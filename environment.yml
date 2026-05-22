@@ -1,0 +1,44 @@
+# Development environment for qpubench.
+#
+# Create:  conda env create -f environment.yml
+# Update:  conda env update -f environment.yml --prune
+# Activate: conda activate qpubench
+#
+# The package itself is installed via pip in editable mode (-e .)
+# so local source changes are reflected immediately without reinstall.
+
+name: qpubench
+
+channels:
+  - conda-forge      # preferred: most up-to-date builds
+  - defaults
+
+dependencies:
+  # ── Python ──────────────────────────────────────────────────────────────────
+  - python=3.12      # pin to a specific minor for reproducibility; 3.11–3.13 all work
+
+  # ── Core runtime (available on conda-forge) ──────────────────────────────────
+  - pydantic>=2.0
+
+  # ── Development tools (available on conda-forge) ─────────────────────────────
+  - pytest>=8.0
+  - pytest-cov
+  - ruff
+  - mypy
+
+  # ── Optional quantum backends (comment in what you need) ─────────────────────
+  # - qiskit>=2.0
+  # - qiskit-aer
+  # - pyarrow
+  # - pandas
+
+  # ── pip for packages not on conda-forge ─────────────────────────────────────
+  - pip
+
+  - pip:
+      # Editable install of the local package (reflects source changes immediately)
+      - -e .
+      # Uncomment quantum backends that are only available on PyPI:
+      # - pyqrack             # Qrack GPU/CPU simulator
+      # - qiskit-ibm-runtime  # IBM Quantum Runtime
+      # - qiskit-nature>=0.7  # Quantum chemistry for Qiskit

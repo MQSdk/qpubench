@@ -1,0 +1,65 @@
+{% set version = "0.1.0" %}
+
+package:
+  name: qpubench
+  version: {{ version }}
+
+source:
+  # Local build from the repository root.
+  # For a released tarball replace with:
+  #   url: https://pypi.io/packages/source/q/qpubench/qpubench-{{ version }}.tar.gz
+  #   sha256: <sha256>
+  path: ..
+
+build:
+  number: 0
+  # Pure-Python package: one noarch build works on all platforms and
+  # Python versions within the constraint.
+  noarch: python
+  script: {{ PYTHON }} -m pip install . --no-deps --no-build-isolation -vv
+
+requirements:
+  host:
+    - python >=3.11
+    - pip
+    - hatchling        # build backend declared in pyproject.toml
+  run:
+    - python >=3.11
+    - pydantic >=2.0   # available on conda-forge
+
+# ── Optional extras ────────────────────────────────────────────────────────────
+# Conda does not have a native "extras" concept.  Install quantum backends
+# separately after activating the environment:
+#
+#   conda install -c conda-forge qiskit qiskit-aer          # Qiskit stack
+#   pip install pyqrack                                       # Qrack (PyPI only)
+#   conda install -c conda-forge pyarrow pandas              # Storage extras
+#
+# CUDA-Q must be installed per NVIDIA's instructions:
+#   https://nvidia.github.io/cuda-quantum/
+
+test:
+  imports:
+    - qpubench
+    - qpubench.schemas
+  requires:
+    - pytest >=8.0
+  source_files:
+    - tests/
+  commands:
+    - pytest tests/ -q
+
+about:
+  home: https://github.com/mqsdk/qpubench
+  license: MIT
+  license_file: LICENSE
+  summary: Modality-agnostic quantum benchmark framework
+  description: |
+    qpubench provides a unified schema and execution pipeline for
+    benchmarking quantum algorithms and circuits across gate-based
+    simulators, gate-based hardware, MBQC-FPGA, and algorithm libraries
+    (VQE, ADAPT-VQE, genetic circuit search, ExcitationSolve, GSOpt).
+
+extra:
+  recipe-maintainers:
+    - mqsdk

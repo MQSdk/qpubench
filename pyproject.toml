@@ -1,0 +1,101 @@
+# ── Build backend ─────────────────────────────────────────────────────────────
+# hatchling is PEP 517/518 compliant and works with pip, uv, and Poetry 2+.
+# Conda-build calls `pip install .` which also uses this backend.
+[build-system]
+requires      = ["hatchling"]
+build-backend = "hatchling.build"
+
+# ── Core metadata (PEP 621) ───────────────────────────────────────────────────
+[project]
+name            = "qpubench"
+version         = "0.1.0"
+description     = "Modality-agnostic quantum benchmark framework"
+readme          = "README.md"
+license         = { file = "LICENSE" }
+requires-python = ">=3.11"
+authors         = [{ name = "MQS", email = "mark@mqs.dk" }]
+keywords        = [
+    "quantum computing", "benchmarking", "VQE", "MBQC",
+    "qiskit", "pennylane", "CUDA-Q", "pydantic",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Physics",
+    "Typing :: Typed",
+]
+
+# Runtime dependency — only pydantic; all quantum backends are optional.
+dependencies = ["pydantic>=2.0"]
+
+[project.urls]
+Homepage      = "https://github.com/mqsdk/qpubench"
+Repository    = "https://github.com/mqsdk/qpubench"
+"Bug Tracker" = "https://github.com/mqsdk/qpubench/issues"
+
+# ── Optional extras ───────────────────────────────────────────────────────────
+# Install with:
+#   pip install "qpubench[qiskit]"
+#   uv pip install "qpubench[qiskit]"
+#   poetry add "qpubench[qiskit]"
+[project.optional-dependencies]
+qiskit  = ["qiskit>=2.0", "qiskit-aer", "qiskit-ibm-runtime", "qiskit-nature>=0.7"]
+qrack   = ["pyqrack"]
+storage = ["pyarrow", "pandas"]
+cudaq   = []   # CUDA-Q installed separately via conda/pip per NVIDIA docs
+all     = [
+    "qiskit>=2.0", "qiskit-aer", "qiskit-ibm-runtime", "qiskit-nature>=0.7",
+    "pyarrow", "pandas",
+]
+
+# ── Dependency groups (PEP 735) ───────────────────────────────────────────────
+# Supported by: pip ≥24.1, uv, Poetry 2.
+#
+# pip:     pip install --group dev
+# uv:      uv sync (auto-includes "dev" group)  /  uv sync --only-group dev
+# poetry:  poetry install --with dev
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov",
+    "ruff",
+    "mypy",
+]
+
+# ── Hatchling ─────────────────────────────────────────────────────────────────
+[tool.hatch.build.targets.wheel]
+packages = ["src/qpubench"]
+
+# ── uv ────────────────────────────────────────────────────────────────────────
+# uv installs from this pyproject.toml natively (PEP 517).
+#
+# Common commands:
+#   uv sync                   install package + dev group
+#   uv sync --all-extras      include all optional extras too
+#   uv pip install .          bare pip-style install (no lockfile)
+#   uv add qpubench           add as a dependency from another project
+[tool.uv]
+dev-dependencies = [
+    "pytest>=8.0",
+    "pytest-cov",
+    "ruff",
+    "mypy",
+]
+
+# ── Ruff ──────────────────────────────────────────────────────────────────────
+[tool.ruff]
+line-length    = 100
+target-version = "py311"
+
+# ── Mypy ──────────────────────────────────────────────────────────────────────
+[tool.mypy]
+strict = true
+
+# ── Pytest ────────────────────────────────────────────────────────────────────
+[tool.pytest.ini_options]
+testpaths = ["tests"]
