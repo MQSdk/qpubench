@@ -6,18 +6,25 @@ import pydantic
 
 
 class QPUModality(str, enum.Enum):
-    GATE_BASED = "gate_based"
-    MBQC       = "mbqc"
-    ANNEALING  = "annealing"
+    GATE_BASED              = "gate_based"
+    MBQC                    = "mbqc"
+    ANNEALING               = "annealing"
+    PHOTONIC_LINEAR_OPTICS  = "photonic_linear_optics"   # linear-optics Fock-state chip
+    FUSION_BASED            = "fusion_based"             # FBQC with resource states + fusion gates
+    QPE                     = "qpe"                      # Quantum Phase Estimation (gate-based QPE/IQPE)
+    GBS                     = "gbs"                      # Gaussian Boson Sampling (squeezed states + interferometer)
+    KQD                     = "kqd"                      # Krylov Quantum Diagonalization (QSE / SQD)
 
 
 class CircuitFormat(str, enum.Enum):
-    QASM2               = "qasm2"
-    QASM3               = "qasm3"
-    QGC                 = "qgc"                  # Qrack native serialisation
-    MEASUREMENT_PATTERN = "measurement_pattern"  # MBQC
-    JSON                = "json"
-    MOLECULE_JSON       = "molecule_json"         # algorithm-driven: problem spec not a circuit
+    QASM2                = "qasm2"
+    QASM3                = "qasm3"
+    QGC                  = "qgc"                  # Qrack native serialisation
+    MEASUREMENT_PATTERN  = "measurement_pattern"  # MBQC
+    JSON                 = "json"
+    MOLECULE_JSON        = "molecule_json"         # algorithm-driven: problem spec not a circuit
+    FOCK_STATE_CIRCUIT   = "fock_state_circuit"   # photonic: phase vector + Fock in/out spec
+    LINEAR_OPTICS_UNITARY = "linear_optics_unitary"  # photonic: raw M×M unitary matrix
 
 
 class PauliLabel(str, enum.Enum):

@@ -78,6 +78,11 @@ class AlgorithmSpec(pydantic.BaseModel):
     theta_init:         list[float]  = []     # TN parameter initialisation
     phi_init:           list[float]  = []     # circuit parameter initialisation
     extra_params:       dict[str, Any] = {}   # algorithm-specific escape hatch
+    # QPE / IQPE fields (QDK chemistry pipeline)
+    num_bits:           int | None   = None  # phase register bits
+    shots_per_bit:      int | None   = None  # IQPE: majority-vote shots per bit
+    evolution_time:     float | None = None  # T_max = π/‖H‖₁
+    trotter_order:      int | None   = None  # Suzuki-Trotter product formula order
 
 
 class ExecutionOptions(pydantic.BaseModel):

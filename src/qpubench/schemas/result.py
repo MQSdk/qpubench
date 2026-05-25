@@ -2,7 +2,23 @@ from __future__ import annotations
 
 import pydantic
 
+from .photonic import (
+    HOMResult,
+    IndistinguishabilityPurificationResult,
+    PhotonicAnalogSimResult,
+    PhotonicSimulationResult,
+    PhotonicSensitivityAnalysis,
+    PhotonicVQEResult,
+)
+from .gbs import (
+    GBSCliqueFindingResult,
+    GBSSamplingResult,
+    VibronicSpectrumResult,
+    TDMGBSResult,
+)
 from .primitives import CircuitFormat, FidelityMetric, JobStatus, QPUModality
+from .qdk_chemistry import QPEResult, QChemPipelineSpec
+from .qse import KQDPipelineSpec
 
 
 class TranspileLayout(pydantic.BaseModel):
@@ -165,6 +181,23 @@ class QuantumResult(pydantic.BaseModel):
     wall_seconds:          float | None                  = None   # actual wall time
     wall_budget_seconds:   float | None                  = None   # allowed budget (GSOpt)
     metadata:              dict                          = {}
+    # Photonic-modality result fields (QPUModality.PHOTONIC_LINEAR_OPTICS / FUSION_BASED)
+    photonic_simulation:        PhotonicSimulationResult | None                 = None
+    photonic_vqe:               PhotonicVQEResult | None                        = None
+    photonic_sensitivity:       PhotonicSensitivityAnalysis | None              = None
+    hom_result:                 HOMResult | None                                = None
+    indist_purification:        IndistinguishabilityPurificationResult | None   = None
+    photonic_analog_sim:        PhotonicAnalogSimResult | None                  = None
+    # QPE-modality result fields (QPUModality.QPE)
+    qpe_result:                 QPEResult | None                                = None
+    qchem_pipeline:             QChemPipelineSpec | None                        = None
+    # GBS-modality result fields (QPUModality.GBS)
+    gbs_sampling:               GBSSamplingResult | None                        = None
+    gbs_clique_finding:         GBSCliqueFindingResult | None                   = None
+    vibronic_spectrum:          VibronicSpectrumResult | None                   = None
+    tdm_gbs:                    TDMGBSResult | None                             = None
+    # KQD-modality result fields (QPUModality.KQD)
+    kqd_pipeline:               KQDPipelineSpec | None                          = None
 
     @property
     def openqasm3_transpiled(self) -> str | None:

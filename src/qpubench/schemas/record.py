@@ -10,7 +10,7 @@ from .circuit import CircuitSpec
 from .execution import ExecutionOptions
 from .result import QuantumResult
 
-SCHEMA_VERSION = "1.3.0"
+SCHEMA_VERSION = "1.7.0"
 
 _utcnow = lambda: datetime.datetime.now(datetime.UTC)  # noqa: E731
 

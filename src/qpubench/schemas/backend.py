@@ -190,3 +190,197 @@ class BackendSpec(pydantic.BaseModel):
             num_qubits=num_logical_qubits,
             auth={"fpga_family": fpga_family},
         )
+
+    @classmethod
+    def photochipsim(cls, num_modes: int = 6) -> BackendSpec:
+        """photochipsim linear-optics simulator (thewalrus permanent engine)."""
+        return cls(
+            name=f"photochipsim_{num_modes}mode",
+            provider="photochipsim",
+            qpu_modality=QPUModality.PHOTONIC_LINEAR_OPTICS,
+            simulator=True,
+            num_qubits=num_modes,
+            auth={"num_modes": str(num_modes)},
+        )
+
+    @classmethod
+    def strawberry_fields(
+        cls,
+        backend: str = "fock",
+        num_modes: int = 6,
+        cutoff_dim: int = 5,
+    ) -> BackendSpec:
+        """Xanadu Strawberry Fields simulator.
+
+        backend  "fock"        — Fock-basis simulator (exact, exponential cost)
+                 "gaussian"    — Gaussian state simulator
+                 "tf"          — TensorFlow differentiable backend
+        """
+        return cls(
+            name=f"sf_{backend}",
+            provider="strawberry_fields",
+            qpu_modality=QPUModality.PHOTONIC_LINEAR_OPTICS,
+            simulator=True,
+            num_qubits=num_modes,
+            auth={"backend": backend, "cutoff_dim": str(cutoff_dim)},
+        )
+
+    @classmethod
+    def perceval(
+        cls,
+        backend: str = "SLOS",
+        num_modes: int = 6,
+    ) -> BackendSpec:
+        """Quandela Perceval photonic simulator.
+
+        backend  "SLOS"  — Schrödinger LOQC Simulator (state-vector)
+                 "MPS"   — matrix product state backend
+                 "Naive" — brute-force permanent computation
+        """
+        return cls(
+            name=f"perceval_{backend}",
+            provider="perceval",
+            qpu_modality=QPUModality.PHOTONIC_LINEAR_OPTICS,
+            simulator=True,
+            num_qubits=num_modes,
+            auth={"backend": backend},
+        )
+
+    @classmethod
+    def photonic_chip_hardware(
+        cls,
+        chip_id: str,
+        platform: str = "silicon_nitride",
+        num_modes: int = 6,
+    ) -> BackendSpec:
+        """Real photonic integrated circuit hardware backend."""
+        return cls(
+            name=chip_id,
+            provider="photonic_hardware",
+            qpu_modality=QPUModality.PHOTONIC_LINEAR_OPTICS,
+            simulator=False,
+            num_qubits=num_modes,
+            auth={"platform": platform, "chip_id": chip_id},
+        )
+
+    @classmethod
+    def xanadu_x8(cls, num_modes: int = 8) -> BackendSpec:
+        """Xanadu X8 photonic chip — 8-mode PNR GBS hardware.
+
+        Accessed via Xanadu Cloud RemoteEngine("X8") or the Strawberry Fields
+        remote engine.  num_modes fixed at 8 (4 signal + 4 idler).
+        """
+        return cls(
+            name="xanadu_x8",
+            provider="xanadu",
+            qpu_modality=QPUModality.GBS,
+            simulator=False,
+            num_qubits=num_modes,
+            auth={"device": "X8"},
+        )
+
+    @classmethod
+    def xanadu_borealis(cls, via_braket: bool = False) -> BackendSpec:
+        """Xanadu Borealis TDM GBS hardware — 216 effective modes.
+
+        via_braket=True  uses the AWS Braket BraketEngine with the
+        Borealis ARN; via_braket=False uses the native SF RemoteEngine.
+        """
+        arn = "arn:aws:braket:us-east-1::device/qpu/xanadu/Borealis"
+        return cls(
+            name="xanadu_borealis",
+            provider="aws_braket" if via_braket else "xanadu",
+            qpu_modality=QPUModality.GBS,
+            simulator=False,
+            num_qubits=216,
+            auth={
+                "device": "Borealis",
+                "device_arn": arn if via_braket else "",
+                "via_braket": str(via_braket),
+            },
+        )
+
+    @classmethod
+    def strawberry_fields_gaussian(cls, num_modes: int | None = None) -> BackendSpec:
+        """Strawberry Fields Gaussian state simulator for GBS.
+
+        Distinct from the Fock-basis SF backend: uses the covariance-matrix
+        formalism and thewalrus hafnian for photon-number probabilities.
+        """
+        return cls(
+            name="sf_gaussian",
+            provider="strawberry_fields",
+            qpu_modality=QPUModality.GBS,
+            simulator=True,
+            num_qubits=num_modes,
+        )
+
+    @classmethod
+    def qiskit_aer(
+        cls,
+        method: str = "statevector",
+        num_qubits: int | None = None,
+    ) -> BackendSpec:
+        """Qiskit Aer simulator — default backend for KQD/QSE benchmarks.
+
+        method  "statevector"   — exact state-vector simulation
+                "matrix_product_state" — MPS simulation for larger systems
+                "stabilizer"    — Clifford-only stabilizer simulation
+        """
+        return cls(
+            name=f"aer_{method}",
+            provider="aer",
+            qpu_modality=QPUModality.KQD,
+            simulator=True,
+            num_qubits=num_qubits,
+            auth={"method": method},
+        )
+
+    @classmethod
+    def qdk_chemistry_simulator(
+        cls,
+        executor: str = "qdk_sparse_state_simulator",
+        num_qubits: int | None = None,
+    ) -> BackendSpec:
+        """Microsoft QDK chemistry simulator backend.
+
+        executor  "qdk_sparse_state_simulator" — sparse statevector (≤~20 qubits).
+                  "qdk_full_state_simulator"   — dense statevector (< 14 qubits).
+                  "qiskit_aer_simulator"       — Aer with noise model support.
+        """
+        return cls(
+            name=executor,
+            provider="qdk_chemistry",
+            qpu_modality=QPUModality.QPE,
+            simulator=True,
+            num_qubits=num_qubits,
+            auth={"executor": executor},
+        )
+
+    @classmethod
+    def azure_quantum(
+        cls,
+        target: str,
+        *,
+        resource_id_ref: str = "",
+        location_ref: str = "",
+    ) -> BackendSpec:
+        """Azure Quantum hardware / resource-estimation target.
+
+        target  Azure Quantum target id, e.g.:
+                  "microsoft.estimator"          — QDK resource estimator
+                  "quantinuum.hqs-lt-s1"         — Quantinuum H1 hardware
+                  "ionq.simulator"               — IonQ cloud simulator
+        Credentials are stored as env-var references.
+        """
+        return cls(
+            name=target,
+            provider="azure_quantum",
+            qpu_modality=QPUModality.QPE,
+            simulator=("simulator" in target or "estimator" in target),
+            auth={
+                "target":           target,
+                "resource_id_ref":  resource_id_ref,
+                "location_ref":     location_ref,
+            },
+        )

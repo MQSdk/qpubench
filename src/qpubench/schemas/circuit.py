@@ -4,6 +4,7 @@ import pydantic
 
 from .mbqc import MBQCPattern
 from .observable import SparsePauliObservable
+from .photonic import PhotonicCircuitSpec
 from .primitives import CircuitFormat, QPUModality
 
 
@@ -50,6 +51,7 @@ class CircuitSpec(pydantic.BaseModel):
     parameter_bindings:  list[ParameterBinding]  = []
     gate_counts:         dict[str, int]          = {}
     measurement_pattern: MBQCPattern | None      = None
+    photonic_circuit:    PhotonicCircuitSpec | None = None  # PHOTONIC_LINEAR_OPTICS / FUSION_BASED
 
     model_config = pydantic.ConfigDict(arbitrary_types_allowed=True)
 
@@ -59,6 +61,14 @@ class CircuitSpec(pydantic.BaseModel):
             if self.measurement_pattern is None and self.serialized is None:
                 raise ValueError(
                     "MBQC CircuitSpec requires measurement_pattern or serialized"
+                )
+        if self.modality in (
+            QPUModality.PHOTONIC_LINEAR_OPTICS,
+            QPUModality.FUSION_BASED,
+        ):
+            if self.photonic_circuit is None and self.serialized is None:
+                raise ValueError(
+                    "Photonic CircuitSpec requires photonic_circuit or serialized"
                 )
         for pb in self.parameter_bindings:
             if pb.name not in self.parameters:
