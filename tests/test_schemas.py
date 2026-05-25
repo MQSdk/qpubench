@@ -336,7 +336,7 @@ def test_benchmark_record_json_roundtrip():
     record  = _minimal_record()
     json_str = record.model_dump_json()
     data     = json.loads(json_str)
-    assert data["schema_version"] == "1.7.0"
+    assert data["schema_version"] == "1.11.0"
     restored = BenchmarkRecord.model_validate_json(json_str)
     assert restored.experiment_id == record.experiment_id
     assert restored.result.expectation_values[0].value == -1.137
@@ -1661,4 +1661,1051 @@ def test_backend_spec_qiskit_aer():
     assert b.qpu_modality == QPUModality.KQD
     assert b.simulator is True
     assert b.num_qubits == 12
+
+
+# ---------------------------------------------------------------------------
+# QESEM (Qedma) schemas (v1.8.0)
+# ---------------------------------------------------------------------------
+
+def test_qesem_observable_spec():
+    from qpubench.schemas.qesem import QESEMObservableSpec
+    obs = QESEMObservableSpec(
+        pauli_terms={"Z1": 1.0, "Z0,Z3": 0.3},
+        description="ZZ correlation",
+    )
+    assert obs.pauli_terms["Z1"] == pytest.approx(1.0)
+    assert obs.description == "ZZ correlation"
+
+
+def test_qesem_circuit_options():
+    from qpubench.schemas.qesem import QESEMCircuitOptions, QESEMTranspilationLevel
+    opts = QESEMCircuitOptions(
+        error_suppression_only=False,
+        twirl=True,
+        transpilation_level=QESEMTranspilationLevel.STANDARD,
+        parallel_execution=True,
+    )
+    assert opts.parallel_execution is True
+    assert opts.transpilation_level == QESEMTranspilationLevel.STANDARD
+
+
+def test_qesem_precision_per_factor():
+    from qpubench.schemas.qesem import QESEMPrecisionPerFactor
+    pf = QESEMPrecisionPerFactor(
+        scale_precision_map={"0.0": 0.1, "1.0": 0.15, "2.0": 0.2}
+    )
+    assert pf.scale_precision_map["0.0"] == pytest.approx(0.1)
+
+
+def test_qesem_job_spec():
+    from qpubench.schemas.qesem import (
+        QESEMJobSpec, QESEMObservableSpec, QESEMCircuitOptions,
+        QESEMTranspilationLevel, QESEMPrecisionMode,
+    )
+    obs = QESEMObservableSpec(pauli_terms={"Z0": 0.2, "Z1": 0.2, "Z2": 0.2})
+    spec = QESEMJobSpec(
+        circuit_qasm='OPENQASM 2.0;\nqreg q[3];\nh q[0];\ncx q[0],q[1];',
+        num_qubits=3,
+        observables=[obs],
+        precision=0.05,
+        precision_mode=QESEMPrecisionMode.CIRCUIT,
+        backend_name="ibm_fez",
+        circuit_options=QESEMCircuitOptions(
+            transpilation_level=QESEMTranspilationLevel.STANDARD,
+        ),
+        description="avg magnetization",
+    )
+    assert spec.backend_name == "ibm_fez"
+    assert len(spec.observables) == 1
+    assert spec.precision_mode == QESEMPrecisionMode.CIRCUIT
+
+
+def test_qesem_expectation_values():
+    from qpubench.schemas.qesem import (
+        QESEMExpectationValue, QESEMScaleExpectationValue,
+        QESEMHeuristicResult, QESEMNoiseScalingResult,
+    )
+    raw = QESEMExpectationValue(value=-0.42, error_bar=0.08)
+    assert raw.value == pytest.approx(-0.42)
+
+    scale_zero = QESEMScaleExpectationValue(value=-0.81, error_bar=0.05, scale=0.0)
+    scale_one  = QESEMScaleExpectationValue(value=-0.56, error_bar=0.04, scale=1.0)
+    scale_two  = QESEMScaleExpectationValue(value=-0.32, error_bar=0.04, scale=2.0)
+
+    ns = QESEMNoiseScalingResult(
+        scaling_method="QESEM",
+        results_per_scale=[scale_zero, scale_one, scale_two],
+    )
+    assert ns.scale_factors == pytest.approx([0.0, 1.0, 2.0])
+    assert ns.zero_noise_result.value == pytest.approx(-0.81)
+
+    heuristic = QESEMHeuristicResult(
+        value=-0.80, error_bar=0.06,
+        extrapolation="linear", scale_factors=[0.0, 1.0, 2.0],
+    )
+    assert heuristic.extrapolation == "linear"
+
+
+def test_qesem_observable_result_mitigated_property():
+    from qpubench.schemas.qesem import (
+        QESEMExpectationValue, QESEMScaleExpectationValue,
+        QESEMNoiseScalingResult, QESEMHeuristicResult, QESEMObservableResult,
+    )
+    raw = QESEMExpectationValue(value=-0.42, error_bar=0.08)
+    scale_zero = QESEMScaleExpectationValue(value=-0.81, error_bar=0.05, scale=0.0)
+    ns = QESEMNoiseScalingResult(results_per_scale=[scale_zero])
+
+    # Without heuristic: mitigated = zero_noise_result
+    obs_result_no_heuristic = QESEMObservableResult(unmitigated=raw, noise_scaling=ns)
+    assert obs_result_no_heuristic.mitigated.value == pytest.approx(-0.81)
+
+    # With heuristic: mitigated = first heuristic result
+    h = QESEMHeuristicResult(value=-0.80, error_bar=0.05, extrapolation="linear", scale_factors=[0.0, 1.0])
+    obs_result_with_heuristic = QESEMObservableResult(unmitigated=raw, noise_scaling=ns, qesem_heuristic=[h])
+    assert obs_result_with_heuristic.mitigated.value == pytest.approx(-0.80)
+
+
+def test_qesem_circuit_result_properties():
+    from qpubench.schemas.qesem import (
+        QESEMObservableSpec, QESEMObservableResult, QESEMCircuitObservableResult,
+        QESEMCircuitResult, QESEMExpectationValue, QESEMScaleExpectationValue,
+        QESEMNoiseScalingResult,
+    )
+    obs1 = QESEMObservableSpec(pauli_terms={"Z0": 0.5})
+    obs2 = QESEMObservableSpec(pauli_terms={"Z1": 0.5})
+
+    def make_result(mitigated_val: float) -> QESEMObservableResult:
+        ns = QESEMNoiseScalingResult(
+            results_per_scale=[
+                QESEMScaleExpectationValue(value=mitigated_val, error_bar=0.04, scale=0.0)
+            ]
+        )
+        return QESEMObservableResult(
+            unmitigated=QESEMExpectationValue(value=mitigated_val * 0.6, error_bar=0.1),
+            noise_scaling=ns,
+        )
+
+    cr = QESEMCircuitResult(
+        parameter_index=0,
+        observable_results=[
+            QESEMCircuitObservableResult(observable=obs1, result=make_result(-0.81)),
+            QESEMCircuitObservableResult(observable=obs2, result=make_result(-0.76)),
+        ],
+    )
+    assert cr.mitigated_evs == pytest.approx([-0.81, -0.76])
+    assert len(cr.noisy_evs) == 2
+
+
+def test_qesem_execution_details():
+    from qpubench.schemas.qesem import QESEMExecutionDetails, QESEMTranspiledCircuit
+    tc = QESEMTranspiledCircuit(
+        circuit_qasm="OPENQASM 2.0; ...",
+        qubit_maps=[{"0": 12, "1": 13, "2": 14}],
+        num_measurement_bases=4,
+    )
+    details = QESEMExecutionDetails(
+        total_shots=48_000,
+        mitigation_shots=12_000,
+        gate_fidelities={"CNOT": 0.9901, "ID1Q": 0.9989},
+        transpiled_circuits=[tc],
+    )
+    assert details.gate_fidelities["CNOT"] == pytest.approx(0.9901)
+    assert details.transpiled_circuits[0].num_measurement_bases == 4
+
+
+def test_qesem_characterization_result():
+    from qpubench.schemas.qesem import QESEMCharacterizationResult, QESEMGateInfidelity
+    char = QESEMCharacterizationResult(
+        qpu_name="ibm_fez",
+        measurement_errors={0: 0.012, 1: 0.009, 2: 0.015},
+        gate_infidelities=[
+            QESEMGateInfidelity(gate_name="CNOT", qubits=(0, 1), infidelity=0.0099),
+            QESEMGateInfidelity(gate_name="CNOT", qubits=(1, 2), infidelity=0.0087),
+        ],
+        qubit_map={0: 12, 1: 13, 2: 14},
+    )
+    assert char.measurement_errors[0] == pytest.approx(0.012)
+    assert char.gate_infidelities[0].infidelity == pytest.approx(0.0099)
+
+
+def test_qesem_job_record_roundtrip():
+    import json
+    from qpubench.schemas.qesem import (
+        QESEMJobRecord, QESEMJobSpec, QESEMJobStatus, QESEMObservableSpec,
+        QESEMCircuitResult, QESEMCircuitObservableResult, QESEMObservableResult,
+        QESEMExpectationValue, QESEMScaleExpectationValue, QESEMNoiseScalingResult,
+        QESEMExecutionDetails, QESEMCharacterizationResult, QESEMGateInfidelity,
+        QESEMExecutionMode, QESEMPrecisionMode,
+    )
+    obs = QESEMObservableSpec(pauli_terms={"Z0": 0.2, "Z1": 0.2})
+    ns = QESEMNoiseScalingResult(
+        results_per_scale=[
+            QESEMScaleExpectationValue(value=-0.76, error_bar=0.04, scale=0.0)
+        ]
+    )
+    obs_result = QESEMObservableResult(
+        unmitigated=QESEMExpectationValue(value=-0.52, error_bar=0.09),
+        noise_scaling=ns,
+    )
+    record = QESEMJobRecord(
+        job_id="qesem-abc123",
+        status=QESEMJobStatus.SUCCEEDED,
+        qpu_name="ibm_fez",
+        spec=QESEMJobSpec(
+            backend_name="ibm_fez",
+            observables=[obs],
+            precision=0.05,
+        ),
+        precision_mode=QESEMPrecisionMode.JOB,
+        execution_mode=QESEMExecutionMode.BATCH,
+        analytical_qpu_time_s=240.0,
+        total_execution_time_s=310.5,
+        circuit_results=[
+            QESEMCircuitResult(
+                parameter_index=0,
+                observable_results=[
+                    QESEMCircuitObservableResult(observable=obs, result=obs_result)
+                ],
+            )
+        ],
+        execution_details=QESEMExecutionDetails(
+            total_shots=40_000,
+            mitigation_shots=10_000,
+            gate_fidelities={"CNOT": 0.990},
+        ),
+        characterization=QESEMCharacterizationResult(
+            qpu_name="ibm_fez",
+            gate_infidelities=[
+                QESEMGateInfidelity(gate_name="CNOT", qubits=(0, 1), infidelity=0.01)
+            ],
+        ),
+    )
+    json_str = record.model_dump_json()
+    data = json.loads(json_str)
+    assert data["job_id"] == "qesem-abc123"
+    assert data["execution_details"]["total_shots"] == 40_000
+    restored = QESEMJobRecord.model_validate_json(json_str)
+    assert restored.circuit_results[0].mitigated_evs[0] == pytest.approx(-0.76)
+
+
+def test_quantum_result_qesem_field():
+    import json
+    from qpubench.schemas.qesem import QESEMJobRecord, QESEMJobStatus, QESEMJobSpec
+    from qpubench.schemas.primitives import ErrorMitigationStrategy
+    from qpubench.schemas.execution import ExecutionOptions
+    qesem_record = QESEMJobRecord(
+        job_id="qesem-xyz",
+        status=QESEMJobStatus.SUCCEEDED,
+        spec=QESEMJobSpec(backend_name="ibm_torino", precision=0.05),
+    )
+    result = QuantumResult(
+        modality=QPUModality.GATE_BASED,
+        qesem_result=qesem_record,
+    )
+    data = json.loads(result.model_dump_json())
+    assert data["qesem_result"]["job_id"] == "qesem-xyz"
+
+
+def test_backend_spec_qesem():
+    b = BackendSpec.qesem("ibm_fez", api_token_ref="QEDMA_TOKEN")
+    assert b.provider == "qedma"
+    assert b.qpu_modality == QPUModality.GATE_BASED
+    assert b.simulator is False
+    assert b.auth["backend_name"] == "ibm_fez"
+    assert b.auth["api_token_ref"] == "QEDMA_TOKEN"
+
+
+def test_execution_options_qesem_fields():
+    from qpubench.schemas.qesem import QESEMCircuitOptions, QESEMJobOptions, QESEMExecutionMode
+    from qpubench.schemas.execution import ExecutionOptions
+    from qpubench.schemas.primitives import ErrorMitigationStrategy
+    opts = ExecutionOptions(
+        shots=10_000,
+        error_mitigation=ErrorMitigationStrategy.QESEM,
+        qesem_circuit_options=QESEMCircuitOptions(parallel_execution=True),
+        qesem_job_options=QESEMJobOptions(execution_mode=QESEMExecutionMode.SESSION),
+    )
+    assert opts.qesem_circuit_options.parallel_execution is True
+    assert opts.qesem_job_options.execution_mode == QESEMExecutionMode.SESSION
+
+
+# ---------------------------------------------------------------------------
+# QCSchema / QCElemental / PennyLane tests
+# ---------------------------------------------------------------------------
+
+def test_qcmolecule_h2():
+    from qpubench.schemas.qcschema import QCMolecule
+    # H2 at equilibrium bond length 0.742 Å = 1.4011 Bohr
+    mol = QCMolecule(
+        symbols=["H", "H"],
+        geometry=[0.0, 0.0, -0.7005, 0.0, 0.0, 0.7005],
+        molecular_charge=0.0,
+        molecular_multiplicity=1,
+        name="H2",
+    )
+    assert mol.num_atoms == 2
+    assert mol.formula == "H2"
+    assert len(mol.geometry) == 6
+
+
+def test_qcmolecule_geometry_validation():
+    from qpubench.schemas.qcschema import QCMolecule
+    import pytest
+    with pytest.raises(Exception):
+        QCMolecule(symbols=["H", "H"], geometry=[0.0, 0.0])  # wrong length
+
+
+def test_qcmolecule_water_fragments():
+    from qpubench.schemas.qcschema import QCMolecule
+    mol = QCMolecule(
+        symbols=["O", "H", "H"],
+        geometry=[0.0, 0.0, 0.0, 0.0, 1.43, -1.11, 0.0, 1.43, 1.11],
+        name="H2O",
+        fragments=[[0, 1, 2]],
+        fragment_charges=[0.0],
+        fragment_multiplicities=[1],
+        connectivity=[(0, 1, 1.0), (0, 2, 1.0)],
+    )
+    assert mol.formula == "H2O"
+    assert mol.num_atoms == 3
+    assert len(mol.connectivity) == 2
+
+
+def test_qc_model_and_driver():
+    from qpubench.schemas.qcschema import QCModel, QCDriver
+    m = QCModel(method="ccsd(t)", basis="cc-pVDZ")
+    assert m.method == "ccsd(t)"
+    assert m.basis == "cc-pVDZ"
+    assert QCDriver.ENERGY.value == "energy"
+    assert QCDriver.GRADIENT.value == "gradient"
+    assert QCDriver.HESSIAN.value == "hessian"
+    assert QCDriver.PROPERTIES.value == "properties"
+
+
+def test_qc_energy_components():
+    from qpubench.schemas.qcschema import QCEnergyComponents
+    ec = QCEnergyComponents(
+        nuclear_repulsion_energy=0.7137,
+        scf_one_electron_energy=-3.5692,
+        scf_two_electron_energy=1.8223,
+        mp2_correlation_energy=-0.0351,
+        mp2_total_energy=-1.1318,
+        ccsd_total_energy=-1.1373,
+        fci_total_energy=-1.1516,
+    )
+    assert ec.fci_total_energy == pytest.approx(-1.1516)
+    assert ec.mp2_correlation_energy == pytest.approx(-0.0351)
+    assert ec.scf_xc_energy is None
+
+
+def test_qc_atomic_result_properties():
+    from qpubench.schemas.qcschema import QCAtomicResultProperties, QCCalcInfo, QCEnergyComponents
+    props = QCAtomicResultProperties(
+        calcinfo=QCCalcInfo(nbasis=4, nmo=4, nalpha=1, nbeta=1, natom=2),
+        return_energy=-1.1173,
+        energy_components=QCEnergyComponents(
+            nuclear_repulsion_energy=0.7137,
+            ccsd_total_energy=-1.1373,
+        ),
+        scf_dipole_moment=[0.0, 0.0, 0.0],
+    )
+    assert props.return_energy == pytest.approx(-1.1173)
+    assert props.calcinfo.nbasis == 4
+    assert props.energy_components.ccsd_total_energy == pytest.approx(-1.1373)
+    assert props.scf_dipole_moment == [0.0, 0.0, 0.0]
+
+
+def test_qc_wavefunction_data():
+    from qpubench.schemas.qcschema import QCWavefunctionData
+    wfn = QCWavefunctionData(
+        basis_name="sto-3g",
+        nao=2,
+        nmo=2,
+        scf_orbitals_a=[0.5489, 0.5489, 0.5489, -0.5489],  # 2×2 column-major
+        scf_eigenvalues_a=[-0.5783, 0.6695],
+        scf_occupations_a=[2.0, 0.0],
+        overlap_matrix=[1.0, 0.6593, 0.6593, 1.0],
+    )
+    assert wfn.nao == 2
+    assert wfn.nmo == 2
+    assert len(wfn.scf_orbitals_a) == 4
+    assert wfn.scf_eigenvalues_a[0] == pytest.approx(-0.5783)
+
+
+def test_qc_atomic_input():
+    from qpubench.schemas.qcschema import QCAtomicInput, QCMolecule, QCModel, QCDriver
+    mol = QCMolecule(symbols=["H", "H"], geometry=[0.0, 0.0, -0.7, 0.0, 0.0, 0.7])
+    inp = QCAtomicInput(
+        molecule=mol,
+        driver=QCDriver.ENERGY,
+        model=QCModel(method="hf", basis="sto-3g"),
+        keywords={"scf_type": "df"},
+        id="job-001",
+    )
+    assert inp.schema_name == "qcschema_input"
+    assert inp.schema_version == 1
+    assert inp.model.method == "hf"
+    assert inp.keywords["scf_type"] == "df"
+
+
+def test_qc_atomic_result_roundtrip():
+    from qpubench.schemas.qcschema import (
+        QCAtomicResult, QCAtomicResultProperties, QCMolecule, QCModel,
+        QCDriver, QCProvenance, QCWavefunctionData, QCEnergyComponents,
+    )
+    mol = QCMolecule(symbols=["H", "H"], geometry=[0.0, 0.0, -0.7, 0.0, 0.0, 0.7])
+    result = QCAtomicResult(
+        molecule=mol,
+        driver=QCDriver.ENERGY,
+        model=QCModel(method="ccsd", basis="cc-pvdz"),
+        return_result=-1.1373,
+        properties=QCAtomicResultProperties(
+            return_energy=-1.1373,
+            energy_components=QCEnergyComponents(
+                nuclear_repulsion_energy=0.7137,
+                ccsd_total_energy=-1.1373,
+            ),
+        ),
+        wavefunction=QCWavefunctionData(basis_name="cc-pvdz", nao=10, nmo=10),
+        success=True,
+        provenance=QCProvenance(creator="psi4", version="1.7"),
+    )
+    data = json.loads(result.model_dump_json())
+    assert data["schema_name"] == "qcschema_output"
+    assert data["return_result"] == pytest.approx(-1.1373)
+    assert data["properties"]["return_energy"] == pytest.approx(-1.1373)
+    assert data["wavefunction"]["basis_name"] == "cc-pvdz"
+    restored = QCAtomicResult.model_validate(data)
+    assert restored.success is True
+    assert restored.provenance.creator == "psi4"
+
+
+def test_qc_optimization_result():
+    from qpubench.schemas.qcschema import (
+        QCOptimizationInput, QCOptimizationResult, QCAtomicInput,
+        QCMolecule, QCModel, QCDriver,
+    )
+    mol_start = QCMolecule(symbols=["H", "H"], geometry=[0.0, 0.0, -0.8, 0.0, 0.0, 0.8])
+    mol_final = QCMolecule(symbols=["H", "H"], geometry=[0.0, 0.0, -0.7, 0.0, 0.0, 0.7])
+    inp_spec = QCAtomicInput(
+        molecule=mol_start,
+        driver=QCDriver.GRADIENT,
+        model=QCModel(method="hf", basis="sto-3g"),
+    )
+    opt = QCOptimizationResult(
+        input_specification=inp_spec,
+        initial_molecule=mol_start,
+        final_molecule=mol_final,
+        energies=[-1.1100, -1.1160, -1.1170, -1.1173],
+        success=True,
+    )
+    assert opt.num_steps == 4
+    assert opt.converged_energy == pytest.approx(-1.1173)
+    assert opt.final_molecule.num_atoms == 2
+
+
+def test_pennylane_mol_dataset():
+    from qpubench.schemas.qcschema import PennyLaneMolDataset
+    ds = PennyLaneMolDataset(
+        molname="H2",
+        basis="STO-3G",
+        bondlength=0.742,
+        hf_energy=-1.1175,
+        fci_energy=-1.1516,
+        num_electrons=2,
+        num_qubits=4,
+        pauli_terms=15,
+        dataset_tag="H2_STO-3G_0.742",
+    )
+    assert ds.molname == "H2"
+    assert ds.num_qubits == 4
+    assert ds.correlation_energy == pytest.approx(-1.1516 - (-1.1175))
+
+
+def test_pennylane_mol_dataset_correlation_energy_none():
+    from qpubench.schemas.qcschema import PennyLaneMolDataset
+    ds = PennyLaneMolDataset(molname="LiH", basis="cc-pVDZ")
+    assert ds.correlation_energy is None
+
+
+def test_qcschema_record_reference_energy():
+    from qpubench.schemas.qcschema import (
+        QCSchemaRecord, QCAtomicResult, QCAtomicResultProperties,
+        QCMolecule, QCModel, QCDriver, PennyLaneMolDataset,
+    )
+    mol = QCMolecule(symbols=["H", "H"], geometry=[0.0, 0.0, -0.7, 0.0, 0.0, 0.7])
+    atomic = QCAtomicResult(
+        molecule=mol,
+        driver=QCDriver.ENERGY,
+        model=QCModel(method="fci", basis="sto-3g"),
+        return_result=-1.1516,
+        properties=QCAtomicResultProperties(return_energy=-1.1516),
+    )
+    rec = QCSchemaRecord(atomic_result=atomic)
+    assert rec.reference_energy == pytest.approx(-1.1516)
+
+    # PennyLane fallback
+    rec2 = QCSchemaRecord(
+        pennylane_dataset=PennyLaneMolDataset(
+            molname="H2", basis="STO-3G", bondlength=0.742, fci_energy=-1.1516
+        )
+    )
+    assert rec2.reference_energy == pytest.approx(-1.1516)
+
+    # Empty record
+    rec3 = QCSchemaRecord()
+    assert rec3.reference_energy is None
+
+
+def test_quantum_result_qcschema_field():
+    from qpubench.schemas.qcschema import (
+        QCSchemaRecord, QCAtomicResult, QCAtomicResultProperties,
+        QCMolecule, QCModel, QCDriver,
+    )
+    from qpubench.schemas.result import QuantumResult
+    from qpubench.schemas.primitives import QPUModality
+    mol = QCMolecule(symbols=["H", "H"], geometry=[0.0, 0.0, -0.7, 0.0, 0.0, 0.7])
+    atomic = QCAtomicResult(
+        molecule=mol,
+        driver=QCDriver.ENERGY,
+        model=QCModel(method="ccsd(t)", basis="cc-pvdz"),
+        return_result=-1.1644,
+        properties=QCAtomicResultProperties(return_energy=-1.1644),
+    )
+    result = QuantumResult(
+        modality=QPUModality.GATE_BASED,
+        qcschema_record=QCSchemaRecord(atomic_result=atomic),
+    )
+    data = json.loads(result.model_dump_json())
+    assert data["qcschema_record"]["atomic_result"]["return_result"] == pytest.approx(-1.1644)
+
+
+# ---------------------------------------------------------------------------
+# Neutral atom / AHS (Bloqade / Aquila) tests
+# ---------------------------------------------------------------------------
+
+def test_atom_arrangement_square_lattice():
+    from qpubench.schemas.neutral_atom import AtomicSite, AtomArrangement, LatticeGeometryType
+    # 3×3 square lattice at 6 µm spacing, all filled
+    sites = [AtomicSite(x=i * 6.0, y=j * 6.0) for i in range(3) for j in range(3)]
+    arr = AtomArrangement(
+        sites=sites,
+        lattice_type=LatticeGeometryType.SQUARE,
+        lattice_spacing_um=6.0,
+    )
+    assert arr.num_sites == 9
+    assert arr.num_filled_sites == 9
+    assert arr.fill_fraction == pytest.approx(1.0)
+
+
+def test_atom_arrangement_chain_with_defect():
+    from qpubench.schemas.neutral_atom import AtomicSite, AtomArrangement, LatticeGeometryType
+    sites = [AtomicSite(x=i * 5.0, y=0.0) for i in range(5)]
+    arr = AtomArrangement(
+        sites=sites,
+        filling=[1, 1, 0, 1, 1],   # site 2 empty
+        lattice_type=LatticeGeometryType.CHAIN,
+        lattice_spacing_um=5.0,
+    )
+    assert arr.num_sites == 5
+    assert arr.num_filled_sites == 4
+    assert arr.fill_fraction == pytest.approx(0.8)
+
+
+def test_atom_arrangement_default_filling():
+    from qpubench.schemas.neutral_atom import AtomicSite, AtomArrangement
+    sites = [AtomicSite(x=float(i), y=0.0) for i in range(4)]
+    arr = AtomArrangement(sites=sites)
+    assert arr.filling == [1, 1, 1, 1]   # defaults to all-filled
+    assert arr.fill_fraction == pytest.approx(1.0)
+
+
+def test_ahs_time_series():
+    from qpubench.schemas.neutral_atom import AHSTimeSeries
+    # π-pulse: ramp up to Ω_max, hold, ramp down
+    ts = AHSTimeSeries(
+        times_us=[0.0, 0.1, 0.9, 1.0],
+        values=[0.0, 15.7, 15.7, 0.0],
+    )
+    assert ts.num_points == 4
+    assert ts.duration_us == pytest.approx(1.0)
+
+
+def test_ahs_waveform_piecewise_linear():
+    from qpubench.schemas.neutral_atom import AHSWaveform, AHSWaveformType
+    wf = AHSWaveform(
+        waveform_type=AHSWaveformType.PIECEWISE_LINEAR,
+        durations_us=[0.3, 0.4, 0.3],
+        values=[0.0, 15.7, 15.7, 0.0],
+    )
+    assert wf.total_duration_us == pytest.approx(1.0)
+    assert wf.waveform_type == AHSWaveformType.PIECEWISE_LINEAR
+
+
+def test_ahs_waveform_constant():
+    from qpubench.schemas.neutral_atom import AHSWaveform, AHSWaveformType
+    wf = AHSWaveform(
+        waveform_type=AHSWaveformType.CONSTANT,
+        duration_us=2.0,
+        values=[15.7],
+    )
+    assert wf.total_duration_us == pytest.approx(2.0)
+
+
+def test_ahs_driving_field():
+    from qpubench.schemas.neutral_atom import (
+        AHSDrivingField, AHSTimeSeries, NeutralAtomCoupling, SpatialModulationType,
+    )
+    times = [0.0, 0.5, 1.0, 1.5, 2.0]
+    rabi = AHSTimeSeries(times_us=times, values=[0.0, 15.7, 15.7, 15.7, 0.0])
+    det  = AHSTimeSeries(times_us=times, values=[-30.0, -30.0, 0.0, 30.0, 30.0])
+    phase = AHSTimeSeries(times_us=[0.0, 2.0], values=[0.0, 0.0])
+    field = AHSDrivingField(
+        coupling=NeutralAtomCoupling.RYDBERG,
+        rabi_amplitude=rabi,
+        rabi_phase=phase,
+        detuning=det,
+        spatial_modulation=SpatialModulationType.UNIFORM,
+    )
+    assert field.coupling == NeutralAtomCoupling.RYDBERG
+    assert field.rabi_amplitude.duration_us == pytest.approx(2.0)
+    assert field.detuning.values[0] == pytest.approx(-30.0)
+
+
+def test_ahs_local_detuning():
+    from qpubench.schemas.neutral_atom import AHSLocalDetuning, AHSTimeSeries
+    ts = AHSTimeSeries(times_us=[0.0, 1.0, 2.0], values=[0.0, 50.0, 0.0])
+    ld = AHSLocalDetuning(
+        time_series=ts,
+        site_coefficients=[0.0, 1.0, 0.5, 0.0, 1.0],
+    )
+    assert len(ld.site_coefficients) == 5
+    assert ld.time_series.duration_us == pytest.approx(2.0)
+
+
+def test_ahs_program_spec():
+    from qpubench.schemas.neutral_atom import (
+        AHSProgramSpec, AtomArrangement, AtomicSite, AHSDrivingField,
+        AHSTimeSeries, NeutralAtomCoupling, LatticeGeometryType,
+    )
+    sites = [AtomicSite(x=i * 6.0, y=0.0) for i in range(5)]
+    arr = AtomArrangement(
+        sites=sites, lattice_type=LatticeGeometryType.CHAIN, lattice_spacing_um=6.0,
+    )
+    rabi = AHSTimeSeries(times_us=[0.0, 0.5, 1.0], values=[0.0, 15.7, 0.0])
+    det  = AHSTimeSeries(times_us=[0.0, 0.5, 1.0], values=[-30.0, 0.0, 30.0])
+    field = AHSDrivingField(rabi_amplitude=rabi, detuning=det)
+    prog = AHSProgramSpec(
+        atom_arrangement=arr,
+        driving_fields=[field],
+        total_duration_us=1.0,
+        description="Z2 order preparation",
+    )
+    assert prog.num_qubits == 5
+    assert prog.coupling == NeutralAtomCoupling.RYDBERG
+    assert prog.total_duration_us == pytest.approx(1.0)
+
+
+def test_ahs_batch_spec():
+    from qpubench.schemas.neutral_atom import AHSBatchSpec
+    batch = AHSBatchSpec(
+        variable_names=["detuning_end", "rabi_max"],
+        parameter_values=[
+            [-30.0, -20.0, -10.0, 0.0],   # detuning_end sweep
+            [10.0,  12.0,  14.0, 15.7],   # rabi_max sweep
+        ],
+        num_shots_per_batch=100,
+    )
+    assert batch.batch_size == 4
+    assert len(batch.variable_names) == 2
+
+
+def test_aquila_device_spec_defaults():
+    from qpubench.schemas.neutral_atom import AquilaDeviceSpec
+    hw = AquilaDeviceSpec()
+    assert hw.max_qubits == 256
+    assert hw.area_width_um == pytest.approx(75.0)
+    assert hw.min_atom_spacing_um == pytest.approx(4.0)
+    assert hw.rabi_max_rad_us == pytest.approx(15.8)
+    assert hw.max_pulse_duration_us == pytest.approx(4.0)
+    assert hw.c6_rad_us_um6 == pytest.approx(5.42e6)
+    assert hw.max_shots == 1000
+
+
+def test_ahs_shot_result_properties():
+    from qpubench.schemas.neutral_atom import AHSShotResult, AHSShotStatus
+    good = AHSShotResult(
+        status=AHSShotStatus.SUCCESS,
+        pre_sequence=[1, 1, 1, 1],
+        post_sequence=[1, 0, 0, 1],
+    )
+    assert good.is_perfect_fill is True
+
+    defect = AHSShotResult(
+        status=AHSShotStatus.SUCCESS,
+        pre_sequence=[1, 0, 1, 1],   # site 1 missing
+        post_sequence=[1, 0, 0, 1],
+    )
+    assert defect.is_perfect_fill is False
+
+    failed = AHSShotResult(status=AHSShotStatus.FAILURE)
+    assert failed.is_perfect_fill is False
+
+
+def test_ahs_task_result_analysis():
+    from qpubench.schemas.neutral_atom import AHSTaskResult, AHSShotResult, AHSShotStatus
+    shots = [
+        AHSShotResult(status=AHSShotStatus.SUCCESS,
+                      pre_sequence=[1, 1, 1], post_sequence=[1, 0, 1]),
+        AHSShotResult(status=AHSShotStatus.SUCCESS,
+                      pre_sequence=[1, 1, 1], post_sequence=[0, 1, 0]),
+        AHSShotResult(status=AHSShotStatus.SUCCESS,
+                      pre_sequence=[1, 0, 1], post_sequence=[1, 0, 1]),  # imperfect fill
+        AHSShotResult(status=AHSShotStatus.FAILURE,
+                      pre_sequence=[1, 1, 1], post_sequence=[1, 0, 1]),
+    ]
+    task = AHSTaskResult(num_shots_requested=4, shot_results=shots)
+    assert task.num_shots_completed == 4
+    assert len(task.successful_shots) == 3
+    assert len(task.perfect_fill_shots) == 2   # only first two
+    # bitstrings for perfect-fill shots
+    assert task.bitstrings == [[1, 0, 1], [0, 1, 0]]
+    # counts
+    assert task.counts == {"101": 1, "010": 1}
+    # rydberg_densities: P(post==0) per site over 2 good shots
+    # site 0: (1-1 + 1-0)/2 = 0.5
+    # site 1: (1-0 + 1-1)/2 = 0.5
+    # site 2: (1-1 + 1-0)/2 = 0.5
+    dens = task.rydberg_densities
+    assert len(dens) == 3
+    assert dens[0] == pytest.approx(0.5)
+    assert dens[1] == pytest.approx(0.5)
+
+
+def test_ahs_task_result_roundtrip():
+    from qpubench.schemas.neutral_atom import (
+        AHSTaskResult, AHSShotResult, AHSShotStatus, AHSExecutionMetadata,
+    )
+    task = AHSTaskResult(
+        metadata=AHSExecutionMetadata(
+            task_id="arn:aws:braket:us-east-1::task/abc123",
+            device_id="arn:aws:braket:us-east-1::device/qpu/quera/Aquila",
+            status="COMPLETED",
+            cost_usd=0.07,
+        ),
+        num_shots_requested=7,
+        shot_results=[
+            AHSShotResult(status=AHSShotStatus.SUCCESS,
+                          pre_sequence=[1, 1], post_sequence=[1, 0]),
+        ] * 7,
+    )
+    data = json.loads(task.model_dump_json())
+    assert data["metadata"]["task_id"] == "arn:aws:braket:us-east-1::task/abc123"
+    assert data["num_shots_requested"] == 7
+    restored = AHSTaskResult.model_validate(data)
+    assert len(restored.shot_results) == 7
+    assert restored.rydberg_densities == [pytest.approx(0.0), pytest.approx(1.0)]
+
+
+def test_quantum_result_ahs_field():
+    from qpubench.schemas.neutral_atom import (
+        AHSTaskResult, AHSShotResult, AHSShotStatus,
+    )
+    from qpubench.schemas.result import QuantumResult
+    task = AHSTaskResult(
+        num_shots_requested=2,
+        shot_results=[
+            AHSShotResult(status=AHSShotStatus.SUCCESS,
+                          pre_sequence=[1, 1, 1], post_sequence=[1, 0, 1]),
+            AHSShotResult(status=AHSShotStatus.SUCCESS,
+                          pre_sequence=[1, 1, 1], post_sequence=[0, 1, 0]),
+        ],
+    )
+    result = QuantumResult(modality=QPUModality.NEUTRAL_ATOM, ahs_result=task)
+    data = json.loads(result.model_dump_json())
+    assert data["modality"] == "neutral_atom"
+    assert data["ahs_result"]["num_shots_requested"] == 2
+
+
+def test_backend_spec_aquila():
+    b = BackendSpec.aquila()
+    assert b.provider == "quera"
+    assert b.qpu_modality == QPUModality.NEUTRAL_ATOM
+    assert b.simulator is False
+    assert "Aquila" in b.auth["device_arn"]
+
+
+def test_backend_spec_bloqade_emulator():
+    b = BackendSpec.bloqade_emulator(num_qubits=12)
+    assert b.provider == "bloqade"
+    assert b.qpu_modality == QPUModality.NEUTRAL_ATOM
+    assert b.simulator is True
     assert b.num_qubits == 12
+
+
+# ---------------------------------------------------------------------------
+# SlowQuant UCC / VQE schema tests
+# ---------------------------------------------------------------------------
+
+def test_ucc_active_space_config():
+    from qpubench.schemas.slowquant import UCCActiveSpaceConfig
+    cas = UCCActiveSpaceConfig(
+        num_active_electrons=2,
+        num_active_orbitals=2,
+        num_total_electrons=2,
+        num_total_orbitals=4,
+        include_orbital_optimization=False,
+    )
+    assert cas.num_qubits == 4   # 2 × num_active_orbitals
+    assert cas.frozen_core_orbitals == 0
+
+
+def test_ucc_wavefunction_config():
+    from qpubench.schemas.slowquant import (
+        UCCWavefunctionConfig, UCCActiveSpaceConfig, UCCAnsatzType, UCCExcitationLevel,
+    )
+    cas = UCCActiveSpaceConfig(num_active_electrons=2, num_active_orbitals=2)
+    cfg = UCCWavefunctionConfig(
+        ansatz=UCCAnsatzType.UCC,
+        excitations=UCCExcitationLevel.SD,
+        active_space=cas,
+        spin_adapted=True,
+    )
+    assert cfg.num_qubits == 4
+    assert cfg.excitations == UCCExcitationLevel.SD
+    assert cfg.spin_adapted is True
+
+
+def test_ucc_scf_result_homo_lumo_gap():
+    from qpubench.schemas.slowquant import UCCSCFResult
+    scf = UCCSCFResult(
+        hf_energy=-1.1175,
+        nuclear_repulsion=0.7137,
+        num_iterations=12,
+        converged=True,
+        mo_energies=[-0.5783, 0.6695, 1.2345, 2.0000],
+        orbital_occupations=[2.0, 0.0, 0.0, 0.0],
+        homo_index=0,
+    )
+    assert scf.hf_energy == pytest.approx(-1.1175)
+    assert scf.homo_lumo_gap == pytest.approx(0.6695 - (-0.5783))
+    assert scf.converged is True
+
+
+def test_ucc_scf_result_no_gap():
+    from qpubench.schemas.slowquant import UCCSCFResult
+    scf = UCCSCFResult(hf_energy=-1.1175)
+    assert scf.homo_lumo_gap is None
+
+
+def test_ucc_integral_data():
+    from qpubench.schemas.slowquant import UCCIntegralData
+    # Minimal H2/STO-3G: 2 AOs → 4-entry h_ao, 16-entry g_ao
+    nao = 2
+    data = UCCIntegralData(
+        basis_set="STO-3G",
+        num_basis_functions=nao,
+        h_ao=[-1.12, -0.96, -0.96, -0.50],   # nao² = 4
+        overlap_ao=[1.0, 0.66, 0.66, 1.0],
+    )
+    assert data.num_basis_functions == 2
+    assert len(data.h_ao) == 4
+    assert data.g_ao == []   # omitted
+
+
+def test_ucc_optimization_result():
+    from qpubench.schemas.slowquant import (
+        UCCOptimizationResult, UCCOptimizationMethod, UCCIterationRecord,
+    )
+    history = [
+        UCCIterationRecord(iteration=0, energy=-1.1000, gradient_norm=0.12),
+        UCCIterationRecord(iteration=1, energy=-1.1320, gradient_norm=0.04),
+        UCCIterationRecord(iteration=2, energy=-1.1373, gradient_norm=0.001),
+    ]
+    opt = UCCOptimizationResult(
+        method=UCCOptimizationMethod.ONE_STEP,
+        num_iterations=3,
+        converged=True,
+        final_energy=-1.1373,
+        theta=[0.0512, -0.0318],
+        kappa=[],
+        iteration_history=history,
+        gradient_norm_final=0.001,
+    )
+    assert opt.final_energy == pytest.approx(-1.1373)
+    assert opt.num_theta_params == 2
+    assert opt.num_kappa_params == 0
+    assert opt.iteration_history[2].gradient_norm == pytest.approx(0.001)
+
+
+def test_ucc_rdm_data():
+    from qpubench.schemas.slowquant import UCCRDMData
+    # 2 active orbitals: rdm1 is 2×2=4 entries
+    rdm = UCCRDMData(
+        num_active_orbitals=2,
+        rdm1=[1.9823, 0.0023, 0.0023, 0.0154],
+        rdm2=[],
+        has_rdm3=False,
+        has_rdm4=False,
+    )
+    assert len(rdm.rdm1) == 4
+    assert rdm.has_rdm3 is False
+
+
+def test_ucc_excited_state_ev_auto():
+    from qpubench.schemas.slowquant import UCCExcitedStateResult
+    # eV should be auto-filled from au value
+    state = UCCExcitedStateResult(
+        state_index=1,
+        excitation_energy_au=0.3084,
+        transition_dipole=[0.0, 0.0, 1.042],
+        oscillator_strength=0.3215,
+    )
+    assert state.excitation_energy_ev == pytest.approx(0.3084 * 27.211_386_245_988)
+    assert state.oscillator_strength == pytest.approx(0.3215)
+
+
+def test_ucc_linear_response_result():
+    from qpubench.schemas.slowquant import (
+        UCCLinearResponseResult, UCCLinearResponseType, UCCExcitationLevel,
+        UCCExcitedStateResult,
+    )
+    states = [
+        UCCExcitedStateResult(state_index=1, excitation_energy_au=0.308,
+                              transition_dipole=[0.0, 0.0, 1.04], oscillator_strength=0.32),
+        UCCExcitedStateResult(state_index=2, excitation_energy_au=0.421,
+                              transition_dipole=[0.0, 1.12, 0.0], oscillator_strength=0.11),
+    ]
+    lr = UCCLinearResponseResult(
+        response_type=UCCLinearResponseType.SELF_CONSISTENT,
+        excitation_level=UCCExcitationLevel.SD,
+        num_states_computed=2,
+        excited_states=states,
+    )
+    assert len(lr.excitation_energies_au) == 2
+    assert lr.excitation_energies_au[0] == pytest.approx(0.308)
+    assert lr.oscillator_strengths[1] == pytest.approx(0.11)
+
+
+def test_ucc_circuit_spec():
+    from qpubench.schemas.slowquant import UCCCircuitSpec, UCCAnsatzType, UCCExcitationLevel
+    circ = UCCCircuitSpec(
+        ansatz_type=UCCAnsatzType.FUCC,
+        excitation_level=UCCExcitationLevel.SD,
+        num_qubits=4,
+        num_parameters=3,
+        gate_depth=24,
+        cx_count=12,
+        spin_adapted=True,
+    )
+    assert circ.num_qubits == 4
+    assert circ.cx_count == 12
+    assert circ.qubit_encoding == "jordan_wigner"
+
+
+def test_slowquant_record_correlation_energy():
+    from qpubench.schemas.slowquant import (
+        SlowQuantRecord, UCCSCFResult, UCCOptimizationResult, UCCOptimizationMethod,
+        UCCActiveSpaceConfig, UCCWavefunctionConfig, UCCAnsatzType, UCCExcitationLevel,
+    )
+    scf = UCCSCFResult(hf_energy=-1.1175, converged=True)
+    opt = UCCOptimizationResult(
+        method=UCCOptimizationMethod.ONE_STEP,
+        num_iterations=5,
+        converged=True,
+        final_energy=-1.1373,
+        theta=[0.051, -0.032],
+    )
+    cas = UCCActiveSpaceConfig(num_active_electrons=2, num_active_orbitals=2)
+    cfg = UCCWavefunctionConfig(
+        ansatz=UCCAnsatzType.UCC,
+        excitations=UCCExcitationLevel.SD,
+        active_space=cas,
+    )
+    rec = SlowQuantRecord(
+        molecule_name="H2",
+        basis_set="STO-3G",
+        scf_result=scf,
+        wavefunction_config=cfg,
+        optimization_result=opt,
+    )
+    assert rec.correlation_energy == pytest.approx(-1.1373 - (-1.1175))
+    assert rec.num_qubits == 4   # from wavefunction_config
+
+
+def test_slowquant_record_roundtrip():
+    from qpubench.schemas.slowquant import (
+        SlowQuantRecord, UCCSCFResult, UCCOptimizationResult, UCCOptimizationMethod,
+        UCCActiveSpaceConfig, UCCWavefunctionConfig, UCCAnsatzType, UCCExcitationLevel,
+        UCCLinearResponseResult, UCCLinearResponseType, UCCExcitedStateResult,
+        UCCCircuitSpec,
+    )
+    scf = UCCSCFResult(hf_energy=-1.1175, converged=True,
+                       mo_energies=[-0.578, 0.670], homo_index=0)
+    opt = UCCOptimizationResult(
+        method=UCCOptimizationMethod.TWO_STEP,
+        num_iterations=8,
+        converged=True,
+        final_energy=-1.1516,
+        theta=[0.04, -0.03, 0.01],
+        kappa=[0.002, -0.001],
+    )
+    cas = UCCActiveSpaceConfig(num_active_electrons=2, num_active_orbitals=2,
+                               include_orbital_optimization=True)
+    cfg = UCCWavefunctionConfig(ansatz=UCCAnsatzType.TUPS,
+                                excitations=UCCExcitationLevel.SD, active_space=cas)
+    lr = UCCLinearResponseResult(
+        response_type=UCCLinearResponseType.PROJECTED,
+        excitation_level=UCCExcitationLevel.SD,
+        num_states_computed=1,
+        excited_states=[
+            UCCExcitedStateResult(state_index=1, excitation_energy_au=0.5716,
+                                  oscillator_strength=0.0)
+        ],
+    )
+    circ = UCCCircuitSpec(ansatz_type=UCCAnsatzType.TUPS,
+                          excitation_level=UCCExcitationLevel.SD,
+                          num_qubits=4, num_parameters=5, gate_depth=18, cx_count=8)
+    rec = SlowQuantRecord(
+        molecule_name="H2",
+        basis_set="STO-3G",
+        scf_result=scf,
+        wavefunction_config=cfg,
+        optimization_result=opt,
+        linear_response=lr,
+        circuit_spec=circ,
+    )
+    data = json.loads(rec.model_dump_json())
+    assert data["molecule_name"] == "H2"
+    assert data["optimization_result"]["final_energy"] == pytest.approx(-1.1516)
+    assert data["linear_response"]["excited_states"][0]["state_index"] == 1
+    restored = SlowQuantRecord.model_validate(data)
+    assert restored.num_qubits == 4
+    assert restored.correlation_energy == pytest.approx(-1.1516 - (-1.1175))
+
+
+def test_quantum_result_slowquant_field():
+    from qpubench.schemas.slowquant import (
+        SlowQuantRecord, UCCSCFResult, UCCOptimizationResult, UCCOptimizationMethod,
+    )
+    from qpubench.schemas.result import QuantumResult
+    opt = UCCOptimizationResult(
+        method=UCCOptimizationMethod.ONE_STEP,
+        num_iterations=4,
+        converged=True,
+        final_energy=-1.1373,
+        theta=[0.05],
+    )
+    rec = SlowQuantRecord(
+        molecule_name="H2",
+        scf_result=UCCSCFResult(hf_energy=-1.1175, converged=True),
+        optimization_result=opt,
+        ucc_energy=-1.1373,
+    )
+    result = QuantumResult(
+        modality=QPUModality.GATE_BASED,
+        slowquant_record=rec,
+    )
+    data = json.loads(result.model_dump_json())
+    assert data["slowquant_record"]["ucc_energy"] == pytest.approx(-1.1373)
+    assert data["slowquant_record"]["molecule_name"] == "H2"

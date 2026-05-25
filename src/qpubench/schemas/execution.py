@@ -5,6 +5,7 @@ from typing import Any
 import pydantic
 
 from .primitives import ErrorMitigationStrategy
+from .qesem import QESEMCircuitOptions, QESEMJobOptions
 
 
 class ZNEConfig(pydantic.BaseModel):
@@ -123,6 +124,9 @@ class ExecutionOptions(pydantic.BaseModel):
     algorithm_spec:       AlgorithmSpec | None    = None
     cluster_depth:        int | None              = None
     adaptive_corrections: bool                    = True
+    # QESEM (Qedma) fields
+    qesem_circuit_options: QESEMCircuitOptions | None = None
+    qesem_job_options:     QESEMJobOptions | None     = None
 
     @pydantic.model_validator(mode="after")
     def _zne_default_config(self) -> ExecutionOptions:

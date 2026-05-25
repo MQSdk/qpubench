@@ -316,6 +316,37 @@ class BackendSpec(pydantic.BaseModel):
         )
 
     @classmethod
+    def qesem(
+        cls,
+        backend_name: str,
+        *,
+        api_token_ref: str = "",
+        via_qiskit_function: bool = False,
+    ) -> BackendSpec:
+        """Qedma QESEM error suppression and mitigation service.
+
+        QESEM wraps an IBM gate-based backend with noise-aware transpilation,
+        device characterization, and quasi-probabilistic error tuning (QET).
+
+        backend_name         IBM backend to target, e.g. "ibm_fez", "ibm_torino".
+        api_token_ref        Env-var name holding the Qedma API token.
+        via_qiskit_function  True when submitting through the IBM Qiskit Functions
+                             catalog (QiskitFunctionsCatalog) rather than directly
+                             via the qedma-api client.
+        """
+        return cls(
+            name=f"qesem_{backend_name}",
+            provider="qedma",
+            qpu_modality=QPUModality.GATE_BASED,
+            simulator=False,
+            auth={
+                "backend_name":         backend_name,
+                "api_token_ref":        api_token_ref,
+                "via_qiskit_function":  str(via_qiskit_function),
+            },
+        )
+
+    @classmethod
     def qiskit_aer(
         cls,
         method: str = "statevector",
@@ -383,4 +414,44 @@ class BackendSpec(pydantic.BaseModel):
                 "resource_id_ref":  resource_id_ref,
                 "location_ref":     location_ref,
             },
+        )
+
+    @classmethod
+    def aquila(
+        cls,
+        *,
+        aws_region: str = "us-east-1",
+        api_token_ref: str = "",
+    ) -> BackendSpec:
+        """QuEra Aquila 256-qubit neutral-atom QPU via AWS Braket.
+
+        aws_region     AWS region hosting the Aquila device.
+        api_token_ref  Environment variable name holding the AWS credentials
+                       (or empty to use the default boto3 credential chain).
+        """
+        return cls(
+            name="aquila",
+            provider="quera",
+            qpu_modality=QPUModality.NEUTRAL_ATOM,
+            simulator=False,
+            auth={
+                "device_arn": f"arn:aws:braket:{aws_region}::device/qpu/quera/Aquila",
+                "aws_region": aws_region,
+                "api_token_ref": api_token_ref,
+            },
+        )
+
+    @classmethod
+    def bloqade_emulator(cls, num_qubits: int | None = None) -> BackendSpec:
+        """Bloqade Python local AHS emulator (exact state-vector / KrylovKit).
+
+        Runs on CPU; practical up to ~20 atoms for full state-vector simulation.
+        No API credentials required — purely local.
+        """
+        return cls(
+            name="bloqade_python",
+            provider="bloqade",
+            qpu_modality=QPUModality.NEUTRAL_ATOM,
+            simulator=True,
+            num_qubits=num_qubits,
         )

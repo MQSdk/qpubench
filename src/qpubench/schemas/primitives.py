@@ -14,6 +14,7 @@ class QPUModality(str, enum.Enum):
     QPE                     = "qpe"                      # Quantum Phase Estimation (gate-based QPE/IQPE)
     GBS                     = "gbs"                      # Gaussian Boson Sampling (squeezed states + interferometer)
     KQD                     = "kqd"                      # Krylov Quantum Diagonalization (QSE / SQD)
+    NEUTRAL_ATOM            = "neutral_atom"             # Analog Hamiltonian Simulation on Rydberg atoms
 
 
 class CircuitFormat(str, enum.Enum):

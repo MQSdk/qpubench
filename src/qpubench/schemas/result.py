@@ -19,6 +19,10 @@ from .gbs import (
 from .primitives import CircuitFormat, FidelityMetric, JobStatus, QPUModality
 from .qdk_chemistry import QPEResult, QChemPipelineSpec
 from .qse import KQDPipelineSpec
+from .qesem import QESEMJobRecord
+from .qcschema import QCSchemaRecord
+from .neutral_atom import AHSTaskResult
+from .slowquant import SlowQuantRecord
 
 
 class TranspileLayout(pydantic.BaseModel):
@@ -198,6 +202,14 @@ class QuantumResult(pydantic.BaseModel):
     tdm_gbs:                    TDMGBSResult | None                             = None
     # KQD-modality result fields (QPUModality.KQD)
     kqd_pipeline:               KQDPipelineSpec | None                          = None
+    # QESEM (Qedma) error suppression/mitigation result fields
+    qesem_result:               QESEMJobRecord | None                           = None
+    # QCSchema / QCElemental / PennyLane quantum chemistry reference record
+    qcschema_record:            QCSchemaRecord | None                           = None
+    # Neutral-atom (Rydberg / AHS) result fields (QPUModality.NEUTRAL_ATOM)
+    ahs_result:                 AHSTaskResult | None                            = None
+    # SlowQuant UCC / VQE calculation record
+    slowquant_record:           SlowQuantRecord | None                          = None
 
     @property
     def openqasm3_transpiled(self) -> str | None:

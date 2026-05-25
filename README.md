@@ -2,7 +2,7 @@
 
 [![Python ≥ 3.11](https://img.shields.io/badge/python-≥3.11-blue)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green)](LICENSE)
-[![Schema v1.3.0](https://img.shields.io/badge/schema-v1.3.0-orange)](docs/schemas.md)
+[![Schema v1.11.0](https://img.shields.io/badge/schema-v1.11.0-orange)](docs/schemas.md)
 
 Modality-agnostic quantum benchmark framework with a typed [Pydantic v2](https://docs.pydantic.dev/) schema layer.
 
@@ -17,7 +17,7 @@ qpubench separates **what you benchmark** (schemas) from **how execution happens
 | **[Installation](docs/installation.md)** | pip · uv · Poetry 2 · conda |
 | **[Schema reference](docs/schemas.md)** | Every Pydantic model, field, and enum |
 | **[Backends & adapters](docs/backends.md)** | BackendAdapter / AlgorithmAdapter protocols, writing a new adapter |
-| **[Integrations](docs/integrations.md)** | Cebule SDK · Xenakis · ExcitationSolve · GSOpt |
+| **[Integrations](docs/integrations.md)** | Cebule SDK · Xenakis · ExcitationSolve · GSOpt · Photonic · QDK Chemistry · GBS · QSE/KQD · QESEM · QCSchema/QCElemental/PennyLane · Bloqade/Aquila · SlowQuant |
 | **[MBQC FPGA](docs/mbqc.md)** | 16-bit program word, COE files, byproduct registers |
 | **[Persistence](docs/persistence.md)** | NDJSONStore · ParquetStore · hooks |
 | **[Compatibility](docs/compatibility.md)** | Pauli encoding, complex precision, MBQC bit conventions |
@@ -171,22 +171,32 @@ record = runner.run(mol, "qforte", options)
 
 ## Schema overview
 
-Schema version **1.3.0** — 13 modules, zero quantum SDK dependencies.
+Schema version **1.11.0** — 19 modules, zero quantum SDK dependencies.
 
-| Module | Key types |
-|---|---|
-| `primitives` | `QPUModality`, `CircuitFormat`, `PauliLabel`, `CebuleTaskType`, all enums |
-| `circuit` | `CircuitSpec` (`from_openqasm3`, `openqasm3`, `bind`), `ParameterBinding` |
-| `observable` | `SparsePauliObservable`, `PauliTerm`, `from_cebule_operators` |
-| `backend` | `BackendSpec` (`.aer_statevector()`, `.ibm()`, `.qrack()`, `.cudaq()`, `.cebule()`, …) |
-| `execution` | `ExecutionOptions`, `AlgorithmSpec`, `ZNEConfig`, `TranspilerConfig` |
-| `result` | `QuantumResult`, `ExpectationResult`, `ShotResult`, `FidelityResult`, `AdaptIteration`, `TranspileLayout` |
-| `record` | `BenchmarkRecord`, `VQAConfig` |
-| `mbqc` | `MBQCPattern`, `MBQCProgramWord`, `MBQCExecutionResult` — bit-exact 16-bit FPGA word |
-| `cebule` | `MolMapResult`, `QASMGenResult`, `TNQCOptResult`, `COVOResult`, `MolecularGeometry` |
-| `xenakis` | `LayerGenome`, `BitstringGenome`, `QNEATGenome`, `GARunResult`, `XenakisRunConfig` |
-| `excitation_solve` | `ExcitationSolveResult`, `ExcitationSolveSweep`, `ExcitationAdaptResult` |
-| `gsopt` | `GSOptBenchmarkResult`, `ActiveSpaceSpec`, `REFERENCE_ENERGIES`, `VQERunConfig` |
+| Module | Modality | Key types |
+|---|---|---|
+| `primitives` | all | `QPUModality`, `CircuitFormat`, `PauliLabel`, `CebuleTaskType`, `ComplexNumber` |
+| `circuit` | all | `CircuitSpec` (`from_openqasm3`, `openqasm3`, `bind`), `ParameterBinding` |
+| `observable` | all | `SparsePauliObservable`, `PauliTerm` |
+| `backend` | all | `BackendSpec` (19 factory constructors) |
+| `execution` | all | `ExecutionOptions`, `AlgorithmSpec`, `ZNEConfig`, `TranspilerConfig` |
+| `result` | all | `QuantumResult` (15 result-type fields), `ExpectationResult`, `ShotResult`, `TranspileLayout` |
+| `record` | all | `BenchmarkRecord`, `VQAConfig` |
+| `mbqc` | MBQC | `MBQCPattern`, `MBQCProgramWord`, `MBQCExecutionResult` — bit-exact 16-bit FPGA word |
+| `cebule` | gate | `MolMapResult`, `QASMGenResult`, `TNQCOptResult`, `COVOResult`, `MolecularGeometry` |
+| `xenakis` | gate | `LayerGenome`, `BitstringGenome`, `QNEATGenome`, `GARunResult`, `XenakisRunConfig` |
+| `excitation_solve` | gate | `ExcitationSolveResult`, `ExcitationSolveSweep`, `ExcitationAdaptResult` |
+| `gsopt` | gate | `GSOptBenchmarkResult`, `ActiveSpaceSpec`, `REFERENCE_ENERGIES`, `VQERunConfig` |
+| `photonic` | photonic / FBQC | `PhotonicCircuitSpec`, `SinglePhotonSourceSpec`, `FockState`, `HOMResult`, `FBQCRunConfig`, `PhotonicVQEResult`, `PhotonicAnalogSimResult` |
+| `qdk_chemistry` | QPE | `QChemPipelineSpec`, `MoleculeStructureSpec`, `SCFResult`, `FermionicHamiltonianSpec`, `QPEResult`, `ResourceEstimationResult`, `ModelHamiltonianSpec` |
+| `gbs` | GBS | `GBSProgramSpec`, `GaussianStateSpec`, `HafnianResult`, `GBSCliqueFindingResult`, `VibronicSpectrumResult`, `TDMGBSResult` |
+| `qse` | KQD | `KQDPipelineSpec`, `KQDConfig`, `KrylovSubspaceMatrices`, `KrylovEigenResult`, `SQDConvergenceResult`, `CholeskyDecompositionSpec` |
+| `qesem` | GATE_BASED + QESEM | `QESEMJobRecord`, `QESEMJobSpec`, `QESEMObservableResult`, `QESEMNoiseScalingResult`, `QESEMCircuitOptions`, `QESEMExecutionDetails`, `QESEMCharacterizationResult` |
+| `qcschema` | all (chemistry) | `QCMolecule`, `QCAtomicInput`, `QCAtomicResult`, `QCOptimizationResult`, `QCWavefunctionData`, `QCEnergyComponents`, `PennyLaneMolDataset`, `QCSchemaRecord` |
+| `neutral_atom` | NEUTRAL_ATOM | `AtomArrangement`, `AHSProgramSpec`, `AHSDrivingField`, `AHSTimeSeries`, `AHSTaskResult`, `AHSShotResult`, `AquilaDeviceSpec`, `AHSBatchSpec` |
+| `slowquant` | GATE_BASED | `SlowQuantRecord`, `UCCWavefunctionConfig`, `UCCOptimizationResult`, `UCCLinearResponseResult`, `UCCExcitedStateResult`, `UCCCircuitSpec`, `UCCSCFResult`, `UCCRDMData` |
+
+`QPUModality` values: `GATE_BASED` · `MBQC` · `ANNEALING` · `PHOTONIC_LINEAR_OPTICS` · `FUSION_BASED` · `QPE` · `GBS` · `KQD` · `NEUTRAL_ATOM`
 
 → Full field-level reference: [docs/schemas.md](docs/schemas.md)
 
@@ -197,7 +207,20 @@ Schema version **1.3.0** — 13 modules, zero quantum SDK dependencies.
 ```
 qpubench/
 ├── src/qpubench/
-│   ├── schemas/           ← Pydantic schema layer (13 modules, schema v1.3.0)
+│   ├── schemas/           ← Pydantic schema layer (18 modules, schema v1.10.0)
+│   │   ├── primitives, circuit, observable, backend, execution, result, record
+│   │   ├── mbqc           ← MBQC-FPGA 16-bit program word
+│   │   ├── cebule         ← Cebule SDK task I/O
+│   │   ├── xenakis        ← Xenakis GA circuit genomes
+│   │   ├── excitation_solve, gsopt
+│   │   ├── photonic       ← Linear-optics chips, FBQC, HOM, photonic VQE/analog
+│   │   ├── qdk_chemistry  ← QDK chemistry pipeline: SCF→active space→QPE→resource est.
+│   │   ├── gbs            ← Gaussian Boson Sampling: hafnian, vibronic, TDM/Borealis
+│   │   ├── qse            ← Krylov Quantum Diagonalization (KQD/SQD)
+│   │   ├── qesem          ← QESEM (Qedma): noise scaling, QET, device characterization
+│   │   ├── qcschema       ← QCSchema/QCElemental/PennyLane interoperability
+│   │   ├── neutral_atom   ← Neutral atom AHS: Bloqade/Aquila atom arrangement, drives, results
+│   │   └── slowquant      ← SlowQuant UCC/VQE: ansatz config, SCF, optimization, linear response
 │   ├── backends/          ← BackendAdapter/AlgorithmAdapter protocols + stubs
 │   ├── runner.py          ← BenchmarkRunner (run, sweep, hooks, dual-protocol dispatch)
 │   └── store.py           ← NDJSONStore, ParquetStore, ResultStore protocol
@@ -207,7 +230,7 @@ qpubench/
 │   └── qforte/            ← Complete QForte integration (ADAPT-VQE, UCCNVQE)
 │
 ├── examples/              ← Runnable examples (gate-based, MBQC, QForte VQE)
-├── tests/                 ← 61 schema tests, no quantum SDK required
+├── tests/                 ← 156 schema tests, no quantum SDK required
 ├── docs/                  ← Detailed documentation
 ├── conda-recipe/          ← conda-build recipe (meta.yaml)
 ├── environment.yml        ← conda development environment
@@ -220,7 +243,7 @@ qpubench/
 ## Tests
 
 ```sh
-pytest tests/       # 61 tests, no quantum SDK required
+pytest tests/       # 156 tests, no quantum SDK required
 ```
 
 ---

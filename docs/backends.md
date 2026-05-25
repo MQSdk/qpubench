@@ -165,19 +165,65 @@ The runner dispatches to `run_algorithm()` automatically when it detects `Algori
 
 ## Backend support matrix
 
-| Backend | Provider | Adapter | Status |
-|---|---|---|---|
-| Qiskit Aer (statevector + QASM) | `"aer"` | `AerAdapter` | Stub — fill TODOs in `aer_adapter.py` |
-| IBM Quantum Runtime V2 | `"ibm"` | `IBMAdapter` | Stub — fill TODOs in `ibm_adapter.py` |
-| Qrack GPU/CPU simulator | `"qrack"` | `QrackAdapter` | Stub — fill TODOs in `qrack_adapter.py` |
-| IQM hardware | `"iqm"` | Copy `backend_adapter_template.py` | |
-| Qibo cloud | `"qibo"` | Copy `backend_adapter_template.py` | |
-| MBQC-FPGA (photonic) | `"mbqc"` | Copy `backend_adapter_template.py` | Schemas complete; COE + CSV round-trip |
-| PennyLane `lightning.qubit` | `"pennylane"` | Copy template | `BackendSpec.lightning_qubit()` |
-| CUDA-Q | `"cudaq"` | Copy template | `BackendSpec.cudaq()` |
-| Cebule cloud | `"cebule"` | Copy template | `BackendSpec.cebule()` |
-| Stub gate simulator | — | `StubGateAdapter` | Fully functional, no SDK |
-| Stub MBQC simulator | — | `StubMBQCAdapter` | Fully functional, no SDK |
+### Gate-based
+
+| Backend | Provider | Modality | Adapter | Status |
+|---|---|---|---|---|
+| Qiskit Aer (statevector + QASM) | `"aer"` | `GATE_BASED` | `AerAdapter` | Stub — fill TODOs in `aer_adapter.py` |
+| IBM Quantum Runtime V2 | `"ibm"` | `GATE_BASED` | `IBMAdapter` | Stub — fill TODOs in `ibm_adapter.py` |
+| Qrack GPU/CPU simulator | `"qrack"` | `GATE_BASED` | `QrackAdapter` | Stub — fill TODOs in `qrack_adapter.py` |
+| IQM hardware | `"iqm"` | `GATE_BASED` | Copy `backend_adapter_template.py` | |
+| Qibo cloud | `"qibo"` | `GATE_BASED` | Copy `backend_adapter_template.py` | |
+| PennyLane `lightning.qubit` | `"pennylane"` | `GATE_BASED` | Copy template | `BackendSpec.lightning_qubit()` |
+| CUDA-Q | `"cudaq"` | `GATE_BASED` | Copy template | `BackendSpec.cudaq()` |
+| Cebule cloud | `"cebule"` | `GATE_BASED` | Copy template | `BackendSpec.cebule()` |
+| Stub gate simulator | — | `GATE_BASED` | `StubGateAdapter` | Fully functional, no SDK |
+| Stub MBQC simulator | — | `MBQC` | `StubMBQCAdapter` | Fully functional, no SDK |
+| MBQC-FPGA | `"mbqc"` | `MBQC` | Copy `backend_adapter_template.py` | Schemas complete; COE + CSV round-trip |
+
+### Photonic (linear-optics / FBQC)
+
+| Backend | Provider | Modality | Factory | Notes |
+|---|---|---|---|---|
+| photochipsim | `"photochipsim"` | `PHOTONIC_LINEAR_OPTICS` | `BackendSpec.photochipsim(num_modes)` | thewalrus permanent engine |
+| Strawberry Fields Fock | `"strawberry_fields"` | `PHOTONIC_LINEAR_OPTICS` | `BackendSpec.strawberry_fields(backend, num_modes, cutoff_dim)` | Fock-basis; also `"gaussian"` or `"tf"` backend |
+| Quandela Perceval | `"perceval"` | `PHOTONIC_LINEAR_OPTICS` | `BackendSpec.perceval(backend, num_modes)` | SLOS / MPS / Naive |
+| Photonic chip hardware | `"photonic_hardware"` | `PHOTONIC_LINEAR_OPTICS` | `BackendSpec.photonic_chip_hardware(chip_id, platform, num_modes)` | SiN, SOI, InP, LN platforms |
+
+### GBS (Gaussian Boson Sampling)
+
+| Backend | Provider | Modality | Factory | Notes |
+|---|---|---|---|---|
+| Xanadu X8 | `"xanadu"` | `GBS` | `BackendSpec.xanadu_x8(num_modes=8)` | 8-mode PNR hardware; Xanadu Cloud |
+| Xanadu Borealis | `"xanadu"` / `"aws_braket"` | `GBS` | `BackendSpec.xanadu_borealis(via_braket=False)` | 216-mode TDM; `via_braket=True` for AWS |
+| Strawberry Fields Gaussian | `"strawberry_fields"` | `GBS` | `BackendSpec.strawberry_fields_gaussian(num_modes)` | Covariance-matrix + thewalrus hafnian |
+
+### QPE / QDK chemistry
+
+| Backend | Provider | Modality | Factory | Notes |
+|---|---|---|---|---|
+| QDK simulator | `"qdk_chemistry"` | `QPE` | `BackendSpec.qdk_chemistry_simulator(executor, num_qubits)` | Sparse / full state vector |
+| Azure Quantum | `"azure_quantum"` | `QPE` | `BackendSpec.azure_quantum(target, *, resource_id_ref, location_ref)` | Hardware + resource estimator |
+
+### KQD / QSE
+
+| Backend | Provider | Modality | Factory | Notes |
+|---|---|---|---|---|
+| Qiskit Aer (KQD) | `"aer"` | `KQD` | `BackendSpec.qiskit_aer(method="statevector", num_qubits)` | statevector / MPS / stabilizer |
+
+### QESEM (Qedma)
+
+| Backend | Provider | Modality | Factory | Notes |
+|---|---|---|---|---|
+| QESEM native client | `"qedma"` | `GATE_BASED` + `QESEM` | `BackendSpec.qesem(backend_name, *, api_token_ref, via_qiskit_function=False)` | Wraps any IBM backend with noise-aware QET mitigation |
+| QESEM via Qiskit Function | `"qedma"` | `GATE_BASED` + `QESEM` | `BackendSpec.qesem(backend_name, via_qiskit_function=True)` | Submitted through IBM Qiskit Functions catalog |
+
+### Neutral atom (Rydberg / AHS)
+
+| Backend | Provider | Modality | Factory | Notes |
+|---|---|---|---|---|
+| QuEra Aquila 256-qubit QPU | `"quera"` | `NEUTRAL_ATOM` | `BackendSpec.aquila(aws_region="us-east-1")` | Analog Hamiltonian Simulation; submitted via AWS Braket |
+| Bloqade Python emulator | `"bloqade"` | `NEUTRAL_ATOM` | `BackendSpec.bloqade_emulator(num_qubits)` | Local exact state-vector; no credentials; practical up to ~20 atoms |
 
 ### Algorithm libraries
 
