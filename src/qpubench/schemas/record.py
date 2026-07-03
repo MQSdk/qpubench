@@ -12,7 +12,8 @@ from .result import QuantumResult
 
 SCHEMA_VERSION = "1.11.0"
 
-_utcnow = lambda: datetime.datetime.now(datetime.UTC)  # noqa: E731
+def _utcnow() -> datetime.datetime:
+    return datetime.datetime.now(datetime.UTC)
 
 
 class VQAConfig(pydantic.BaseModel):

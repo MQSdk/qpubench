@@ -71,7 +71,6 @@ class StubMBQCAdapter:
 
     @property
     def spec(self) -> BackendSpec:
-        pattern = None
         return BackendSpec(
             name="stub_mbqc",
             provider="mbqc",

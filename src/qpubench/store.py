@@ -10,6 +10,7 @@ ParquetStore — optional columnar store requiring pyarrow + pandas.
 from __future__ import annotations
 
 import pathlib
+from collections.abc import Iterator
 from typing import Any, Protocol, runtime_checkable
 
 from .schemas.record import BenchmarkRecord
@@ -71,7 +72,7 @@ class NDJSONStore:
     def all(self) -> list[BenchmarkRecord]:
         return list(self._iter())
 
-    def _iter(self):
+    def _iter(self) -> Iterator[BenchmarkRecord]:
         if not self._path.exists():
             return
         with self._path.open(encoding="utf-8") as fh:
@@ -101,9 +102,9 @@ class ParquetStore:
 
     def save(self, record: BenchmarkRecord) -> None:
         try:
-            import pandas as pd
-            import pyarrow as pa
-            import pyarrow.parquet as pq
+            import pandas as pd  # type: ignore[import-untyped]
+            import pyarrow as pa  # type: ignore[import-not-found]
+            import pyarrow.parquet as pq  # type: ignore[import-not-found]
         except ImportError as e:
             raise ImportError(
                 "ParquetStore requires pyarrow and pandas. "
@@ -134,20 +135,17 @@ class ParquetStore:
     def query(self, **filters: Any) -> list[BenchmarkRecord]:
         import pyarrow.parquet as pq
 
-        table = pq.read_table(self._path)
-        df    = table.to_pandas()
-        mask  = pd.Series([True] * len(df), index=df.index)
+        df = pq.read_table(self._path).to_pandas()
         for col, val in filters.items():
             if col in df.columns:
-                mask &= df[col] == val
+                df = df[df[col] == val]
         return [
             BenchmarkRecord.model_validate_json(row["_raw_json"])
-            for _, row in df[mask].iterrows()
+            for _, row in df.iterrows()
         ]
 
-    def to_dataframe(self):
+    def to_dataframe(self) -> Any:
         """Return a pandas DataFrame of flattened records (no pyarrow dependency)."""
-        import pandas as pd
         import pyarrow.parquet as pq
 
         return pq.read_table(self._path).to_pandas()
@@ -157,7 +155,7 @@ class ParquetStore:
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _nested_get(d: dict, key: str) -> Any:
+def _nested_get(d: dict[str, Any], key: str) -> Any:
     for part in key.split("."):
         if not isinstance(d, dict):
             return None

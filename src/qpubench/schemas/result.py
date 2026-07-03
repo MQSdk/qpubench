@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 import pydantic
 
 from .photonic import (
@@ -184,7 +186,7 @@ class QuantumResult(pydantic.BaseModel):
     error_message:         str | None                    = None
     wall_seconds:          float | None                  = None   # actual wall time
     wall_budget_seconds:   float | None                  = None   # allowed budget (GSOpt)
-    metadata:              dict                          = {}
+    metadata:              dict[str, Any]                = {}
     # Photonic-modality result fields (QPUModality.PHOTONIC_LINEAR_OPTICS / FUSION_BASED)
     photonic_simulation:        PhotonicSimulationResult | None                 = None
     photonic_vqe:               PhotonicVQEResult | None                        = None

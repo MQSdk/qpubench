@@ -97,7 +97,7 @@ class BenchmarkRunner:
             elapsed = time.perf_counter() - t0
 
             # Caller-supplied vqa overrides extracted metadata if provided
-            merged_vqa = vqa if vqa is not None else extracted_vqa
+            merged_vqa: VQAConfig | None = vqa if vqa is not None else extracted_vqa
 
         # --- Circuit-driven path (Aer, IBM, Qrack, MBQC, stubs) ---
         else:

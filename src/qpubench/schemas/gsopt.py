@@ -27,6 +27,8 @@ GSOptBenchmarkResult.chemical_accuracy_achieved → bool (<1 mHartree)
 """
 from __future__ import annotations
 
+from typing import Any
+
 import enum
 
 import pydantic
@@ -254,7 +256,7 @@ class GSOptBenchmarkResult(pydantic.BaseModel):
             },
         )
 
-    def to_vqa_config(self) -> dict:
+    def to_vqa_config(self) -> dict[str, Any]:
         """Return keyword arguments for constructing a VQAConfig.
 
         Usage::

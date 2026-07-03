@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 import pydantic
 
 from .mbqc import MBQCPattern
@@ -87,7 +89,7 @@ class CircuitSpec(pydantic.BaseModel):
         source: str,
         *,
         num_qubits: int,
-        **kwargs,
+        **kwargs: Any,
     ) -> CircuitSpec:
         """Construct a CircuitSpec from an OpenQASM 3.0 source string."""
         return cls(

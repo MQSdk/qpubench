@@ -87,7 +87,7 @@ def _build_system(qf: Any, circuit: CircuitSpec) -> Any:
         )
 
     if build_type == "psi4":
-        geom = [tuple([sym, tuple(xyz)]) for sym, xyz in spec["mol_geometry"]]
+        geom = [(sym, tuple(xyz)) for sym, xyz in spec["mol_geometry"]]
         return qf.system_factory(
             system_type="molecule",
             build_type="psi4",

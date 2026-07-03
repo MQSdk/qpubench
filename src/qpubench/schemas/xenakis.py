@@ -91,7 +91,7 @@ class LayerGenome(pydantic.BaseModel):
         return counts
 
     @classmethod
-    def from_struct(cls, d: dict) -> LayerGenome:
+    def from_struct(cls, d: dict[str, Any]) -> LayerGenome:
         """Parse a qarchga Genome.to_struct() / best_genome.json dict."""
         parsed_layers: list[GenomeLayer] = []
         for raw_layer in d["layers"]:
@@ -110,7 +110,7 @@ class LayerGenome(pydantic.BaseModel):
             layers=parsed_layers,
         )
 
-    def to_struct(self) -> dict:
+    def to_struct(self) -> dict[str, Any]:
         """Serialise back to the qarchga Genome.to_struct() format."""
         return {
             "n_qubits": self.n_qubits,

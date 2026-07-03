@@ -1,0 +1,96 @@
+# AGENTS.md — QPUBench
+
+Modality-agnostic quantum benchmark framework. Pydantic v2 schema layer with zero quantum SDK dependencies in the core package. Schema v1.11.0.
+
+## Stack
+
+- Python ≥ 3.11 · Pydantic ≥ 2.0 (only mandatory runtime dep)
+- Build: hatchling (PEP 517) · Package mgmt: uv / pip / Poetry 2 / conda
+- Linting: ruff (line-length 100, target py311) · Types: mypy (strict) · Tests: pytest
+
+## Commands
+
+```sh
+# Install (dev)
+uv sync                         # preferred — installs package + dev group
+pip install -e "." --group dev  # fallback
+
+# Test
+pytest tests/                   # all 156 schema tests (no quantum SDK needed)
+pytest tests/test_schemas.py -k "pauli"   # single file, filtered
+
+# Lint / format / type-check
+ruff check src/ tests/
+ruff format src/ tests/
+mypy src/
+```
+
+Run `ruff check` and `mypy src/` before committing. Tests must pass without any quantum SDK installed.
+
+## Architecture
+
+```
+src/qpubench/
+├── schemas/       ← 19 Pydantic v2 modules — the stable core
+├── backends/      ← BackendAdapter + AlgorithmAdapter protocols + stubs
+├── runner.py      ← BenchmarkRunner (run, sweep, hooks, dual-protocol dispatch)
+└── store.py       ← NDJSONStore, ParquetStore, ResultStore protocol
+
+integrations/      ← NOT installed; copy into your project
+examples/          ← Runnable demos
+tests/             ← Schema-only unit tests
+```
+
+`BackendAdapter` — caller provides a `CircuitSpec`, adapter executes it, returns `QuantumResult`.
+`AlgorithmAdapter` — adapter generates its own circuit from a problem spec, returns `(QuantumResult, VQAConfig)`. Detected by the runner via `isinstance()`.
+
+## Critical constraints — never violate these
+
+- **No quantum SDK imports inside `src/qpubench/`**. Only adapters (in your project or `integrations/`) import external SDKs. The test suite must pass with `pip install .` alone.
+- **Never change a schema field name or type without bumping `schema_version`** in `src/qpubench/schemas/record.py`. Existing stored records break silently otherwise.
+- **Pauli encoding is non-standard for Qrack**: I=0, X=1, **Z=2, Y=3** (Q# convention). Always use `PauliLabel.to_qrack_int()`, never raw integers.
+- **MBQC byproduct register bit order**: bit 0 = Z, bit 1 = X — reversed from gate-based convention. See `schemas/mbqc.py`.
+- **`AlgorithmAdapter` detection is duck-typed**: your class must have both `validate_problem` and `run_algorithm` methods, or the runner silently falls through to the `BackendAdapter` path.
+
+## Adding a new schema module
+
+1. Create `src/qpubench/schemas/<name>.py` with Pydantic v2 models.
+2. Export new public types from `src/qpubench/__init__.py`.
+3. Add tests in `tests/test_schemas.py` — no mocking of quantum SDKs.
+4. Update the schema version string and the table in `docs/schemas.md`.
+
+Do **not** add `model_config = ConfigDict(arbitrary_types_allowed=True)` — all schema fields must be JSON-serialisable by default.
+
+## Adding a new adapter
+
+Copy `integrations/template/backend_adapter_template.py` or `algorithm_adapter_template.py`.
+Move SDK imports inside the methods that use them — never at module level — so importing the adapter without the SDK installed doesn't raise `ImportError`.
+
+```python
+# Good
+def run(self, circuit, options):
+    import qiskit_aer  # deferred import
+
+# Bad — breaks `pip install .` users
+import qiskit_aer
+```
+
+## Testing adapters
+
+Mock the external library at the import level; do not require the SDK in CI:
+
+```python
+with patch("my_adapter.my_library", MagicMock()) as mock_lib:
+    mock_lib.solve.return_value = -2.9003
+    record = runner.run(mol_spec, "mine", ExecutionOptions())
+assert record.result.status == JobStatus.SUCCEEDED
+```
+
+See `INTEGRATION_GUIDE.md §5` for the full pattern.
+
+## What not to do
+
+- Don't create migration scripts or version-conversion code — the schema is append-only; add new optional fields instead of changing existing ones.
+- Don't add `print()` statements to `src/qpubench/` core; use `logging.getLogger(__name__)`.
+- Don't commit result files (`results/*.ndjson`, `*.parquet`) — they are gitignored.
+- Don't use `git push --force` on `main`.

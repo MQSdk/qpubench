@@ -16,11 +16,10 @@ from __future__ import annotations
 from ..schemas.backend import BackendSpec
 from ..schemas.circuit import CircuitSpec
 from ..schemas.execution import ExecutionOptions, TranspilerConfig
-from ..schemas.primitives import CircuitFormat, ErrorMitigationStrategy, JobStatus, QPUModality
+from ..schemas.primitives import CircuitFormat, ErrorMitigationStrategy, FidelityMetric, JobStatus, QPUModality
 from ..schemas.result import (
     ExpectationResult,
     FidelityResult,
-    FidelityMetric,
     QuantumResult,
     ShotResult,
     TranspileLayout,
