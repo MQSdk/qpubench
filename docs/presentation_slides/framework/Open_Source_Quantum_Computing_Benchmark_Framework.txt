@@ -1,0 +1,81 @@
+Benchmark Framework
+
+Framework
+Programming language agnostic, but presented via Python
+
+Credentials handling via environment file and API tokens
+
+Extensive schema reference
+
+Schema
+Module index (external repos)
+
+Primitives
+
+Circuit
+
+ObservableBackend
+
+Execution
+
+Result
+
+Record
+
+Adapters
+BackendAdapter
+
+AlgorithmAdapter
+
+TranspilationAdapter
+
+ErrorAdapter
+
+QPU Modalities
+
+Data Persistency
+
+Cross-framework compatibility
+
+Python specific
+Code quality: pydantic, PEP8, black, ruff, mypy, ponytail
+
+Multi-agent System Overview
+gitea-mcp: https://gitea.com/gitea/gitea-mcp
+
+Claude Code: https://gitea.com/gitea/gitea-mcp#usage-with-claude-code
+
+Mistral Vibe: https://gitea.com/gitea/gitea-mcp#usage-with-mistral-vibe
+
+https://about.gitea.com/resources/tutorials/gitea-mcp-server
+
+https://steviee.medium.com/my-new-ai-driver-cc-gitea-gitea-mcp-f98960bff054
+
+https://www.reddit.com/r/ClaudeAI/comments/1ufk39b/i_opensourced_my_multiagent_dev_pipeline_it_turns/
+
+https://matteovillosio.com/writing/agent2agent-mcp-tutorial/
+
+https://quaily.com/jdevtw-en/p/explore-manage-gitea-repo-using-gitea-mcp-server
+
+Ponytail: https://github.com/DietrichGebert/ponytail
+
+https://kareemf.com/on-working-with-agentic-models-part-3https://medium.com/@bijit211987/the-complete-guide-to-claude-md-memory-rules-loading-and-cross-tool-compression-97cc12ed037b
+
+https://www.reddit.com/r/ClaudeAI/comments/1qw9hr4/claude_code_has_an_undocumented_persistent_memory/
+
+AGENTS.md, CLAUDE.md, CONTEXT.md, workspaces, worktrees, contract.ts
+gitea
+github
+repos
+Before starting: Write CONTEXT.md with current task, status, constraints
+Each session: claude → "Read CONTEXT.md and CLAUDE.md first"
+When switching repos: Update CONTEXT.md with what you just completed
+For coordinated changes: Run parallel instances with clear boundaries
+For shared types: Keep a contract file that both CLAUDEs reference
+
+Multi-agent System: Memory
+
+Self-deployed LLMs
+https://huggingface.co/Abzu
+
+

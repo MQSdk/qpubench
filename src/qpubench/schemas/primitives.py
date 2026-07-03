@@ -44,12 +44,21 @@ class PauliLabel(str, enum.Enum):
 
 
 class ErrorMitigationStrategy(str, enum.Enum):
-    NONE  = "none"
-    DD    = "dynamical_decoupling"
-    TREX  = "trex"
-    ZNE   = "zne"
-    PEC   = "pec"
-    QESEM = "qesem"
+    NONE       = "none"
+    DD         = "dynamical_decoupling"
+    TREX       = "trex"
+    ZNE        = "zne"
+    PEC        = "pec"
+    QESEM      = "qesem"
+    FIRE_OPAL  = "fire_opal"    # Q-CTRL Fire Opal noise suppression service
+    MITIQ_ZNE  = "mitiq_zne"   # Mitiq zero-noise extrapolation
+    MITIQ_PEC  = "mitiq_pec"   # Mitiq probabilistic error cancellation
+    MITIQ_CDR  = "mitiq_cdr"   # Mitiq Clifford data regression
+    MITIQ_REM  = "mitiq_rem"   # Mitiq readout error mitigation
+    MITIQ_DDD  = "mitiq_ddd"   # Mitiq dynamical decoupling
+    HAIQU      = "haiqu"       # Haiqu Rivet transpilation middleware
+    PARITY_QC  = "parity_qc"   # ParityQC parity-encoded compilation
+    QMATTER    = "qmatter"     # QMatter quantum problem compression
 
 
 class FidelityMetric(str, enum.Enum):

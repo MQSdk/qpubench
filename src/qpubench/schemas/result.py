@@ -25,6 +25,14 @@ from .qesem import QESEMJobRecord
 from .qcschema import QCSchemaRecord
 from .neutral_atom import AHSTaskResult
 from .slowquant import SlowQuantRecord
+from .error_mitigation import (
+    FireOpalResult,
+    HaiquTranspilationResult,
+    IBMRuntimeRecord,
+    MitiqResult,
+    ParityQCResult,
+    QMatterCompressionResult,
+)
 
 
 class TranspileLayout(pydantic.BaseModel):
@@ -212,6 +220,13 @@ class QuantumResult(pydantic.BaseModel):
     ahs_result:                 AHSTaskResult | None                            = None
     # SlowQuant UCC / VQE calculation record
     slowquant_record:           SlowQuantRecord | None                          = None
+    # Error mitigation provider result fields
+    fire_opal_result:           FireOpalResult | None                           = None
+    mitiq_result:               MitiqResult | None                              = None
+    haiqu_result:               HaiquTranspilationResult | None                 = None
+    parity_qc_result:           ParityQCResult | None                           = None
+    qmatter_result:             QMatterCompressionResult | None                 = None
+    ibm_runtime_record:         IBMRuntimeRecord | None                         = None
 
     @property
     def openqasm3_transpiled(self) -> str | None:

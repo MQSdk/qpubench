@@ -1,0 +1,1011 @@
+% Options for packages loaded elsewhere
+\PassOptionsToPackage{unicode}{hyperref}
+\PassOptionsToPackage{hyphens}{url}
+\PassOptionsToPackage{dvipsnames,svgnames,x11names}{xcolor}
+%
+\documentclass[
+  ignorenonframetext,
+  aspectratio=169,
+]{beamer}
+\usepackage{pgfpages}
+\setbeamertemplate{caption}[numbered]
+\setbeamertemplate{caption label separator}{: }
+\setbeamercolor{caption name}{fg=normal text.fg}
+\beamertemplatenavigationsymbolsempty
+% Prevent slide breaks in the middle of a paragraph
+\widowpenalties 1 10000
+\raggedbottom
+\setbeamertemplate{part page}{
+  \centering
+  \begin{beamercolorbox}[sep=16pt,center]{part title}
+    \usebeamerfont{part title}\insertpart\par
+  \end{beamercolorbox}
+}
+\setbeamertemplate{section page}{
+  \centering
+  \begin{beamercolorbox}[sep=12pt,center]{part title}
+    \usebeamerfont{section title}\insertsection\par
+  \end{beamercolorbox}
+}
+\setbeamertemplate{subsection page}{
+  \centering
+  \begin{beamercolorbox}[sep=8pt,center]{part title}
+    \usebeamerfont{subsection title}\insertsubsection\par
+  \end{beamercolorbox}
+}
+\AtBeginPart{
+  \frame{\partpage}
+}
+\AtBeginSection{
+  \ifbibliography
+  \else
+    \frame{\sectionpage}
+  \fi
+}
+\AtBeginSubsection{
+  \frame{\subsectionpage}
+}
+\usepackage{amsmath,amssymb}
+\usepackage{iftex}
+\ifPDFTeX
+  \usepackage[T1]{fontenc}
+  \usepackage[utf8]{inputenc}
+  \usepackage{textcomp} % provide euro and other symbols
+\else % if luatex or xetex
+  \usepackage{unicode-math} % this also loads fontspec
+  \defaultfontfeatures{Scale=MatchLowercase}
+  \defaultfontfeatures[\rmfamily]{Ligatures=TeX,Scale=1}
+\fi
+\usepackage{lmodern}
+\usetheme[]{metropolis}
+\usefonttheme{professionalfonts}
+\ifPDFTeX\else
+  % xetex/luatex font selection
+  \setmonofont[Scale=0.78]{DejaVu Sans Mono}
+\fi
+% Use upquote if available, for straight quotes in verbatim environments
+\IfFileExists{upquote.sty}{\usepackage{upquote}}{}
+\IfFileExists{microtype.sty}{% use microtype if available
+  \usepackage[]{microtype}
+  \UseMicrotypeSet[protrusion]{basicmath} % disable protrusion for tt fonts
+}{}
+\makeatletter
+\@ifundefined{KOMAClassName}{% if non-KOMA class
+  \IfFileExists{parskip.sty}{%
+    \usepackage{parskip}
+  }{% else
+    \setlength{\parindent}{0pt}
+    \setlength{\parskip}{6pt plus 2pt minus 1pt}}
+}{% if KOMA class
+  \KOMAoptions{parskip=half}}
+\makeatother
+\usepackage{xcolor}
+\newif\ifbibliography
+\usepackage{color}
+\usepackage{fancyvrb}
+\newcommand{\VerbBar}{|}
+\newcommand{\VERB}{\Verb[commandchars=\\\{\}]}
+\DefineVerbatimEnvironment{Highlighting}{Verbatim}{commandchars=\\\{\}}
+% Add ',fontsize=\small' for more characters per line
+\newenvironment{Shaded}{}{}
+\newcommand{\AlertTok}[1]{\textcolor[rgb]{1.00,0.00,0.00}{\textbf{#1}}}
+\newcommand{\AnnotationTok}[1]{\textcolor[rgb]{0.38,0.63,0.69}{\textbf{\textit{#1}}}}
+\newcommand{\AttributeTok}[1]{\textcolor[rgb]{0.49,0.56,0.16}{#1}}
+\newcommand{\BaseNTok}[1]{\textcolor[rgb]{0.25,0.63,0.44}{#1}}
+\newcommand{\BuiltInTok}[1]{\textcolor[rgb]{0.00,0.50,0.00}{#1}}
+\newcommand{\CharTok}[1]{\textcolor[rgb]{0.25,0.44,0.63}{#1}}
+\newcommand{\CommentTok}[1]{\textcolor[rgb]{0.38,0.63,0.69}{\textit{#1}}}
+\newcommand{\CommentVarTok}[1]{\textcolor[rgb]{0.38,0.63,0.69}{\textbf{\textit{#1}}}}
+\newcommand{\ConstantTok}[1]{\textcolor[rgb]{0.53,0.00,0.00}{#1}}
+\newcommand{\ControlFlowTok}[1]{\textcolor[rgb]{0.00,0.44,0.13}{\textbf{#1}}}
+\newcommand{\DataTypeTok}[1]{\textcolor[rgb]{0.56,0.13,0.00}{#1}}
+\newcommand{\DecValTok}[1]{\textcolor[rgb]{0.25,0.63,0.44}{#1}}
+\newcommand{\DocumentationTok}[1]{\textcolor[rgb]{0.73,0.13,0.13}{\textit{#1}}}
+\newcommand{\ErrorTok}[1]{\textcolor[rgb]{1.00,0.00,0.00}{\textbf{#1}}}
+\newcommand{\ExtensionTok}[1]{#1}
+\newcommand{\FloatTok}[1]{\textcolor[rgb]{0.25,0.63,0.44}{#1}}
+\newcommand{\FunctionTok}[1]{\textcolor[rgb]{0.02,0.16,0.49}{#1}}
+\newcommand{\ImportTok}[1]{\textcolor[rgb]{0.00,0.50,0.00}{\textbf{#1}}}
+\newcommand{\InformationTok}[1]{\textcolor[rgb]{0.38,0.63,0.69}{\textbf{\textit{#1}}}}
+\newcommand{\KeywordTok}[1]{\textcolor[rgb]{0.00,0.44,0.13}{\textbf{#1}}}
+\newcommand{\NormalTok}[1]{#1}
+\newcommand{\OperatorTok}[1]{\textcolor[rgb]{0.40,0.40,0.40}{#1}}
+\newcommand{\OtherTok}[1]{\textcolor[rgb]{0.00,0.44,0.13}{#1}}
+\newcommand{\PreprocessorTok}[1]{\textcolor[rgb]{0.74,0.48,0.00}{#1}}
+\newcommand{\RegionMarkerTok}[1]{#1}
+\newcommand{\SpecialCharTok}[1]{\textcolor[rgb]{0.25,0.44,0.63}{#1}}
+\newcommand{\SpecialStringTok}[1]{\textcolor[rgb]{0.73,0.40,0.53}{#1}}
+\newcommand{\StringTok}[1]{\textcolor[rgb]{0.25,0.44,0.63}{#1}}
+\newcommand{\VariableTok}[1]{\textcolor[rgb]{0.10,0.09,0.49}{#1}}
+\newcommand{\VerbatimStringTok}[1]{\textcolor[rgb]{0.25,0.44,0.63}{#1}}
+\newcommand{\WarningTok}[1]{\textcolor[rgb]{0.38,0.63,0.69}{\textbf{\textit{#1}}}}
+\usepackage{longtable,booktabs,array}
+\usepackage{calc} % for calculating minipage widths
+\usepackage{caption}
+% Make caption package work with longtable
+\makeatletter
+\def\fnum@table{\tablename~\thetable}
+\makeatother
+\setlength{\emergencystretch}{3em} % prevent overfull lines
+\providecommand{\tightlist}{%
+  \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+\setcounter{secnumdepth}{-\maxdimen} % remove section numbering
+\metroset{block=fill}
+\setbeamertemplate{navigation symbols}{}
+\usepackage{booktabs}
+\usepackage{amsmath,amssymb}
+\ifLuaTeX
+  \usepackage{selnolig}  % disable illegal ligatures
+\fi
+\usepackage{bookmark}
+\IfFileExists{xurl.sty}{\usepackage{xurl}}{} % add URL line breaks if available
+\urlstyle{same}
+\hypersetup{
+  pdftitle={QPUBench},
+  pdfauthor={MQS · mark@mqs.dk},
+  colorlinks=true,
+  linkcolor={Maroon},
+  filecolor={Maroon},
+  citecolor={Blue},
+  urlcolor={Blue},
+  pdfcreator={LaTeX via pandoc}}
+
+\title{QPUBench}
+\subtitle{Open Source Quantum Computing Benchmark Framework}
+\author{MQS · mark@mqs.dk}
+\date{2026}
+\institute{Molecular Quantum Solutions}
+
+\begin{document}
+\frame{\titlepage}
+
+\section{Framework Overview}\label{framework-overview}
+
+\begin{frame}[fragile]{What is QPUBench?}
+\phantomsection\label{what-is-qpubench}
+\textbf{Modality-agnostic quantum benchmark framework}
+
+\begin{itemize}
+\tightlist
+\item
+  Separates \emph{what} you benchmark (schemas) from \emph{how}
+  execution happens (adapters) and \emph{how results are stored}
+  (stores)
+\item
+  Typed \textbf{Pydantic v2} schema layer --- zero quantum SDK
+  dependencies in core
+\item
+  Gate-based circuits, MBQC on FPGA, molecular VQE, evolutionary circuit
+  search, and error-mitigated runs all share one
+  \texttt{BenchmarkRecord}
+\item
+  Schema \textbf{v1.12.0} --- 21 modules, language-agnostic JSON output
+\end{itemize}
+
+\vspace{0.5em}
+\begin{block}{Core invariant}
+\texttt{qpubench} itself never imports from any quantum library. Only adapters do.
+\end{block}
+\end{frame}
+
+\begin{frame}[fragile]{Architecture}
+\phantomsection\label{architecture}
+\begin{columns}[T]
+\begin{column}{0.5\textwidth}
+\textbf{Core layer} \emph{(no SDK dependencies)}
+
+\begin{itemize}
+\tightlist
+\item
+  \texttt{schemas/} --- 21 Pydantic v2 modules
+\item
+  \texttt{runner.py} --- \texttt{BenchmarkRunner}
+\item
+  \texttt{store.py} --- \texttt{NDJSONStore}, \texttt{ParquetStore}
+\end{itemize}
+\end{column}
+
+\begin{column}{0.5\textwidth}
+\textbf{Integration layer} \emph{(your project)}
+
+\begin{itemize}
+\tightlist
+\item
+  \texttt{backends/} --- adapter protocols + stubs
+\item
+  \texttt{integrations/} --- copy into your project
+\item
+  \texttt{examples/} --- runnable demos
+\end{itemize}
+\end{column}
+\end{columns}
+
+\vspace{0.5em}
+
+\begin{verbatim}
+CircuitSpec / Problem  ──▶  Adapter  ──▶  BenchmarkRecord  ──▶  Store
+\end{verbatim}
+\end{frame}
+
+\begin{frame}[fragile]{Key Design Principles}
+\phantomsection\label{key-design-principles}
+\begin{longtable}[]{@{}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 2\tabcolsep) * \real{0.4231}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 2\tabcolsep) * \real{0.5769}}@{}}
+\toprule\noalign{}
+\begin{minipage}[b]{\linewidth}\raggedright
+Principle
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+Implementation
+\end{minipage} \\
+\midrule\noalign{}
+\endhead
+\textbf{Schema-first} & Pydantic v2 is the stable contract --- all
+records are valid JSON \\
+\textbf{No SDK lock-in} & Core never imports any quantum library \\
+\textbf{Three adapter protocols} & \texttt{BackendAdapter} ·
+\texttt{AlgorithmAdapter} · \texttt{ErrorMitigationAdapter} \\
+\textbf{Append-only stores} & NDJSON and Parquet for reproducible
+sweeps \\
+\textbf{Language-agnostic} & Any language can parse the NDJSON output \\
+\bottomrule\noalign{}
+\end{longtable}
+\end{frame}
+
+\begin{frame}[fragile]{Installation}
+\phantomsection\label{installation}
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{\# Minimal — schemas + stubs, no quantum SDK required}
+\ExtensionTok{pip}\NormalTok{ install .}
+
+\CommentTok{\# With optional backends}
+\ExtensionTok{pip}\NormalTok{ install }\StringTok{".[qiskit]"}     \CommentTok{\# Qiskit Aer + IBM Quantum Runtime V2}
+\ExtensionTok{pip}\NormalTok{ install }\StringTok{".[storage]"}    \CommentTok{\# Parquet store (pyarrow + pandas)}
+\ExtensionTok{pip}\NormalTok{ install }\StringTok{".[all]"}        \CommentTok{\# everything on PyPI}
+\end{Highlighting}
+\end{Shaded}
+
+\textbf{Package managers}: \texttt{pip} · \texttt{uv} ·
+\texttt{Poetry\ 2} · \texttt{conda}
+
+\textbf{Credentials}: via \texttt{.env} file and
+\texttt{BackendSpec.auth} (never hardcoded)
+\end{frame}
+
+\section{Schema Layer}\label{schema-layer}
+
+\begin{frame}[fragile]{Core Schema Modules}
+\phantomsection\label{core-schema-modules}
+\begin{longtable}[]{@{}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 4\tabcolsep) * \real{0.2759}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 4\tabcolsep) * \real{0.3448}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 4\tabcolsep) * \real{0.3793}}@{}}
+\toprule\noalign{}
+\begin{minipage}[b]{\linewidth}\raggedright
+Module
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+Modality
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+Key types
+\end{minipage} \\
+\midrule\noalign{}
+\endhead
+\texttt{primitives} & all & \texttt{QPUModality},
+\texttt{CircuitFormat}, \texttt{PauliLabel}, \texttt{ComplexNumber} \\
+\texttt{circuit} & all & \texttt{CircuitSpec} ---
+\texttt{from\_openqasm3()}, \texttt{bind()},
+\texttt{is\_parametric()} \\
+\texttt{observable} & all & \texttt{SparsePauliObservable},
+\texttt{PauliTerm} \\
+\texttt{backend} & all & \texttt{BackendSpec} --- 27 factory
+constructors \\
+\texttt{execution} & all & \texttt{ExecutionOptions},
+\texttt{AlgorithmSpec}, \texttt{ZNEConfig} \\
+\texttt{error\_mitigation} & all & \texttt{ErrorMitigationStrategy},
+provider configs, \texttt{QuantumAdvantageRecord} \\
+\texttt{result} & all & \texttt{QuantumResult},
+\texttt{ExpectationResult}, \texttt{ShotResult} \\
+\texttt{record} & all & \texttt{BenchmarkRecord}, \texttt{VQAConfig} \\
+\bottomrule\noalign{}
+\end{longtable}
+\end{frame}
+
+\begin{frame}[fragile]{Domain-Specific Schema Modules}
+\phantomsection\label{domain-specific-schema-modules}
+\begin{longtable}[]{@{}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 2\tabcolsep) * \real{0.2759}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 2\tabcolsep) * \real{0.7241}}@{}}
+\toprule\noalign{}
+\begin{minipage}[b]{\linewidth}\raggedright
+Module
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+Modality / Framework
+\end{minipage} \\
+\midrule\noalign{}
+\endhead
+\texttt{mbqc} & MBQC-FPGA --- bit-exact 16-bit program word \\
+\texttt{photonic} & Linear-optics chips, FBQC, HOM, photonic
+VQE/analog \\
+\texttt{gbs} & Gaussian Boson Sampling --- hafnian, vibronic,
+TDM/Borealis \\
+\texttt{qdk\_chemistry} & SCF → active space → QPE → resource
+estimation \\
+\texttt{qse} & Krylov Quantum Diagonalization (KQD / SQD) \\
+\texttt{qesem} & QESEM (Qedma) --- noise scaling, QET, device
+characterisation \\
+\texttt{qcschema} & QCSchema / QCElemental / PennyLane
+interoperability \\
+\texttt{neutral\_atom} & Bloqade / Aquila AHS, Rydberg atom
+arrangement \\
+\texttt{slowquant} & SlowQuant UCC/VQE --- ansatz, SCF, linear
+response \\
+\texttt{error\_mitigation} & Q-CTRL · Mitiq · Haiqu · ParityQC · QMatter
+· Quantum Motion · IBM V2 · Advantage Tracker \\
+\bottomrule\noalign{}
+\end{longtable}
+\end{frame}
+
+\begin{frame}[fragile]{QPU Modalities}
+\phantomsection\label{qpu-modalities}
+QPUBench natively covers \textbf{9 quantum computing paradigms}:
+
+\begin{columns}[T]
+\begin{column}{0.5\textwidth}
+\begin{itemize}
+\tightlist
+\item
+  \texttt{GATE\_BASED} --- qubit circuits (QASM2/3)
+\item
+  \texttt{MBQC} --- measurement-based QC on FPGA
+\item
+  \texttt{PHOTONIC\_LINEAR\_OPTICS} --- Fock-state chips
+\item
+  \texttt{FUSION\_BASED} --- FBQC resource states + fusion
+\item
+  \texttt{QPE} --- Quantum Phase Estimation / IQPE
+\end{itemize}
+\end{column}
+
+\begin{column}{0.5\textwidth}
+\begin{itemize}
+\tightlist
+\item
+  \texttt{GBS} --- Gaussian Boson Sampling
+\item
+  \texttt{KQD} --- Krylov Quantum Diagonalization
+\item
+  \texttt{NEUTRAL\_ATOM} --- AHS on Rydberg atoms
+\item
+  \texttt{ANNEALING} --- quantum annealing
+\end{itemize}
+\end{column}
+\end{columns}
+
+\vspace{0.3em}
+
+All modalities share the same \texttt{BenchmarkRecord} schema.
+\end{frame}
+
+\begin{frame}[fragile]{CircuitSpec --- One Type for All Circuits}
+\phantomsection\label{circuitspec-one-type-for-all-circuits}
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{\# Gate{-}based (QASM2)}
+\NormalTok{circuit }\OperatorTok{=}\NormalTok{ CircuitSpec(}
+\NormalTok{    num\_qubits}\OperatorTok{=}\DecValTok{2}\NormalTok{,}
+\NormalTok{    serialized}\OperatorTok{=}\StringTok{\textquotesingle{}OPENQASM 2.0;}\CharTok{\textbackslash{}n}\StringTok{include "qelib1.inc";}\CharTok{\textbackslash{}n}\StringTok{...\textquotesingle{}}\NormalTok{,}
+\NormalTok{    observables}\OperatorTok{=}\NormalTok{[SparsePauliObservable(num\_qubits}\OperatorTok{=}\DecValTok{2}\NormalTok{, terms}\OperatorTok{=}\NormalTok{[}
+\NormalTok{        PauliTerm(qubit\_indices}\OperatorTok{=}\NormalTok{(}\DecValTok{0}\NormalTok{, }\DecValTok{1}\NormalTok{),}
+\NormalTok{                  pauli\_ops}\OperatorTok{=}\NormalTok{(PauliLabel.Z, PauliLabel.Z),}
+\NormalTok{                  coefficient}\OperatorTok{=}\NormalTok{ComplexNumber(re}\OperatorTok{=}\FloatTok{1.0}\NormalTok{))}
+\NormalTok{    ])],}
+\NormalTok{)}
+
+\CommentTok{\# OpenQASM 3.0 helper}
+\NormalTok{circuit }\OperatorTok{=}\NormalTok{ CircuitSpec.from\_openqasm3(source, num\_qubits}\OperatorTok{=}\DecValTok{2}\NormalTok{)}
+
+\CommentTok{\# Parametric VQE — bind() returns a new copy}
+\NormalTok{ansatz }\OperatorTok{=}\NormalTok{ CircuitSpec(num\_qubits}\OperatorTok{=}\DecValTok{2}\NormalTok{, parameters}\OperatorTok{=}\NormalTok{[}\StringTok{"theta"}\NormalTok{], ...)}
+\NormalTok{bound  }\OperatorTok{=}\NormalTok{ ansatz.bind(\{}\StringTok{"theta"}\NormalTok{: }\FloatTok{1.2566}\NormalTok{\})}
+
+\CommentTok{\# Algorithm{-}driven (chemistry)}
+\NormalTok{mol }\OperatorTok{=}\NormalTok{ CircuitSpec(}\BuiltInTok{format}\OperatorTok{=}\NormalTok{CircuitFormat.MOLECULE\_JSON,}
+\NormalTok{                  serialized}\OperatorTok{=}\StringTok{"/path/to/He{-}ccpvdz.json"}\NormalTok{, num\_qubits}\OperatorTok{=}\DecValTok{0}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+\end{frame}
+
+\section{Adapters}\label{adapters}
+
+\begin{frame}[fragile]{Three Adapter Protocols}
+\phantomsection\label{three-adapter-protocols}
+\begin{columns}[T]
+\begin{column}{0.33\textwidth}
+\textbf{\texttt{BackendAdapter}} \emph{Circuit in, result out}
+
+\begin{verbatim}
+CircuitSpec
+    ↓ run()
+QuantumResult
+\end{verbatim}
+
+Aer · Qrack · IBM IQM · MBQC-FPGA
+\end{column}
+
+\begin{column}{0.33\textwidth}
+\textbf{\texttt{AlgorithmAdapter}} \emph{Problem spec in}
+
+\begin{verbatim}
+CircuitSpec
+ (problem)
+    ↓ run_algorithm()
+(Result, VQAConfig)
+\end{verbatim}
+
+QForte · OpenFermion
+\end{column}
+
+\begin{column}{0.33\textwidth}
+\textbf{\texttt{ErrorMitigationAdapter}} \emph{Wraps a BackendAdapter}
+
+\begin{verbatim}
+inner adapter
+    ↓ run()
+mitigate/suppress
+    ↓
+QuantumResult
+\end{verbatim}
+
+Fire Opal · Mitiq Haiqu · ParityQC
+\end{column}
+\end{columns}
+
+\vspace{0.3em}
+
+\texttt{BenchmarkRunner} dispatches automatically ---
+\texttt{ErrorMitigationAdapter} registers like any
+\texttt{BackendAdapter}.
+\end{frame}
+
+\begin{frame}[fragile]{BackendAdapter --- Estimator vs Sampler}
+\phantomsection\label{backendadapter-estimator-vs-sampler}
+\begin{Shaded}
+\begin{Highlighting}[]
+\KeywordTok{class}\NormalTok{ MyBackendAdapter:}
+    \AttributeTok{@property}
+    \KeywordTok{def}\NormalTok{ spec(}\VariableTok{self}\NormalTok{) }\OperatorTok{{-}\textgreater{}}\NormalTok{ BackendSpec: ...          }\CommentTok{\# hardware description}
+
+    \KeywordTok{def}\NormalTok{ validate(}\VariableTok{self}\NormalTok{, circuit: CircuitSpec) }\OperatorTok{{-}\textgreater{}} \BuiltInTok{list}\NormalTok{[}\BuiltInTok{str}\NormalTok{]: ...}
+
+    \KeywordTok{def}\NormalTok{ run(}\VariableTok{self}\NormalTok{, circuit: CircuitSpec,}
+\NormalTok{            options: ExecutionOptions) }\OperatorTok{{-}\textgreater{}}\NormalTok{ QuantumResult:}
+        \ControlFlowTok{if}\NormalTok{ circuit.observables:}
+            \CommentTok{\# Estimator path → expectation\_values (VQE, QAOA)}
+\NormalTok{            evs }\OperatorTok{=}\NormalTok{ [measure\_expectation(circuit, obs) }\ControlFlowTok{for}\NormalTok{ obs }\KeywordTok{in}\NormalTok{ circuit.observables]}
+            \ControlFlowTok{return}\NormalTok{ QuantumResult(expectation\_values}\OperatorTok{=}\NormalTok{evs, ...)}
+        \ControlFlowTok{else}\NormalTok{:}
+            \CommentTok{\# Sampler path → shot counts / bitstrings}
+\NormalTok{            counts }\OperatorTok{=}\NormalTok{ sample\_bitstrings(circuit, options.shots)}
+            \ControlFlowTok{return}\NormalTok{ QuantumResult(shots}\OperatorTok{=}\NormalTok{ShotResult(..., counts}\OperatorTok{=}\NormalTok{counts), ...)}
+\end{Highlighting}
+\end{Shaded}
+
+\textbf{Rule}: SDK imports go inside the method that uses them --- never
+at module level.
+\end{frame}
+
+\begin{frame}[fragile]{AlgorithmAdapter (QForte example)}
+\phantomsection\label{algorithmadapter-qforte-example}
+\begin{Shaded}
+\begin{Highlighting}[]
+\KeywordTok{class}\NormalTok{ QForteAlgorithmAdapter:}
+    \KeywordTok{def}\NormalTok{ validate\_problem(}\VariableTok{self}\NormalTok{, circuit: CircuitSpec) }\OperatorTok{{-}\textgreater{}} \BuiltInTok{list}\NormalTok{[}\BuiltInTok{str}\NormalTok{]:}
+        \ControlFlowTok{if}\NormalTok{ circuit.}\BuiltInTok{format} \OperatorTok{!=}\NormalTok{ CircuitFormat.MOLECULE\_JSON:}
+            \ControlFlowTok{return}\NormalTok{ [}\SpecialStringTok{f"Expected MOLECULE\_JSON, got }\SpecialCharTok{\{}\NormalTok{circuit}\SpecialCharTok{.}\BuiltInTok{format}\SpecialCharTok{!r\}}\SpecialStringTok{"}\NormalTok{]}
+        \ControlFlowTok{return}\NormalTok{ []}
+
+    \KeywordTok{def}\NormalTok{ run\_algorithm(}\VariableTok{self}\NormalTok{, circuit: CircuitSpec,}
+\NormalTok{                      options: ExecutionOptions}
+\NormalTok{                      ) }\OperatorTok{{-}\textgreater{}} \BuiltInTok{tuple}\NormalTok{[QuantumResult, VQAConfig]:}
+        \ImportTok{import}\NormalTok{ qforte }\ImportTok{as}\NormalTok{ qf                   }\CommentTok{\# ← deferred SDK import}
+\NormalTok{        mol }\OperatorTok{=}\NormalTok{ qf.system\_factory(...)}
+\NormalTok{        alg }\OperatorTok{=}\NormalTok{ qf.ADAPTVQE(mol, ...)}
+\NormalTok{        alg.run(pool\_type}\OperatorTok{=}\StringTok{"SD"}\NormalTok{, optimizer}\OperatorTok{=}\StringTok{"BFGS"}\NormalTok{, ...)}
+\NormalTok{        energy }\OperatorTok{=} \BuiltInTok{float}\NormalTok{(alg.get\_gs\_energy())}
+\NormalTok{        result }\OperatorTok{=}\NormalTok{ QuantumResult(expectation\_values}\OperatorTok{=}\NormalTok{[}
+\NormalTok{            ExpectationResult(observable\_index}\OperatorTok{=}\DecValTok{0}\NormalTok{, value}\OperatorTok{=}\NormalTok{energy, std\_error}\OperatorTok{=}\FloatTok{0.0}\NormalTok{)}
+\NormalTok{        ], status}\OperatorTok{=}\NormalTok{JobStatus.SUCCEEDED)}
+        \ControlFlowTok{return}\NormalTok{ result, VQAConfig(problem\_type}\OperatorTok{=}\StringTok{"chemistry"}\NormalTok{,}
+\NormalTok{                                 final\_eigenvalue}\OperatorTok{=}\NormalTok{energy, ...)}
+\end{Highlighting}
+\end{Shaded}
+\end{frame}
+
+\begin{frame}[fragile]{Energy Evaluator Hook}
+\phantomsection\label{energy-evaluator-hook}
+Advanced: QForte drives the ansatz; a qpubench backend evaluates
+\(\langle H \rangle\)
+
+\begin{verbatim}
+QForte optimizer  -->  energy_feval(params)
+                              |
+                    EnergyEvaluatorHook.evaluate()
+                              |
+                    qpubench BackendAdapter.run()
+                              |
+                    QuantumResult  -->  <H> (float)
+\end{verbatim}
+
+\begin{itemize}
+\tightlist
+\item
+  Enables ADAPT-VQE on \textbf{Aer, Qrack GPU, IBM hardware}, or any
+  adapter
+\item
+  Gradient computation automatically routed through the hook
+\item
+  Falls back to QForte's internal C++ simulator on error
+\item
+  Available in \texttt{integrations/qforte/energy\_hook.py}
+\end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]{Error Mitigation Providers}
+\phantomsection\label{error-mitigation-providers}
+\texttt{error\_mitigation.py} --- one schema module, seven provider
+integrations:
+
+\begin{longtable}[]{@{}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 4\tabcolsep) * \real{0.3333}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 4\tabcolsep) * \real{0.3333}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 4\tabcolsep) * \real{0.3333}}@{}}
+\toprule\noalign{}
+\begin{minipage}[b]{\linewidth}\raggedright
+Provider
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+Schema types
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+Technique
+\end{minipage} \\
+\midrule\noalign{}
+\endhead
+\textbf{Q-CTRL Fire Opal} & \texttt{FireOpalConfig},
+\texttt{FireOpalResult} & Closed-box noise suppression;
+\texttt{fo.execute()} API \\
+\textbf{Mitiq} & \texttt{MitiqConfig} + 5 configs, \texttt{MitiqResult}
+& ZNE · PEC · CDR · REM · DDD \\
+\textbf{Haiqu Rivet} & \texttt{HaiquRivetConfig},
+\texttt{HaiquTranspilationResult} & Hardware-aware transpilation
+caching \\
+\textbf{ParityQC} & \texttt{ParityQCConfig}, \texttt{ParityQCResult} &
+Parity encoding for QUBO / HCBO / Ising \\
+\textbf{QMatter} & \texttt{QMatterConfig},
+\texttt{QMatterCompressionResult} & Quantum problem compression \\
+\textbf{Quantum Motion} & \texttt{QuantumMotionDeviceSpec} & Silicon
+CMOS spin-qubit characterisation \\
+\bottomrule\noalign{}
+\end{longtable}
+
+\vspace{0.3em}
+
+\texttt{ErrorMitigationStrategy} enum extended: \texttt{FIRE\_OPAL} ·
+\texttt{MITIQ\_ZNE/PEC/CDR/REM/DDD} · \texttt{HAIQU} ·
+\texttt{PARITY\_QC} · \texttt{QMATTER}
+\end{frame}
+
+\begin{frame}[fragile]{IQM Hardware --- Star Topology}
+\phantomsection\label{iqm-hardware-star-topology}
+\begin{columns}[T]
+\begin{column}{0.55\textwidth}
+\textbf{IQM Resonance cloud} (\texttt{iqm-client} + \texttt{qiskit-iqm})
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{\# Star architecture: all qubits via COMPR1 resonator}
+\NormalTok{backend }\OperatorTok{=}\NormalTok{ BackendSpec.iqm\_resonance(}
+    \StringTok{"garnet"}\NormalTok{,       }\CommentTok{\# 20Q IQM Garnet}
+\NormalTok{    api\_token\_ref}\OperatorTok{=}\StringTok{"IQM\_TOKEN"}\NormalTok{,}
+\NormalTok{)}
+\CommentTok{\# BackendSpec.iqm\_resonance("deneb")   \# 6Q}
+\CommentTok{\# BackendSpec.iqm\_resonance("sirius")  \# 24Q Star}
+
+\NormalTok{adapter }\OperatorTok{=}\NormalTok{ IQMAdapter(}\StringTok{"garnet"}\NormalTok{, token}\OperatorTok{=}\NormalTok{os.environ[}\StringTok{"IQM\_TOKEN"}\NormalTok{])}
+\end{Highlighting}
+\end{Shaded}
+
+Calibration via
+\texttt{IQMClient.get\_dynamic\_quantum\_architecture()}: T1
+\textasciitilde28 µs · T2* \textasciitilde17 µs · PRX
+\textasciitilde99.79\% · CZ \textasciitilde98.42\%
+\end{column}
+
+\begin{column}{0.45\textwidth}
+\textbf{Native gate set}
+
+\begin{longtable}[]{@{}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 4\tabcolsep) * \real{0.2500}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 4\tabcolsep) * \real{0.4583}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 4\tabcolsep) * \real{0.2917}}@{}}
+\toprule\noalign{}
+\begin{minipage}[b]{\linewidth}\raggedright
+Gate
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+Parameters
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+Notes
+\end{minipage} \\
+\midrule\noalign{}
+\endhead
+\texttt{PRX} & \(\theta\), \(\varphi\) & Angles in \textbf{fractions of
+turns} --- \(\theta\)=0.5 \(\rightarrow\) \(\pi\) rotation \\
+\texttt{CZ} & --- & Controlled-Z, symmetric \\
+\texttt{MOVE} & --- & Qubit \(\leftrightarrow\) resonator swap (Star
+only) \\
+\bottomrule\noalign{}
+\end{longtable}
+
+Hub-and-spoke topology gives effective all-to-all connectivity without
+SWAP routing.
+\end{column}
+\end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{IBM Quantum Runtime V2}
+\phantomsection\label{ibm-quantum-runtime-v2}
+\begin{columns}[T]
+\begin{column}{0.5\textwidth}
+\textbf{EstimatorV2 PUB}
+\texttt{(circuit,\ observables,\ params?,\ precision?)}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{\# precision replaces fixed shot count}
+\NormalTok{estimator.run([(qc, obs, params, }\FloatTok{1e{-}2}\NormalTok{)])}
+\NormalTok{result[i].data.evs   }\CommentTok{\# expectation value}
+\NormalTok{result[i].data.stds  }\CommentTok{\# statistical error}
+\end{Highlighting}
+\end{Shaded}
+
+\textbf{SamplerV2 PUB} \texttt{(circuit,\ params?,\ shots?)}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{sampler.run([(qc, params, }\DecValTok{4096}\NormalTok{)])}
+\NormalTok{bit\_array }\OperatorTok{=}\NormalTok{ result[}\DecValTok{0}\NormalTok{].data.meas}
+\NormalTok{counts }\OperatorTok{=}\NormalTok{ bit\_array.get\_counts()}
+\end{Highlighting}
+\end{Shaded}
+
+\texttt{BitArray.shape} = \texttt{(num\_shots,)} or
+\texttt{(num\_params,\ num\_shots)}
+\end{column}
+
+\begin{column}{0.5\textwidth}
+\textbf{Execution modes} (\texttt{IBMExecutionMode})
+
+\begin{longtable}[]{@{}ll@{}}
+\toprule\noalign{}
+Mode & When to use \\
+\midrule\noalign{}
+\endhead
+\texttt{SESSION} & VQE / adaptive --- exclusive QPU hold \\
+\texttt{BATCH} & Sweeps --- parallel independent jobs \\
+\texttt{SINGLE} & One-shot run (default) \\
+\bottomrule\noalign{}
+\end{longtable}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{adapter }\OperatorTok{=}\NormalTok{ IBMAdapter(}
+    \StringTok{"ibm\_torino"}\NormalTok{,}
+\NormalTok{    execution\_mode}\OperatorTok{=}\NormalTok{IBMExecutionMode.SESSION,}
+\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\textbf{\texttt{IBMRuntimeRecord}} on \texttt{QuantumResult}: job\_id ·
+session\_id · resilience\_level · \texttt{ExecutionSpan} timestamps
+
+\vspace{0.3em}
+
+\textbf{CUDA-Q}: \texttt{cudaq.observe()} \(\approx\) EstimatorV2;
+\texttt{cudaq.sample()} \(\approx\) SamplerV2 --- same
+\texttt{BackendAdapter} protocol.
+\end{column}
+\end{columns}
+\end{frame}
+
+\begin{frame}[fragile]{Quantum Advantage Tracker}
+\phantomsection\label{quantum-advantage-tracker}
+\texttt{BenchmarkRecord.advantage} holds a
+\texttt{QuantumAdvantageRecord}:
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{record }\OperatorTok{=}\NormalTok{ runner.run(circuit, }\StringTok{"ibm\_torino"}\NormalTok{, options)}
+\NormalTok{record }\OperatorTok{=}\NormalTok{ record.model\_copy(update}\OperatorTok{=}\NormalTok{\{}\StringTok{"advantage"}\NormalTok{: QuantumAdvantageRecord(}
+\NormalTok{    experiment\_type}\OperatorTok{=}\NormalTok{AdvantageExperimentType.OBSERVABLE\_ESTIMATION,}
+\NormalTok{    circuit\_name}\OperatorTok{=}\StringTok{"Loschmidt{-}echo{-}70q"}\NormalTok{,}
+\NormalTok{    num\_qubits}\OperatorTok{=}\DecValTok{70}\NormalTok{,}
+\NormalTok{    backend\_name}\OperatorTok{=}\StringTok{"ibm\_boston"}\NormalTok{,}
+\NormalTok{    floquet\_layers}\OperatorTok{=}\DecValTok{20}\NormalTok{,}
+\NormalTok{    observable\_value}\OperatorTok{=}\FloatTok{0.327}\NormalTok{,}
+\NormalTok{    observable\_error\_bound}\OperatorTok{=}\FloatTok{0.012}\NormalTok{,}
+\NormalTok{    classical\_method}\OperatorTok{=}\NormalTok{ClassicalComparisonMethod.TENSOR\_NETWORK,}
+\NormalTok{    coupling\_params}\OperatorTok{=}\NormalTok{\{}\StringTok{"b"}\NormalTok{: }\FloatTok{1.0}\NormalTok{, }\StringTok{"delta"}\NormalTok{: }\FloatTok{0.5}\NormalTok{\},}
+\NormalTok{    submission\_url}\OperatorTok{=}\StringTok{"https://github.com/quantum{-}advantage{-}tracker/..."}\NormalTok{,}
+\NormalTok{)\})}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{block}{Quantum Advantage Tracker}
+Community registry co-initiated by IBM, Flatiron Institute, BlueQubit, Algorithmiq.
+Three experiment categories: observable estimation · variational · classically verifiable.
+\end{block}
+\end{frame}
+
+\section{Execution \& Storage}\label{execution-storage}
+
+\begin{frame}[fragile]{BenchmarkRunner}
+\phantomsection\label{benchmarkrunner}
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{runner }\OperatorTok{=}\NormalTok{ BenchmarkRunner(store}\OperatorTok{=}\NormalTok{NDJSONStore(Path(}\StringTok{"results.ndjson"}\NormalTok{)))}
+\NormalTok{runner.register(AerAdapter(), name}\OperatorTok{=}\StringTok{"aer"}\NormalTok{)}
+\NormalTok{runner.register(QForteAlgorithmAdapter(), name}\OperatorTok{=}\StringTok{"qforte"}\NormalTok{)}
+
+\CommentTok{\# Single run}
+\NormalTok{record }\OperatorTok{=}\NormalTok{ runner.run(circuit, }\StringTok{"aer"}\NormalTok{, ExecutionOptions(shots}\OperatorTok{=}\DecValTok{4096}\NormalTok{))}
+
+\CommentTok{\# Cartesian product sweep: circuits × backends × options}
+\NormalTok{records }\OperatorTok{=}\NormalTok{ runner.sweep(}
+\NormalTok{    circuits}\OperatorTok{=}\NormalTok{[circuit\_h2, circuit\_lih],}
+\NormalTok{    backend\_names}\OperatorTok{=}\NormalTok{[}\StringTok{"aer"}\NormalTok{, }\StringTok{"qforte"}\NormalTok{],}
+\NormalTok{    options\_list}\OperatorTok{=}\NormalTok{[ExecutionOptions(shots}\OperatorTok{=}\DecValTok{1024}\NormalTok{),}
+\NormalTok{                  ExecutionOptions(shots}\OperatorTok{=}\DecValTok{8192}\NormalTok{)],}
+\NormalTok{    run\_id}\OperatorTok{=}\StringTok{"vqe{-}sweep{-}001"}\NormalTok{,}
+\NormalTok{)}
+
+\CommentTok{\# Post{-}execution hooks}
+\NormalTok{runner.add\_hook(}\KeywordTok{lambda}\NormalTok{ rec: log\_energy(rec.vqa.final\_eigenvalue))}
+\end{Highlighting}
+\end{Shaded}
+\end{frame}
+
+\begin{frame}[fragile]{Data Persistence}
+\phantomsection\label{data-persistence}
+\textbf{NDJSONStore} --- zero dependencies, append-only, grep-able
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{store }\OperatorTok{=}\NormalTok{ NDJSONStore(Path(}\StringTok{"results/run1.ndjson"}\NormalTok{))}
+\NormalTok{store.save(record)}
+
+\NormalTok{record  }\OperatorTok{=}\NormalTok{ store.load(experiment\_id)           }\CommentTok{\# by UUID}
+\NormalTok{records }\OperatorTok{=}\NormalTok{ store.query(                        }\CommentTok{\# dot{-}path filters}
+\NormalTok{    backend\_\_name}\OperatorTok{=}\StringTok{"aer\_statevector"}\NormalTok{,}
+\NormalTok{    result\_\_status}\OperatorTok{=}\StringTok{"succeeded"}\NormalTok{,}
+\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\textbf{ParquetStore} --- columnar analytics
+(\texttt{pip\ install\ ".{[}storage{]}"})
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{store }\OperatorTok{=}\NormalTok{ ParquetStore(Path(}\StringTok{"results/run1.parquet"}\NormalTok{))}
+\NormalTok{df }\OperatorTok{=}\NormalTok{ store.to\_dataframe()                     }\CommentTok{\# → pandas DataFrame}
+\end{Highlighting}
+\end{Shaded}
+
+Every record is one JSON line --- stream-able, pandas-ready,
+archive-safe.
+\end{frame}
+
+\section{Integrations}\label{integrations}
+
+\begin{frame}[fragile]{Integration Ecosystem (1/3)}
+\phantomsection\label{integration-ecosystem-13}
+\begin{longtable}[]{@{}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 4\tabcolsep) * \real{0.3611}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 4\tabcolsep) * \real{0.3889}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 4\tabcolsep) * \real{0.2500}}@{}}
+\toprule\noalign{}
+\begin{minipage}[b]{\linewidth}\raggedright
+Integration
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+Schema module
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+Protocol
+\end{minipage} \\
+\midrule\noalign{}
+\endhead
+Cebule SDK & \texttt{cebule} & \texttt{BackendAdapter} \\
+Xenakis GA circuit search & \texttt{xenakis} &
+\texttt{AlgorithmAdapter} \\
+ExcitationSolve (Fourier VQE) & \texttt{excitation\_solve} &
+\texttt{AlgorithmAdapter} \\
+GSOpt (ground-state benchmark) & \texttt{gsopt} &
+\texttt{AlgorithmAdapter} \\
+Photochipsim / FBQC & \texttt{photonic} & \texttt{BackendAdapter} \\
+QDK / QuNorth chemistry & \texttt{qdk\_chemistry} &
+\texttt{AlgorithmAdapter} \\
+\bottomrule\noalign{}
+\end{longtable}
+\end{frame}
+
+\begin{frame}[fragile]{Integration Ecosystem (2/3)}
+\phantomsection\label{integration-ecosystem-23}
+\begin{longtable}[]{@{}lll@{}}
+\toprule\noalign{}
+Integration & Schema module & Protocol \\
+\midrule\noalign{}
+\endhead
+DTU-GBS / photonic\_QC & \texttt{gbs} & \texttt{BackendAdapter} \\
+QSE / KQD & \texttt{qse} & \texttt{AlgorithmAdapter} \\
+QESEM (Qedma) & \texttt{qesem} & \texttt{BackendAdapter} \\
+QCSchema / PennyLane & \texttt{qcschema} & cross-format interop \\
+Bloqade / Aquila & \texttt{neutral\_atom} & \texttt{BackendAdapter} \\
+SlowQuant UCC/VQE & \texttt{slowquant} & \texttt{AlgorithmAdapter} \\
+\bottomrule\noalign{}
+\end{longtable}
+\end{frame}
+
+\begin{frame}[fragile]{Integration Ecosystem (3/3) --- Error Mitigation
+\& Hardware}
+\phantomsection\label{integration-ecosystem-33-error-mitigation-hardware}
+\begin{longtable}[]{@{}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 4\tabcolsep) * \real{0.3611}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 4\tabcolsep) * \real{0.3889}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 4\tabcolsep) * \real{0.2500}}@{}}
+\toprule\noalign{}
+\begin{minipage}[b]{\linewidth}\raggedright
+Integration
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+Schema module
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+Protocol
+\end{minipage} \\
+\midrule\noalign{}
+\endhead
+Q-CTRL Fire Opal & \texttt{error\_mitigation} &
+\texttt{ErrorMitigationAdapter} \\
+Mitiq (ZNE · PEC · CDR · REM · DDD) & \texttt{error\_mitigation} &
+\texttt{ErrorMitigationAdapter} \\
+Haiqu Rivet transpiler & \texttt{error\_mitigation} &
+\texttt{ErrorMitigationAdapter} \\
+ParityQC parity encoding & \texttt{error\_mitigation} &
+\texttt{ErrorMitigationAdapter} \\
+QMatter problem compression & \texttt{error\_mitigation} &
+\texttt{ErrorMitigationAdapter} \\
+IQM Resonance (garnet · deneb · sirius) & --- &
+\texttt{BackendAdapter} \\
+Quantum Motion CMOS spin-qubit & \texttt{error\_mitigation} &
+\texttt{BackendAdapter} \\
+\bottomrule\noalign{}
+\end{longtable}
+\end{frame}
+
+\begin{frame}[fragile]{Cross-Framework Compatibility}
+\phantomsection\label{cross-framework-compatibility}
+\textbf{Pauli encoding} --- explicit converters prevent silent
+convention bugs:
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{\# Qrack Q\# convention: I=0, X=1, Z=2, Y=3  (non{-}sequential!)}
+\NormalTok{PauliLabel.Z.to\_qrack\_int()           }\CommentTok{\# → 2  (not 3)}
+\NormalTok{PauliLabel.Y.to\_qrack\_int()           }\CommentTok{\# → 3  (not 2)}
+
+\CommentTok{\# Qiskit C API QkBitTerm bit{-}packed encoding}
+\NormalTok{PauliLabel.X.to\_qiskit\_c\_bit\_term()   }\CommentTok{\# → 0b0010}
+
+\CommentTok{\# MBQC byproduct register: bit 0 = Z, bit 1 = X  (reversed vs gate{-}based!)}
+\end{Highlighting}
+\end{Shaded}
+
+\textbf{Complex numbers}: stored as \texttt{\{"re":\ 1.0,\ "im":\ 0.5\}}
+--- valid JSON without Python eval
+
+\textbf{QCSchema / QCElemental / PennyLane} interoperability via the
+\texttt{qcschema} module
+\end{frame}
+
+\section{Code Quality}\label{code-quality}
+
+\begin{frame}[fragile]{Python Quality Toolchain}
+\phantomsection\label{python-quality-toolchain}
+\begin{Shaded}
+\begin{Highlighting}[]
+\ExtensionTok{ruff}\NormalTok{ check src/ tests/    }\CommentTok{\# lint (line{-}length 100, target py311)}
+\ExtensionTok{ruff}\NormalTok{ format src/ tests/   }\CommentTok{\# format}
+\ExtensionTok{mypy}\NormalTok{ src/                 }\CommentTok{\# static types (strict = true)}
+\ExtensionTok{pytest}\NormalTok{ tests/ }\AttributeTok{{-}q}          \CommentTok{\# 156 tests — no quantum SDK required}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{longtable}[]{@{}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 2\tabcolsep) * \real{0.5000}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 2\tabcolsep) * \real{0.5000}}@{}}
+\toprule\noalign{}
+\begin{minipage}[b]{\linewidth}\raggedright
+Tool
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+Role
+\end{minipage} \\
+\midrule\noalign{}
+\endhead
+\textbf{Pydantic v2} & Runtime-validated schemas --- field types
+enforced at parse time \\
+\textbf{ruff} & Linting + auto-formatting, replaces
+flake8/isort/black \\
+\textbf{mypy strict} & Full type coverage --- \texttt{Any} only where
+unavoidable \\
+\textbf{pytest} & Schema-only test suite runs with
+\texttt{pip\ install\ .} alone \\
+\textbf{ponytail} & Agent code-quality enforcement via decision
+ladder \\
+\bottomrule\noalign{}
+\end{longtable}
+\end{frame}
+
+\section{Summary}\label{summary}
+
+\begin{frame}[fragile]{Getting Started}
+\phantomsection\label{getting-started}
+\begin{Shaded}
+\begin{Highlighting}[]
+\ImportTok{from}\NormalTok{ qpubench }\ImportTok{import}\NormalTok{ (}
+\NormalTok{    BenchmarkRunner, NDJSONStore, StubGateAdapter,}
+\NormalTok{    CircuitSpec, ExecutionOptions,}
+\NormalTok{    SparsePauliObservable, PauliTerm, PauliLabel, ComplexNumber,}
+\NormalTok{)}
+\ImportTok{import}\NormalTok{ pathlib}
+
+\NormalTok{circuit }\OperatorTok{=}\NormalTok{ CircuitSpec(}
+\NormalTok{    num\_qubits}\OperatorTok{=}\DecValTok{2}\NormalTok{,}
+\NormalTok{    serialized}\OperatorTok{=}\StringTok{\textquotesingle{}OPENQASM 2.0;}\CharTok{\textbackslash{}n}\StringTok{include "qelib1.inc";}\CharTok{\textbackslash{}n}\StringTok{qreg q[2];}\CharTok{\textbackslash{}n}\StringTok{h q[0];}\CharTok{\textbackslash{}n}\StringTok{cx q[0],q[1];\textquotesingle{}}\NormalTok{,}
+\NormalTok{    observables}\OperatorTok{=}\NormalTok{[SparsePauliObservable(num\_qubits}\OperatorTok{=}\DecValTok{2}\NormalTok{, terms}\OperatorTok{=}\NormalTok{[}
+\NormalTok{        PauliTerm(qubit\_indices}\OperatorTok{=}\NormalTok{(}\DecValTok{0}\NormalTok{, }\DecValTok{1}\NormalTok{),}
+\NormalTok{                  pauli\_ops}\OperatorTok{=}\NormalTok{(PauliLabel.Z, PauliLabel.Z),}
+\NormalTok{                  coefficient}\OperatorTok{=}\NormalTok{ComplexNumber(re}\OperatorTok{=}\FloatTok{1.0}\NormalTok{))}
+\NormalTok{    ])],}
+\NormalTok{)}
+\NormalTok{runner }\OperatorTok{=}\NormalTok{ BenchmarkRunner(store}\OperatorTok{=}\NormalTok{NDJSONStore(pathlib.Path(}\StringTok{"results.ndjson"}\NormalTok{)))}
+\NormalTok{runner.register(StubGateAdapter(seed}\OperatorTok{=}\DecValTok{42}\NormalTok{), name}\OperatorTok{=}\StringTok{"stub"}\NormalTok{)}
+\NormalTok{record }\OperatorTok{=}\NormalTok{ runner.run(circuit, }\StringTok{"stub"}\NormalTok{, ExecutionOptions(shots}\OperatorTok{=}\DecValTok{4096}\NormalTok{))}
+\BuiltInTok{print}\NormalTok{(}\SpecialStringTok{f"\textless{}ZZ\textgreater{} = }\SpecialCharTok{\{}\NormalTok{record}\SpecialCharTok{.}\NormalTok{result}\SpecialCharTok{.}\NormalTok{expectation\_values[}\DecValTok{0}\NormalTok{]}\SpecialCharTok{.}\NormalTok{value}\SpecialCharTok{:.4f\}}\SpecialStringTok{"}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+\end{frame}
+
+\begin{frame}[fragile]{Roadmap \& Links}
+\phantomsection\label{roadmap-links}
+\textbf{Repository}: \texttt{github.com/mqsdk/qpubench}
+
+\textbf{Schema v1.12.0} --- 21 modules · 9 QPU modalities · zero quantum
+SDK deps in core
+
+\vspace{0.5em}
+
+\textbf{Contributing} --- writing an adapter takes \textasciitilde30
+lines:
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\FunctionTok{cp}\NormalTok{ integrations/template/backend\_adapter\_template.py  my\_adapter.py}
+\CommentTok{\# fill the three TODOs: spec, validate(), run()}
+\end{Highlighting}
+\end{Shaded}
+
+See \texttt{INTEGRATION\_GUIDE.md} and \texttt{AGENTS.md} for the full
+development workflow.
+
+\vspace{0.5em}
+
+\textbf{Contact}: \texttt{contact@mqs.dk}
+\end{frame}
+
+\end{document}

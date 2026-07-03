@@ -7,10 +7,11 @@ import pydantic
 
 from .backend import BackendSpec
 from .circuit import CircuitSpec
+from .error_mitigation import QuantumAdvantageRecord
 from .execution import ExecutionOptions
 from .result import QuantumResult
 
-SCHEMA_VERSION = "1.11.0"
+SCHEMA_VERSION = "1.12.0"
 
 def _utcnow() -> datetime.datetime:
     return datetime.datetime.now(datetime.UTC)
@@ -119,12 +120,13 @@ class BenchmarkRecord(pydantic.BaseModel):
     options:  ExecutionOptions
     result:   QuantumResult
 
-    vqa:           VQAConfig | None = None
+    vqa:           VQAConfig | None             = None
     num_qubits:    int
-    circuit_depth: int | None       = None
-    ga_run_id:     str | None       = None   # links this record to a GARunResult
-    tags:          list[str]        = []
-    notes:         str              = ""
+    circuit_depth: int | None                   = None
+    ga_run_id:     str | None                   = None   # links this record to a GARunResult
+    advantage:     QuantumAdvantageRecord | None = None   # Quantum Advantage Tracker metadata
+    tags:          list[str]                    = []
+    notes:         str                          = ""
 
     @classmethod
     def from_vqe(

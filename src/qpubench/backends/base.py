@@ -19,17 +19,19 @@ BackendAdapter assumes:  qpubench provides circuit → backend executes it.
 AlgorithmAdapter assumes: library generates circuit from problem spec → executes on
                           its own simulator → qpubench records results.
 
-The deeper integration (library generates circuit, qpubench backend executes it)
-requires a third pattern — EnergyEvaluatorAdapter — which is not yet implemented.
-That would allow any VQE algorithm to use any qpubench backend for energy evaluation.
+ErrorMitigationAdapter wraps a BackendAdapter with pre/post error mitigation or
+suppression (Q-CTRL Fire Opal, Mitiq, Haiqu Rivet, etc.).  It satisfies the
+BackendAdapter protocol so BenchmarkRunner requires no changes — register it
+directly and it dispatches normally through the circuit-driven path.
 """
+
 from __future__ import annotations
 
 from typing import Protocol, runtime_checkable
 
 from ..schemas.backend import BackendSpec
 from ..schemas.circuit import CircuitSpec
-from ..schemas.execution import AlgorithmSpec, ExecutionOptions
+from ..schemas.execution import ExecutionOptions
 from ..schemas.record import VQAConfig
 from ..schemas.result import QuantumResult, TranspileLayout
 
@@ -101,8 +103,7 @@ class AlgorithmAdapter(Protocol):
     """
 
     @property
-    def spec(self) -> BackendSpec:
-        ...
+    def spec(self) -> BackendSpec: ...
 
     def validate_problem(self, circuit: CircuitSpec) -> list[str]:
         """Validate the problem specification; return warnings."""
@@ -117,4 +118,37 @@ class AlgorithmAdapter(Protocol):
 
         The algorithm is determined by options.algorithm_spec.name.
         """
+        ...
+
+
+@runtime_checkable
+class ErrorMitigationAdapter(Protocol):
+    """Protocol for adapters that wrap error mitigation around a BackendAdapter.
+
+    Satisfies BackendAdapter (same spec/validate/run interface) so it can be
+    registered with BenchmarkRunner directly — no runner changes needed.
+    Internally the adapter holds a reference to an inner BackendAdapter and
+    intercepts run() to apply pre/post processing (noise scaling, compilation,
+    randomised compiling, readout correction, etc.).
+
+    Implementations: FireOpalAdapter, MitiqAdapter, HaiquAdapter.
+
+    The inner BackendAdapter is not registered with the runner separately;
+    it is composed inside the ErrorMitigationAdapter at construction time.
+    """
+
+    @property
+    def spec(self) -> BackendSpec: ...
+
+    def validate(self, circuit: CircuitSpec) -> list[str]: ...
+
+    def run(
+        self,
+        circuit: CircuitSpec,
+        options: ExecutionOptions,
+    ) -> QuantumResult: ...
+
+    @property
+    def inner(self) -> BackendAdapter:
+        """The wrapped BackendAdapter that performs raw circuit execution."""
         ...

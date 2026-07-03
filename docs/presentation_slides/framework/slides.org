@@ -1,0 +1,621 @@
+#+OPTIONS: H:2 toc:nil num:nil
+#+BEAMER_THEME: metropolis
+#+BEAMER_HEADER: \metroset{block=fill}
+#+BEAMER_HEADER: \setbeamertemplate{navigation symbols}{}
+#+LATEX_HEADER: \usepackage{booktabs}
+
+#+title: QPUBench
+
+#+author: MQS · mark@mqs.dk
+#+date: 2026
+
+\metroset{block=fill}
+
+\setbeamertemplate{navigation symbols}{}
+
+\usepackage{booktabs}
+
+\usepackage{amsmath,amssymb}
+
+* Framework Overview
+:PROPERTIES:
+:CUSTOM_ID: framework-overview
+:END:
+** What is QPUBench?
+:PROPERTIES:
+:CUSTOM_ID: what-is-qpubench
+:END:
+*Modality-agnostic quantum benchmark framework*
+
+- Separates /what/ you benchmark (schemas) from /how/ execution happens
+  (adapters) and /how results are stored/ (stores)
+- Typed *Pydantic v2* schema layer --- zero quantum SDK dependencies in
+  core
+- Gate-based circuits, MBQC on FPGA, molecular VQE, evolutionary circuit
+  search, and error-mitigated runs all share one =BenchmarkRecord=
+- Schema *v1.12.0* --- 21 modules, language-agnostic JSON output
+
+\vspace{0.5em}
+\begin{block}{Core invariant}
+\texttt{qpubench} itself never imports from any quantum library. Only adapters do.
+\end{block}
+** Architecture
+:PROPERTIES:
+:CUSTOM_ID: architecture
+:END:
+
+*Core layer* /(no SDK dependencies)/
+
+- =schemas/= --- 21 Pydantic v2 modules
+- =runner.py= --- =BenchmarkRunner=
+- =store.py= --- =NDJSONStore=, =ParquetStore=
+
+*Integration layer* /(your project)/
+
+- =backends/= --- adapter protocols + stubs
+- =integrations/= --- copy into your project
+- =examples/= --- runnable demos
+
+\vspace{0.5em}
+#+begin_example
+CircuitSpec / Problem  ──▶  Adapter  ──▶  BenchmarkRecord  ──▶  Store
+#+end_example
+
+** Key Design Principles
+:PROPERTIES:
+:CUSTOM_ID: key-design-principles
+:END:
+| Principle                 | Implementation                                                    |
+|---------------------------+-------------------------------------------------------------------|
+| *Schema-first*            | Pydantic v2 is the stable contract --- all records are valid JSON |
+| *No SDK lock-in*          | Core never imports any quantum library                            |
+| *Three adapter protocols* | =BackendAdapter= · =AlgorithmAdapter= · =ErrorMitigationAdapter=  |
+| *Append-only stores*      | NDJSON and Parquet for reproducible sweeps                        |
+| *Language-agnostic*       | Any language can parse the NDJSON output                          |
+
+** Installation
+:PROPERTIES:
+:CUSTOM_ID: installation
+:END:
+#+begin_src sh
+# Minimal — schemas + stubs, no quantum SDK required
+pip install .
+
+# With optional backends
+pip install ".[qiskit]"     # Qiskit Aer + IBM Quantum Runtime V2
+pip install ".[storage]"    # Parquet store (pyarrow + pandas)
+pip install ".[all]"        # everything on PyPI
+#+end_src
+
+*Package managers*: =pip= · =uv= · =Poetry 2= · =conda=
+
+*Credentials*: via =.env= file and =BackendSpec.auth= (never hardcoded)
+
+* Schema Layer
+:PROPERTIES:
+:CUSTOM_ID: schema-layer
+:END:
+** Core Schema Modules
+:PROPERTIES:
+:CUSTOM_ID: core-schema-modules
+:END:
+| Module             | Modality | Key types                                                             |
+|--------------------+----------+-----------------------------------------------------------------------|
+| =primitives=       | all      | =QPUModality=, =CircuitFormat=, =PauliLabel=, =ComplexNumber=         |
+| =circuit=          | all      | =CircuitSpec= --- =from_openqasm3()=, =bind()=, =is_parametric()=     |
+| =observable=       | all      | =SparsePauliObservable=, =PauliTerm=                                  |
+| =backend=          | all      | =BackendSpec= --- 27 factory constructors                             |
+| =execution=        | all      | =ExecutionOptions=, =AlgorithmSpec=, =ZNEConfig=                      |
+| =error_mitigation= | all      | =ErrorMitigationStrategy=, provider configs, =QuantumAdvantageRecord= |
+| =result=           | all      | =QuantumResult=, =ExpectationResult=, =ShotResult=                    |
+| =record=           | all      | =BenchmarkRecord=, =VQAConfig=                                        |
+
+** Domain-Specific Schema Modules
+:PROPERTIES:
+:CUSTOM_ID: domain-specific-schema-modules
+:END:
+| Module             | Modality / Framework                                                                      |
+|--------------------+-------------------------------------------------------------------------------------------|
+| =mbqc=             | MBQC-FPGA --- bit-exact 16-bit program word                                               |
+| =photonic=         | Linear-optics chips, FBQC, HOM, photonic VQE/analog                                       |
+| =gbs=              | Gaussian Boson Sampling --- hafnian, vibronic, TDM/Borealis                               |
+| =qdk_chemistry=    | SCF → active space → QPE → resource estimation                                            |
+| =qse=              | Krylov Quantum Diagonalization (KQD / SQD)                                                |
+| =qesem=            | QESEM (Qedma) --- noise scaling, QET, device characterisation                             |
+| =qcschema=         | QCSchema / QCElemental / PennyLane interoperability                                       |
+| =neutral_atom=     | Bloqade / Aquila AHS, Rydberg atom arrangement                                            |
+| =slowquant=        | SlowQuant UCC/VQE --- ansatz, SCF, linear response                                        |
+| =error_mitigation= | Q-CTRL · Mitiq · Haiqu · ParityQC · QMatter · Quantum Motion · IBM V2 · Advantage Tracker |
+
+** QPU Modalities
+:PROPERTIES:
+:CUSTOM_ID: qpu-modalities
+:END:
+QPUBench natively covers *9 quantum computing paradigms*:
+
+- =GATE_BASED= --- qubit circuits (QASM2/3)
+- =MBQC= --- measurement-based QC on FPGA
+- =PHOTONIC_LINEAR_OPTICS= --- Fock-state chips
+- =FUSION_BASED= --- FBQC resource states + fusion
+- =QPE= --- Quantum Phase Estimation / IQPE
+
+- =GBS= --- Gaussian Boson Sampling
+- =KQD= --- Krylov Quantum Diagonalization
+- =NEUTRAL_ATOM= --- AHS on Rydberg atoms
+- =ANNEALING= --- quantum annealing
+
+\vspace{0.3em}
+All modalities share the same =BenchmarkRecord= schema.
+
+** CircuitSpec --- One Type for All Circuits
+:PROPERTIES:
+:CUSTOM_ID: circuitspec-one-type-for-all-circuits
+:END:
+#+begin_src python
+# Gate-based (QASM2)
+circuit = CircuitSpec(
+    num_qubits=2,
+    serialized='OPENQASM 2.0;\ninclude "qelib1.inc";\n...',
+    observables=[SparsePauliObservable(num_qubits=2, terms=[
+        PauliTerm(qubit_indices=(0, 1),
+                  pauli_ops=(PauliLabel.Z, PauliLabel.Z),
+                  coefficient=ComplexNumber(re=1.0))
+    ])],
+)
+
+# OpenQASM 3.0 helper
+circuit = CircuitSpec.from_openqasm3(source, num_qubits=2)
+
+# Parametric VQE — bind() returns a new copy
+ansatz = CircuitSpec(num_qubits=2, parameters=["theta"], ...)
+bound  = ansatz.bind({"theta": 1.2566})
+
+# Algorithm-driven (chemistry)
+mol = CircuitSpec(format=CircuitFormat.MOLECULE_JSON,
+                  serialized="/path/to/He-ccpvdz.json", num_qubits=0)
+#+end_src
+
+* Adapters
+:PROPERTIES:
+:CUSTOM_ID: adapters
+:END:
+** Three Adapter Protocols
+:PROPERTIES:
+:CUSTOM_ID: three-adapter-protocols
+:END:
+
+*=BackendAdapter=* /Circuit in, result out/
+
+#+begin_example
+CircuitSpec
+    ↓ run()
+QuantumResult
+#+end_example
+
+Aer · Qrack · IBM IQM · MBQC-FPGA
+
+*=AlgorithmAdapter=* /Problem spec in/
+
+#+begin_example
+CircuitSpec
+ (problem)
+    ↓ run_algorithm()
+(Result, VQAConfig)
+#+end_example
+
+QForte · OpenFermion
+
+*=ErrorMitigationAdapter=* /Wraps a BackendAdapter/
+
+#+begin_example
+inner adapter
+    ↓ run()
+mitigate/suppress
+    ↓
+QuantumResult
+#+end_example
+
+Fire Opal · Mitiq Haiqu · ParityQC
+
+\vspace{0.3em}
+=BenchmarkRunner= dispatches automatically --- =ErrorMitigationAdapter=
+registers like any =BackendAdapter=.
+
+** BackendAdapter --- Estimator vs Sampler
+:PROPERTIES:
+:CUSTOM_ID: backendadapter-estimator-vs-sampler
+:END:
+#+begin_src python
+class MyBackendAdapter:
+    @property
+    def spec(self) -> BackendSpec: ...          # hardware description
+
+    def validate(self, circuit: CircuitSpec) -> list[str]: ...
+
+    def run(self, circuit: CircuitSpec,
+            options: ExecutionOptions) -> QuantumResult:
+        if circuit.observables:
+            # Estimator path → expectation_values (VQE, QAOA)
+            evs = [measure_expectation(circuit, obs) for obs in circuit.observables]
+            return QuantumResult(expectation_values=evs, ...)
+        else:
+            # Sampler path → shot counts / bitstrings
+            counts = sample_bitstrings(circuit, options.shots)
+            return QuantumResult(shots=ShotResult(..., counts=counts), ...)
+#+end_src
+
+*Rule*: SDK imports go inside the method that uses them --- never at
+module level.
+
+** AlgorithmAdapter (QForte example)
+:PROPERTIES:
+:CUSTOM_ID: algorithmadapter-qforte-example
+:END:
+#+begin_src python
+class QForteAlgorithmAdapter:
+    def validate_problem(self, circuit: CircuitSpec) -> list[str]:
+        if circuit.format != CircuitFormat.MOLECULE_JSON:
+            return [f"Expected MOLECULE_JSON, got {circuit.format!r}"]
+        return []
+
+    def run_algorithm(self, circuit: CircuitSpec,
+                      options: ExecutionOptions
+                      ) -> tuple[QuantumResult, VQAConfig]:
+        import qforte as qf                   # ← deferred SDK import
+        mol = qf.system_factory(...)
+        alg = qf.ADAPTVQE(mol, ...)
+        alg.run(pool_type="SD", optimizer="BFGS", ...)
+        energy = float(alg.get_gs_energy())
+        result = QuantumResult(expectation_values=[
+            ExpectationResult(observable_index=0, value=energy, std_error=0.0)
+        ], status=JobStatus.SUCCEEDED)
+        return result, VQAConfig(problem_type="chemistry",
+                                 final_eigenvalue=energy, ...)
+#+end_src
+
+** Energy Evaluator Hook
+:PROPERTIES:
+:CUSTOM_ID: energy-evaluator-hook
+:END:
+Advanced: QForte drives the ansatz; a qpubench backend evaluates
+\(\langle H \rangle\)
+
+#+begin_example
+QForte optimizer  -->  energy_feval(params)
+                              |
+                    EnergyEvaluatorHook.evaluate()
+                              |
+                    qpubench BackendAdapter.run()
+                              |
+                    QuantumResult  -->  <H> (float)
+#+end_example
+
+- Enables ADAPT-VQE on *Aer, Qrack GPU, IBM hardware*, or any adapter
+- Gradient computation automatically routed through the hook
+- Falls back to QForte's internal C++ simulator on error
+- Available in =integrations/qforte/energy_hook.py=
+
+** Error Mitigation Providers
+:PROPERTIES:
+:CUSTOM_ID: error-mitigation-providers
+:END:
+=error_mitigation.py= --- one schema module, seven provider
+integrations:
+
+| Provider           | Schema types                                   | Technique                                        |
+|--------------------+------------------------------------------------+--------------------------------------------------|
+| *Q-CTRL Fire Opal* | =FireOpalConfig=, =FireOpalResult=             | Closed-box noise suppression; =fo.execute()= API |
+| *Mitiq*            | =MitiqConfig= + 5 configs, =MitiqResult=       | ZNE · PEC · CDR · REM · DDD                      |
+| *Haiqu Rivet*      | =HaiquRivetConfig=, =HaiquTranspilationResult= | Hardware-aware transpilation caching             |
+| *ParityQC*         | =ParityQCConfig=, =ParityQCResult=             | Parity encoding for QUBO / HCBO / Ising          |
+| *QMatter*          | =QMatterConfig=, =QMatterCompressionResult=    | Quantum problem compression                      |
+| *Quantum Motion*   | =QuantumMotionDeviceSpec=                      | Silicon CMOS spin-qubit characterisation         |
+
+\vspace{0.3em}
+=ErrorMitigationStrategy= enum extended: =FIRE_OPAL= ·
+=MITIQ_ZNE/PEC/CDR/REM/DDD= · =HAIQU= · =PARITY_QC= · =QMATTER=
+
+** IQM Hardware --- Star Topology
+:PROPERTIES:
+:CUSTOM_ID: iqm-hardware-star-topology
+:END:
+
+*IQM Resonance cloud* (=iqm-client= + =qiskit-iqm=)
+
+#+begin_src python
+# Star architecture: all qubits via COMPR1 resonator
+backend = BackendSpec.iqm_resonance(
+    "garnet",       # 20Q IQM Garnet
+    api_token_ref="IQM_TOKEN",
+)
+# BackendSpec.iqm_resonance("deneb")   # 6Q
+# BackendSpec.iqm_resonance("sirius")  # 24Q Star
+
+adapter = IQMAdapter("garnet", token=os.environ["IQM_TOKEN"])
+#+end_src
+
+Calibration via =IQMClient.get_dynamic_quantum_architecture()=: T1 ~28
+µs · T2* ~17 µs · PRX ~99.79% · CZ ~98.42%
+
+*Native gate set*
+
+| Gate   | Parameters              | Notes                                                                              |
+|--------+-------------------------+------------------------------------------------------------------------------------|
+| =PRX=  | \(\theta\), \(\varphi\) | Angles in *fractions of turns* --- \(\theta\)=0.5 \(\rightarrow\) \(\pi\) rotation |
+| =CZ=   | ---                     | Controlled-Z, symmetric                                                            |
+| =MOVE= | ---                     | Qubit \(\leftrightarrow\) resonator swap (Star only)                               |
+
+Hub-and-spoke topology gives effective all-to-all connectivity without
+SWAP routing.
+
+** IBM Quantum Runtime V2
+:PROPERTIES:
+:CUSTOM_ID: ibm-quantum-runtime-v2
+:END:
+
+*EstimatorV2 PUB* =(circuit, observables, params?, precision?)=
+
+#+begin_src python
+# precision replaces fixed shot count
+estimator.run([(qc, obs, params, 1e-2)])
+result[i].data.evs   # expectation value
+result[i].data.stds  # statistical error
+#+end_src
+
+*SamplerV2 PUB* =(circuit, params?, shots?)=
+
+#+begin_src python
+sampler.run([(qc, params, 4096)])
+bit_array = result[0].data.meas
+counts = bit_array.get_counts()
+#+end_src
+
+=BitArray.shape= = =(num_shots,)= or =(num_params, num_shots)=
+
+*Execution modes* (=IBMExecutionMode=)
+
+| Mode      | When to use                           |
+|-----------+---------------------------------------|
+| =SESSION= | VQE / adaptive --- exclusive QPU hold |
+| =BATCH=   | Sweeps --- parallel independent jobs  |
+| =SINGLE=  | One-shot run (default)                |
+
+#+begin_src python
+adapter = IBMAdapter(
+    "ibm_torino",
+    execution_mode=IBMExecutionMode.SESSION,
+)
+#+end_src
+
+*=IBMRuntimeRecord=* on =QuantumResult=: job_id · session_id ·
+resilience_level · =ExecutionSpan= timestamps
+
+\vspace{0.3em}
+*CUDA-Q*: =cudaq.observe()= \(\approx\) EstimatorV2; =cudaq.sample()=
+\(\approx\) SamplerV2 --- same =BackendAdapter= protocol.
+
+** Quantum Advantage Tracker
+:PROPERTIES:
+:CUSTOM_ID: quantum-advantage-tracker
+:END:
+=BenchmarkRecord.advantage= holds a =QuantumAdvantageRecord=:
+
+#+begin_src python
+record = runner.run(circuit, "ibm_torino", options)
+record = record.model_copy(update={"advantage": QuantumAdvantageRecord(
+    experiment_type=AdvantageExperimentType.OBSERVABLE_ESTIMATION,
+    circuit_name="Loschmidt-echo-70q",
+    num_qubits=70,
+    backend_name="ibm_boston",
+    floquet_layers=20,
+    observable_value=0.327,
+    observable_error_bound=0.012,
+    classical_method=ClassicalComparisonMethod.TENSOR_NETWORK,
+    coupling_params={"b": 1.0, "delta": 0.5},
+    submission_url="https://github.com/quantum-advantage-tracker/...",
+)})
+#+end_src
+
+\begin{block}{Quantum Advantage Tracker}
+Community registry co-initiated by IBM, Flatiron Institute, BlueQubit, Algorithmiq.
+Three experiment categories: observable estimation · variational · classically verifiable.
+\end{block}
+* Execution & Storage
+:PROPERTIES:
+:CUSTOM_ID: execution-storage
+:END:
+** BenchmarkRunner
+:PROPERTIES:
+:CUSTOM_ID: benchmarkrunner
+:END:
+#+begin_src python
+runner = BenchmarkRunner(store=NDJSONStore(Path("results.ndjson")))
+runner.register(AerAdapter(), name="aer")
+runner.register(QForteAlgorithmAdapter(), name="qforte")
+
+# Single run
+record = runner.run(circuit, "aer", ExecutionOptions(shots=4096))
+
+# Cartesian product sweep: circuits × backends × options
+records = runner.sweep(
+    circuits=[circuit_h2, circuit_lih],
+    backend_names=["aer", "qforte"],
+    options_list=[ExecutionOptions(shots=1024),
+                  ExecutionOptions(shots=8192)],
+    run_id="vqe-sweep-001",
+)
+
+# Post-execution hooks
+runner.add_hook(lambda rec: log_energy(rec.vqa.final_eigenvalue))
+#+end_src
+
+** Data Persistence
+:PROPERTIES:
+:CUSTOM_ID: data-persistence
+:END:
+*NDJSONStore* --- zero dependencies, append-only, grep-able
+
+#+begin_src python
+store = NDJSONStore(Path("results/run1.ndjson"))
+store.save(record)
+
+record  = store.load(experiment_id)           # by UUID
+records = store.query(                        # dot-path filters
+    backend__name="aer_statevector",
+    result__status="succeeded",
+)
+#+end_src
+
+*ParquetStore* --- columnar analytics (=pip install ".[storage]"=)
+
+#+begin_src python
+store = ParquetStore(Path("results/run1.parquet"))
+df = store.to_dataframe()                     # → pandas DataFrame
+#+end_src
+
+Every record is one JSON line --- stream-able, pandas-ready,
+archive-safe.
+
+* Integrations
+:PROPERTIES:
+:CUSTOM_ID: integrations
+:END:
+** Integration Ecosystem (1/3)
+:PROPERTIES:
+:CUSTOM_ID: integration-ecosystem-13
+:END:
+| Integration                    | Schema module      | Protocol           |
+|--------------------------------+--------------------+--------------------|
+| Cebule SDK                     | =cebule=           | =BackendAdapter=   |
+| Xenakis GA circuit search      | =xenakis=          | =AlgorithmAdapter= |
+| ExcitationSolve (Fourier VQE)  | =excitation_solve= | =AlgorithmAdapter= |
+| GSOpt (ground-state benchmark) | =gsopt=            | =AlgorithmAdapter= |
+| Photochipsim / FBQC            | =photonic=         | =BackendAdapter=   |
+| QDK / QuNorth chemistry        | =qdk_chemistry=    | =AlgorithmAdapter= |
+
+** Integration Ecosystem (2/3)
+:PROPERTIES:
+:CUSTOM_ID: integration-ecosystem-23
+:END:
+| Integration           | Schema module  | Protocol             |
+|-----------------------+----------------+----------------------|
+| DTU-GBS / photonic_QC | =gbs=          | =BackendAdapter=     |
+| QSE / KQD             | =qse=          | =AlgorithmAdapter=   |
+| QESEM (Qedma)         | =qesem=        | =BackendAdapter=     |
+| QCSchema / PennyLane  | =qcschema=     | cross-format interop |
+| Bloqade / Aquila      | =neutral_atom= | =BackendAdapter=     |
+| SlowQuant UCC/VQE     | =slowquant=    | =AlgorithmAdapter=   |
+
+** Integration Ecosystem (3/3) --- Error Mitigation & Hardware
+:PROPERTIES:
+:CUSTOM_ID: integration-ecosystem-33-error-mitigation-hardware
+:END:
+| Integration                             | Schema module      | Protocol                 |
+|-----------------------------------------+--------------------+--------------------------|
+| Q-CTRL Fire Opal                        | =error_mitigation= | =ErrorMitigationAdapter= |
+| Mitiq (ZNE · PEC · CDR · REM · DDD)     | =error_mitigation= | =ErrorMitigationAdapter= |
+| Haiqu Rivet transpiler                  | =error_mitigation= | =ErrorMitigationAdapter= |
+| ParityQC parity encoding                | =error_mitigation= | =ErrorMitigationAdapter= |
+| QMatter problem compression             | =error_mitigation= | =ErrorMitigationAdapter= |
+| IQM Resonance (garnet · deneb · sirius) | ---                | =BackendAdapter=         |
+| Quantum Motion CMOS spin-qubit          | =error_mitigation= | =BackendAdapter=         |
+
+** Cross-Framework Compatibility
+:PROPERTIES:
+:CUSTOM_ID: cross-framework-compatibility
+:END:
+*Pauli encoding* --- explicit converters prevent silent convention bugs:
+
+#+begin_src python
+# Qrack Q# convention: I=0, X=1, Z=2, Y=3  (non-sequential!)
+PauliLabel.Z.to_qrack_int()           # → 2  (not 3)
+PauliLabel.Y.to_qrack_int()           # → 3  (not 2)
+
+# Qiskit C API QkBitTerm bit-packed encoding
+PauliLabel.X.to_qiskit_c_bit_term()   # → 0b0010
+
+# MBQC byproduct register: bit 0 = Z, bit 1 = X  (reversed vs gate-based!)
+#+end_src
+
+*Complex numbers*: stored as ={"re": 1.0, "im": 0.5}= --- valid JSON
+without Python eval
+
+*QCSchema / QCElemental / PennyLane* interoperability via the =qcschema=
+module
+
+* Code Quality
+:PROPERTIES:
+:CUSTOM_ID: code-quality
+:END:
+** Python Quality Toolchain
+:PROPERTIES:
+:CUSTOM_ID: python-quality-toolchain
+:END:
+#+begin_src sh
+ruff check src/ tests/    # lint (line-length 100, target py311)
+ruff format src/ tests/   # format
+mypy src/                 # static types (strict = true)
+pytest tests/ -q          # 156 tests — no quantum SDK required
+#+end_src
+
+| Tool          | Role                                                             |
+|---------------+------------------------------------------------------------------|
+| *Pydantic v2* | Runtime-validated schemas --- field types enforced at parse time |
+| *ruff*        | Linting + auto-formatting, replaces flake8/isort/black           |
+| *mypy strict* | Full type coverage --- =Any= only where unavoidable              |
+| *pytest*      | Schema-only test suite runs with =pip install .= alone           |
+| *ponytail*    | Agent code-quality enforcement via decision ladder               |
+
+* Summary
+:PROPERTIES:
+:CUSTOM_ID: summary
+:END:
+** Getting Started
+:PROPERTIES:
+:CUSTOM_ID: getting-started
+:END:
+#+begin_src python
+from qpubench import (
+    BenchmarkRunner, NDJSONStore, StubGateAdapter,
+    CircuitSpec, ExecutionOptions,
+    SparsePauliObservable, PauliTerm, PauliLabel, ComplexNumber,
+)
+import pathlib
+
+circuit = CircuitSpec(
+    num_qubits=2,
+    serialized='OPENQASM 2.0;\ninclude "qelib1.inc";\nqreg q[2];\nh q[0];\ncx q[0],q[1];',
+    observables=[SparsePauliObservable(num_qubits=2, terms=[
+        PauliTerm(qubit_indices=(0, 1),
+                  pauli_ops=(PauliLabel.Z, PauliLabel.Z),
+                  coefficient=ComplexNumber(re=1.0))
+    ])],
+)
+runner = BenchmarkRunner(store=NDJSONStore(pathlib.Path("results.ndjson")))
+runner.register(StubGateAdapter(seed=42), name="stub")
+record = runner.run(circuit, "stub", ExecutionOptions(shots=4096))
+print(f"<ZZ> = {record.result.expectation_values[0].value:.4f}")
+#+end_src
+
+** Roadmap & Links
+:PROPERTIES:
+:CUSTOM_ID: roadmap-links
+:END:
+*Repository*: =github.com/mqsdk/qpubench=
+
+*Schema v1.12.0* --- 21 modules · 9 QPU modalities · zero quantum SDK
+deps in core
+
+\vspace{0.5em}
+*Contributing* --- writing an adapter takes ~30 lines:
+
+#+begin_src sh
+cp integrations/template/backend_adapter_template.py  my_adapter.py
+# fill the three TODOs: spec, validate(), run()
+#+end_src
+
+See =INTEGRATION_GUIDE.md= and =AGENTS.md= for the full development
+workflow.
+
+\vspace{0.5em}
+*Contact*: =contact@mqs.dk=

@@ -336,7 +336,7 @@ def test_benchmark_record_json_roundtrip():
     record  = _minimal_record()
     json_str = record.model_dump_json()
     data     = json.loads(json_str)
-    assert data["schema_version"] == "1.11.0"
+    assert data["schema_version"] == "1.12.0"
     restored = BenchmarkRecord.model_validate_json(json_str)
     assert restored.experiment_id == record.experiment_id
     assert restored.result.expectation_values[0].value == -1.137

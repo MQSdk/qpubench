@@ -442,6 +442,166 @@ class BackendSpec(pydantic.BaseModel):
         )
 
     @classmethod
+    def iqm(
+        cls,
+        device_name: str,
+        *,
+        num_qubits: int | None = None,
+        api_token_ref: str     = "",
+    ) -> BackendSpec:
+        """IQM hardware backend (generic constructor).
+
+        Star architecture: all qubits connected via central resonator (COMPR1).
+        Native gates: PRX(θ, φ), CZ, MOVE (qubit ↔ resonator).
+        Angles for PRX are in fractions of turns (not radians).
+
+        Use iqm_resonance() for IQM Resonance cloud access.
+        """
+        return cls(
+            name=device_name,
+            provider="iqm",
+            qpu_modality=QPUModality.GATE_BASED,
+            simulator=False,
+            num_qubits=num_qubits,
+            native_gates=["prx", "cz", "move"],
+            auth={"api_token_ref": api_token_ref, "device": device_name},
+        )
+
+    @classmethod
+    def iqm_resonance(
+        cls,
+        device_name: str = "garnet",
+        *,
+        num_qubits: int | None = None,
+        api_token_ref: str     = "",
+    ) -> BackendSpec:
+        """IQM Resonance cloud QPU access.
+
+        Known devices:
+          "garnet"  — 20-qubit IQM Garnet
+          "deneb"   — 6-qubit IQM Deneb (first commercially deployed IQM QPU)
+          "sirius"  — 24-qubit IQM Sirius (STAR 24 topology)
+
+        Authentication: bearer token via IQM_TOKEN env var or api_token_ref.
+        Endpoint: https://cocos.resonance.meetiqm.com/v1
+        """
+        _NUM_QUBITS = {"garnet": 20, "deneb": 6, "sirius": 24}
+        return cls(
+            name=f"iqm_{device_name}",
+            provider="iqm",
+            qpu_modality=QPUModality.GATE_BASED,
+            simulator=False,
+            num_qubits=num_qubits or _NUM_QUBITS.get(device_name),
+            native_gates=["prx", "cz", "move"],
+            auth={
+                "api_token_ref": api_token_ref,
+                "device_name":   device_name,
+                "endpoint":      "https://cocos.resonance.meetiqm.com/v1",
+            },
+        )
+
+    @classmethod
+    def iqm_local_server(
+        cls,
+        url: str,
+        device_name: str,
+        *,
+        num_qubits: int | None = None,
+        api_token_ref: str     = "",
+    ) -> BackendSpec:
+        """IQM on-premise / local IQM Resonance server.
+
+        url  base URL of the local IQM Cortex server, e.g.
+             "http://iqm-server.local:8080/v1"
+        """
+        return cls(
+            name=f"iqm_local_{device_name}",
+            provider="iqm",
+            qpu_modality=QPUModality.GATE_BASED,
+            simulator=False,
+            num_qubits=num_qubits,
+            native_gates=["prx", "cz", "move"],
+            auth={"api_token_ref": api_token_ref, "device_name": device_name, "endpoint": url},
+        )
+
+    @classmethod
+    def quantum_motion(
+        cls,
+        device_name: str,
+        *,
+        num_qubits: int | None = None,
+        gate_access: str       = "qiskit",
+    ) -> BackendSpec:
+        """Quantum Motion silicon CMOS spin-qubit QPU.
+
+        Quantum Motion fabricates spin-qubit processors in standard CMOS
+        foundries (first full-stack CMOS QPU delivered to UK NQCC, 2025).
+        Exposed via Qiskit- or Cirq-compatible backends.
+
+        gate_access  "qiskit" | "cirq"
+        """
+        return cls(
+            name=device_name,
+            provider="quantum_motion",
+            qpu_modality=QPUModality.GATE_BASED,
+            simulator=False,
+            num_qubits=num_qubits,
+            auth={"gate_access": gate_access},
+        )
+
+    @classmethod
+    def q_ctrl_fire_opal(
+        cls,
+        backend_name: str,
+        *,
+        api_key_ref:  str = "",
+        instance_ref: str = "",
+    ) -> BackendSpec:
+        """Q-CTRL Fire Opal noise-robust compilation service.
+
+        Fire Opal wraps an IBM hardware backend with automated error suppression
+        (pulse-level optimisation + dynamical decoupling).
+
+        Credentials: IBM Cloud API key + CRN instance string.
+        Python package: fireopal
+        API: fo.execute(circuits, shot_count, credentials, backend_name)
+        """
+        return cls(
+            name=f"fire_opal_{backend_name}",
+            provider="q_ctrl",
+            qpu_modality=QPUModality.GATE_BASED,
+            simulator=False,
+            auth={
+                "backend_name": backend_name,
+                "api_key_ref":  api_key_ref,
+                "instance_ref": instance_ref,
+            },
+        )
+
+    @classmethod
+    def haiqu(
+        cls,
+        backend_name: str,
+        *,
+        transpiler_backend: str = "qiskit",
+    ) -> BackendSpec:
+        """Haiqu Rivet transpilation middleware wrapping a hardware backend.
+
+        Rivet (open-source: haiqu-ai/rivet) provides hardware-aware caching
+        and pipelining of transpilation passes.  The proprietary Haiqu SDK
+        adds state compression and error mitigation on top.
+
+        transpiler_backend  "qiskit" | "bqskit" | "pytket"
+        """
+        return cls(
+            name=f"haiqu_{backend_name}",
+            provider="haiqu",
+            qpu_modality=QPUModality.GATE_BASED,
+            simulator=False,
+            auth={"backend_name": backend_name, "transpiler": transpiler_backend},
+        )
+
+    @classmethod
     def bloqade_emulator(cls, num_qubits: int | None = None) -> BackendSpec:
         """Bloqade Python local AHS emulator (exact state-vector / KrylovKit).
 
