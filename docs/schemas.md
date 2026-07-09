@@ -39,6 +39,7 @@ Vendor-scoped modules are named `<org_or_maintainer>_<package>.py` — the filen
 | [`polarizable_embedding`](#polarizable_embedding) | Polarizable embedding ("The Frame"): CPPE + PyFraME real potfile format, wired through `pyscf.solvent.PE` (unprefixed — no single vendor) |
 | [`optimizer_catalog`](#optimizer_catalog) | Minimizer / stopping-criterion catalogue over `AdaptVQEConfig` fields (unprefixed — framework's own type) |
 | [`hamiltonian_library`](#hamiltonian_library) | Metadata for Hamiltonians loaded from PennyLane qchem / HamLib Chemistry (unprefixed — two external sources, no single vendor) |
+| [`basis_sets`](#basis_sets) | Basis-set catalogue: Basis Set Exchange (real, verified function counts) + q-vSZP (schema-only, no PyPI package) — unprefixed, two external sources |
 | [`contraction_path`](#contraction_path) | Tensor-network contraction-path strategy/config/result, real quimb + cotengra mechanism (unprefixed — framework's own type over two libraries) |
 | `qctrl_fire_opal` | Q-CTRL Fire Opal noise-robust compilation |
 | `unitaryfund_mitiq` | Mitiq — ZNE, PEC, CDR, REM, DDD |
@@ -47,6 +48,7 @@ Vendor-scoped modules are named `<org_or_maintainer>_<package>.py` — the filen
 | `qmatter_qmatter` | QMatter quantum problem compression |
 | `quantum_motion_hardware` | Quantum Motion silicon CMOS spin-qubit hardware |
 | `ibm_runtime_v2` | Qiskit Runtime V2 EstimatorV2/SamplerV2 PUB format, BitArray, ExecutionSpans |
+| [`ibm_cost_estimator`](#ibm_cost_estimator) | Real resource estimation (ALAP-scheduled transpile + IBM's own usage formula) + dollar cost breakdown across IBM's 4 access plans |
 
 ---
 
@@ -1318,6 +1320,46 @@ locations below are `.gitignore`d:
 | `HamiltonianSource` | `PENNYLANE_QCHEM` \| `HAMLIB_CHEMISTRY` \| `AB_INITIO_PYSCF` |
 | `HamiltonianLibraryRecord` | molecule/basis/encoding + whichever of `fci_energy`/`hf_energy`/`vqe_energy`/`one_norm` the source actually ships (never fabricated) — `AB_INITIO_PYSCF` is the only source that fills in a real `hf_energy` (it computes HF itself) |
 
+## `basis_sets`
+
+Full documentation → [docs/integrations/basis_sets.md](integrations/basis_sets.md)
+
+Added 2026-07-09 to back `data/IBM_VQE_Test_Benchmark.csv`'s `Basis`
+column with a real catalogue instead of a free-text string. Two sources,
+**both real** — corrected 2026-07-09 after actually downloading and
+parsing q-vSZP's own data files: an earlier version of this module wrongly
+claimed q-vSZP needed ORCA + its Fortran CLI just to know its composition.
+It doesn't — only the contraction *coefficients* are charge-dependent, not
+the basis-function count, which is a fixed per-element property parsed
+straight from `q-vSZP_basis/basisq` (confirmed against the
+independently-generated CP2K-format file too).
+
+- **Basis Set Exchange** (basissetexchange.org, `pip install
+  'qpubench[bse]'`) — covers `sto-3g`/`6-31g`/`cc-pvdz`/`cc-pvtz`/
+  `def2-svp`/`def2-tzvp`. Ships its data locally (no network at runtime).
+  `count_basis_functions()`'s spherical-harmonic function counts were
+  cross-checked against real `pyscf.gto.M(...).nao` for every
+  (element, basis) pair in the benchmark CSV — exact match in all 18
+  cases (`tests/test_basis_sets.py`).
+- **q-vSZP** (github.com/grimme-lab/qvSZP, Grimme group, `pip install
+  'qpubench[qvszp]'`) — downloads+caches the real `basisq`/`basisq_
+  lesspolfunc`/`basisq_gxtb`/`ecpq`/CP2K-format files directly from the
+  repo (same pattern as `hamlib.py`) and parses real per-element shell
+  composition — no ORCA, no Fortran CLI. This caught a real error in the
+  original benchmark CSV draft: its Li2/qvSZP qubit count (34) was
+  physically impossible for a homonuclear diatomic; the real value is 36.
+  What remains schema-only (`QvSZPRunConfig`/`QvSZPBasisResult`, same
+  boundary as `pyscf.ProjectionEmbeddingConfig`/`DMETConfig`) is only
+  producing the true molecule-specific charge-*adapted* coefficients for
+  an actual ORCA run — not the basis composition itself.
+
+| Type | Verified against real data | Purpose |
+|---|---|---|
+| `BasisSetCatalogEntry` / `BASIS_SET_CATALOG` | Yes, all 7 entries | Basis identity: family, cardinality, polarization, element coverage source |
+| `get_basis_set_entry()` / `list_available_elements()` / `count_basis_functions()` (`hamiltonian_sources/basis_set_exchange.py`) | Yes — live `bse.get_metadata()`/`get_basis()` calls | Look up / confirm a basis is real; real per-element spatial AO function counts |
+| `count_basis_functions()` / `ecp_core_electrons()` / `get_cp2k_format_text()` (`hamiltonian_sources/qvszp.py`) | Yes — live download + parse of the real `q-vSZP_basis/` files | Real per-element q-vSZP function counts/ECP coverage; ready-to-use CP2K basis text |
+| `QvSZPRunConfig` / `QvSZPBasisResult` | No — schema-only | Real `qvSZP` CLI invocation shape for molecule-adapted coefficients (build from source; no adapter here calls it) |
+
 ## `contraction_path`
 
 Added 2026-07-09 to close qrunch's "Choose a Contraction Path Finder"
@@ -1347,3 +1389,45 @@ strategies onto real `optimize=` values and returns real
 | `ContractionPathStrategy` | `SEQUENTIAL` \| `RANDOM_GREEDY_128` \| `MULTI_STRATEGY` \| `NONE` — qrunch's own four strategies |
 | `ContractionPathConfig` | strategy + `num_repeats` (cotengra `HyperOptimizer.max_repeats`) + `max_memory_fraction`/`memory_budget_elements` (mapped to a real cotengra slicing `target_size` for `MULTI_STRATEGY`) |
 | `ContractionPathResult` | `strategy_used` + real `opt_cost`/`largest_intermediate` from `opt_einsum.contract.PathInfo` |
+
+## `ibm_cost_estimator`
+
+Full documentation → [docs/integrations/ibm_cost_estimator.md](integrations/ibm_cost_estimator.md)
+
+Added 2026-07-09: real per-circuit resource estimation for IBM Quantum
+hardware, plus a dollar-cost breakdown across all four IBM access plans
+(Open / Pay-As-You-Go / Flex / Premium) — answering "how long will this
+take and what will it cost" *before* submitting anything to
+`backends/ibm_adapter.py`, and without needing an IBM Quantum account.
+Same real-vs-sourced-but-unconfirmed split as `basis_sets`: resource
+estimation is real Qiskit output; the exact $/minute figures could not be
+confirmed against `ibm.com/quantum/products` directly (403 to automated
+fetches in this session) and are cross-referenced from IBM's own docs
+(what's confirmed there) plus two independent analyst/press sources (the
+rest) — see the module docstring and integration doc for the exact split,
+and verify before budgeting.
+
+`backends/ibm_cost_estimator.py` (real, Qiskit-dependent): transpiles +
+ALAP-schedules a `CircuitSpec` against a real IBM calibration snapshot
+(`qiskit_ibm_runtime.fake_provider.FakeBrisbane` etc — no credentials
+needed, or a live backend via `IBMAdapter.get_live_backend()`), then
+applies IBM's own documented usage formula from
+quantum.cloud.ibm.com/docs/en/guides/estimate-job-run-time. Verified: a
+4-qubit test circuit against `FakeBrisbane` gives real `depth=14`, 3 `ecr`
+gates, `3.52` microsecond circuit duration (`tests/test_ibm_cost_estimator.py`).
+
+`schemas/ibm_cost_estimator.py` (pure Pydantic, no Qiskit import): turns
+total QPU-seconds into a `PlanCostBreakdown` per plan — Open Plan's free
+10-min/28-day quota, Pay-As-You-Go's per-second billing, Flex's prepaid
+$30k-minimum lump sum, Premium's $249,600/year minimum annual
+subscription. `aggregate_benchmark_cost()` rolls up a whole study's worth
+of per-job estimates. See `examples/guides/estimate_ibm_cost.py` for an
+end-to-end walkthrough costing `data/IBM_VQE_Test_Benchmark.csv`.
+
+| Type | Verified against real data | Purpose |
+|---|---|---|
+| `CircuitResourceEstimate` | Yes — real Qiskit transpile/schedule/duration | Per-circuit depth, 1Q/2Q gate counts, real duration, IBM-formula QPU-time estimate |
+| `estimate_circuit_resources()` (`backends/ibm_cost_estimator.py`) | Yes — real `FakeBrisbane`/live-backend transpilation | Builds a `CircuitResourceEstimate` from a `CircuitSpec` |
+| `IBMPricingRates` | Partially — see docstring for confirmed-vs-cross-referenced split per field | Per-plan $/minute rates, free quota, minimums — all overridable |
+| `IBMAccessPlan` | — | `OPEN` \| `PAY_AS_YOU_GO` \| `FLEX` \| `PREMIUM` |
+| `PlanCostBreakdown` / `estimate_all_plans()` / `aggregate_benchmark_cost()` | Arithmetic only, real once `IBMPricingRates` is confirmed | Dollar cost per plan for a given QPU-time total |

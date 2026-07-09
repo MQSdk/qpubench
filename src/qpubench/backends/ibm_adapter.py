@@ -187,6 +187,18 @@ class IBMAdapter:
         )
         return service.backend(self._backend_name)
 
+    def get_live_backend(self) -> Any:
+        """Public wrapper around `_get_backend()` — real, credentialed
+        `BackendV2` for this adapter's `backend_name`/`channel`/`instance`.
+        Used by `backends.ibm_cost_estimator` to estimate resources against
+        live calibration data instead of the offline `FakeBackend` default.
+        """
+        return self._get_backend()
+
+    @property
+    def backend_name(self) -> str:
+        return self._backend_name
+
     def transpile(
         self,
         circuit: CircuitSpec,

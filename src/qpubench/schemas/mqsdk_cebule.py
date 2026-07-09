@@ -31,6 +31,24 @@ NOT found in that TaskType enum (kept, flagged — see CebuleTaskType docstring)
 MOL_MAP    molecular geometry -> qubit Hamiltonian (constraint-based encoding)
 QASM_GEN   Hamiltonian -> OpenQASM measurement circuits + post-processing table
 
+Re-checked 2026-07-09 against the current docs.mqs.dk quantum-computing
+section (https://docs.mqs.dk/sections/section_014_quantum_computing/,
+which the SDK's own maintainers describe as recently updated) — this did
+NOT change the TaskType-enum-membership confidence for MOL_MAP/QASM_GEN
+above (that still requires checking the SDK source directly, not done in
+this session), but did surface real field-level corrections to
+``QASMGenInput``/``TNQCOptInput``/``TNQCOptResult`` below, now updated:
+``QASMGenInput.include_state_circuit`` defaults to ``False`` (was
+documented as ``True`` previously), ``TNQCOptInput.opt_method`` defaults
+to ``"COBYLA"`` (was ``"BFGS"``), and two new ``TNQCOptInput`` fields —
+``measurement_method`` (``"pauli"`` vs ``"grouped"`` — ``"grouped"`` is
+QASM_GEN's own basis-state-pair-grouping technique, confirming QASM_GEN
+is usable *inside* TN_QC_OPT, not just standalone) and
+``optimization_mode`` (``"circuit"``/``"network"``/``"both"``) — are now
+documented and added here. ``TNQCOptResult`` also gained
+``function_calls``/``cost_history``/``param_history``/``metadata``/
+``optimize_result`` outputs not previously documented.
+
 SDK session pattern
 --------------------
     import mqsdk, os
@@ -153,17 +171,28 @@ class MolMapResult(pydantic.BaseModel):
 # ---------------------------------------------------------------------------
 
 class QASMGenInput(pydantic.BaseModel):
-    """Input for the Cebule QASM_GEN task.
+    """Input for the Cebule QASM_GEN task — "the measurement method [that]
+    efficiently evaluates the expectation value of the mapped Hamiltonian
+    using a novel circuit generation scheme that groups terms by
+    computational basis state pairs rather than Pauli string
+    decomposition" (docs.mqs.dk, checked 2026-07-09). Explicitly
+    documented as compatible with the output of either MOL_MAP or
+    TN_QC_OPT — a general measurement strategy, not tied to one Hamiltonian
+    source.
 
     operator is a Hermitian sparse matrix (2-D list) whose expectation value
     is to be measured.  Either state_vector or state_circuit (OpenQASM string)
     may be supplied for state preparation; both are optional.
+
+    include_state_circuit defaults to False — corrected 2026-07-09
+    against the current docs.mqs.dk table (an earlier revision of this
+    module had it defaulting True).
     """
     task_type:             CebuleTaskType = CebuleTaskType.QASM_GEN
     operator:              list[list[float]]
     state_vector:          list[float] | None = None
     state_circuit:         str | None         = None
-    include_state_circuit: bool               = True
+    include_state_circuit: bool               = False
 
 
 class QASMGenResult(pydantic.BaseModel):
@@ -225,20 +254,41 @@ class TNQCOptInput(pydantic.BaseModel):
 
     Store the raw SDK value here; use SparsePauliObservable.from_cebule_operators()
     on the TNQCOptResult output for a typed representation.
+
+    opt_method defaults to "COBYLA" — corrected 2026-07-09 against the
+    current docs.mqs.dk table (an earlier revision of this module had it
+    defaulting "BFGS").
+
+    measurement_method / optimization_mode — added 2026-07-09, confirmed
+    real in the current docs.mqs.dk table (not present in the revision
+    this module was originally written against):
+
+    measurement_method   "pauli" (default, per-Pauli-string expectation
+                          values) or "grouped" — QASM_GEN's own
+                          basis-state-pair-grouping measurement scheme
+                          (see QASMGenInput) used *inside* TN_QC_OPT
+                          rather than as a separate task.
+    optimization_mode     "both" (default, jointly optimize theta/phi —
+                          matches the reference paper's own approach) |
+                          "circuit" (freeze theta, plain VQE over phi
+                          only) | "network" (freeze phi, classical-only
+                          parameter search over theta).
     """
-    task_type:        CebuleTaskType  = CebuleTaskType.TN_QC_OPT
-    h_coeff_values:   list[float]
-    h_operators:      list[Any]
-    n_iterations:     int
-    n_layers_network: int
-    qasm_ansatz:      str | None     = None
-    n_layers_circuit: int            = 3
-    three_para_tn:    bool           = True
-    theta_init:       list[float]    = []
-    phi_init:         list[float]    = []
-    conv_tol:         float | None   = None
-    opt_method:       str            = "BFGS"
-    backend:          str            = "lightning.qubit"   # or "qiskit.aer"
+    task_type:           CebuleTaskType  = CebuleTaskType.TN_QC_OPT
+    h_coeff_values:      list[float]
+    h_operators:         list[Any]
+    n_iterations:        int
+    n_layers_network:    int
+    qasm_ansatz:         str | None     = None
+    n_layers_circuit:    int            = 3
+    three_para_tn:       bool           = True
+    theta_init:          list[float]    = []
+    phi_init:            list[float]    = []
+    conv_tol:            float | None   = None
+    opt_method:          str            = "COBYLA"
+    backend:             str            = "lightning.qubit"   # or "qiskit.aer"
+    measurement_method:  str            = "pauli"                # "pauli" | "grouped"
+    optimization_mode:   str            = "both"                    # "circuit" | "network" | "both"
 
 
 class TNQCOptResult(pydantic.BaseModel):
@@ -247,12 +297,35 @@ class TNQCOptResult(pydantic.BaseModel):
     qubit_operators uses space-separated PauliLabel+index tokens ("X0 Y1 Z3").
     Use SparsePauliObservable.from_cebule_operators(qubit_operators,
     h_tn_opt_qubit, num_qubits) to get a typed observable.
+
+    h_tn_opt_qubit / qubit_operators — kept as two separate parallel lists
+    (matches how to_sparse_pauli_observable() already consumes them, and
+    an earlier session's direct read of the SDK-facing docs). The current
+    docs.mqs.dk table (checked 2026-07-09) instead shows a single
+    ``H_TN_opt_qubit: tuple (lists)`` output, demonstrated via
+    ``zip(*H_TN_opt_qubit)`` to get (operator, coefficient) pairs — which
+    could mean the real API returns one combined 2-tuple field rather than
+    two separate keys. Not confident enough from a docs-page fetch alone
+    to restructure this (would break to_sparse_pauli_observable() if
+    wrong) — verify field names against a real TN_QC_OPT job response
+    before relying on either shape.
+
+    function_calls / cost_history / param_history / metadata /
+    optimize_result — added 2026-07-09, documented in the current
+    docs.mqs.dk table but not present when this module was first written;
+    all optional since it's unconfirmed whether older API versions
+    populate them.
     """
     vqe_energy:      float
     phi:             list[float]   # optimised circuit parameters U(φ)
     theta:           list[float]   # optimised TN parameters U(θ)
     h_tn_opt_qubit:  list[float]   # optimised Hamiltonian coefficients
     qubit_operators: list[str]     # "X0 Y1 Z3" format, parallel to h_tn_opt_qubit
+    function_calls:  int | None            = None   # number of cost-function evaluations
+    cost_history:    list[float]           = []      # energy value per function evaluation
+    param_history:   list[list[float]]     = []      # theta+phi history per evaluation
+    metadata:        dict[str, Any] | list[Any] | None = None   # backend-specific
+    optimize_result: dict[str, Any] | None = None   # full scipy.optimize.minimize OptimizeResult, as returned by the API ("OptimizeResult" in the docs)
 
     def to_sparse_pauli_observable(self, num_qubits: int) -> SparsePauliObservable:
         return SparsePauliObservable.from_cebule_operators(

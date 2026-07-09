@@ -138,6 +138,15 @@ from .hamiltonian_library import (
     HamiltonianLibraryRecord,
     HamiltonianSource,
 )
+from .basis_sets import (
+    BASIS_SET_CATALOG,
+    BasisSetCatalogEntry,
+    BasisSetFamily,
+    BasisSetSource,
+    QvSZPBasisResult,
+    QvSZPRunConfig,
+    QvSZPVariant,
+)
 from .contraction_path import (
     ContractionPathConfig,
     ContractionPathResult,
@@ -400,6 +409,19 @@ from .ibm_runtime_v2 import (
     IBMRuntimeRecord,
     IBMSamplerPUB,
 )
+from .ibm_cost_estimator import (
+    BenchmarkCostEstimate,
+    CircuitResourceEstimate,
+    IBMAccessPlan,
+    IBMPricingRates,
+    PlanCostBreakdown,
+    aggregate_benchmark_cost,
+    estimate_all_plans,
+    estimate_flex,
+    estimate_open_plan,
+    estimate_pay_as_you_go,
+    estimate_premium,
+)
 from .unitaryfund_mitiq import (
     MitiqCDRConfig,
     MitiqConfig,
@@ -464,6 +486,18 @@ __all__ = [
     "IBMPrimitiveType",
     "IBMRuntimeRecord",
     "IBMSamplerPUB",
+    # ibm_cost_estimator
+    "BenchmarkCostEstimate",
+    "CircuitResourceEstimate",
+    "IBMAccessPlan",
+    "IBMPricingRates",
+    "PlanCostBreakdown",
+    "aggregate_benchmark_cost",
+    "estimate_all_plans",
+    "estimate_flex",
+    "estimate_open_plan",
+    "estimate_pay_as_you_go",
+    "estimate_premium",
     # unitaryfund_mitiq
     "MitiqCDRConfig",
     "MitiqConfig",
@@ -671,6 +705,14 @@ __all__ = [
     # hamiltonian_library
     "HamiltonianLibraryRecord",
     "HamiltonianSource",
+    # basis_sets
+    "BASIS_SET_CATALOG",
+    "BasisSetCatalogEntry",
+    "BasisSetFamily",
+    "BasisSetSource",
+    "QvSZPBasisResult",
+    "QvSZPRunConfig",
+    "QvSZPVariant",
     # contraction_path
     "ContractionPathConfig",
     "ContractionPathResult",

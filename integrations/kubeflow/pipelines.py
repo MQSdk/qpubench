@@ -79,9 +79,9 @@ def cebule_molecular_vqe_pipeline(
     n_iterations: int = 100,
     n_layers_network: int = 3,
     n_layers_circuit: int = 3,
-    opt_method: str = "BFGS",
+    opt_method: str = "COBYLA",   # Cebule's own current default (docs.mqs.dk, checked 2026-07-09)
     tn_backend: str = "lightning.qubit",
-    include_state_circuit: bool = True,
+    include_state_circuit: bool = False,   # Cebule's own current default (docs.mqs.dk, checked 2026-07-09)
     shots: int = 1024,
 ) -> None:
     mol_map_task = _with_cebule_credentials(

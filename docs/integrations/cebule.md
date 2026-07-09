@@ -103,14 +103,23 @@ result = MolMapResult(
 
 ---
 
-## QASM_GEN *(unconfirmed against current SDK source)*
+## QASM_GEN *(unconfirmed against current SDK source; fully documented on docs.mqs.dk)*
 
-Generates OpenQASM 2.0 circuits for Hamiltonian measurement, one circuit per Pauli grouping.
+The measurement method: evaluates the expectation value of a mapped
+Hamiltonian via a circuit-generation scheme that groups terms by
+computational basis state pairs rather than per-Pauli-string
+decomposition — generates OpenQASM 2.0 circuits, one per basis-state
+grouping. Explicitly documented as compatible with the output of either
+`MOL_MAP` or `TN_QC_OPT` (see below — it's also usable *inside*
+`TN_QC_OPT` directly via `measurement_method="grouped"`).
+
+`include_state_circuit` defaults to `False` (corrected 2026-07-09 against
+the current docs.mqs.dk table).
 
 ```python
 from qpubench.schemas import QASMGenInput, QASMGenResult
 
-inp = QASMGenInput(operator=[[…]], include_state_circuit=True)
+inp = QASMGenInput(operator=[[…]], include_state_circuit=True)   # override the False default explicitly
 
 result = QASMGenResult(
     circuit_files=["OPENQASM 2.0; …", "OPENQASM 2.0; …"],
@@ -128,7 +137,14 @@ qasm3_specs = result.to_openqasm3_circuit_specs(num_qubits=4, qasm3_sources=[…
 
 ## TN_QC_OPT
 
-Hybrid tensor-network + quantum circuit VQE.
+Hybrid tensor-network + quantum circuit VQE. `opt_method` defaults to
+`"COBYLA"` (corrected 2026-07-09 — was `"BFGS"` in an earlier revision of
+this doc). `measurement_method` (`"pauli"` default, or `"grouped"` —
+QASM_GEN's own basis-state-pair grouping used internally) and
+`optimization_mode` (`"both"` default — jointly optimize θ/φ; `"circuit"`
+freezes θ for plain VQE over φ; `"network"` freezes φ for a classical-only
+θ search) were added 2026-07-09, confirmed real against the current
+docs.mqs.dk table.
 
 ```python
 from qpubench.schemas import TNQCOptInput, TNQCOptResult, SparsePauliObservable
@@ -139,8 +155,10 @@ inp = TNQCOptInput(
     n_iterations=100,
     n_layers_network=3,
     n_layers_circuit=3,
-    opt_method="BFGS",
+    opt_method="COBYLA",
     backend="lightning.qubit",
+    measurement_method="grouped",   # or "pauli"
+    optimization_mode="both",        # or "circuit" / "network"
 )
 
 result = TNQCOptResult(
@@ -149,6 +167,8 @@ result = TNQCOptResult(
     theta=[0.5, -0.1, 0.2],     # optimised TN parameters U(θ)
     h_tn_opt_qubit=[0.5, -0.3, 0.1],
     qubit_operators=["Z0", "X0 Z1", "Y1"],
+    function_calls=42,
+    cost_history=[-0.9, -1.05, -1.136],
 )
 
 # Convert to SparsePauliObservable
@@ -162,7 +182,7 @@ from qpubench.schemas import AlgorithmSpec
 
 spec = AlgorithmSpec(
     name="TN_QC_OPT",
-    optimizer="BFGS",
+    optimizer="COBYLA",
     opt_maxiter=100,
     n_layers_network=3,
     n_layers_circuit=3,

@@ -90,6 +90,15 @@ were verified to coexist in one environment (`qiskit>=2.2`, `qiskit-aer`
 >=0.17, `numpy<2.5` for `numba`/`braket`'s default simulator) — install
 `pip install 'qpubench[qiskit,braket,iqm]'` together without conflict.
 
+### Resource / cost estimation (before you submit anything)
+
+`ibm_cost_estimator.py` estimates what a circuit/study will cost on real
+IBM Quantum hardware *before* running it — real ALAP-scheduled
+transpilation against `qiskit_ibm_runtime.fake_provider` (no credentials
+needed) plus IBM's own documented usage formula, then a dollar breakdown
+across all four IBM access plans (`schemas/ibm_cost_estimator.py`). Full
+documentation → [docs/integrations/ibm_cost_estimator.md](integrations/ibm_cost_estimator.md).
+
 ### Integration examples (copy into your project)
 
 From `integrations/`:
