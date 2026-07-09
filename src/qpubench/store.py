@@ -6,6 +6,13 @@ NDJSONStore  — zero-dependency append-only store (default).
 
 ParquetStore — optional columnar store requiring pyarrow + pandas.
                Enables fast analytical queries over large sweep results.
+
+S3Store      — optional object store requiring boto3.
+               One JSON object per record, so concurrent writers never race
+               on a shared file the way NDJSONStore's append target can.
+               Works against real AWS S3 and any S3-compatible endpoint
+               (MinIO, Hugging Face Storage Buckets, ...); see
+               S3Store.huggingface() for a ready-made HF configuration.
 """
 from __future__ import annotations
 
@@ -152,6 +159,152 @@ class ParquetStore:
 
 
 # ---------------------------------------------------------------------------
+# S3 (optional) — AWS S3 and S3-compatible endpoints (MinIO, HF buckets, ...)
+# ---------------------------------------------------------------------------
+
+class S3Store:
+    """Object store backed by S3 or any S3-compatible endpoint.
+
+    Requires: pip install 'qpubench[s3]'
+
+    One JSON object per record, written to
+    f"{prefix}/{experiment_id}.json" (or f"{experiment_id}.json" with no
+    prefix). Unlike NDJSONStore's shared append-only file, there is no
+    read-modify-write of shared state, so concurrent writers — separate
+    processes, machines, or a distributed sweep — do not race.
+
+    Only put_object, get_object, and the list_objects_v2 paginator are
+    used, so this works unmodified against real AWS S3 and against
+    S3-compatible gateways such as MinIO or Hugging Face Storage Buckets
+    (see S3Store.huggingface()).
+
+    Pass an already-constructed boto3 client via `client=` (e.g. one built
+    from an AWS CLI profile) or pass boto3.client("s3", ...) kwargs
+    directly — endpoint_url, region_name, aws_access_key_id,
+    aws_secret_access_key, config=botocore.config.Config(...), etc.
+    """
+
+    def __init__(
+        self,
+        bucket: str,
+        prefix: str = "",
+        *,
+        client: Any | None = None,
+        **client_kwargs: Any,
+    ) -> None:
+        self._bucket = bucket
+        self._prefix = prefix.strip("/")
+        self._client = client if client is not None else _s3_client(**client_kwargs)
+
+    @classmethod
+    def huggingface(
+        cls,
+        bucket: str,
+        namespace: str,
+        *,
+        access_key_id: str,
+        secret_access_key: str,
+        prefix: str = "",
+    ) -> S3Store:
+        """Construct an S3Store backed by a Hugging Face Storage Bucket.
+
+        namespace   your HF username or organization — scopes the gateway
+                    endpoint (https://s3.hf.co/<namespace>).
+        access_key_id / secret_access_key
+                    S3 credentials generated from a HF User Access Token:
+                    Settings -> Access Tokens -> (token) -> Generate S3
+                    credentials. access_key_id is prefixed "HFAK...".
+
+        The HF S3 gateway is single-region and path-style addressed, and
+        only supports ListObjectsV2; the botocore Config below matches
+        https://huggingface.co/docs/hub/en/storage-buckets-s3
+        """
+        try:
+            from botocore.config import Config  # type: ignore[import-not-found]
+        except ImportError as e:
+            raise ImportError(
+                "S3Store.huggingface() requires boto3. "
+                "Install with: pip install 'qpubench[s3]'"
+            ) from e
+        return cls(
+            bucket=bucket,
+            prefix=prefix,
+            endpoint_url=f"https://s3.hf.co/{namespace}",
+            aws_access_key_id=access_key_id,
+            aws_secret_access_key=secret_access_key,
+            config=Config(
+                region_name="us-east-1",
+                s3={"addressing_style": "path"},
+                request_checksum_calculation="when_required",
+                response_checksum_validation="when_required",
+            ),
+        )
+
+    def _key(self, experiment_id: str) -> str:
+        return f"{self._prefix}/{experiment_id}.json" if self._prefix else f"{experiment_id}.json"
+
+    def save(self, record: BenchmarkRecord) -> None:
+        self._client.put_object(
+            Bucket=self._bucket,
+            Key=self._key(record.experiment_id),
+            Body=record.model_dump_json().encode("utf-8"),
+            ContentType="application/json",
+        )
+
+    def load(self, experiment_id: str) -> BenchmarkRecord:
+        key = self._key(experiment_id)
+        try:
+            response = self._client.get_object(Bucket=self._bucket, Key=key)
+        except self._client.exceptions.NoSuchKey as e:
+            raise KeyError(
+                f"experiment_id {experiment_id!r} not found in "
+                f"s3://{self._bucket}/{key}"
+            ) from e
+        return BenchmarkRecord.model_validate_json(_read_body(response))
+
+    def query(self, **filters: Any) -> list[BenchmarkRecord]:
+        """Filter records by dot-separated field path (see NDJSONStore.query)."""
+        results: list[BenchmarkRecord] = []
+        for record in self._iter():
+            flat = record.model_dump()
+            if all(
+                _nested_get(flat, k.replace("__", ".")) == v
+                for k, v in filters.items()
+            ):
+                results.append(record)
+        return results
+
+    def all(self) -> list[BenchmarkRecord]:
+        return list(self._iter())
+
+    def _iter(self) -> Iterator[BenchmarkRecord]:
+        list_prefix = f"{self._prefix}/" if self._prefix else ""
+        paginator = self._client.get_paginator("list_objects_v2")
+        for page in paginator.paginate(Bucket=self._bucket, Prefix=list_prefix):
+            for obj in page.get("Contents", []):
+                key = obj["Key"]
+                if not key.endswith(".json"):
+                    continue
+                response = self._client.get_object(Bucket=self._bucket, Key=key)
+                yield BenchmarkRecord.model_validate_json(_read_body(response))
+
+
+def _s3_client(**kwargs: Any) -> Any:
+    try:
+        import boto3  # type: ignore[import-not-found]
+    except ImportError as e:
+        raise ImportError(
+            "S3Store requires boto3. Install with: pip install 'qpubench[s3]'"
+        ) from e
+    return boto3.client("s3", **kwargs)
+
+
+def _read_body(get_object_response: dict[str, Any]) -> str:
+    body = get_object_response["Body"].read()
+    return body.decode("utf-8") if isinstance(body, bytes) else body
+
+
+# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
@@ -177,7 +330,8 @@ def _flatten_record(record: BenchmarkRecord) -> dict[str, Any]:
         "tags":            json.dumps(record.tags),
         "notes":           record.notes,
         # circuit
-        "circuit_modality":  record.circuit.modality.value,
+        "circuit_computing_model": record.circuit.computing_model.value,
+        "circuit_qubit_modality":  record.circuit.qubit_modality.value if record.circuit.qubit_modality else None,
         "circuit_format":    record.circuit.format.value,
         # backend
         "backend_name":      record.backend.name,

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pydantic
 
-from .primitives import QPUModality
+from .primitives import ComputingModel, QubitModality
 
 
 class QubitCharacteristics(pydantic.BaseModel):
@@ -51,7 +51,8 @@ class BackendSpec(pydantic.BaseModel):
     """
     name:              str
     provider:          str
-    qpu_modality:      QPUModality             = QPUModality.GATE_BASED
+    computing_model:   ComputingModel          = ComputingModel.GATE_BASED
+    qubit_modality:    QubitModality | None    = None
     num_qubits:        int | None              = None
     simulator:         bool                    = False
     native_gates:      list[str]               = []
@@ -101,16 +102,67 @@ class BackendSpec(pydantic.BaseModel):
         backend_name: str,
         *,
         instance:  str = "ibm-q/open/main",
-        channel:   str = "ibm_quantum",
+        channel:   str = "ibm_quantum_platform",
         token_ref: str = "",
     ) -> BackendSpec:
+        """
+        channel default is "ibm_quantum_platform" — confirmed against the
+        installed qiskit-ibm-runtime (0.47.x): QiskitRuntimeService now
+        raises ValueError for the old "ibm_quantum" channel ("'channel' can
+        only be 'ibm_cloud', or 'ibm_quantum_platform'"), a real migration
+        away from the legacy IBM Quantum Platform "IQP" channel.
+        `instance` (hub/group/project) may also need to become a Cloud
+        Resource Name (CRN) string under the new channel — not verified
+        here; check your IBM Quantum account's migration guidance.
+        """
         return cls(
             name=backend_name,
             provider="ibm",
+            qubit_modality=QubitModality.SUPERCONDUCTING,
             auth={
                 "token_ref": token_ref,
                 "instance":  instance,
                 "channel":   channel,
+            },
+        )
+
+    @classmethod
+    def braket(
+        cls,
+        device_arn: str,
+        *,
+        qubit_modality: QubitModality = QubitModality.SUPERCONDUCTING,
+        num_qubits: int | None = None,
+        s3_bucket_ref: str = "",
+        s3_prefix: str = "braket-results",
+    ) -> BackendSpec:
+        """Generic gate-based AWS Braket device.
+
+        device_arn  full Braket device ARN, e.g.
+                     "arn:aws:braket:us-east-1::device/qpu/rigetti/Ankaa-3"
+                     "arn:aws:braket:us-east-1::device/qpu/ionq/Aria-1"
+                     "arn:aws:braket:::device/quantum-simulator/amazon/sv1"
+        s3_bucket_ref  env-var reference to the S3 bucket Braket writes task
+                       results to — every Braket job (simulator or QPU)
+                       requires an S3 output location; there is no
+                       synchronous "just return the result" call.
+        s3_prefix      key prefix under the bucket for this backend's results.
+
+        This is the generic gate-based Braket path — distinct from the
+        modality-specific Braket wiring elsewhere in the schema layer:
+        `xanadu_borealis(via_braket=True)` (GBS) and `aquila()` (neutral-atom
+        AHS) each talk to Braket for their own specialized IR, not OpenQASM.
+        """
+        return cls(
+            name=device_arn.rsplit("/", 1)[-1],
+            provider="aws_braket",
+            qubit_modality=qubit_modality,
+            simulator="quantum-simulator" in device_arn,
+            num_qubits=num_qubits,
+            auth={
+                "device_arn":    device_arn,
+                "s3_bucket_ref": s3_bucket_ref,
+                "s3_prefix":     s3_prefix,
             },
         )
 
@@ -186,7 +238,7 @@ class BackendSpec(pydantic.BaseModel):
         return cls(
             name=f"mbqc_fpga_{fpga_family}",
             provider="mbqc",
-            qpu_modality=QPUModality.MBQC,
+            computing_model=ComputingModel.MBQC,
             num_qubits=num_logical_qubits,
             auth={"fpga_family": fpga_family},
         )
@@ -197,7 +249,8 @@ class BackendSpec(pydantic.BaseModel):
         return cls(
             name=f"photochipsim_{num_modes}mode",
             provider="photochipsim",
-            qpu_modality=QPUModality.PHOTONIC_LINEAR_OPTICS,
+            computing_model=ComputingModel.GATE_BASED,
+            qubit_modality=QubitModality.PHOTONIC,
             simulator=True,
             num_qubits=num_modes,
             auth={"num_modes": str(num_modes)},
@@ -219,7 +272,8 @@ class BackendSpec(pydantic.BaseModel):
         return cls(
             name=f"sf_{backend}",
             provider="strawberry_fields",
-            qpu_modality=QPUModality.PHOTONIC_LINEAR_OPTICS,
+            computing_model=ComputingModel.GATE_BASED,
+            qubit_modality=QubitModality.PHOTONIC,
             simulator=True,
             num_qubits=num_modes,
             auth={"backend": backend, "cutoff_dim": str(cutoff_dim)},
@@ -240,7 +294,8 @@ class BackendSpec(pydantic.BaseModel):
         return cls(
             name=f"perceval_{backend}",
             provider="perceval",
-            qpu_modality=QPUModality.PHOTONIC_LINEAR_OPTICS,
+            computing_model=ComputingModel.GATE_BASED,
+            qubit_modality=QubitModality.PHOTONIC,
             simulator=True,
             num_qubits=num_modes,
             auth={"backend": backend},
@@ -257,7 +312,8 @@ class BackendSpec(pydantic.BaseModel):
         return cls(
             name=chip_id,
             provider="photonic_hardware",
-            qpu_modality=QPUModality.PHOTONIC_LINEAR_OPTICS,
+            computing_model=ComputingModel.GATE_BASED,
+            qubit_modality=QubitModality.PHOTONIC,
             simulator=False,
             num_qubits=num_modes,
             auth={"platform": platform, "chip_id": chip_id},
@@ -273,7 +329,8 @@ class BackendSpec(pydantic.BaseModel):
         return cls(
             name="xanadu_x8",
             provider="xanadu",
-            qpu_modality=QPUModality.GBS,
+            computing_model=ComputingModel.GBS,
+            qubit_modality=QubitModality.PHOTONIC,
             simulator=False,
             num_qubits=num_modes,
             auth={"device": "X8"},
@@ -290,7 +347,8 @@ class BackendSpec(pydantic.BaseModel):
         return cls(
             name="xanadu_borealis",
             provider="aws_braket" if via_braket else "xanadu",
-            qpu_modality=QPUModality.GBS,
+            computing_model=ComputingModel.GBS,
+            qubit_modality=QubitModality.PHOTONIC,
             simulator=False,
             num_qubits=216,
             auth={
@@ -310,7 +368,8 @@ class BackendSpec(pydantic.BaseModel):
         return cls(
             name="sf_gaussian",
             provider="strawberry_fields",
-            qpu_modality=QPUModality.GBS,
+            computing_model=ComputingModel.GBS,
+            qubit_modality=QubitModality.PHOTONIC,
             simulator=True,
             num_qubits=num_modes,
         )
@@ -337,7 +396,8 @@ class BackendSpec(pydantic.BaseModel):
         return cls(
             name=f"qesem_{backend_name}",
             provider="qedma",
-            qpu_modality=QPUModality.GATE_BASED,
+            computing_model=ComputingModel.GATE_BASED,
+            qubit_modality=QubitModality.SUPERCONDUCTING,
             simulator=False,
             auth={
                 "backend_name":         backend_name,
@@ -361,7 +421,7 @@ class BackendSpec(pydantic.BaseModel):
         return cls(
             name=f"aer_{method}",
             provider="aer",
-            qpu_modality=QPUModality.KQD,
+            computing_model=ComputingModel.GATE_BASED,
             simulator=True,
             num_qubits=num_qubits,
             auth={"method": method},
@@ -382,7 +442,7 @@ class BackendSpec(pydantic.BaseModel):
         return cls(
             name=executor,
             provider="qdk_chemistry",
-            qpu_modality=QPUModality.QPE,
+            computing_model=ComputingModel.GATE_BASED,
             simulator=True,
             num_qubits=num_qubits,
             auth={"executor": executor},
@@ -395,6 +455,7 @@ class BackendSpec(pydantic.BaseModel):
         *,
         resource_id_ref: str = "",
         location_ref: str = "",
+        qubit_modality: QubitModality | None = None,
     ) -> BackendSpec:
         """Azure Quantum hardware / resource-estimation target.
 
@@ -403,11 +464,19 @@ class BackendSpec(pydantic.BaseModel):
                   "quantinuum.hqs-lt-s1"         — Quantinuum H1 hardware
                   "ionq.simulator"               — IonQ cloud simulator
         Credentials are stored as env-var references.
+
+        qubit_modality  QPU modality override. Inferred from target
+                        when omitted: "quantinuum"/"ionq" (non-simulator) →
+                        TRAPPED_ION; simulator/estimator targets → None.
         """
+        if qubit_modality is None and "simulator" not in target and "estimator" not in target:
+            if "quantinuum" in target or "ionq" in target:
+                qubit_modality = QubitModality.TRAPPED_ION
         return cls(
             name=target,
             provider="azure_quantum",
-            qpu_modality=QPUModality.QPE,
+            computing_model=ComputingModel.GATE_BASED,
+            qubit_modality=qubit_modality,
             simulator=("simulator" in target or "estimator" in target),
             auth={
                 "target":           target,
@@ -432,7 +501,8 @@ class BackendSpec(pydantic.BaseModel):
         return cls(
             name="aquila",
             provider="quera",
-            qpu_modality=QPUModality.NEUTRAL_ATOM,
+            computing_model=ComputingModel.ADIABATIC,
+            qubit_modality=QubitModality.NEUTRAL_ATOM,
             simulator=False,
             auth={
                 "device_arn": f"arn:aws:braket:{aws_region}::device/qpu/quera/Aquila",
@@ -460,7 +530,8 @@ class BackendSpec(pydantic.BaseModel):
         return cls(
             name=device_name,
             provider="iqm",
-            qpu_modality=QPUModality.GATE_BASED,
+            computing_model=ComputingModel.GATE_BASED,
+            qubit_modality=QubitModality.SUPERCONDUCTING,
             simulator=False,
             num_qubits=num_qubits,
             native_gates=["prx", "cz", "move"],
@@ -489,7 +560,8 @@ class BackendSpec(pydantic.BaseModel):
         return cls(
             name=f"iqm_{device_name}",
             provider="iqm",
-            qpu_modality=QPUModality.GATE_BASED,
+            computing_model=ComputingModel.GATE_BASED,
+            qubit_modality=QubitModality.SUPERCONDUCTING,
             simulator=False,
             num_qubits=num_qubits or _NUM_QUBITS.get(device_name),
             native_gates=["prx", "cz", "move"],
@@ -517,7 +589,8 @@ class BackendSpec(pydantic.BaseModel):
         return cls(
             name=f"iqm_local_{device_name}",
             provider="iqm",
-            qpu_modality=QPUModality.GATE_BASED,
+            computing_model=ComputingModel.GATE_BASED,
+            qubit_modality=QubitModality.SUPERCONDUCTING,
             simulator=False,
             num_qubits=num_qubits,
             native_gates=["prx", "cz", "move"],
@@ -543,7 +616,8 @@ class BackendSpec(pydantic.BaseModel):
         return cls(
             name=device_name,
             provider="quantum_motion",
-            qpu_modality=QPUModality.GATE_BASED,
+            computing_model=ComputingModel.GATE_BASED,
+            qubit_modality=QubitModality.SILICON_SPIN,
             simulator=False,
             num_qubits=num_qubits,
             auth={"gate_access": gate_access},
@@ -569,7 +643,8 @@ class BackendSpec(pydantic.BaseModel):
         return cls(
             name=f"fire_opal_{backend_name}",
             provider="q_ctrl",
-            qpu_modality=QPUModality.GATE_BASED,
+            computing_model=ComputingModel.GATE_BASED,
+            qubit_modality=QubitModality.SUPERCONDUCTING,
             simulator=False,
             auth={
                 "backend_name": backend_name,
@@ -596,7 +671,7 @@ class BackendSpec(pydantic.BaseModel):
         return cls(
             name=f"haiqu_{backend_name}",
             provider="haiqu",
-            qpu_modality=QPUModality.GATE_BASED,
+            computing_model=ComputingModel.GATE_BASED,
             simulator=False,
             auth={"backend_name": backend_name, "transpiler": transpiler_backend},
         )
@@ -611,7 +686,8 @@ class BackendSpec(pydantic.BaseModel):
         return cls(
             name="bloqade_python",
             provider="bloqade",
-            qpu_modality=QPUModality.NEUTRAL_ATOM,
+            computing_model=ComputingModel.ADIABATIC,
+            qubit_modality=QubitModality.NEUTRAL_ATOM,
             simulator=True,
             num_qubits=num_qubits,
         )

@@ -7,11 +7,11 @@ import pydantic
 
 from .backend import BackendSpec
 from .circuit import CircuitSpec
-from .error_mitigation import QuantumAdvantageRecord
+from .advantage import QuantumAdvantageRecord
 from .execution import ExecutionOptions
 from .result import QuantumResult
 
-SCHEMA_VERSION = "1.12.0"
+SCHEMA_VERSION = "2.3.0"
 
 def _utcnow() -> datetime.datetime:
     return datetime.datetime.now(datetime.UTC)
@@ -51,6 +51,13 @@ class VQAConfig(pydantic.BaseModel):
     convergence_values:     energy per optimizer iteration
     convergence_parameters: parameter vector per iteration
     adapt_maxiter_reached:  True if ADAPT-VQE hit adapt_maxiter without converging
+
+    Classiq synthesis linking
+    -------------------------
+    classiq_synthesis_id:  links to ClassiqSynthesisResult.program_id (classiq.py).
+                           mapper/ansatz/n_cnot/num_parameters above are reused
+                           as-is for Classiq chemistry runs — see
+                           ClassiqVQEResult.to_vqa_config().
     """
     problem_type:             str                   # "chemistry", "optimization", "ml"
     molecule:                 str | None            = None
@@ -78,6 +85,8 @@ class VQAConfig(pydantic.BaseModel):
     ga_run_id:                str | None            = None   # links to GARunResult.run_id
     genome_hash:              str | None            = None   # stable hash of evolved genome
     best_complexity:          float | None          = None   # Xenakis ad-hoc complexity score
+    # Constrained circuit synthesis fields (Classiq family)
+    classiq_synthesis_id:     str | None            = None   # links to ClassiqSynthesisResult.program_id
     convergence_values:       list[float]           = []
     convergence_parameters:   list[list[float]]     = []
     adapt_maxiter_reached:    bool                  = False

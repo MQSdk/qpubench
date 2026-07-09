@@ -26,12 +26,12 @@ from qpubench import (
     NDJSONStore,
     StubMBQCAdapter,
 )
-from qpubench.schemas.mbqc import (
+from qpubench.schemas.johnrscott_mbqc_fpga import (
     AdaptiveSpec,
     ByproductUpdateSpec,
     CommutationSpec,
 )
-from qpubench.schemas.primitives import QPUModality, CircuitFormat
+from qpubench.schemas.primitives import ComputingModel, CircuitFormat
 
 
 def rx_pattern(xi: float, eta: float, zeta: float) -> MBQCPattern:
@@ -81,7 +81,7 @@ def main() -> None:
 
     # Run via stub backend
     circuit = CircuitSpec(
-        modality=QPUModality.MBQC,
+        computing_model=ComputingModel.MBQC,
         num_qubits=pattern.num_logical_qubits,
         format=CircuitFormat.MEASUREMENT_PATTERN,
         measurement_pattern=pattern,

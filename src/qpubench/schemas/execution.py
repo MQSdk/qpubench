@@ -4,8 +4,8 @@ from typing import Any
 
 import pydantic
 
-from .primitives import ErrorMitigationStrategy
-from .qesem import QESEMCircuitOptions, QESEMJobOptions
+from .primitives import AlgorithmFamily, ErrorMitigationStrategy
+from .qedma_qesem import QESEMCircuitOptions, QESEMJobOptions
 
 
 class ZNEConfig(pydantic.BaseModel):
@@ -32,58 +32,64 @@ class TranspilerConfig(pydantic.BaseModel):
 
 
 class AlgorithmSpec(pydantic.BaseModel):
-    """Specification for an algorithm-driven VQE run.
+    """Identifies which algorithm-driven run this is.
 
-    Used by algorithm-library adapters (e.g. QForteAdapter, Cebule SDK) that
-    generate their own circuits internally rather than accepting a pre-written
-    circuit.
+    Used by AlgorithmAdapter implementations (QForte, Cebule SDK, Xenakis,
+    ExcitationSolve, ...) that generate their own circuits internally rather
+    than accepting a pre-written circuit.
 
-    QForte VQE variants:
-      UCCNVQE    — disentangled UCC VQE (fixed operator pool)
-      ADAPTVQE   — adaptive derivative-assembled pseudo-Trotterised VQE
-      UCCNPQE    — UCC projective quantum eigensolver
-      SPQE       — selected projective quantum eigensolver
+    name    library-specific algorithm label, e.g. "ADAPTVQE", "UCCNVQE",
+            "TN_QC_OPT" — interpreted by whichever adapter is registered.
+    family  package-agnostic identity (AlgorithmFamily). Set this to compare
+            runs of "the same algorithm" across different implementing
+            adapters — e.g. family=ADAPT_VQE lets a caller switch between
+            the evangelistalab_qforte, ibm_qiskit_adapt_vqe, and
+            microsoft_qdk_adapt_vqe adapters using the same AdaptVQEConfig.
+    extra_params  escape hatch for adapter-specific kwargs not covered by a
+                  typed config.
 
-    Cebule SDK task types (see CebuleTaskType):
-      TN_QC_OPT  — tensor-network + quantum circuit hybrid VQE
-      COVO       — correlation-optimised virtual orbital pre-processing
-      MOL_MAP    — molecular Hamiltonian → qubit mapping
-      QASM_GEN   — OpenQASM measurement circuit generation
-
-    pool_type options: "SD", "GSD", "SDTQ", "sa_SD", "custom"
-    optimizer options: "BFGS", "jacobi", "nelder-mead", "L-BFGS-B", "COBYLA"
+    Hyperparameters live in each algorithm's own schema module, not here:
+      ADAPT_VQE (generic)    → AdaptVQEConfig (this module)
+      QForte-specific extras → evangelistalab_qforte.QForteAlgorithmConfig
+      ExcitationSolve        → dlr_excitation_solve.ExcitationSolveConfig
+      Xenakis GA search      → mqsdk_xenakis.GAConfig / GenomeConfig
+      Cebule TN_QC_OPT       → mqsdk_cebule.TNQCOptInput
+      QDK QPE/IQPE           → microsoft_qdk.QPEConfig
     """
-    name:               str               # "UCCNVQE", "ADAPTVQE", "TN_QC_OPT", ...
-    pool_type:          str          = "SD"
-    optimizer:          str          = "BFGS"
-    use_analytic_grad:  bool         = True
-    opt_thresh:         float        = 1.0e-5
-    opt_ftol:           float        = 1.0e-5
-    opt_maxiter:        int          = 200
-    noise_factor:       float        = 0.0    # UCCNVQE: artificial noise
-    avqe_thresh:        float        = 1.0e-2 # ADAPTVQE: gradient norm threshold
-    adapt_maxiter:      int          = 20     # ADAPTVQE: macro-iteration limit
-    compact_excitations: bool        = False
-    qubit_excitations:  bool         = False
-    diis_max_dim:       int          = 0      # 0 = disabled
-    # ExcitationSolve fields (dlr-wf/ExcitationSolve)
-    num_samples:        int          = 5      # energy probe points per parameter sweep (≥5)
-    # Evolutionary / GA fields (Xenakis family)
-    param_restarts:     int          = 1      # random restarts for local parameter search
-    local_opt_steps:    int          = 0      # coordinate-descent steps per restart
-    # TN_QC_OPT (Cebule) fields
-    n_layers_network:   int | None   = None   # classical tensor network depth
-    n_layers_circuit:   int | None   = None   # quantum circuit layer count
-    three_para_tn:      bool         = True   # rotation parameterisation mode
-    qasm_ansatz:        str | None   = None   # pre-defined parametric QASM ansatz
-    theta_init:         list[float]  = []     # TN parameter initialisation
-    phi_init:           list[float]  = []     # circuit parameter initialisation
-    extra_params:       dict[str, Any] = {}   # algorithm-specific escape hatch
-    # QPE / IQPE fields (QDK chemistry pipeline)
-    num_bits:           int | None   = None  # phase register bits
-    shots_per_bit:      int | None   = None  # IQPE: majority-vote shots per bit
-    evolution_time:     float | None = None  # T_max = π/‖H‖₁
-    trotter_order:      int | None   = None  # Suzuki-Trotter product formula order
+    name:          str
+    family:        AlgorithmFamily | None = None
+    extra_params:  dict[str, Any]         = {}
+
+
+class AdaptVQEConfig(pydantic.BaseModel):
+    """Package-agnostic ADAPT-VQE hyperparameters (AlgorithmFamily.ADAPT_VQE).
+
+    The common contract every ADAPT-VQE implementation accepts, regardless
+    of which package runs it. Each adapter translates these into its own
+    call — e.g. QForteAlgorithmConfig wraps this plus QForte-only extras
+    (diis_max_dim, use_cumulative_thresh, add_equiv_ops).
+
+    pool_type              operator pool: "SD" | "GSD" | "SDTQ" | "sa_SD"
+    optimizer              classical optimizer name; each adapter maps this
+                            onto its own supported set (e.g. scipy method name)
+    gradient_threshold      macro-iteration stop: ‖gradient‖ below this ends
+                            ansatz growth (QForte: avqe_thresh)
+    energy_threshold        micro-optimizer (parameter fit) convergence
+                            threshold (QForte: opt_thresh)
+    max_macro_iterations    operator-pool growth steps / ansatz depth cap
+                            (QForte: adapt_maxiter)
+    max_micro_iterations    optimizer steps per macro-iteration
+                            (QForte: opt_maxiter)
+    use_analytic_gradient   analytic gradient (parameter-shift / commutator)
+                            vs finite-difference
+    """
+    pool_type:             str   = "SD"
+    optimizer:             str   = "BFGS"
+    gradient_threshold:    float = 1.0e-2
+    energy_threshold:      float = 1.0e-5
+    max_macro_iterations:  int   = 20
+    max_micro_iterations:  int   = 200
+    use_analytic_gradient: bool  = True
 
 
 class ExecutionOptions(pydantic.BaseModel):
@@ -102,7 +108,9 @@ class ExecutionOptions(pydantic.BaseModel):
 
     Algorithm-driven fields (QForte and similar libraries)
     -------------------------------------------------------
-    algorithm_spec     which algorithm to run and its hyperparameters
+    algorithm_spec     which algorithm to run (name + AlgorithmFamily)
+    adapt_vqe_config   shared hyperparameter contract for
+                       AlgorithmFamily.ADAPT_VQE, package-agnostic
 
     MBQC fields
     -----------
@@ -122,6 +130,7 @@ class ExecutionOptions(pydantic.BaseModel):
         default_factory=TranspilerConfig
     )
     algorithm_spec:       AlgorithmSpec | None    = None
+    adapt_vqe_config:     AdaptVQEConfig | None   = None
     cluster_depth:        int | None              = None
     adaptive_corrections: bool                    = True
     # QESEM (Qedma) fields

@@ -110,6 +110,24 @@ class SparsePauliObservable(pydantic.BaseModel):
             ))
         return cls(num_qubits=num_qubits, terms=terms)
 
+    def to_qiskit_pauli_list(self, num_qubits: int) -> list[tuple[str, complex]]:
+        """(pauli_label, coefficient) pairs for ``SparsePauliOp.from_list()``.
+
+        Labels are full-length (one character per qubit, 'I'-padded).
+        Qiskit's own convention has the rightmost character as qubit 0
+        (verified: ``SparsePauliOp.from_list([("IZ", 1.0)])`` evaluates to
+        -1.0 on a circuit with only ``x(0)`` applied — qubit 0 is the last
+        character).
+        """
+        pairs: list[tuple[str, complex]] = []
+        for term in self.terms:
+            chars = ["I"] * num_qubits
+            for idx, op in zip(term.qubit_indices, term.pauli_ops):
+                chars[idx] = op.value
+            label = "".join(reversed(chars))
+            pairs.append((label, term.coefficient.value))
+        return pairs
+
     def to_qrack_flat_arrays(self) -> tuple[list[int], list[int]]:
         """Flatten all terms into a single (qubits, paulis) pair for Qrack.
 

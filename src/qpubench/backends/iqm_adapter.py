@@ -1,9 +1,6 @@
 """IQM hardware backend adapter.
 
-Install:
-  pip install iqm-client            # core client + REST API
-  pip install qiskit-iqm            # Qiskit provider (qiskit_on_iqm)
-  pip install cirq-iqm              # Cirq provider (optional)
+Install: pip install 'qpubench[iqm]'   (iqm-client[qiskit])
 
 Hardware topology:
   IQM uses a **Star architecture** (e.g. IQM Garnet 20Q, IQM Sirius 24Q):
@@ -11,12 +8,11 @@ Hardware topology:
   effective all-to-all connectivity without SWAP routing.
 
 Native gate set:
-  PRX(θ, φ)  — parametric rotation:
-               exp(-i π θ (X cos(2πφ) + Y sin(2πφ)))
-               angles in **fractions of turns** (not radians!):
-               θ = 0.5 → π rotation, φ = 0.25 → Y basis
-  CZ         — controlled-Z (symmetric, no arguments)
-  MOVE       — population exchange qubit ↔ computational resonator
+  r(theta, phi)  — parametric rotation (PRX under a different Qiskit
+               instruction name; confirmed on the real transpiled output
+               below): exp(-i pi theta (X cos(2*pi*phi) + Y sin(2*pi*phi)))
+  cz         — controlled-Z (symmetric, no arguments)
+  MOVE       — population exchange qubit <-> computational resonator
                (Star topology only; not a standard unitary on qubits)
 
 IQM Resonance cloud:
@@ -24,15 +20,33 @@ IQM Resonance cloud:
   Auth:     bearer token set via IQM_TOKEN env var or passed to IQMProvider.
   Known devices: garnet (20Q), deneb (6Q), sirius (24Q Star).
 
+Import path change (verified empirically)
+------------------------------------------
+The standalone ``qiskit-iqm``/``qiskit_on_iqm`` packages are obsolete —
+importing ``qiskit_iqm`` now raises
+``RuntimeError: The qiskit-iqm package is obsolete ... use iqm-client[qiskit]
+instead``. The real, current package is ``iqm-client[qiskit]`` (>=22.10),
+which bundles the same functionality under the ``iqm.qiskit_iqm`` /
+``iqm.iqm_client`` namespace — confirmed by installing both in an isolated
+sandbox venv and inspecting ``IQMProvider``/``IQMClient`` directly.
+
 qiskit-iqm usage:
-  from qiskit_on_iqm import IQMProvider
-  provider  = IQMProvider(url, token=os.environ["IQM_TOKEN"])
-  backend   = provider.get_backend()
+  from iqm.qiskit_iqm import IQMProvider
+  provider = IQMProvider(url, token=os.environ["IQM_TOKEN"])
+  backend  = provider.get_backend(device_name)
   pm = generate_preset_pass_manager(optimization_level=3, backend=backend)
 
-Calibration data (via IQMClient.get_dynamic_quantum_architecture()):
-  T1 ~28 µs, T2* ~17 µs, T2 echo ~28 µs
-  PRX fidelity ~99.79%, CZ fidelity ~98.42% (device-dependent)
+Verified for real (no live IQM server) via ``iqm.qiskit_iqm.fake_backends``
+(``IQMFakeAdonis`` etc. — bundled local BackendV2 instances): transpile +
+Sampler-path run both confirmed correct on a Bell circuit, including the
+real native gate names above and Star-topology final qubit layout.
+
+Calibration data (via IQMClient.get_calibration_set()):
+  Confirmed against iqm-client 34.0.4: CalibrationSet.observations is a
+  list of ObservationLite(dut_field, value, unit, uncertainty, ...) — the
+  real source of per-qubit/per-gate T1/T2/fidelity numbers (not
+  DynamicQuantumArchitecture.components/operations, which only names
+  qubits/gates, not their calibrated values).
 
 Credentials: set via BackendSpec.auth or environment variable —
   IQM_TOKEN   (bearer token from IQM Resonance dashboard)
@@ -40,21 +54,28 @@ Credentials: set via BackendSpec.auth or environment variable —
 
 from __future__ import annotations
 
+from typing import Any
+
+import os
+
 from ..schemas.backend import BackendSpec
 from ..schemas.circuit import CircuitSpec
 from ..schemas.execution import ExecutionOptions
 from ..schemas.primitives import (
     CircuitFormat,
-    QPUModality,
+    ComputingModel,
+    JobStatus,
 )
 from ..schemas.result import (
     QuantumResult,
+    ShotResult,
     TranspileLayout,
 )
+from ._qiskit_common import load_qiskit_circuit
 
 
 class IQMAdapter:
-    """IQM hardware adapter using qiskit-iqm (IQMProvider / IQMBackend).
+    """IQM hardware adapter using iqm-client's Qiskit bridge (IQMProvider / IQMBackend).
 
     Parameters
     ----------
@@ -93,8 +114,8 @@ class IQMAdapter:
 
     def validate(self, circuit: CircuitSpec) -> list[str]:
         warnings: list[str] = []
-        if circuit.modality != QPUModality.GATE_BASED:
-            warnings.append(f"IQMAdapter expects GATE_BASED; got {circuit.modality}")
+        if circuit.computing_model != ComputingModel.GATE_BASED:
+            warnings.append(f"IQMAdapter expects GATE_BASED; got {circuit.computing_model}")
         if circuit.format not in (CircuitFormat.QASM2, CircuitFormat.QASM3):
             warnings.append(
                 f"IQMAdapter accepts QASM2/3 circuits (transpiled internally); got {circuit.format}"
@@ -103,121 +124,90 @@ class IQMAdapter:
             warnings.append("Circuit has unbound parameters")
         return warnings
 
+    # ------------------------------------------------------------------
+
+    def _get_backend(self) -> Any:
+        from iqm.qiskit_iqm import IQMProvider  # type: ignore[attr-defined]
+
+        provider = IQMProvider(self._url, token=self._token or os.environ.get("IQM_TOKEN"))
+        return provider.get_backend(self._device_name)
+
+    def _transpile_qc(self, circuit: CircuitSpec, options: ExecutionOptions, backend: Any) -> Any:
+        from qiskit.transpiler.preset_passmanagers import generate_preset_pass_manager
+
+        qc = load_qiskit_circuit(circuit)
+        pm = generate_preset_pass_manager(
+            optimization_level=options.optimization_level,
+            backend=backend,
+            seed_transpiler=options.seed,
+        )
+        return pm.run(qc)
+
     def transpile(
         self,
         circuit: CircuitSpec,
         options: ExecutionOptions,
     ) -> tuple[CircuitSpec, TranspileLayout | None]:
-        """Transpile to IQM native gates via qiskit-iqm.
+        """Transpile to IQM native gates (r/cz, Star-topology MOVE) via iqm-client."""
+        from qiskit import qasm3
 
-        TODO: fill in with real implementation —
+        backend = self._get_backend()
+        tqc = self._transpile_qc(circuit, options, backend)
 
-            import os
-            from qiskit import QuantumCircuit
-            from qiskit_on_iqm import IQMProvider
-            from qiskit.transpiler.preset_passmanagers import (
-                generate_preset_pass_manager,
-            )
-
-            provider = IQMProvider(
-                self._url,
-                token=self._token or os.environ["IQM_TOKEN"],
-            )
-            backend = provider.get_backend()
-
-            qc  = QuantumCircuit.from_qasm_str(circuit.serialized)
-            pm  = generate_preset_pass_manager(
-                optimization_level=options.optimization_level,
-                backend=backend,
-                seed_transpiler=options.seed,
-            )
-            tqc = pm.run(qc)
-
-            # Star topology: IQMNaiveResonatorMoving pass may insert MOVE gates.
-            # The coupling map uses qubit↔resonator edges, not qubit↔qubit.
-            # Physical qubit names are e.g. "QB1" … "QB20" + "COMPR1".
-
-            layout = tqc.layout
-            # extract initial / final virtual→physical mapping
-            transpile_layout = TranspileLayout(
-                num_virtual=circuit.num_qubits,
-                num_physical=backend.num_qubits,
-                initial_layout=list(range(circuit.num_qubits)),
-                final_layout=list(range(circuit.num_qubits)),
-            )
-            transpiled = circuit.model_copy(update={
-                "serialized": tqc.qasm(),
-                "gate_counts": dict(tqc.count_ops()),
-                "format": "qasm3",
-            })
-            return transpiled, transpile_layout
-        """
-        raise NotImplementedError("IQMAdapter.transpile: see TODO in iqm_adapter.py")
+        final_positions = tqc.layout.final_index_layout() if tqc.layout else list(range(circuit.num_qubits))
+        transpile_layout = TranspileLayout(
+            num_virtual=circuit.num_qubits,
+            num_physical=backend.num_qubits,
+            initial_layout=list(range(circuit.num_qubits)),
+            final_layout=list(final_positions),
+        )
+        transpiled = circuit.model_copy(update={
+            "serialized": qasm3.dumps(tqc),
+            "gate_counts": dict(tqc.count_ops()),
+            "format": CircuitFormat.QASM3,
+        })
+        return transpiled, transpile_layout
 
     def run(
         self,
         circuit: CircuitSpec,
         options: ExecutionOptions,
     ) -> QuantumResult:
-        """Transpile and submit to IQM Resonance via qiskit-iqm.
-
-        TODO: fill in with real implementation —
-
-            import os
-            from qiskit import QuantumCircuit
-            from qiskit_on_iqm import IQMProvider
-            from qiskit.transpiler.preset_passmanagers import (
-                generate_preset_pass_manager,
+        """Transpile and submit to IQM Resonance via iqm-client's Qiskit bridge."""
+        if circuit.observables:
+            raise NotImplementedError(
+                "IQMAdapter: Estimator path not available — iqm-client's qiskit "
+                "bridge (iqm.qiskit_iqm, confirmed against 34.0.4) exposes no "
+                "EstimatorV2-equivalent; use the Sampler path and compute "
+                "observables classically from counts."
             )
 
-            provider = IQMProvider(
-                self._url,
-                token=self._token or os.environ["IQM_TOKEN"],
-            )
-            backend = provider.get_backend()
+        backend = self._get_backend()
+        tqc = self._transpile_qc(circuit, options, backend)
+        if not tqc.cregs:
+            tqc.measure_all()
 
-            qc  = QuantumCircuit.from_qasm_str(circuit.serialized)
-            pm  = generate_preset_pass_manager(
-                optimization_level=options.optimization_level,
-                backend=backend,
-                seed_transpiler=options.seed,
-            )
-            tqc = pm.run(qc)
+        shots = options.shots or 1024
+        job = backend.run(tqc, shots=shots, memory=options.memory)
+        result = job.result()
+        counts = dict(result.get_counts())
+        # Per-shot memory: supported by real IQM hardware backends, not by
+        # the bundled fake/local backends (confirmed: IQMFakeAdonis.run()
+        # ignores memory=True and get_memory() raises).
+        memory = result.get_memory() if options.memory else []
 
-            shots = options.shots or 1024
-
-            # --- Estimator path (observables present) ---
-            if circuit.observables:
-                from qiskit_ibm_runtime import EstimatorV2 as Estimator
-                # IQM does not yet expose an IBM-style EstimatorV2.
-                # Use the Qiskit Statevector backend as a local stand-in for
-                # now; replace with IQM's native expectation-value estimation
-                # when available in qiskit-iqm.
-                raise NotImplementedError(
-                    "IQMAdapter: Estimator path not yet available via qiskit-iqm; "
-                    "use the Sampler path and compute observables classically."
-                )
-
-            # --- Sampler path (bitstring counts) ---
-            job    = backend.run(tqc, shots=shots, rep_delay=options.rep_delay_s)
-            result = job.result()
-            counts = dict(result.get_counts())
-            memory = result.get_memory() if options.memory else []
-
-            return QuantumResult(
-                modality=QPUModality.GATE_BASED,
-                shots=ShotResult(
-                    num_qubits=circuit.num_qubits,
-                    num_shots=shots,
-                    counts=counts,
-                    memory=memory,
-                ),
-                status=JobStatus.SUCCEEDED,
-                job_id=job.job_id(),
-                qpu_time_s=result.time_taken,
-            )
-        """
-        raise NotImplementedError("IQMAdapter.run: see TODO in iqm_adapter.py")
+        return QuantumResult(
+            computing_model=ComputingModel.GATE_BASED,
+            shots=ShotResult(
+                num_qubits=circuit.num_qubits,
+                num_shots=shots,
+                counts=counts,
+                memory=memory,
+            ),
+            status=JobStatus.SUCCEEDED,
+            job_id=job.job_id(),
+            qpu_time_s=getattr(result, "time_taken", None),
+        )
 
     # ------------------------------------------------------------------
     # Calibration helper
@@ -227,38 +217,23 @@ class IQMAdapter:
     def fetch_calibration(device_name: str, url: str, token: str) -> dict[str, object]:
         """Fetch per-qubit and per-gate calibration data from IQM Client.
 
-        TODO: fill in with real implementation —
-
-            import os
-            from iqm.iqm_client import IQMClient
-
-            client = IQMClient(url, token=token)
-            arch   = client.get_dynamic_quantum_architecture()
-
-            # arch.components is a dict of component_name → ComponentInfo
-            # Each ComponentInfo carries calibration_sets with T1, T2*, T2 echo,
-            # PRX fidelity, CZ fidelity, MOVE fidelity (Star topology).
-            #
-            # Typical values (device-dependent):
-            #   T1      ~28 µs
-            #   T2*     ~17 µs
-            #   T2 echo ~28 µs
-            #   PRX     ~99.79 % fidelity
-            #   CZ      ~98.42 % fidelity
-
-            calibration: dict[str, object] = {}
-            for comp_name, comp_info in arch.components.items():
-                calibration[comp_name] = {
-                    "t1_s":  comp_info.t1_s,
-                    "t2_s":  comp_info.t2_s,
-                    "t2e_s": comp_info.t2e_s,
-                }
-            for op_name, op_calib in arch.operations.items():
-                for loci, props in op_calib.items():
-                    calibration[f"{op_name}_{loci}"] = {
-                        "fidelity": props.fidelity,
-                        "duration_s": props.duration_s,
-                    }
-            return calibration
+        Typical values (device-dependent):
+          T1      ~28 us
+          T2*     ~17 us
+          T2 echo ~28 us
+          PRX     ~99.79 % fidelity
+          CZ      ~98.42 % fidelity
         """
-        raise NotImplementedError("IQMAdapter.fetch_calibration: see TODO in iqm_adapter.py")
+        from iqm.iqm_client import IQMClient
+
+        client = IQMClient(url, token=token)
+        calibration_set = client.get_calibration_set()
+
+        calibration: dict[str, object] = {}
+        for obs in calibration_set.observations:
+            calibration[obs.dut_field] = {
+                "value": obs.value,
+                "unit": obs.unit,
+                "uncertainty": obs.uncertainty,
+            }
+        return calibration

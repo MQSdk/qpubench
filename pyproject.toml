@@ -44,13 +44,42 @@ Repository    = "https://github.com/mqsdk/qpubench"
 #   uv pip install "qpubench[qiskit]"
 #   poetry add "qpubench[qiskit]"
 [project.optional-dependencies]
-qiskit  = ["qiskit>=2.0", "qiskit-aer", "qiskit-ibm-runtime", "qiskit-nature>=0.7"]
+qiskit  = ["qiskit>=2.0", "qiskit-aer", "qiskit-ibm-runtime", "qiskit-nature>=0.7", "qiskit_qasm3_import"]
 qrack   = ["pyqrack"]
+braket  = ["amazon-braket-sdk", "qiskit-braket-provider"]   # generic gate-based AWS Braket adapter (backends/braket_adapter.py)
+iqm     = ["iqm-client[qiskit]"]   # IQM hardware adapter (backends/iqm_adapter.py) — standalone qiskit-iqm is obsolete, bundled here instead
+classiq = ["classiq"]
+pyscf   = ["pyscf"]   # mean-field/DFT, PCM/COSMO solvation, periodic pbc — schemas/pyscf.py
+hamlib  = ["h5py", "requests"]   # HamLib Chemistry loader (hamiltonian_sources/hamlib.py)
+pennylane = ["pennylane", "aiohttp", "fsspec", "h5py"]   # PennyLane qchem dataset loader (hamiltonian_sources/pennylane_qchem.py)
+openfermion = ["openfermion", "openfermionpyscf", "pyscf"]   # ab initio Hamiltonian construction (hamiltonian_sources/ab_initio.py)
+tensor_network = ["quimb", "cotengra"]   # contraction path selection (tensor_network/contraction_path.py)
 storage = ["pyarrow", "pandas"]
+s3      = ["boto3"]   # S3 / S3-compatible object stores (AWS S3, MinIO, HF Storage Buckets)
 cudaq   = []   # CUDA-Q installed separately via conda/pip per NVIDIA docs
+# integrations/generic_adapt_vqe/ classical optimizer — not a quantum SDK,
+# used by ibm_qiskit_adapt_vqe/ and microsoft_qdk_adapt_vqe/ (numpy only
+# needed to run their tests, which independently verify the Jordan-Wigner
+# and circuit-synthesis math via dense-matrix construction).
+adapt_vqe = ["scipy", "numpy"]
+# integrations/kubeflow/ — compiles qpubench algorithmic steps into a
+# Kubeflow Pipelines (kfp) DAG. Not a quantum SDK; only needed to compile
+# and submit pipelines, not by the container images the pipeline runs.
+kubeflow = ["kfp>=2.0", "kfp-kubernetes"]
 all     = [
-    "qiskit>=2.0", "qiskit-aer", "qiskit-ibm-runtime", "qiskit-nature>=0.7",
+    "qiskit>=2.0", "qiskit-aer", "qiskit-ibm-runtime", "qiskit-nature>=0.7", "qiskit_qasm3_import",
+    "amazon-braket-sdk", "qiskit-braket-provider",
+    "iqm-client[qiskit]",
+    "classiq",
+    "pyscf",
+    "h5py", "requests",
+    "pennylane", "aiohttp", "fsspec",
+    "openfermion", "openfermionpyscf",
+    "quimb", "cotengra",
     "pyarrow", "pandas",
+    "boto3",
+    "scipy", "numpy",
+    "kfp>=2.0", "kfp-kubernetes",
 ]
 
 # ── Dependency groups (PEP 735) ───────────────────────────────────────────────

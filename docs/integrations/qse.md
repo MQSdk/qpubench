@@ -1,8 +1,8 @@
 # QSE / KQD integration
 
-qpubench models Krylov Quantum Diagonalization (KQD) and Quantum Subspace Expansion (QSE) in `src/qpubench/schemas/qse.py`. The schemas cover the algorithm families implemented in [MQSdk/qse](https://github.com/MQSdk/qse).
+qpubench models Krylov Quantum Diagonalization (KQD) and Quantum Subspace Expansion (QSE) in `src/qpubench/schemas/mqsdk_qse.py`. The schemas cover the algorithm families implemented in [MQSdk/qse](https://github.com/MQSdk/qse).
 
-Modality: `QPUModality.KQD`
+Computing model: `ComputingModel.GATE_BASED` (KQD is an algorithmic technique on top of gate-based circuits — see `KQDMethod`, not a separate paradigm)
 
 ---
 
@@ -25,7 +25,7 @@ All variants use Trotter time evolution U = e^{−iHdt} to generate the Krylov b
 ### Néel states (spin chains)
 
 ```python
-from qpubench.schemas.qse import NeelStateSpec, KQDReferenceSpec, KQDReferenceStateType
+from qpubench.schemas.mqsdk_qse import NeelStateSpec, KQDReferenceSpec, KQDReferenceStateType
 
 # Two complementary Néel states for antiferromagnetic chain
 ref0 = KQDReferenceSpec(
@@ -45,7 +45,7 @@ ref1 = KQDReferenceSpec(
 ### Slater determinants (chemistry)
 
 ```python
-from qpubench.schemas.qse import SlaterDeterminantRef, KQDReferenceSpec, KQDReferenceStateType
+from qpubench.schemas.mqsdk_qse import SlaterDeterminantRef, KQDReferenceSpec, KQDReferenceStateType
 
 # H2 in STO-3G: 2 active orbitals, 2 electrons (HF reference)
 slater = SlaterDeterminantRef(
@@ -70,7 +70,7 @@ ref_chem = KQDReferenceSpec(
 ## Time evolution
 
 ```python
-from qpubench.schemas.qse import KQDTimeEvolutionSpec, KrylovTimeEvolutionVariant
+from qpubench.schemas.mqsdk_qse import KQDTimeEvolutionSpec, KrylovTimeEvolutionVariant
 import math
 
 # dt = π / ‖H‖₂ (spectral norm)
@@ -93,7 +93,7 @@ print(te_spec.dt_circ)   # dt / 6 — Trotter step size for each sub-circuit
 ## KQD configuration
 
 ```python
-from qpubench.schemas.qse import KQDConfig, KQDMethod, RegularizationConfig, EigensolverMethod
+from qpubench.schemas.mqsdk_qse import KQDConfig, KQDMethod, RegularizationConfig, EigensolverMethod
 
 config = KQDConfig(
     method=KQDMethod.HADAMARD_TEST,
@@ -116,7 +116,7 @@ config = KQDConfig(
 The Hadamard test measures matrix elements of both the overlap matrix S and the projected Hamiltonian H:
 
 ```python
-from qpubench.schemas.qse import (
+from qpubench.schemas.mqsdk_qse import (
     KrylovMatrixSpec, KrylovSubspaceMatrices,
     HadamardTestIterationResult,
     KrylovEigenResult,
@@ -166,7 +166,7 @@ eigen = KrylovEigenResult(
 The SQD path measures Krylov circuits in the computational basis and accumulates bitstrings across steps:
 
 ```python
-from qpubench.schemas.qse import (
+from qpubench.schemas.mqsdk_qse import (
     SQDPostselectionConfig, SQDStep, SQDConvergenceResult,
     KrylovBitstringCounts, CumulativeKrylovCounts,
 )
@@ -205,7 +205,7 @@ pool = CumulativeKrylovCounts(
 For molecular Hamiltonians, the two-electron integrals can be stored in low-rank Cholesky form:
 
 ```python
-from qpubench.schemas.qse import CholeskyDecompositionSpec
+from qpubench.schemas.mqsdk_qse import CholeskyDecompositionSpec
 
 chol = CholeskyDecompositionSpec(
     num_orbitals=4,     # H2 in cc-pVDZ: 4 spatial orbitals → 10 active
@@ -221,9 +221,9 @@ chol = CholeskyDecompositionSpec(
 ## Full pipeline
 
 ```python
-from qpubench.schemas.qse import KQDPipelineSpec
+from qpubench.schemas.mqsdk_qse import KQDPipelineSpec
 from qpubench.schemas.result import QuantumResult
-from qpubench.schemas.primitives import QPUModality
+from qpubench.schemas.primitives import ComputingModel
 
 pipeline = KQDPipelineSpec(
     num_qubits=10,
@@ -240,7 +240,7 @@ pipeline = KQDPipelineSpec(
 )
 
 result = QuantumResult(
-    modality=QPUModality.KQD,
+    computing_model=ComputingModel.GATE_BASED,
     kqd_pipeline=pipeline,
 )
 ```
@@ -250,7 +250,7 @@ result = QuantumResult(
 ## Circuit family metadata
 
 ```python
-from qpubench.schemas.qse import KrylovCircuitFamilySpec, KQDMethod
+from qpubench.schemas.mqsdk_qse import KrylovCircuitFamilySpec, KQDMethod
 
 # Multi-reference Hadamard test: 2² × 6² = 144 circuits for (I,J,m,n)
 fam = KrylovCircuitFamilySpec(

@@ -33,7 +33,7 @@ import enum
 
 import pydantic
 
-from .primitives import JobStatus, QPUModality
+from .primitives import ComputingModel, JobStatus
 from .result import ExpectationResult, QuantumResult
 
 
@@ -235,7 +235,7 @@ class GSOptBenchmarkResult(pydantic.BaseModel):
     def to_quantum_result(self) -> QuantumResult:
         """Convert to a qpubench QuantumResult for use in BenchmarkRecord."""
         return QuantumResult(
-            modality=QPUModality.GATE_BASED,
+            computing_model=ComputingModel.GATE_BASED,
             expectation_values=[
                 ExpectationResult(
                     observable_index=0,

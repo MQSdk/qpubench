@@ -4,7 +4,7 @@ from typing import Any
 
 import pydantic
 
-from .photonic import (
+from .dtu_photonic import (
     HOMResult,
     IndistinguishabilityPurificationResult,
     PhotonicAnalogSimResult,
@@ -12,27 +12,26 @@ from .photonic import (
     PhotonicSensitivityAnalysis,
     PhotonicVQEResult,
 )
-from .gbs import (
+from .dtu_gbs import (
     GBSCliqueFindingResult,
     GBSSamplingResult,
     VibronicSpectrumResult,
     TDMGBSResult,
 )
-from .primitives import CircuitFormat, FidelityMetric, JobStatus, QPUModality
-from .qdk_chemistry import QPEResult, QChemPipelineSpec
-from .qse import KQDPipelineSpec
-from .qesem import QESEMJobRecord
-from .qcschema import QCSchemaRecord
-from .neutral_atom import AHSTaskResult
-from .slowquant import SlowQuantRecord
-from .error_mitigation import (
-    FireOpalResult,
-    HaiquTranspilationResult,
-    IBMRuntimeRecord,
-    MitiqResult,
-    ParityQCResult,
-    QMatterCompressionResult,
-)
+from .primitives import CircuitFormat, ComputingModel, FidelityMetric, JobStatus, QubitModality
+from .microsoft_qdk import QPEResult, QChemPipelineSpec
+from .mqsdk_qse import KQDPipelineSpec
+from .qedma_qesem import QESEMJobRecord
+from .molssi_qcschema import QCSchemaRecord
+from .quera_bloqade import AHSTaskResult
+from .erikkjellgren_slowquant import SlowQuantRecord
+from .qctrl_fire_opal import FireOpalResult
+from .haiqu_rivet import HaiquTranspilationResult
+from .ibm_runtime_v2 import IBMRuntimeRecord
+from .unitaryfund_mitiq import MitiqResult
+from .parityqc_parityqc import ParityQCResult
+from .qmatter_qmatter import QMatterCompressionResult
+from .evangelistalab_qforte import QForteRunResult
 
 
 class TranspileLayout(pydantic.BaseModel):
@@ -177,7 +176,8 @@ class QuantumResult(pydantic.BaseModel):
     fidelity            — Fubini-Study distance from reference (sim only)
     shots               — corrected bitstring counts
     """
-    modality:            QPUModality
+    computing_model:     ComputingModel
+    qubit_modality:      QubitModality | None            = None
     expectation_values:  list[ExpectationResult] | None = None
     shots:               ShotResult | None               = None
     fidelity:            FidelityResult | None           = None
@@ -195,31 +195,33 @@ class QuantumResult(pydantic.BaseModel):
     wall_seconds:          float | None                  = None   # actual wall time
     wall_budget_seconds:   float | None                  = None   # allowed budget (GSOpt)
     metadata:              dict[str, Any]                = {}
-    # Photonic-modality result fields (QPUModality.PHOTONIC_LINEAR_OPTICS / FUSION_BASED)
+    # Photonic result fields (qubit_modality=PHOTONIC / computing_model=FUSION_BASED)
     photonic_simulation:        PhotonicSimulationResult | None                 = None
     photonic_vqe:               PhotonicVQEResult | None                        = None
     photonic_sensitivity:       PhotonicSensitivityAnalysis | None              = None
     hom_result:                 HOMResult | None                                = None
     indist_purification:        IndistinguishabilityPurificationResult | None   = None
     photonic_analog_sim:        PhotonicAnalogSimResult | None                  = None
-    # QPE-modality result fields (QPUModality.QPE)
+    # QPE result fields (Microsoft QDK chemistry pipeline; technique on top of GATE_BASED)
     qpe_result:                 QPEResult | None                                = None
     qchem_pipeline:             QChemPipelineSpec | None                        = None
-    # GBS-modality result fields (QPUModality.GBS)
+    # GBS result fields (computing_model=GBS)
     gbs_sampling:               GBSSamplingResult | None                        = None
     gbs_clique_finding:         GBSCliqueFindingResult | None                   = None
     vibronic_spectrum:          VibronicSpectrumResult | None                   = None
     tdm_gbs:                    TDMGBSResult | None                             = None
-    # KQD-modality result fields (QPUModality.KQD)
+    # KQD result fields (MQS QSE; technique on top of GATE_BASED)
     kqd_pipeline:               KQDPipelineSpec | None                          = None
     # QESEM (Qedma) error suppression/mitigation result fields
     qesem_result:               QESEMJobRecord | None                           = None
     # QCSchema / QCElemental / PennyLane quantum chemistry reference record
     qcschema_record:            QCSchemaRecord | None                           = None
-    # Neutral-atom (Rydberg / AHS) result fields (QPUModality.NEUTRAL_ATOM)
+    # Neutral-atom (Rydberg / AHS) result fields (computing_model=ADIABATIC, qubit_modality=NEUTRAL_ATOM)
     ahs_result:                 AHSTaskResult | None                            = None
     # SlowQuant UCC / VQE calculation record
     slowquant_record:           SlowQuantRecord | None                          = None
+    # QForte (evangelistalab/qforte) algorithm-run result
+    qforte_result:              QForteRunResult | None                          = None
     # Error mitigation provider result fields
     fire_opal_result:           FireOpalResult | None                           = None
     mitiq_result:               MitiqResult | None                              = None

@@ -1,17 +1,46 @@
 # Cebule SDK integration
 
-[Cebule SDK](https://docs.mqs.dk/sections/section_014_quantum_computing/) (MQS) provides four cloud quantum-chemistry task types. qpubench models each task's input and output as typed Pydantic schemas in `src/qpubench/schemas/cebule.py`.
+[Cebule SDK](https://docs.mqs.dk/sections/section_014_quantum_computing/) (MQS) provides cloud quantum-chemistry and materials-property task types. qpubench models each task's input and output as typed Pydantic schemas in `src/qpubench/schemas/mqsdk_cebule.py`.
+
+**Revised 2026-07-08.** This module was checked directly against the real
+SDK source — [gitlab.com/mqsdk/python-sdk](https://gitlab.com/mqsdk/python-sdk),
+specifically `mqsdk/core/cebule.py`'s `TaskType` enum, `mqsdk/utils/tasks.py`'s
+helper functions, and the `notebooks/` examples — and turned up a real gap:
+`MOL_MAP`/`QASM_GEN` (below) do not appear in that `TaskType` enum, while
+fifteen other task types the SDK does expose (solvation, ab initio MD,
+geometry optimization, group-contribution/GNN property prediction) weren't
+modeled at all. Both are now fixed — see "Task types" below for what's
+confirmed vs. kept-with-caveat, and the new sections for each task family.
 
 ---
 
 ## Task types
 
-| `CebuleTaskType` | What it does |
-|---|---|
-| `MOL_MAP` | Map a molecular geometry to a qubit Hamiltonian via constraint-based encoding |
-| `QASM_GEN` | Generate OpenQASM 2.0 measurement circuits for a Hamiltonian |
-| `TN_QC_OPT` | Tensor-network + quantum circuit hybrid VQE optimisation |
-| `COVO` | Correlation-optimised virtual orbital pre-processing |
+`CebuleTaskEnvelope` (`max_processors`, `connected_task_id`,
+`connected_model_id`, `connected_dataset_id`,
+`notification_minutes_threshold`) is common to every task below —
+confirmed directly against `MQSCebule.create_task()`'s signature. Tasks
+chain into a DAG via `connected_task_id` (e.g. `GEOMETRY_OPT` →
+`COSMO` → `SIGMA` → `SOLUBILITY`).
+
+| `CebuleTaskType` | What it does | Confirmed against |
+|---|---|---|
+| `COSMO` | Continuum solvation (dielectric constant + VDW radii) | `mqsdk/utils/tasks.py`, `notebooks/2_COSMO_task_Cebule.ipynb` |
+| `SIGMA` | COSMO-SAC/-RS sigma profile, chained from a `COSMO` task | `mqsdk/utils/tasks.py` |
+| `SOLUBILITY` | Solubility from one or more `SIGMA` results | `mqsdk/utils/tasks.py` |
+| `BORN_OPPENHEIMER_MD` | Ab initio MD, Quantum-ESPRESSO-backed (periodic-capable) | `notebooks/3_BOMD_task_Cebule.ipynb` |
+| `CAR_PARRINELLO_MD` | Ab initio MD, Quantum-ESPRESSO-backed (periodic-capable) | `notebooks/4_CPMD_task_Cebule.ipynb` |
+| `FORCE_FIELD_MD` | Classical MD of a molecule (or polymer) in a solvent box | `scripts/md.py` |
+| `GEOMETRY_OPT` | Force-field + semi-empirical geometry optimisation | `scripts/geometry.py` |
+| `PERIODIC_GEOMETRY_OPT` | Geometry optimisation under periodic boundary conditions | Enum only — no usage example found; fields inferred |
+| `GROUP_CONTRIBUTION` | Group-contribution property estimation, batchable over mixtures | `scripts/group_contribution.py` |
+| `ATOM_ORDER` | Canonical atom ordering for a SMILES (+ optional geometry) | `mqsdk/utils/tasks.py` |
+| `ACTIVITY_COEFFICIENT` | — | Enum only — no usage example found; not modeled beyond the envelope |
+| `GNN_DATASET_CREATE`/`_EXTEND`/`_GET`/`_DELETE`, `GNN_TRAIN`, `GNN_PREDICT` | Property-prediction GNN dataset/model lifecycle | `notebooks/6_GNN_task_HLGap_GeometryOpt.ipynb` |
+| `TN_QC_OPT` | Tensor-network + quantum circuit hybrid VQE optimisation | Confirmed in `TaskType` enum |
+| `COVO` | Correlation-optimised virtual orbital pre-processing | Confirmed in `TaskType` enum |
+| `MOL_MAP` *(unconfirmed)* | Map a molecular geometry to a qubit Hamiltonian via constraint-based encoding | Not found in `TaskType` enum — kept, see caveat above |
+| `QASM_GEN` *(unconfirmed)* | Generate OpenQASM 2.0 measurement circuits for a Hamiltonian | Not found in `TaskType` enum — kept, see caveat above |
 
 ---
 
@@ -21,7 +50,24 @@
 import mqsdk, os
 
 session = mqsdk.Cebule(os.environ["EMAIL"], os.environ["PASSWORD"])
-task    = session.cebule.create_task(title, TaskType.MOL_MAP, input_data)
+
+# Most tasks: kwargs become the task's JSON input.
+task = session.cebule.create_task(
+    "H2O geometry opt", TaskType.GEOMETRY_OPT,
+    smiles_list=["O"], force_field="mmff94", optimization_method="gfn2_xtb",
+)
+
+# BORN_OPPENHEIMER_MD / CAR_PARRINELLO_MD only: input= is a raw Quantum
+# ESPRESSO input file (create_task allows input= OR **kwargs, not both).
+task = session.cebule.create_task(
+    "QE BOMD run", TaskType.BORN_OPPENHEIMER_MD, input=qe_input_text,
+)
+
+# Chain a follow-up task via connected_task_id:
+cosmo_task = session.cebule.create_task(
+    "COSMO opt", TaskType.COSMO,
+    connected_task_id=task.id, method="dft", basis="6-31g**", dielec=78.0,
+)
 ```
 
 Set credentials in `.env` and reference them via `BackendSpec.cebule()`:
@@ -33,7 +79,7 @@ backend = BackendSpec.cebule(email_ref="EMAIL", password_ref="PASSWORD")
 
 ---
 
-## MOL_MAP
+## MOL_MAP *(unconfirmed against current SDK source)*
 
 Maps a molecular geometry to a qubit Hamiltonian with constraint-based encoding.
 
@@ -57,7 +103,7 @@ result = MolMapResult(
 
 ---
 
-## QASM_GEN
+## QASM_GEN *(unconfirmed against current SDK source)*
 
 Generates OpenQASM 2.0 circuits for Hamiltonian measurement, one circuit per Pauli grouping.
 
@@ -166,6 +212,150 @@ vqa = VQAConfig(
     final_eigenvalue=-24.75,
 )
 ```
+
+---
+
+## Solvation: `COSMO` → `SIGMA` → `SOLUBILITY`
+
+A real, chained pipeline confirmed against `mqsdk/utils/tasks.py`. `COSMO`
+computes continuum-solvation energetics for one molecule; `SIGMA` derives a
+screening-charge-density profile from a completed `COSMO` task; `SOLUBILITY`
+combines `SIGMA` profiles for a solute + solvent mixture into a solubility
+estimate. This is Cebule's answer to qrunch's "Create a Solvent Model" guide.
+
+```python
+from qpubench.schemas import CosmoInput, CosmoMethod, SigmaInput, SolubilityInput
+
+# Step 1 — COSMO on the (already geometry-optimized) solute, chained via
+# connected_task_id to a prior GEOMETRY_OPT task's ID.
+cosmo = CosmoInput(
+    connected_task_id="geometry-opt-task-id",
+    basis="6-31g**",
+    optimize=True,
+    dielec=78.0,       # water
+)
+
+# Step 2 — sigma profile from the COSMO result.
+sigma = SigmaInput(connected_task_id="cosmo-task-id", cosmo_method=CosmoMethod.COSMO_SAC)
+
+# Step 3 — solubility from solute + solvent sigma profiles.
+solubility = SolubilityInput(
+    connected_task_id=["sigma-solute-id", "sigma-solvent-id"],
+    temperature=298.15,
+    melting_point=350.0,
+    enthalpy_melting=20.0,
+    sol_init=0.1,
+    solv_composition=[1.0],
+    change_heat_capacity_melting=5.0,   # required for cosmo-sac
+)
+```
+
+---
+
+## Geometry: `GEOMETRY_OPT` / `PERIODIC_GEOMETRY_OPT`
+
+```python
+from qpubench.schemas import GeometryOptInput, GeometryOptForceField, GeometryOptMethod
+
+geo = GeometryOptInput(
+    smiles_list=["O"],
+    force_field=GeometryOptForceField.MMFF94,       # or GHEMICAL
+    optimization_method=GeometryOptMethod.GFN2_XTB,  # or G_XTB, AM1, UMA
+)
+```
+
+`PeriodicGeometryOptInput` is the periodic-cell counterpart — confirmed to
+exist in the SDK's `TaskType` enum, but no usage example was found during
+this check, so its fields (`cell_lengths`, `cell_angles`, plus the same
+`force_field`/`optimization_method` choice) are inferred by analogy rather
+than confirmed. Verify against the live SDK before relying on exact names.
+
+---
+
+## Ab initio MD: `BORN_OPPENHEIMER_MD` / `CAR_PARRINELLO_MD`
+
+Both wrap Quantum ESPRESSO directly — the payload is a **raw QE input file**
+(`&control`/`&system`/`&electrons` or `&ions` namelists), not kwargs. The
+confirmed example notebooks use a periodic 8-water cell (`ibrav`/`celldm`
+lattice parameters), i.e. genuine periodic plane-wave DFT — Cebule's answer
+to qrunch's periodic-system needs (e.g. the COF-999 tutorial's framework).
+
+```python
+from qpubench.schemas import AbInitioMDInput, AbInitioMDMethod
+
+bomd = AbInitioMDInput(
+    method=AbInitioMDMethod.BORN_OPPENHEIMER,
+    qe_input=open("h2o-periodic.in").read(),   # real QE input file text
+)
+```
+
+Result is raw QE stdout text (`AbInitioMDResult.stdout`), not structured
+JSON — parse energies/forces yourself.
+
+## Classical MD: `FORCE_FIELD_MD`
+
+```python
+from qpubench.schemas import ForceFieldMDInput
+
+md = ForceFieldMDInput(
+    smiles_primary="CCO",              # or a list of SMILES for a polymer chain
+    copies_primary=1,
+    smiles_list_secondary=["O"],
+    copies_list_secondary=[500],
+    temperature=298.15,
+    box_length_nm=4.0,
+    time_fs=10_000.0,
+)
+```
+
+---
+
+## Materials properties: `GROUP_CONTRIBUTION` / `ATOM_ORDER` / `ACTIVITY_COEFFICIENT`
+
+```python
+from qpubench.schemas import GroupContributionInput, AtomOrderInput
+
+# Batchable over multiple mixtures — each inner list is one mixture's SMILES.
+gc = GroupContributionInput(smiles_list=[["CCO", "O"], ["CCC", "O"]], gc_type="unifac")
+
+atom_order = AtomOrderInput(smiles="CCO")   # or smiles=[...] + geometry=[...] for a polymer
+```
+
+`ActivityCoefficientInput` exists (confirmed in the `TaskType` enum) but no
+usage example was found — it currently carries no task-specific fields
+beyond the common envelope.
+
+---
+
+## Property-prediction GNN: dataset + model lifecycle
+
+```python
+from qpubench.schemas import (
+    GNNDatasetCreateInput, GNNDatasetExtendInput, GNNMoleculeChunk,
+    GNNTrainInput, GNNPredictInput,
+)
+
+create = GNNDatasetCreateInput(
+    dataset_name="hlgap_dataset", includes_target_val=True,
+    target_property="homo_lumo_gap",
+)
+extend = GNNDatasetExtendInput(
+    connected_dataset_id="dataset-id",
+    molecule_chunk=GNNMoleculeChunk(
+        smiles=["CCO"], coords=[[0.0, 0.0, 0.0, 1.5, 0.0, 0.0]], target_val=[3.2],
+    ),
+)
+train = GNNTrainInput(
+    connected_dataset_id="dataset-id", model_name="hlgap_model",
+    hyperparameters={"epochs": 75},
+)
+predict = GNNPredictInput(connected_dataset_id="pred-dataset-id", connected_model_id="model-id")
+```
+
+`GNNTrainResult`/`GNNPredictResult` model the fields the SDK's own example
+notebook names (a mean-absolute-error training metric; predictions the
+notebook calls "effective hamiltonians") without over-specifying a payload
+shape that wasn't directly confirmed.
 
 ---
 

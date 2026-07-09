@@ -54,15 +54,41 @@ runner.register(StubGateAdapter(seed=42), name="stub_gate")
 runner.register(StubMBQCAdapter(seed=7, fidelity=0.97), name="stub_mbqc")
 ```
 
-### Partial adapters (fill TODOs)
+### Real adapters (SDK required)
 
-These live in `src/qpubench/backends/` and have the correct schema wiring in place; the SDK-specific call sites are marked with `# TODO`.
+`aer_adapter.py`, `ibm_adapter.py`, `iqm_adapter.py`, and `braket_adapter.py`
+in `src/qpubench/backends/` are real, working implementations (no TODOs) —
+verified against the installed SDKs (`qiskit-aer` 0.17.x, `qiskit-ibm-runtime`
+0.47.x, `iqm-client[qiskit]` 34.x, `amazon-braket-sdk` + `qiskit-braket-provider`
+0.17.x):
 
-| File | Backend | Provider string |
-|---|---|---|
-| `aer_adapter.py` | Qiskit Aer statevector + QASM | `"aer"` |
-| `ibm_adapter.py` | IBM Quantum Runtime V2 | `"ibm"` |
-| `qrack_adapter.py` | PyQrack GPU/CPU (ctypes) | `"qrack"` |
+| File | Backend | Provider string | Tested how |
+|---|---|---|---|
+| `aer_adapter.py` | Qiskit Aer statevector + QASM (EstimatorV2/SamplerV2) | `"aer"` | Fully executed — no credentials needed |
+| `braket_adapter.py` | AWS Braket (via `qiskit-braket-provider`'s `BraketSampler`/`BraketEstimator`) | `"aws_braket"` | Fully executed via `BraketLocalBackend` (`device_arn="local"`) — no AWS account needed |
+| `ibm_adapter.py` | IBM Quantum Runtime V2 (Session/Batch/Single, TREX/ZNE/PEC resilience) | `"ibm"` | Transpile/run logic fully executed against `qiskit_ibm_runtime.fake_provider.FakeManilaV2`; only the credential-fetching `QiskitRuntimeService` call needs a real account |
+| `iqm_adapter.py` | IQM hardware (Sampler path only — no Estimator; see below) | `"iqm"` | Transpile/run logic fully executed against `iqm.qiskit_iqm.fake_backends.IQMFakeAdonis`; only the credential-fetching `IQMProvider` call needs a real account |
+
+`qrack_adapter.py` remains a stub (`raise NotImplementedError`, TODOs in the
+docstring) — out of scope for the pass that made the other four real.
+
+IQM's Estimator path (`circuit.observables` populated) still raises
+`NotImplementedError` — this is a real, current upstream limitation
+(`iqm-client[qiskit]` exposes no `EstimatorV2`-equivalent as of 34.x), not
+an unfinished stub. Use the Sampler path and reconstruct expectation values
+classically from counts.
+
+**Package-name change**: the standalone `qiskit-iqm`/`qiskit_on_iqm`
+packages are now obsolete (importing raises
+`RuntimeError: The qiskit-iqm package is obsolete ... use iqm-client[qiskit]
+instead`, confirmed empirically). Install `pip install 'qpubench[iqm]'`
+(`iqm-client[qiskit]`), which bundles the same functionality under the
+`iqm.qiskit_iqm` / `iqm.iqm_client` namespace.
+
+**Dependency note**: `iqm-client[qiskit]` and the `qiskit`/`braket` extras
+were verified to coexist in one environment (`qiskit>=2.2`, `qiskit-aer`
+>=0.17, `numpy<2.5` for `numba`/`braket`'s default simulator) — install
+`pip install 'qpubench[qiskit,braket,iqm]'` together without conflict.
 
 ### Integration examples (copy into your project)
 
@@ -84,7 +110,7 @@ Copy `integrations/template/backend_adapter_template.py` and fill the TODOs:
 from qpubench.schemas.backend import BackendSpec
 from qpubench.schemas.circuit import CircuitSpec
 from qpubench.schemas.execution import ExecutionOptions
-from qpubench.schemas.primitives import JobStatus, QPUModality
+from qpubench.schemas.primitives import ComputingModel, JobStatus
 from qpubench.schemas.result import ExpectationResult, QuantumResult, ShotResult
 
 class MyBackendAdapter:
@@ -92,7 +118,7 @@ class MyBackendAdapter:
     @property
     def spec(self) -> BackendSpec:
         return BackendSpec(name="my_backend", provider="my_provider",
-                           simulator=True, qpu_modality=QPUModality.GATE_BASED)
+                           simulator=True, computing_model=ComputingModel.GATE_BASED)
 
     def validate(self, circuit: CircuitSpec) -> list[str]:
         warnings = []
@@ -105,7 +131,8 @@ class MyBackendAdapter:
             # Estimator path
             energy = my_sdk.expectation(circuit.serialized, ...)
             return QuantumResult(
-                modality=circuit.modality,
+                computing_model=circuit.computing_model,
+                qubit_modality=circuit.qubit_modality,
                 expectation_values=[
                     ExpectationResult(observable_index=0, value=energy, std_error=0.0)
                 ],
@@ -115,7 +142,8 @@ class MyBackendAdapter:
             # Sampler path
             counts = my_sdk.sample(circuit.serialized, shots=options.shots)
             return QuantumResult(
-                modality=circuit.modality,
+                computing_model=circuit.computing_model,
+                qubit_modality=circuit.qubit_modality,
                 shots=ShotResult(num_qubits=circuit.num_qubits,
                                  num_shots=options.shots, counts=counts),
                 status=JobStatus.SUCCEEDED,
@@ -167,63 +195,71 @@ The runner dispatches to `run_algorithm()` automatically when it detects `Algori
 
 ### Gate-based
 
-| Backend | Provider | Modality | Adapter | Status |
-|---|---|---|---|---|
-| Qiskit Aer (statevector + QASM) | `"aer"` | `GATE_BASED` | `AerAdapter` | Stub — fill TODOs in `aer_adapter.py` |
-| IBM Quantum Runtime V2 | `"ibm"` | `GATE_BASED` | `IBMAdapter` | Stub — fill TODOs in `ibm_adapter.py` |
-| Qrack GPU/CPU simulator | `"qrack"` | `GATE_BASED` | `QrackAdapter` | Stub — fill TODOs in `qrack_adapter.py` |
-| IQM hardware | `"iqm"` | `GATE_BASED` | Copy `backend_adapter_template.py` | |
-| Qibo cloud | `"qibo"` | `GATE_BASED` | Copy `backend_adapter_template.py` | |
-| PennyLane `lightning.qubit` | `"pennylane"` | `GATE_BASED` | Copy template | `BackendSpec.lightning_qubit()` |
-| CUDA-Q | `"cudaq"` | `GATE_BASED` | Copy template | `BackendSpec.cudaq()` |
-| Cebule cloud | `"cebule"` | `GATE_BASED` | Copy template | `BackendSpec.cebule()` |
-| Stub gate simulator | — | `GATE_BASED` | `StubGateAdapter` | Fully functional, no SDK |
-| Stub MBQC simulator | — | `MBQC` | `StubMBQCAdapter` | Fully functional, no SDK |
-| MBQC-FPGA | `"mbqc"` | `MBQC` | Copy `backend_adapter_template.py` | Schemas complete; COE + CSV round-trip |
+| Backend | Provider | Computing model | Qubit modality | Adapter | Status |
+|---|---|---|---|---|---|
+| Qiskit Aer (statevector + QASM) | `"aer"` | `GATE_BASED` | — (simulator) | `AerAdapter` | Real, tested — EstimatorV2/SamplerV2 |
+| IBM Quantum Runtime V2 | `"ibm"` | `GATE_BASED` | `SUPERCONDUCTING` | `IBMAdapter` | Real, tested against a fake backend — implements `TranspilableBackend`; needs real credentials for live hardware |
+| IQM hardware | `"iqm"` | `GATE_BASED` | `SUPERCONDUCTING` | `IQMAdapter` | Real, tested against a fake backend — implements `TranspilableBackend`; Sampler path only (no Estimator — real upstream limitation); `BackendSpec.iqm()` / `.iqm_resonance()` / `.iqm_local_server()` |
+| Qrack GPU/CPU simulator | `"qrack"` | `GATE_BASED` | — (simulator) | `QrackAdapter` | Stub — fill TODOs in `qrack_adapter.py` |
+| AWS Braket (Rigetti/IonQ/OQC/SV1/DM1/TN1) | `"aws_braket"` | `GATE_BASED` | configurable | `BraketAdapter` | Real, tested via `BraketLocalBackend` — implements `TranspilableBackend`; `BackendSpec.braket(device_arn)`; via `qiskit-braket-provider` |
+| Qibo cloud | `"qibo"` | `GATE_BASED` | — | Copy `backend_adapter_template.py` | |
+| PennyLane `lightning.qubit` | `"pennylane"` | `GATE_BASED` | — (simulator) | Copy template | `BackendSpec.lightning_qubit()` |
+| CUDA-Q | `"cudaq"` | `GATE_BASED` | — (simulator) | Copy template | `BackendSpec.cudaq()` |
+| Cebule cloud | `"cebule"` | `GATE_BASED` | — (heterogeneous) | Copy template | `BackendSpec.cebule()` |
+| Quantum Motion CMOS spin-qubit | `"quantum_motion"` | `GATE_BASED` | `SILICON_SPIN` | Copy template | `BackendSpec.quantum_motion(device_name)` |
+| Stub gate simulator | — | `GATE_BASED` | — (simulator) | `StubGateAdapter` | Fully functional, no SDK |
+| Stub MBQC simulator | — | `MBQC` | — | `StubMBQCAdapter` | Fully functional, no SDK |
+| MBQC-FPGA | `"mbqc"` | `MBQC` | — (FPGA control logic) | Copy `backend_adapter_template.py` | Schemas complete; COE + CSV round-trip |
 
 ### Photonic (linear-optics / FBQC)
 
-| Backend | Provider | Modality | Factory | Notes |
-|---|---|---|---|---|
-| photochipsim | `"photochipsim"` | `PHOTONIC_LINEAR_OPTICS` | `BackendSpec.photochipsim(num_modes)` | thewalrus permanent engine |
-| Strawberry Fields Fock | `"strawberry_fields"` | `PHOTONIC_LINEAR_OPTICS` | `BackendSpec.strawberry_fields(backend, num_modes, cutoff_dim)` | Fock-basis; also `"gaussian"` or `"tf"` backend |
-| Quandela Perceval | `"perceval"` | `PHOTONIC_LINEAR_OPTICS` | `BackendSpec.perceval(backend, num_modes)` | SLOS / MPS / Naive |
-| Photonic chip hardware | `"photonic_hardware"` | `PHOTONIC_LINEAR_OPTICS` | `BackendSpec.photonic_chip_hardware(chip_id, platform, num_modes)` | SiN, SOI, InP, LN platforms |
+`ComputingModel` and `QubitModality` are independent — all four factories below set `qubit_modality=PHOTONIC`; the paradigm running on that hardware is `GATE_BASED` for linear-optics circuits (MZI/permanent-based), or set `computing_model=FUSION_BASED` explicitly for FBQC resource-state + fusion-gate circuits.
+
+| Backend | Provider | Computing model | Qubit modality | Factory | Notes |
+|---|---|---|---|---|---|
+| photochipsim | `"photochipsim"` | `GATE_BASED` | `PHOTONIC` | `BackendSpec.photochipsim(num_modes)` | thewalrus permanent engine |
+| Strawberry Fields Fock | `"strawberry_fields"` | `GATE_BASED` | `PHOTONIC` | `BackendSpec.strawberry_fields(backend, num_modes, cutoff_dim)` | Fock-basis; also `"gaussian"` or `"tf"` backend |
+| Quandela Perceval | `"perceval"` | `GATE_BASED` | `PHOTONIC` | `BackendSpec.perceval(backend, num_modes)` | SLOS / MPS / Naive |
+| Photonic chip hardware | `"photonic_hardware"` | `GATE_BASED` | `PHOTONIC` | `BackendSpec.photonic_chip_hardware(chip_id, platform, num_modes)` | SiN, SOI, InP, LN platforms |
 
 ### GBS (Gaussian Boson Sampling)
 
-| Backend | Provider | Modality | Factory | Notes |
-|---|---|---|---|---|
-| Xanadu X8 | `"xanadu"` | `GBS` | `BackendSpec.xanadu_x8(num_modes=8)` | 8-mode PNR hardware; Xanadu Cloud |
-| Xanadu Borealis | `"xanadu"` / `"aws_braket"` | `GBS` | `BackendSpec.xanadu_borealis(via_braket=False)` | 216-mode TDM; `via_braket=True` for AWS |
-| Strawberry Fields Gaussian | `"strawberry_fields"` | `GBS` | `BackendSpec.strawberry_fields_gaussian(num_modes)` | Covariance-matrix + thewalrus hafnian |
+| Backend | Provider | Computing model | Qubit modality | Factory | Notes |
+|---|---|---|---|---|---|
+| Xanadu X8 | `"xanadu"` | `GBS` | `PHOTONIC` | `BackendSpec.xanadu_x8(num_modes=8)` | 8-mode PNR hardware; Xanadu Cloud |
+| Xanadu Borealis | `"xanadu"` / `"aws_braket"` | `GBS` | `PHOTONIC` | `BackendSpec.xanadu_borealis(via_braket=False)` | 216-mode TDM; `via_braket=True` for AWS |
+| Strawberry Fields Gaussian | `"strawberry_fields"` | `GBS` | `PHOTONIC` | `BackendSpec.strawberry_fields_gaussian(num_modes)` | Covariance-matrix + thewalrus hafnian |
 
 ### QPE / QDK chemistry
 
-| Backend | Provider | Modality | Factory | Notes |
-|---|---|---|---|---|
-| QDK simulator | `"qdk_chemistry"` | `QPE` | `BackendSpec.qdk_chemistry_simulator(executor, num_qubits)` | Sparse / full state vector |
-| Azure Quantum | `"azure_quantum"` | `QPE` | `BackendSpec.azure_quantum(target, *, resource_id_ref, location_ref)` | Hardware + resource estimator |
+QPE/IQPE is an algorithmic technique on top of gate-based circuits (see `QPEMethod` in `microsoft_qdk`), not a separate paradigm.
+
+| Backend | Provider | Computing model | Qubit modality | Factory | Notes |
+|---|---|---|---|---|---|
+| QDK simulator | `"qdk_chemistry"` | `GATE_BASED` | — (simulator) | `BackendSpec.qdk_chemistry_simulator(executor, num_qubits)` | Sparse / full state vector |
+| Azure Quantum | `"azure_quantum"` | `GATE_BASED` | `TRAPPED_ION` (Quantinuum/IonQ hardware) or — (simulator/estimator) | `BackendSpec.azure_quantum(target, *, resource_id_ref, location_ref, qubit_modality)` | Hardware + resource estimator; QPU modality inferred from `target` or pass explicitly |
 
 ### KQD / QSE
 
-| Backend | Provider | Modality | Factory | Notes |
-|---|---|---|---|---|
-| Qiskit Aer (KQD) | `"aer"` | `KQD` | `BackendSpec.qiskit_aer(method="statevector", num_qubits)` | statevector / MPS / stabilizer |
+KQD is an algorithmic technique on top of gate-based circuits (see `KQDMethod` in `mqsdk_qse`), not a separate paradigm.
+
+| Backend | Provider | Computing model | Qubit modality | Factory | Notes |
+|---|---|---|---|---|---|
+| Qiskit Aer (KQD) | `"aer"` | `GATE_BASED` | — (simulator) | `BackendSpec.qiskit_aer(method="statevector", num_qubits)` | statevector / MPS / stabilizer |
 
 ### QESEM (Qedma)
 
-| Backend | Provider | Modality | Factory | Notes |
-|---|---|---|---|---|
-| QESEM native client | `"qedma"` | `GATE_BASED` + `QESEM` | `BackendSpec.qesem(backend_name, *, api_token_ref, via_qiskit_function=False)` | Wraps any IBM backend with noise-aware QET mitigation |
-| QESEM via Qiskit Function | `"qedma"` | `GATE_BASED` + `QESEM` | `BackendSpec.qesem(backend_name, via_qiskit_function=True)` | Submitted through IBM Qiskit Functions catalog |
+| Backend | Provider | Computing model | Qubit modality | Factory | Notes |
+|---|---|---|---|---|---|
+| QESEM native client | `"qedma"` | `GATE_BASED` + `QESEM` | `SUPERCONDUCTING` | `BackendSpec.qesem(backend_name, *, api_token_ref, via_qiskit_function=False)` | Wraps any IBM backend with noise-aware QET mitigation |
+| QESEM via Qiskit Function | `"qedma"` | `GATE_BASED` + `QESEM` | `SUPERCONDUCTING` | `BackendSpec.qesem(backend_name, via_qiskit_function=True)` | Submitted through IBM Qiskit Functions catalog |
 
 ### Neutral atom (Rydberg / AHS)
 
-| Backend | Provider | Modality | Factory | Notes |
-|---|---|---|---|---|
-| QuEra Aquila 256-qubit QPU | `"quera"` | `NEUTRAL_ATOM` | `BackendSpec.aquila(aws_region="us-east-1")` | Analog Hamiltonian Simulation; submitted via AWS Braket |
-| Bloqade Python emulator | `"bloqade"` | `NEUTRAL_ATOM` | `BackendSpec.bloqade_emulator(num_qubits)` | Local exact state-vector; no credentials; practical up to ~20 atoms |
+| Backend | Provider | Computing model | Qubit modality | Factory | Notes |
+|---|---|---|---|---|---|
+| QuEra Aquila 256-qubit QPU | `"quera"` | `ADIABATIC` | `NEUTRAL_ATOM` | `BackendSpec.aquila(aws_region="us-east-1")` | Analog Hamiltonian Simulation; submitted via AWS Braket |
+| Bloqade Python emulator | `"bloqade"` | `ADIABATIC` | `NEUTRAL_ATOM` | `BackendSpec.bloqade_emulator(num_qubits)` | Local exact state-vector; no credentials; practical up to ~20 atoms |
 
 ### Algorithm libraries
 

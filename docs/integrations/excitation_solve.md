@@ -2,7 +2,7 @@
 
 [ExcitationSolve](https://github.com/dlr-wf/ExcitationSolve) (*Communications Physics* 2025) is a gradient-free VQE optimizer for excitation-operator ansätze (G³ = G). It fits a 2nd-order Fourier series to 5 energy probe points per parameter and locates the global minimum analytically via the companion matrix method.
 
-Schemas: `src/qpubench/schemas/excitation_solve.py`
+Schemas: `src/qpubench/schemas/dlr_excitation_solve.py`
 
 ---
 

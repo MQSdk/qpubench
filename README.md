@@ -2,7 +2,7 @@
 
 [![Python ≥ 3.11](https://img.shields.io/badge/python-≥3.11-blue)](https://python.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green)](LICENSE)
-[![Schema v1.11.0](https://img.shields.io/badge/schema-v1.11.0-orange)](docs/schemas.md)
+[![Schema v2.3.0](https://img.shields.io/badge/schema-v2.3.0-orange)](docs/schemas.md)
 
 Modality-agnostic quantum benchmark framework with a typed [Pydantic v2](https://docs.pydantic.dev/) schema layer.
 
@@ -19,7 +19,7 @@ qpubench separates **what you benchmark** (schemas) from **how execution happens
 | **[Backends & adapters](docs/backends.md)** | BackendAdapter / AlgorithmAdapter protocols, writing a new adapter |
 | **[Integrations](docs/integrations.md)** | Cebule SDK · Xenakis · ExcitationSolve · GSOpt · Photonic · QDK Chemistry · GBS · QSE/KQD · QESEM · QCSchema/QCElemental/PennyLane · Bloqade/Aquila · SlowQuant |
 | **[MBQC FPGA](docs/mbqc.md)** | 16-bit program word, COE files, byproduct registers |
-| **[Persistence](docs/persistence.md)** | NDJSONStore · ParquetStore · hooks |
+| **[Persistence](docs/persistence.md)** | NDJSONStore · ParquetStore · S3Store (AWS S3 / HF Storage Buckets) · hooks |
 | **[Compatibility](docs/compatibility.md)** | Pauli encoding, complex precision, MBQC bit conventions |
 | **[Integration guide](INTEGRATION_GUIDE.md)** | Writing adapters, energy hooks, testing pattern |
 
@@ -34,6 +34,7 @@ pip install .
 # With optional backends
 pip install ".[qiskit]"      # Qiskit Aer + IBM Quantum Runtime V2
 pip install ".[storage]"     # Parquet store (pyarrow + pandas)
+pip install ".[s3]"          # S3 store (boto3) — AWS S3 / MinIO / HF Storage Buckets
 pip install ".[all]"         # everything on PyPI
 ```
 
@@ -148,55 +149,78 @@ record = runner.run(bound, "stub", ExecutionOptions(shots=4096),
 print(f"Chemical accuracy: {record.vqa.chemical_accuracy}")
 ```
 
-### Algorithm library (QForte ADAPT-VQE)
+### Algorithm library (ADAPT-VQE — switch implementations freely)
+
+`AlgorithmSpec` carries identity (`name` + `AlgorithmFamily`); hyperparameters
+for `AlgorithmFamily.ADAPT_VQE` live in the package-agnostic `AdaptVQEConfig`,
+so the same config runs against QForte's native engine, a from-scratch
+Qiskit-circuit engine, or a QDK/Azure Quantum-flavored one — just register a
+different adapter under a different name:
 
 ```python
-from qpubench import BenchmarkRunner, ExecutionOptions, AlgorithmSpec
+from qpubench import (
+    AdaptVQEConfig, AlgorithmFamily, AlgorithmSpec, BenchmarkRunner, ExecutionOptions,
+)
 from qpubench.schemas.circuit import CircuitSpec
 from qpubench.schemas.primitives import CircuitFormat
 
 mol = CircuitSpec(num_qubits=0, format=CircuitFormat.MOLECULE_JSON,
                   serialized="/path/to/He-ccpvdz.json")
-options = ExecutionOptions(algorithm_spec=AlgorithmSpec(
-    name="ADAPTVQE", pool_type="SD", optimizer="BFGS",
-    avqe_thresh=1e-4, adapt_maxiter=20,
-))
+options = ExecutionOptions(
+    algorithm_spec=AlgorithmSpec(name="ADAPTVQE", family=AlgorithmFamily.ADAPT_VQE),
+    adapt_vqe_config=AdaptVQEConfig(pool_type="SD", optimizer="BFGS",
+                                    gradient_threshold=1e-4, max_macro_iterations=20),
+)
 # register QForteAlgorithmAdapter from integrations/qforte/
 record = runner.run(mol, "qforte", options)
+# — or run the exact same options against a different implementation:
+# register IBMQiskitAdaptVQEAdapter from integrations/ibm_qiskit_adapt_vqe/
+record = runner.run(mol, "ibm_qiskit_adapt_vqe", options)
 ```
 
-→ Full examples: [examples/](examples/) · QForte adapter: [integrations/qforte/](integrations/qforte/)
+→ Full examples: [examples/](examples/) · QForte adapter (native C++ engine, pybind11 schema in
+`schemas/evangelistalab_qforte.py`): [integrations/qforte/](integrations/qforte/) ·
+package-agnostic engine shared by the Qiskit/QDK adapters: [integrations/generic_adapt_vqe/](integrations/generic_adapt_vqe/)
 
 ---
 
 ## Schema overview
 
-Schema version **1.11.0** — 19 modules, zero quantum SDK dependencies.
+Schema version **2.3.0** — 21 of the 31 total schema modules shown below (curated selection; see [docs/schemas.md](docs/schemas.md) for the full index), zero quantum SDK dependencies. (2.0.0 broke `QPUModality` into independent `ComputingModel`/`QubitModality`; 2.1.0 split the `AlgorithmSpec` grab-bag the same way; 2.2.0 added `reaction`; 2.3.0 rewrote `mqsdk_cebule` against the real Cebule SDK source — see "Algorithm library" in Quick start, above.)
 
-| Module | Modality | Key types |
-|---|---|---|
-| `primitives` | all | `QPUModality`, `CircuitFormat`, `PauliLabel`, `CebuleTaskType`, `ComplexNumber` |
-| `circuit` | all | `CircuitSpec` (`from_openqasm3`, `openqasm3`, `bind`), `ParameterBinding` |
-| `observable` | all | `SparsePauliObservable`, `PauliTerm` |
-| `backend` | all | `BackendSpec` (19 factory constructors) |
-| `execution` | all | `ExecutionOptions`, `AlgorithmSpec`, `ZNEConfig`, `TranspilerConfig` |
-| `result` | all | `QuantumResult` (15 result-type fields), `ExpectationResult`, `ShotResult`, `TranspileLayout` |
-| `record` | all | `BenchmarkRecord`, `VQAConfig` |
-| `mbqc` | MBQC | `MBQCPattern`, `MBQCProgramWord`, `MBQCExecutionResult` — bit-exact 16-bit FPGA word |
-| `cebule` | gate | `MolMapResult`, `QASMGenResult`, `TNQCOptResult`, `COVOResult`, `MolecularGeometry` |
-| `xenakis` | gate | `LayerGenome`, `BitstringGenome`, `QNEATGenome`, `GARunResult`, `XenakisRunConfig` |
-| `excitation_solve` | gate | `ExcitationSolveResult`, `ExcitationSolveSweep`, `ExcitationAdaptResult` |
-| `gsopt` | gate | `GSOptBenchmarkResult`, `ActiveSpaceSpec`, `REFERENCE_ENERGIES`, `VQERunConfig` |
-| `photonic` | photonic / FBQC | `PhotonicCircuitSpec`, `SinglePhotonSourceSpec`, `FockState`, `HOMResult`, `FBQCRunConfig`, `PhotonicVQEResult`, `PhotonicAnalogSimResult` |
-| `qdk_chemistry` | QPE | `QChemPipelineSpec`, `MoleculeStructureSpec`, `SCFResult`, `FermionicHamiltonianSpec`, `QPEResult`, `ResourceEstimationResult`, `ModelHamiltonianSpec` |
-| `gbs` | GBS | `GBSProgramSpec`, `GaussianStateSpec`, `HafnianResult`, `GBSCliqueFindingResult`, `VibronicSpectrumResult`, `TDMGBSResult` |
-| `qse` | KQD | `KQDPipelineSpec`, `KQDConfig`, `KrylovSubspaceMatrices`, `KrylovEigenResult`, `SQDConvergenceResult`, `CholeskyDecompositionSpec` |
-| `qesem` | GATE_BASED + QESEM | `QESEMJobRecord`, `QESEMJobSpec`, `QESEMObservableResult`, `QESEMNoiseScalingResult`, `QESEMCircuitOptions`, `QESEMExecutionDetails`, `QESEMCharacterizationResult` |
-| `qcschema` | all (chemistry) | `QCMolecule`, `QCAtomicInput`, `QCAtomicResult`, `QCOptimizationResult`, `QCWavefunctionData`, `QCEnergyComponents`, `PennyLaneMolDataset`, `QCSchemaRecord` |
-| `neutral_atom` | NEUTRAL_ATOM | `AtomArrangement`, `AHSProgramSpec`, `AHSDrivingField`, `AHSTimeSeries`, `AHSTaskResult`, `AHSShotResult`, `AquilaDeviceSpec`, `AHSBatchSpec` |
-| `slowquant` | GATE_BASED | `SlowQuantRecord`, `UCCWavefunctionConfig`, `UCCOptimizationResult`, `UCCLinearResponseResult`, `UCCExcitedStateResult`, `UCCCircuitSpec`, `UCCSCFResult`, `UCCRDMData` |
+Computing model (paradigm) and qubit modality are separate, independent axes — see [Computing model vs. qubit modality](#computing-model-vs-qubit-modality) below.
 
-`QPUModality` values: `GATE_BASED` · `MBQC` · `ANNEALING` · `PHOTONIC_LINEAR_OPTICS` · `FUSION_BASED` · `QPE` · `GBS` · `KQD` · `NEUTRAL_ATOM`
+| Module | Computing model | Qubit modality | Key types |
+|---|---|---|---|
+| `primitives` | all | all | `ComputingModel`, `QubitModality`, `CircuitFormat`, `PauliLabel`, `CebuleTaskType`, `ComplexNumber` |
+| `circuit` | all | all | `CircuitSpec` (`from_openqasm3`, `openqasm3`, `bind`), `ParameterBinding` |
+| `observable` | all | all | `SparsePauliObservable`, `PauliTerm` |
+| `backend` | all | all | `BackendSpec` (28 factory constructors) |
+| `execution` | all | all | `ExecutionOptions`, `AlgorithmSpec`, `ZNEConfig`, `TranspilerConfig` |
+| `result` | all | all | `QuantumResult` (15 result-type fields), `ExpectationResult`, `ShotResult`, `TranspileLayout` |
+| `record` | all | all | `BenchmarkRecord`, `VQAConfig` |
+| `johnrscott_mbqc_fpga` | MBQC | — (FPGA control logic) | `MBQCPattern`, `MBQCProgramWord`, `MBQCExecutionResult` — bit-exact 16-bit FPGA word |
+| `mqsdk_cebule` | GATE_BASED (`TN_QC_OPT`/`COVO`) + classical (solvation, ab initio/classical MD, geometry, GNN) | — | `CosmoResult`, `SigmaResult`, `SolubilityResult`, `AbInitioMDResult`, `GeometryOptResult`, `TNQCOptResult`, `COVOResult` |
+| `mqsdk_xenakis` | GATE_BASED | — | `LayerGenome`, `BitstringGenome`, `QNEATGenome`, `GARunResult`, `XenakisRunConfig` |
+| `dlr_excitation_solve` | GATE_BASED | — | `ExcitationSolveResult`, `ExcitationSolveSweep`, `ExcitationAdaptResult` |
+| `bestquark_gsopt` | GATE_BASED | — | `GSOptBenchmarkResult`, `ActiveSpaceSpec`, `REFERENCE_ENERGIES`, `VQERunConfig` |
+| `dtu_photonic` | GATE_BASED (LOQC) / FUSION_BASED | PHOTONIC | `PhotonicCircuitSpec`, `SinglePhotonSourceSpec`, `FockState`, `HOMResult`, `FBQCRunConfig`, `PhotonicVQEResult`, `PhotonicAnalogSimResult` |
+| `microsoft_qdk` | GATE_BASED (QPE technique) | — | `QChemPipelineSpec`, `MoleculeStructureSpec`, `SCFResult`, `FermionicHamiltonianSpec`, `QPEResult`, `ResourceEstimationResult`, `ModelHamiltonianSpec` |
+| `dtu_gbs` | GBS | PHOTONIC | `GBSProgramSpec`, `GaussianStateSpec`, `HafnianResult`, `GBSCliqueFindingResult`, `VibronicSpectrumResult`, `TDMGBSResult` |
+| `mqsdk_qse` | GATE_BASED (KQD technique) | — | `KQDPipelineSpec`, `KQDConfig`, `KrylovSubspaceMatrices`, `KrylovEigenResult`, `SQDConvergenceResult`, `CholeskyDecompositionSpec` |
+| `qedma_qesem` | GATE_BASED + QESEM | SUPERCONDUCTING | `QESEMJobRecord`, `QESEMJobSpec`, `QESEMObservableResult`, `QESEMNoiseScalingResult`, `QESEMCircuitOptions`, `QESEMExecutionDetails`, `QESEMCharacterizationResult` |
+| `molssi_qcschema` | all (chemistry) | all | `QCMolecule`, `QCAtomicInput`, `QCAtomicResult`, `QCOptimizationResult`, `QCWavefunctionData`, `QCEnergyComponents`, `PennyLaneMolDataset`, `QCSchemaRecord` |
+| `quera_bloqade` | ADIABATIC | NEUTRAL_ATOM | `AtomArrangement`, `AHSProgramSpec`, `AHSDrivingField`, `AHSTimeSeries`, `AHSTaskResult`, `AHSShotResult`, `AquilaDeviceSpec`, `AHSBatchSpec` |
+| `erikkjellgren_slowquant` | GATE_BASED | — | `SlowQuantRecord`, `UCCWavefunctionConfig`, `UCCOptimizationResult`, `UCCLinearResponseResult`, `UCCExcitedStateResult`, `UCCCircuitSpec`, `UCCSCFResult`, `UCCRDMData` |
+| `reaction` | all | all | `ReactionCoordinateSpec`, `ReactionPathResult` — ties a sweep of point calculations into one reaction path / PES |
+
+### Computing model vs. qubit modality
+
+`ComputingModel` (paradigm — how the program is expressed) and `QubitModality` (QPU modality — what hardware realizes it) are independent fields on `CircuitSpec`, `BackendSpec`, and `QuantumResult`. It's many-to-many, not one-to-one: a paradigm is not intrinsically tied to one QPU modality, but not every pairing is realized. `GATE_BASED` circuits run on `SUPERCONDUCTING` (IBM, IQM), `TRAPPED_ION` (Quantinuum, IonQ), `SILICON_SPIN` (Quantum Motion), and `PHOTONIC` (Perceval, photochipsim) hardware alike, while `GBS` and `FUSION_BASED` are photonic-only today. `QPE` and `KQD` are algorithmic techniques layered on `GATE_BASED` (see `microsoft_qdk.QPEMethod` / `mqsdk_qse.KQDMethod`), not separate paradigms.
+
+`ComputingModel` values: `GATE_BASED` · `MBQC` · `FUSION_BASED` · `ADIABATIC` · `ANNEALING` · `GBS` · `SAMPLING`
+
+`QubitModality` values: `SUPERCONDUCTING` · `TRAPPED_ION` · `NEUTRAL_ATOM` · `PHOTONIC` · `SILICON_SPIN`
 
 → Full field-level reference: [docs/schemas.md](docs/schemas.md)
 
@@ -207,23 +231,27 @@ Schema version **1.11.0** — 19 modules, zero quantum SDK dependencies.
 ```
 qpubench/
 ├── src/qpubench/
-│   ├── schemas/           ← Pydantic schema layer (18 modules, schema v1.10.0)
-│   │   ├── primitives, circuit, observable, backend, execution, result, record
-│   │   ├── mbqc           ← MBQC-FPGA 16-bit program word
-│   │   ├── cebule         ← Cebule SDK task I/O
-│   │   ├── xenakis        ← Xenakis GA circuit genomes
-│   │   ├── excitation_solve, gsopt
-│   │   ├── photonic       ← Linear-optics chips, FBQC, HOM, photonic VQE/analog
-│   │   ├── qdk_chemistry  ← QDK chemistry pipeline: SCF→active space→QPE→resource est.
-│   │   ├── gbs            ← Gaussian Boson Sampling: hafnian, vibronic, TDM/Borealis
-│   │   ├── qse            ← Krylov Quantum Diagonalization (KQD/SQD)
-│   │   ├── qesem          ← QESEM (Qedma): noise scaling, QET, device characterization
-│   │   ├── qcschema       ← QCSchema/QCElemental/PennyLane interoperability
-│   │   ├── neutral_atom   ← Neutral atom AHS: Bloqade/Aquila atom arrangement, drives, results
-│   │   └── slowquant      ← SlowQuant UCC/VQE: ansatz config, SCF, optimization, linear response
+│   ├── schemas/           ← Pydantic schema layer (31 modules, schema v2.3.0)
+│   │   ├── primitives, circuit, observable, backend, execution, result, record, reaction, advantage
+│   │   ├── johnrscott_mbqc_fpga      ← MBQC-FPGA 16-bit program word
+│   │   ├── mqsdk_cebule              ← Cebule SDK task I/O (solvation, MD, geometry, GNN, VQE)
+│   │   ├── mqsdk_xenakis             ← Xenakis GA circuit genomes
+│   │   ├── evangelistalab_qforte     ← QForte: pybind11 object layer + ADAPT-VQE/UCCN-VQE/UCCN-PQE/SPQE
+│   │   ├── dlr_excitation_solve, bestquark_gsopt
+│   │   ├── dtu_photonic              ← Linear-optics chips, FBQC, HOM, photonic VQE/analog
+│   │   ├── microsoft_qdk             ← QDK chemistry pipeline: SCF→active space→QPE→resource est.
+│   │   ├── dtu_gbs                   ← Gaussian Boson Sampling: hafnian, vibronic, TDM/Borealis
+│   │   ├── mqsdk_qse                 ← Krylov Quantum Diagonalization (KQD/SQD)
+│   │   ├── qedma_qesem               ← QESEM (Qedma): noise scaling, QET, device characterization
+│   │   ├── molssi_qcschema           ← QCSchema/QCElemental/PennyLane interoperability
+│   │   ├── quera_bloqade             ← Neutral atom AHS: Bloqade/Aquila atom arrangement, drives, results
+│   │   ├── erikkjellgren_slowquant   ← SlowQuant UCC/VQE: ansatz config, SCF, optimization, linear response
+│   │   ├── classiq                  ← Classiq synthesis + chemistry/QAOA (org == package name)
+│   │   └── qctrl_fire_opal, unitaryfund_mitiq, haiqu_rivet, parityqc_parityqc,
+│   │       qmatter_qmatter, quantum_motion_hardware, ibm_runtime_v2  ← one module per vendor
 │   ├── backends/          ← BackendAdapter/AlgorithmAdapter protocols + stubs
 │   ├── runner.py          ← BenchmarkRunner (run, sweep, hooks, dual-protocol dispatch)
-│   └── store.py           ← NDJSONStore, ParquetStore, ResultStore protocol
+│   └── store.py           ← NDJSONStore, ParquetStore, S3Store, ResultStore protocol
 │
 ├── integrations/          ← NOT installed; copy into your project
 │   ├── template/          ← BackendAdapter + AlgorithmAdapter starter templates

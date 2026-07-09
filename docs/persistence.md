@@ -1,6 +1,6 @@
 # Persistence
 
-qpubench ships two stores. Both implement the `ResultStore` protocol:
+qpubench ships three stores. All implement the `ResultStore` protocol:
 
 ```python
 class ResultStore(Protocol):
@@ -91,6 +91,69 @@ Flat column names produced from a `BenchmarkRecord`:
 | `result_status`, `qpu_time_s`, `total_time_s` | `result.*` |
 | `molecule`, `basis`, `ansatz`, `final_eigenvalue`, `ground_truth` | `vqa.*` |
 | `_raw_json` | Full JSON (for `load()` round-trip) |
+
+---
+
+## S3Store
+
+Object store backed by S3 or any S3-compatible endpoint. Requires `pip install 'qpubench[s3]'`.
+
+One JSON object per record — `f"{prefix}/{experiment_id}.json"` — instead of NDJSONStore's shared append-only file. There is no read-modify-write of shared state, so concurrent writers (separate processes, machines, or a distributed sweep) do not race. Only `put_object`, `get_object`, and the `list_objects_v2` paginator are used, so it works unmodified against real AWS S3 and against S3-compatible gateways.
+
+### AWS S3
+
+```python
+from qpubench import BenchmarkRunner, S3Store
+
+store = S3Store(
+    "my-results-bucket",
+    prefix="sweeps/2026-07-06",
+    region_name="eu-west-1",
+    # aws_access_key_id / aws_secret_access_key are optional — omit them to
+    # use the standard boto3 credential chain (env vars, ~/.aws/credentials,
+    # instance role, etc.)
+)
+runner = BenchmarkRunner(store=store)
+```
+
+Any keyword accepted by `boto3.client("s3", ...)` can be passed through directly — `endpoint_url`, `region_name`, `aws_access_key_id`, `aws_secret_access_key`, `config=botocore.config.Config(...)` — which also makes `S3Store` work against MinIO or any other S3-compatible service. Pass an already-constructed client instead via `client=`:
+
+```python
+import boto3
+
+store = S3Store("my-bucket", client=boto3.client("s3", endpoint_url="http://localhost:9000"))
+```
+
+### Hugging Face Storage Buckets
+
+[Storage Buckets](https://huggingface.co/docs/hub/en/storage-buckets) expose an [S3-compatible gateway](https://huggingface.co/docs/hub/en/storage-buckets-s3) at `https://s3.hf.co/<namespace>`. `S3Store.huggingface()` sets up the required botocore `Config` (path-style addressing, single region, `ListObjectsV2`-only) for you:
+
+```python
+from qpubench import S3Store
+
+store = S3Store.huggingface(
+    bucket="my-training-bucket",
+    namespace="my-username",          # or an organization name
+    access_key_id="HFAK...",          # Settings → Access Tokens →
+    secret_access_key="...",          #   (token) → Generate S3 credentials
+    prefix="qpubench-results",
+)
+runner = BenchmarkRunner(store=store)
+```
+
+Generate the S3 credentials from a Hugging Face [User Access Token](https://huggingface.co/settings/tokens) with **Write** permission (its dropdown menu has a **Generate S3 credentials** action); the bucket itself must already exist (`hf buckets create my-training-bucket`, or via [huggingface_hub.create_bucket](https://huggingface.co/docs/huggingface_hub/guides/buckets)).
+
+### Loading and querying
+
+Identical API to `NDJSONStore` — `save()`, `load(experiment_id)`, `query(**filters)`, `all()`:
+
+```python
+record  = store.load("3f2a1b4c-...")
+records = store.query(backend__name="aer_statevector", result__status="succeeded")
+all_records = store.all()   # lists every object under the prefix, then fetches each
+```
+
+`query()`/`all()` list every object under the store's prefix and fetch each in turn — fine for benchmark-scale result sets, but there is no server-side filtering, so very large buckets should be partitioned by `prefix` (e.g. one prefix per `run_id`) to keep listings small.
 
 ---
 

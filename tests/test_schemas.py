@@ -8,9 +8,10 @@ from __future__ import annotations
 import json
 import math
 
+import pydantic
 import pytest
 
-from qpubench.schemas.mbqc import (
+from qpubench.schemas.johnrscott_mbqc_fpga import (
     AdaptiveSpec,
     ByproductUpdateSpec,
     CommutationSpec,
@@ -23,6 +24,7 @@ from qpubench.schemas.mbqc import (
 from qpubench.schemas.observable import PauliTerm, SparsePauliObservable
 from qpubench.schemas.primitives import ComplexNumber, PauliLabel
 from qpubench.schemas.record import BenchmarkRecord, VQAConfig
+from qpubench.schemas.reaction import ReactionCoordinateSpec, ReactionPathResult
 from qpubench.schemas.backend import BackendSpec, GateCharacteristics, QubitCharacteristics
 from qpubench.schemas.circuit import CircuitSpec, ParameterBinding
 from qpubench.schemas.execution import ExecutionOptions, TranspilerConfig, ZNEConfig
@@ -36,9 +38,10 @@ from qpubench.schemas.result import (
 )
 from qpubench.schemas.primitives import (
     CircuitFormat,
+    ComputingModel,
     ErrorMitigationStrategy,
-    QPUModality,
     JobStatus,
+    QubitModality,
 )
 
 
@@ -323,7 +326,7 @@ def _minimal_record() -> BenchmarkRecord:
         backend=BackendSpec.aer_statevector(num_qubits=2),
         options=ExecutionOptions(shots=1024),
         result=QuantumResult(
-            modality=QPUModality.GATE_BASED,
+            computing_model=ComputingModel.GATE_BASED,
             expectation_values=[
                 ExpectationResult(observable_index=0, value=-1.137, std_error=0.001)
             ],
@@ -336,7 +339,7 @@ def test_benchmark_record_json_roundtrip():
     record  = _minimal_record()
     json_str = record.model_dump_json()
     data     = json.loads(json_str)
-    assert data["schema_version"] == "1.12.0"
+    assert data["schema_version"] == "2.3.0"
     restored = BenchmarkRecord.model_validate_json(json_str)
     assert restored.experiment_id == record.experiment_id
     assert restored.result.expectation_values[0].value == -1.137
@@ -351,6 +354,87 @@ def test_vqa_config_energy_error():
     assert vqa.energy_error is not None
     assert math.isclose(vqa.energy_error, 0.001, rel_tol=1e-6)
     assert vqa.chemical_accuracy is True
+
+
+# ---------------------------------------------------------------------------
+# reaction
+# ---------------------------------------------------------------------------
+
+def _record_with_energy(energy: float) -> BenchmarkRecord:
+    circuit = CircuitSpec(num_qubits=2, serialized="OPENQASM 2.0;")
+    return BenchmarkRecord(
+        circuit=circuit,
+        backend=BackendSpec.aer_statevector(num_qubits=2),
+        options=ExecutionOptions(shots=1024),
+        result=QuantumResult(
+            computing_model=ComputingModel.GATE_BASED,
+            expectation_values=[
+                ExpectationResult(observable_index=0, value=energy, std_error=0.0)
+            ],
+        ),
+        vqa=VQAConfig(problem_type="chemistry", final_eigenvalue=energy),
+        num_qubits=2,
+    )
+
+
+def _three_point_spec() -> ReactionCoordinateSpec:
+    circuit = CircuitSpec(num_qubits=2, serialized="OPENQASM 2.0;")
+    return ReactionCoordinateSpec(
+        label="toy reaction",
+        coordinate_name="bond_length_angstrom",
+        coordinate_values=[0.7, 1.2, 1.8],
+        problems=[circuit, circuit, circuit],
+        reactant_index=0,
+        transition_state_index=1,
+        product_index=2,
+    )
+
+
+def test_reaction_coordinate_spec_length_mismatch():
+    circuit = CircuitSpec(num_qubits=2, serialized="OPENQASM 2.0;")
+    with pytest.raises(pydantic.ValidationError):
+        ReactionCoordinateSpec(
+            label="bad",
+            coordinate_name="bond_length_angstrom",
+            coordinate_values=[0.7, 1.2],
+            problems=[circuit],
+        )
+
+
+def test_reaction_coordinate_spec_index_out_of_range():
+    circuit = CircuitSpec(num_qubits=2, serialized="OPENQASM 2.0;")
+    with pytest.raises(pydantic.ValidationError):
+        ReactionCoordinateSpec(
+            label="bad",
+            coordinate_name="bond_length_angstrom",
+            coordinate_values=[0.7, 1.2],
+            problems=[circuit, circuit],
+            transition_state_index=5,
+        )
+
+
+def test_reaction_path_result_length_mismatch():
+    spec = _three_point_spec()
+    with pytest.raises(pydantic.ValidationError):
+        ReactionPathResult(spec=spec, records=[_record_with_energy(-1.0)])
+
+
+def test_reaction_path_result_energies_and_barrier():
+    spec = _three_point_spec()
+    records = [
+        _record_with_energy(-1.130),   # reactant
+        _record_with_energy(-1.100),   # transition state (highest energy)
+        _record_with_energy(-1.140),   # product
+    ]
+    result = ReactionPathResult(spec=spec, records=records)
+
+    assert result.energies == [-1.130, -1.100, -1.140]
+    assert math.isclose(result.barrier_height, 0.030, rel_tol=1e-9)
+    assert math.isclose(result.reaction_energy, -0.010, rel_tol=1e-9)
+
+    plot = result.to_dict_for_plot()
+    assert plot["bond_length_angstrom"] == [0.7, 1.2, 1.8]
+    assert plot["energy"] == [-1.130, -1.100, -1.140]
 
 
 def test_shot_result_probabilities():
@@ -370,7 +454,7 @@ def test_backend_spec_aer_statevector():
     assert b.simulator is True
     assert b.provider == "aer"
     assert b.num_qubits == 5
-    assert b.qpu_modality == QPUModality.GATE_BASED
+    assert b.computing_model == ComputingModel.GATE_BASED
 
 
 def test_backend_spec_ibm_auth():
@@ -385,6 +469,23 @@ def test_backend_spec_qrack():
     assert b.provider == "qrack"
     assert b.simulator is True
     assert b.auth["gpu"] == "False"
+
+
+def test_backend_spec_braket_qpu():
+    b = BackendSpec.braket(
+        "arn:aws:braket:us-east-1::device/qpu/rigetti/Ankaa-3",
+        s3_bucket_ref="MY_BRAKET_BUCKET",
+    )
+    assert b.provider == "aws_braket"
+    assert b.name == "Ankaa-3"
+    assert b.simulator is False
+    assert b.auth["s3_bucket_ref"] == "MY_BRAKET_BUCKET"
+
+
+def test_backend_spec_braket_simulator():
+    b = BackendSpec.braket("arn:aws:braket:::device/quantum-simulator/amazon/sv1")
+    assert b.simulator is True
+    assert b.name == "sv1"
 
 
 def test_backend_spec_gate_error_lookup():
@@ -551,7 +652,7 @@ def test_transpile_layout_length_mismatch():
 
 def test_quantum_result_with_layout():
     result = QuantumResult(
-        modality=QPUModality.GATE_BASED,
+        computing_model=ComputingModel.GATE_BASED,
         shots=ShotResult(num_qubits=2, num_shots=1024, counts={"00": 512, "11": 512}),
         transpile_layout=TranspileLayout(
             num_virtual=2, num_physical=127,
@@ -566,7 +667,7 @@ def test_quantum_result_with_layout():
 
 def test_quantum_result_quasi_probabilities():
     result = QuantumResult(
-        modality=QPUModality.GATE_BASED,
+        computing_model=ComputingModel.GATE_BASED,
         quasi_probabilities={"00": 0.48, "11": 0.52},
         status=JobStatus.SUCCEEDED,
     )
@@ -644,48 +745,51 @@ def test_runner_sweep_produces_correct_count():
 # AlgorithmSpec and algorithm-driven schemas
 # ---------------------------------------------------------------------------
 
-from qpubench.schemas.execution import AlgorithmSpec
+from qpubench.schemas.execution import AdaptVQEConfig, AlgorithmSpec
 from qpubench.schemas.result import AdaptIteration
-from qpubench.schemas.primitives import CircuitFormat
+from qpubench.schemas.primitives import AlgorithmFamily, CircuitFormat
 
 
 def test_algorithm_spec_defaults():
     alg = AlgorithmSpec(name="UCCNVQE")
-    assert alg.pool_type == "SD"
-    assert alg.optimizer == "BFGS"
-    assert alg.use_analytic_grad is True
-    assert alg.opt_thresh == pytest.approx(1.0e-5)
-    assert alg.avqe_thresh == pytest.approx(1.0e-2)
-    assert alg.adapt_maxiter == 20
+    assert alg.family is None
+    assert alg.extra_params == {}
+
+
+def test_adapt_vqe_config_defaults():
+    cfg = AdaptVQEConfig()
+    assert cfg.pool_type == "SD"
+    assert cfg.optimizer == "BFGS"
+    assert cfg.use_analytic_gradient is True
+    assert cfg.energy_threshold == pytest.approx(1.0e-5)
+    assert cfg.gradient_threshold == pytest.approx(1.0e-2)
+    assert cfg.max_macro_iterations == 20
 
 
 def test_algorithm_spec_adapt_vqe():
-    alg = AlgorithmSpec(
-        name="ADAPTVQE",
-        pool_type="SDTQ",
-        optimizer="jacobi",
-        avqe_thresh=1.0e-4,
-        adapt_maxiter=30,
-    )
+    alg = AlgorithmSpec(name="ADAPTVQE", family=AlgorithmFamily.ADAPT_VQE)
+    cfg = AdaptVQEConfig(pool_type="SDTQ", optimizer="jacobi", max_macro_iterations=30)
     assert alg.name == "ADAPTVQE"
-    assert alg.pool_type == "SDTQ"
-    assert alg.adapt_maxiter == 30
+    assert alg.family == AlgorithmFamily.ADAPT_VQE
+    assert cfg.pool_type == "SDTQ"
+    assert cfg.max_macro_iterations == 30
 
 
 def test_algorithm_spec_in_execution_options():
     opts = ExecutionOptions(
-        algorithm_spec=AlgorithmSpec(name="ADAPTVQE", pool_type="GSD")
+        algorithm_spec=AlgorithmSpec(name="ADAPTVQE", family=AlgorithmFamily.ADAPT_VQE),
+        adapt_vqe_config=AdaptVQEConfig(pool_type="GSD"),
     )
     assert opts.algorithm_spec is not None
     assert opts.algorithm_spec.name == "ADAPTVQE"
-    assert opts.algorithm_spec.pool_type == "GSD"
+    assert opts.adapt_vqe_config is not None
+    assert opts.adapt_vqe_config.pool_type == "GSD"
 
 
 def test_algorithm_spec_json_roundtrip():
     alg = AlgorithmSpec(
         name="SPQE",
-        pool_type="GSD",
-        extra_params={"spqe_thresh": 1.0e-4, "max_excit": 2},
+        extra_params={"spqe_thresh": 1.0e-4, "max_excit": 2, "pool_type": "GSD"},
     )
     restored = AlgorithmSpec.model_validate_json(alg.model_dump_json())
     assert restored.name == "SPQE"
@@ -714,7 +818,7 @@ def test_quantum_result_with_adapt_history():
         for i in range(4)
     ]
     result = QuantumResult(
-        modality=QPUModality.GATE_BASED,
+        computing_model=ComputingModel.GATE_BASED,
         expectation_values=[
             ExpectationResult(observable_index=0, value=-2.1628, std_error=0.0)
         ],
@@ -795,7 +899,7 @@ class _MockQForteAdapter:
         alg_name = (options.algorithm_spec.name
                     if options.algorithm_spec else "UCCNVQE")
         result = QuantumResult(
-            modality=QPUModality.GATE_BASED,
+            computing_model=ComputingModel.GATE_BASED,
             expectation_values=[
                 ExpectationResult(
                     observable_index=0,
@@ -859,7 +963,10 @@ def test_adapt_vqe_via_algorithm_adapter():
     record = runner.run(
         mol_spec,
         "mock_qforte",
-        ExecutionOptions(algorithm_spec=AlgorithmSpec(name="ADAPTVQE", avqe_thresh=1.0e-4)),
+        ExecutionOptions(
+            algorithm_spec=AlgorithmSpec(name="ADAPTVQE", family=AlgorithmFamily.ADAPT_VQE),
+            adapt_vqe_config=AdaptVQEConfig(gradient_threshold=1.0e-4),
+        ),
     )
     assert record.result.adapt_history is not None
     assert len(record.result.adapt_history) == 1
@@ -919,7 +1026,7 @@ def test_benchmark_record_algorithm_json_roundtrip():
 # ---------------------------------------------------------------------------
 
 def test_molecule_structure_spec():
-    from qpubench.schemas.qdk_chemistry import AtomSpec, CoordinateUnit, MoleculeStructureSpec
+    from qpubench.schemas.microsoft_qdk import AtomSpec, CoordinateUnit, MoleculeStructureSpec
     mol = MoleculeStructureSpec(
         atoms=[
             AtomSpec(symbol="N", x=0.0, y=0.0, z=-0.55),
@@ -937,7 +1044,7 @@ def test_molecule_structure_spec():
 
 
 def test_scf_run_config_and_result():
-    from qpubench.schemas.qdk_chemistry import SCFMethod, SCFRunConfig, SCFResult
+    from qpubench.schemas.microsoft_qdk import SCFMethod, SCFRunConfig, SCFResult
     cfg = SCFRunConfig(method=SCFMethod.HF, basis_or_guess="cc-pvdz")
     res = SCFResult(
         hf_energy=-108.954_000,
@@ -951,7 +1058,7 @@ def test_scf_run_config_and_result():
 
 
 def test_active_space_selection_config():
-    from qpubench.schemas.qdk_chemistry import (
+    from qpubench.schemas.microsoft_qdk import (
         ActiveSpaceSelectorType,
         ActiveSpaceSelectionConfig,
         ActiveSpaceSelectionResult,
@@ -973,7 +1080,7 @@ def test_active_space_selection_config():
 
 
 def test_qubit_hamiltonian_spec():
-    from qpubench.schemas.qdk_chemistry import (
+    from qpubench.schemas.microsoft_qdk import (
         PauliStringTerm,
         QubitEncodingType,
         QubitHamiltonianSpec,
@@ -993,7 +1100,7 @@ def test_qubit_hamiltonian_spec():
 
 
 def test_model_hamiltonian_ising():
-    from qpubench.schemas.qdk_chemistry import (
+    from qpubench.schemas.microsoft_qdk import (
         BoundaryCondition,
         IsingParams,
         LatticeGraphSpec,
@@ -1015,7 +1122,7 @@ def test_model_hamiltonian_ising():
 
 
 def test_model_hamiltonian_only_one_param_block():
-    from qpubench.schemas.qdk_chemistry import (
+    from qpubench.schemas.microsoft_qdk import (
         HeisenbergParams,
         IsingParams,
         LatticeGraphSpec,
@@ -1034,7 +1141,7 @@ def test_model_hamiltonian_only_one_param_block():
 
 
 def test_qpe_config_and_result():
-    from qpubench.schemas.qdk_chemistry import (
+    from qpubench.schemas.microsoft_qdk import (
         QPEConfig,
         QPEMethod,
         QPEResult,
@@ -1069,7 +1176,7 @@ def test_qpe_config_and_result():
 
 
 def test_resource_estimator_config():
-    from qpubench.schemas.qdk_chemistry import (
+    from qpubench.schemas.microsoft_qdk import (
         ErrorBudgetPartition,
         QECScheme,
         QubitParamsType,
@@ -1098,7 +1205,7 @@ def test_resource_estimator_config():
 
 
 def test_qchem_pipeline_spec_roundtrip():
-    from qpubench.schemas.qdk_chemistry import (
+    from qpubench.schemas.microsoft_qdk import (
         AtomSpec,
         CoordinateUnit,
         FermionicHamiltonianSpec,
@@ -1156,7 +1263,7 @@ def test_backend_spec_qdk_chemistry_simulator():
     )
     assert b.provider == "qdk_chemistry"
     assert b.simulator is True
-    assert b.qpu_modality == QPUModality.QPE
+    assert b.computing_model == ComputingModel.GATE_BASED
 
 
 def test_backend_spec_azure_quantum():
@@ -1175,7 +1282,7 @@ def test_backend_spec_azure_quantum():
 # ---------------------------------------------------------------------------
 
 def test_gbs_program_spec_fock_path():
-    from qpubench.schemas.gbs import (
+    from qpubench.schemas.dtu_gbs import (
         GBSMeasurementType,
         GBSProgramSpec,
         InterferometerSpec,
@@ -1204,7 +1311,7 @@ def test_gbs_program_spec_fock_path():
 
 
 def test_gbs_program_spec_s2gate_path():
-    from qpubench.schemas.gbs import GBSMeasurementType, GBSProgramSpec, S2GateSpec
+    from qpubench.schemas.dtu_gbs import GBSMeasurementType, GBSProgramSpec, S2GateSpec
     prog = GBSProgramSpec(
         num_modes=4,
         s2_gates=[S2GateSpec(mode_a=i, mode_b=i + 4, r=1.0) for i in range(4)],
@@ -1215,7 +1322,7 @@ def test_gbs_program_spec_s2gate_path():
 
 
 def test_gbs_sample_properties():
-    from qpubench.schemas.gbs import GBSSample
+    from qpubench.schemas.dtu_gbs import GBSSample
     s = GBSSample(photon_numbers=[0, 1, 2, 0, 1])
     assert s.total_photons == 4
     assert s.num_clicks == 0   # no click_pattern set
@@ -1226,7 +1333,7 @@ def test_gbs_sample_properties():
 
 def test_gbs_sampling_result_roundtrip():
     import json
-    from qpubench.schemas.gbs import (
+    from qpubench.schemas.dtu_gbs import (
         GBSBackendType,
         GBSMeasurementType,
         GBSProgramSpec,
@@ -1261,7 +1368,7 @@ def test_gbs_sampling_result_roundtrip():
 
 
 def test_gaussian_state_spec():
-    from qpubench.schemas.gbs import GaussianStateSpec, GaussianStateType, QuadratureOrdering
+    from qpubench.schemas.dtu_gbs import GaussianStateSpec, GaussianStateType, QuadratureOrdering
     # 2-mode squeezed vacuum: 4×4 covariance matrix (trivial identity for vacuum)
     V = [1.0] * 16   # placeholder 4×4 flattened
     state = GaussianStateSpec(
@@ -1275,7 +1382,7 @@ def test_gaussian_state_spec():
 
 
 def test_hafnian_matrix_spec():
-    from qpubench.schemas.gbs import HafnianMatrixSpec, QuadratureOrdering
+    from qpubench.schemas.dtu_gbs import HafnianMatrixSpec, QuadratureOrdering
     # 4×4 A matrix for 2 modes
     spec = HafnianMatrixSpec(
         num_modes=2,
@@ -1288,7 +1395,7 @@ def test_hafnian_matrix_spec():
 
 
 def test_takagi_decomposition_spec():
-    from qpubench.schemas.gbs import TakagiDecompositionSpec
+    from qpubench.schemas.dtu_gbs import TakagiDecompositionSpec
     import math
     spec = TakagiDecompositionSpec(
         singular_values=[0.8, 0.6, 0.4, 0.2],
@@ -1304,7 +1411,7 @@ def test_takagi_decomposition_spec():
 
 
 def test_gbs_clique_finding_result():
-    from qpubench.schemas.gbs import GBSCliqueFindingResult, GBSGraphConfig, GraphScalingMethod
+    from qpubench.schemas.dtu_gbs import GBSCliqueFindingResult, GBSGraphConfig, GraphScalingMethod
     import json
     A = [0, 1, 1, 0,
          1, 0, 1, 1,
@@ -1334,7 +1441,7 @@ def test_gbs_clique_finding_result():
 
 
 def test_vibronic_spectrum_config_and_result():
-    from qpubench.schemas.gbs import (
+    from qpubench.schemas.dtu_gbs import (
         DuschinskyResult,
         NormalModeData,
         VibronicGBSParams,
@@ -1397,7 +1504,7 @@ def test_vibronic_spectrum_config_and_result():
 
 
 def test_tdm_gbs_config():
-    from qpubench.schemas.gbs import TDMDelaySpec, TDMGBSConfig, TDMSqueezingLevel
+    from qpubench.schemas.dtu_gbs import TDMDelaySpec, TDMGBSConfig, TDMSqueezingLevel
     delays = TDMDelaySpec(delays=[1, 6, 36], effective_modes=216)
     cfg = TDMGBSConfig(
         delays=delays,
@@ -1412,7 +1519,7 @@ def test_tdm_gbs_config():
 
 
 def test_cluster_state_spec():
-    from qpubench.schemas.gbs import ClusterStateSpec, GaussianStateType
+    from qpubench.schemas.dtu_gbs import ClusterStateSpec, GaussianStateType
     import math
     spec = ClusterStateSpec(
         state_type=GaussianStateType.CLUSTER_1D,
@@ -1427,21 +1534,24 @@ def test_cluster_state_spec():
 def test_backend_spec_xanadu_x8():
     b = BackendSpec.xanadu_x8()
     assert b.provider == "xanadu"
-    assert b.qpu_modality == QPUModality.GBS
+    assert b.computing_model == ComputingModel.GBS
+    assert b.qubit_modality == QubitModality.PHOTONIC
     assert b.simulator is False
 
 
 def test_backend_spec_xanadu_borealis():
     b = BackendSpec.xanadu_borealis(via_braket=True)
     assert b.provider == "aws_braket"
-    assert b.qpu_modality == QPUModality.GBS
+    assert b.computing_model == ComputingModel.GBS
+    assert b.qubit_modality == QubitModality.PHOTONIC
     assert "Borealis" in b.auth["device_arn"]
 
 
 def test_backend_spec_strawberry_fields_gaussian():
     b = BackendSpec.strawberry_fields_gaussian(num_modes=12)
     assert b.provider == "strawberry_fields"
-    assert b.qpu_modality == QPUModality.GBS
+    assert b.computing_model == ComputingModel.GBS
+    assert b.qubit_modality == QubitModality.PHOTONIC
     assert b.simulator is True
 
 
@@ -1450,14 +1560,14 @@ def test_backend_spec_strawberry_fields_gaussian():
 # ---------------------------------------------------------------------------
 
 def test_neel_state_spec():
-    from qpubench.schemas.qse import NeelStateSpec
+    from qpubench.schemas.mqsdk_qse import NeelStateSpec
     s = NeelStateSpec(num_spins=8, shift=0)
     assert s.num_spins == 8
     assert s.shift == 0
 
 
 def test_slater_determinant_ref():
-    from qpubench.schemas.qse import SlaterDeterminantRef
+    from qpubench.schemas.mqsdk_qse import SlaterDeterminantRef
     ref = SlaterDeterminantRef(ncas=4, occ_alpha=[0, 1], occ_beta=[0, 1])
     assert ref.num_qubits == 8
     assert ref.num_electrons == 4
@@ -1468,7 +1578,7 @@ def test_slater_determinant_ref():
 
 
 def test_kqd_reference_spec_neel():
-    from qpubench.schemas.qse import KQDReferenceSpec, KQDReferenceStateType, NeelStateSpec
+    from qpubench.schemas.mqsdk_qse import KQDReferenceSpec, KQDReferenceStateType, NeelStateSpec
     neel = NeelStateSpec(num_spins=6, shift=0)
     ref = KQDReferenceSpec(
         state_type=KQDReferenceStateType.NEEL,
@@ -1481,7 +1591,7 @@ def test_kqd_reference_spec_neel():
 
 
 def test_kqd_time_evolution_spec():
-    from qpubench.schemas.qse import KQDTimeEvolutionSpec, KrylovTimeEvolutionVariant
+    from qpubench.schemas.mqsdk_qse import KQDTimeEvolutionSpec, KrylovTimeEvolutionVariant
     import math
     dt = math.pi / 3.0
     spec = KQDTimeEvolutionSpec(dt=dt, num_trotter_steps=6)
@@ -1490,7 +1600,7 @@ def test_kqd_time_evolution_spec():
 
 
 def test_krylov_circuit_family_spec():
-    from qpubench.schemas.qse import KrylovCircuitFamilySpec, KQDMethod
+    from qpubench.schemas.mqsdk_qse import KrylovCircuitFamilySpec, KQDMethod
     fam = KrylovCircuitFamilySpec(
         method=KQDMethod.HADAMARD_TEST,
         num_qubits_system=10,
@@ -1507,7 +1617,7 @@ def test_krylov_circuit_family_spec():
 
 
 def test_krylov_subspace_matrices():
-    from qpubench.schemas.qse import KrylovMatrixSpec, KrylovSubspaceMatrices
+    from qpubench.schemas.mqsdk_qse import KrylovMatrixSpec, KrylovSubspaceMatrices
     dim = 4
     identity_flat = [1.0, 0.0, 0.0, 0.0,
                      0.0, 1.0, 0.0, 0.0,
@@ -1521,7 +1631,7 @@ def test_krylov_subspace_matrices():
 
 
 def test_krylov_eigen_result():
-    from qpubench.schemas.qse import KrylovEigenResult
+    from qpubench.schemas.mqsdk_qse import KrylovEigenResult
     res = KrylovEigenResult(
         eigenvalues=[-2.81, -1.23, 0.45, 1.87],
         ground_state_energy=-2.81,
@@ -1534,7 +1644,7 @@ def test_krylov_eigen_result():
 
 
 def test_sqd_convergence_result():
-    from qpubench.schemas.qse import SQDStep, SQDConvergenceResult
+    from qpubench.schemas.mqsdk_qse import SQDStep, SQDConvergenceResult
     steps = [
         SQDStep(krylov_step=0, num_bitstrings=10, subspace_dim=10, energy_hartree=-1.1),
         SQDStep(krylov_step=1, num_bitstrings=18, subspace_dim=18, energy_hartree=-1.136),
@@ -1550,7 +1660,7 @@ def test_sqd_convergence_result():
 
 
 def test_cumulative_krylov_counts():
-    from qpubench.schemas.qse import CumulativeKrylovCounts, SQDPostselectionConfig
+    from qpubench.schemas.mqsdk_qse import CumulativeKrylovCounts, SQDPostselectionConfig
     postsel = SQDPostselectionConfig(num_ones=2, min_unique=1)
     counts_obj = CumulativeKrylovCounts(
         cumulative_counts=[{"01": 10, "10": 8}, {"01": 15, "10": 12, "11": 0}],
@@ -1562,7 +1672,7 @@ def test_cumulative_krylov_counts():
 
 
 def test_cholesky_decomposition_spec():
-    from qpubench.schemas.qse import CholeskyDecompositionSpec
+    from qpubench.schemas.mqsdk_qse import CholeskyDecompositionSpec
     spec = CholeskyDecompositionSpec(
         num_orbitals=4,
         eps=1.0e-6,
@@ -1577,7 +1687,7 @@ def test_cholesky_decomposition_spec():
 def test_kqd_pipeline_spec_roundtrip():
     import json
     import math
-    from qpubench.schemas.qse import (
+    from qpubench.schemas.mqsdk_qse import (
         CholeskyDecompositionSpec,
         KQDConfig,
         KQDMethod,
@@ -1637,19 +1747,19 @@ def test_kqd_pipeline_spec_roundtrip():
 def test_quantum_result_kqd_field():
     import json
     import math
-    from qpubench.schemas.qse import KQDConfig, KQDMethod, KQDPipelineSpec
+    from qpubench.schemas.mqsdk_qse import KQDConfig, KQDMethod, KQDPipelineSpec
     pipeline = KQDPipelineSpec(
         num_qubits=6,
         hamiltonian_label="ising_chain_6",
         kqd_config=KQDConfig(method=KQDMethod.SAMPLE_BASED_SQD, krylov_dim=4),
     )
     result = QuantumResult(
-        modality=QPUModality.KQD,
+        computing_model=ComputingModel.GATE_BASED,
         kqd_pipeline=pipeline,
     )
     json_str = result.model_dump_json()
     data = json.loads(json_str)
-    assert data["modality"] == "kqd"
+    assert data["computing_model"] == "gate_based"
     assert data["kqd_pipeline"]["hamiltonian_label"] == "ising_chain_6"
     restored = QuantumResult.model_validate_json(json_str)
     assert restored.kqd_pipeline.num_qubits == 6
@@ -1658,7 +1768,7 @@ def test_quantum_result_kqd_field():
 def test_backend_spec_qiskit_aer():
     b = BackendSpec.qiskit_aer(method="statevector", num_qubits=12)
     assert b.provider == "aer"
-    assert b.qpu_modality == QPUModality.KQD
+    assert b.computing_model == ComputingModel.GATE_BASED
     assert b.simulator is True
     assert b.num_qubits == 12
 
@@ -1668,7 +1778,7 @@ def test_backend_spec_qiskit_aer():
 # ---------------------------------------------------------------------------
 
 def test_qesem_observable_spec():
-    from qpubench.schemas.qesem import QESEMObservableSpec
+    from qpubench.schemas.qedma_qesem import QESEMObservableSpec
     obs = QESEMObservableSpec(
         pauli_terms={"Z1": 1.0, "Z0,Z3": 0.3},
         description="ZZ correlation",
@@ -1678,7 +1788,7 @@ def test_qesem_observable_spec():
 
 
 def test_qesem_circuit_options():
-    from qpubench.schemas.qesem import QESEMCircuitOptions, QESEMTranspilationLevel
+    from qpubench.schemas.qedma_qesem import QESEMCircuitOptions, QESEMTranspilationLevel
     opts = QESEMCircuitOptions(
         error_suppression_only=False,
         twirl=True,
@@ -1690,7 +1800,7 @@ def test_qesem_circuit_options():
 
 
 def test_qesem_precision_per_factor():
-    from qpubench.schemas.qesem import QESEMPrecisionPerFactor
+    from qpubench.schemas.qedma_qesem import QESEMPrecisionPerFactor
     pf = QESEMPrecisionPerFactor(
         scale_precision_map={"0.0": 0.1, "1.0": 0.15, "2.0": 0.2}
     )
@@ -1698,7 +1808,7 @@ def test_qesem_precision_per_factor():
 
 
 def test_qesem_job_spec():
-    from qpubench.schemas.qesem import (
+    from qpubench.schemas.qedma_qesem import (
         QESEMJobSpec, QESEMObservableSpec, QESEMCircuitOptions,
         QESEMTranspilationLevel, QESEMPrecisionMode,
     )
@@ -1721,7 +1831,7 @@ def test_qesem_job_spec():
 
 
 def test_qesem_expectation_values():
-    from qpubench.schemas.qesem import (
+    from qpubench.schemas.qedma_qesem import (
         QESEMExpectationValue, QESEMScaleExpectationValue,
         QESEMHeuristicResult, QESEMNoiseScalingResult,
     )
@@ -1747,7 +1857,7 @@ def test_qesem_expectation_values():
 
 
 def test_qesem_observable_result_mitigated_property():
-    from qpubench.schemas.qesem import (
+    from qpubench.schemas.qedma_qesem import (
         QESEMExpectationValue, QESEMScaleExpectationValue,
         QESEMNoiseScalingResult, QESEMHeuristicResult, QESEMObservableResult,
     )
@@ -1766,7 +1876,7 @@ def test_qesem_observable_result_mitigated_property():
 
 
 def test_qesem_circuit_result_properties():
-    from qpubench.schemas.qesem import (
+    from qpubench.schemas.qedma_qesem import (
         QESEMObservableSpec, QESEMObservableResult, QESEMCircuitObservableResult,
         QESEMCircuitResult, QESEMExpectationValue, QESEMScaleExpectationValue,
         QESEMNoiseScalingResult,
@@ -1797,7 +1907,7 @@ def test_qesem_circuit_result_properties():
 
 
 def test_qesem_execution_details():
-    from qpubench.schemas.qesem import QESEMExecutionDetails, QESEMTranspiledCircuit
+    from qpubench.schemas.qedma_qesem import QESEMExecutionDetails, QESEMTranspiledCircuit
     tc = QESEMTranspiledCircuit(
         circuit_qasm="OPENQASM 2.0; ...",
         qubit_maps=[{"0": 12, "1": 13, "2": 14}],
@@ -1814,7 +1924,7 @@ def test_qesem_execution_details():
 
 
 def test_qesem_characterization_result():
-    from qpubench.schemas.qesem import QESEMCharacterizationResult, QESEMGateInfidelity
+    from qpubench.schemas.qedma_qesem import QESEMCharacterizationResult, QESEMGateInfidelity
     char = QESEMCharacterizationResult(
         qpu_name="ibm_fez",
         measurement_errors={0: 0.012, 1: 0.009, 2: 0.015},
@@ -1830,7 +1940,7 @@ def test_qesem_characterization_result():
 
 def test_qesem_job_record_roundtrip():
     import json
-    from qpubench.schemas.qesem import (
+    from qpubench.schemas.qedma_qesem import (
         QESEMJobRecord, QESEMJobSpec, QESEMJobStatus, QESEMObservableSpec,
         QESEMCircuitResult, QESEMCircuitObservableResult, QESEMObservableResult,
         QESEMExpectationValue, QESEMScaleExpectationValue, QESEMNoiseScalingResult,
@@ -1890,7 +2000,7 @@ def test_qesem_job_record_roundtrip():
 
 def test_quantum_result_qesem_field():
     import json
-    from qpubench.schemas.qesem import QESEMJobRecord, QESEMJobStatus, QESEMJobSpec
+    from qpubench.schemas.qedma_qesem import QESEMJobRecord, QESEMJobStatus, QESEMJobSpec
     from qpubench.schemas.primitives import ErrorMitigationStrategy
     from qpubench.schemas.execution import ExecutionOptions
     qesem_record = QESEMJobRecord(
@@ -1899,7 +2009,7 @@ def test_quantum_result_qesem_field():
         spec=QESEMJobSpec(backend_name="ibm_torino", precision=0.05),
     )
     result = QuantumResult(
-        modality=QPUModality.GATE_BASED,
+        computing_model=ComputingModel.GATE_BASED,
         qesem_result=qesem_record,
     )
     data = json.loads(result.model_dump_json())
@@ -1909,14 +2019,14 @@ def test_quantum_result_qesem_field():
 def test_backend_spec_qesem():
     b = BackendSpec.qesem("ibm_fez", api_token_ref="QEDMA_TOKEN")
     assert b.provider == "qedma"
-    assert b.qpu_modality == QPUModality.GATE_BASED
+    assert b.computing_model == ComputingModel.GATE_BASED
     assert b.simulator is False
     assert b.auth["backend_name"] == "ibm_fez"
     assert b.auth["api_token_ref"] == "QEDMA_TOKEN"
 
 
 def test_execution_options_qesem_fields():
-    from qpubench.schemas.qesem import QESEMCircuitOptions, QESEMJobOptions, QESEMExecutionMode
+    from qpubench.schemas.qedma_qesem import QESEMCircuitOptions, QESEMJobOptions, QESEMExecutionMode
     from qpubench.schemas.execution import ExecutionOptions
     from qpubench.schemas.primitives import ErrorMitigationStrategy
     opts = ExecutionOptions(
@@ -1934,7 +2044,7 @@ def test_execution_options_qesem_fields():
 # ---------------------------------------------------------------------------
 
 def test_qcmolecule_h2():
-    from qpubench.schemas.qcschema import QCMolecule
+    from qpubench.schemas.molssi_qcschema import QCMolecule
     # H2 at equilibrium bond length 0.742 Å = 1.4011 Bohr
     mol = QCMolecule(
         symbols=["H", "H"],
@@ -1949,14 +2059,14 @@ def test_qcmolecule_h2():
 
 
 def test_qcmolecule_geometry_validation():
-    from qpubench.schemas.qcschema import QCMolecule
+    from qpubench.schemas.molssi_qcschema import QCMolecule
     import pytest
     with pytest.raises(Exception):
         QCMolecule(symbols=["H", "H"], geometry=[0.0, 0.0])  # wrong length
 
 
 def test_qcmolecule_water_fragments():
-    from qpubench.schemas.qcschema import QCMolecule
+    from qpubench.schemas.molssi_qcschema import QCMolecule
     mol = QCMolecule(
         symbols=["O", "H", "H"],
         geometry=[0.0, 0.0, 0.0, 0.0, 1.43, -1.11, 0.0, 1.43, 1.11],
@@ -1972,7 +2082,7 @@ def test_qcmolecule_water_fragments():
 
 
 def test_qc_model_and_driver():
-    from qpubench.schemas.qcschema import QCModel, QCDriver
+    from qpubench.schemas.molssi_qcschema import QCModel, QCDriver
     m = QCModel(method="ccsd(t)", basis="cc-pVDZ")
     assert m.method == "ccsd(t)"
     assert m.basis == "cc-pVDZ"
@@ -1983,7 +2093,7 @@ def test_qc_model_and_driver():
 
 
 def test_qc_energy_components():
-    from qpubench.schemas.qcschema import QCEnergyComponents
+    from qpubench.schemas.molssi_qcschema import QCEnergyComponents
     ec = QCEnergyComponents(
         nuclear_repulsion_energy=0.7137,
         scf_one_electron_energy=-3.5692,
@@ -1999,7 +2109,7 @@ def test_qc_energy_components():
 
 
 def test_qc_atomic_result_properties():
-    from qpubench.schemas.qcschema import QCAtomicResultProperties, QCCalcInfo, QCEnergyComponents
+    from qpubench.schemas.molssi_qcschema import QCAtomicResultProperties, QCCalcInfo, QCEnergyComponents
     props = QCAtomicResultProperties(
         calcinfo=QCCalcInfo(nbasis=4, nmo=4, nalpha=1, nbeta=1, natom=2),
         return_energy=-1.1173,
@@ -2016,7 +2126,7 @@ def test_qc_atomic_result_properties():
 
 
 def test_qc_wavefunction_data():
-    from qpubench.schemas.qcschema import QCWavefunctionData
+    from qpubench.schemas.molssi_qcschema import QCWavefunctionData
     wfn = QCWavefunctionData(
         basis_name="sto-3g",
         nao=2,
@@ -2033,7 +2143,7 @@ def test_qc_wavefunction_data():
 
 
 def test_qc_atomic_input():
-    from qpubench.schemas.qcschema import QCAtomicInput, QCMolecule, QCModel, QCDriver
+    from qpubench.schemas.molssi_qcschema import QCAtomicInput, QCMolecule, QCModel, QCDriver
     mol = QCMolecule(symbols=["H", "H"], geometry=[0.0, 0.0, -0.7, 0.0, 0.0, 0.7])
     inp = QCAtomicInput(
         molecule=mol,
@@ -2049,7 +2159,7 @@ def test_qc_atomic_input():
 
 
 def test_qc_atomic_result_roundtrip():
-    from qpubench.schemas.qcschema import (
+    from qpubench.schemas.molssi_qcschema import (
         QCAtomicResult, QCAtomicResultProperties, QCMolecule, QCModel,
         QCDriver, QCProvenance, QCWavefunctionData, QCEnergyComponents,
     )
@@ -2081,7 +2191,7 @@ def test_qc_atomic_result_roundtrip():
 
 
 def test_qc_optimization_result():
-    from qpubench.schemas.qcschema import (
+    from qpubench.schemas.molssi_qcschema import (
         QCOptimizationInput, QCOptimizationResult, QCAtomicInput,
         QCMolecule, QCModel, QCDriver,
     )
@@ -2105,7 +2215,7 @@ def test_qc_optimization_result():
 
 
 def test_pennylane_mol_dataset():
-    from qpubench.schemas.qcschema import PennyLaneMolDataset
+    from qpubench.schemas.molssi_qcschema import PennyLaneMolDataset
     ds = PennyLaneMolDataset(
         molname="H2",
         basis="STO-3G",
@@ -2123,13 +2233,13 @@ def test_pennylane_mol_dataset():
 
 
 def test_pennylane_mol_dataset_correlation_energy_none():
-    from qpubench.schemas.qcschema import PennyLaneMolDataset
+    from qpubench.schemas.molssi_qcschema import PennyLaneMolDataset
     ds = PennyLaneMolDataset(molname="LiH", basis="cc-pVDZ")
     assert ds.correlation_energy is None
 
 
 def test_qcschema_record_reference_energy():
-    from qpubench.schemas.qcschema import (
+    from qpubench.schemas.molssi_qcschema import (
         QCSchemaRecord, QCAtomicResult, QCAtomicResultProperties,
         QCMolecule, QCModel, QCDriver, PennyLaneMolDataset,
     )
@@ -2158,12 +2268,11 @@ def test_qcschema_record_reference_energy():
 
 
 def test_quantum_result_qcschema_field():
-    from qpubench.schemas.qcschema import (
+    from qpubench.schemas.molssi_qcschema import (
         QCSchemaRecord, QCAtomicResult, QCAtomicResultProperties,
         QCMolecule, QCModel, QCDriver,
     )
     from qpubench.schemas.result import QuantumResult
-    from qpubench.schemas.primitives import QPUModality
     mol = QCMolecule(symbols=["H", "H"], geometry=[0.0, 0.0, -0.7, 0.0, 0.0, 0.7])
     atomic = QCAtomicResult(
         molecule=mol,
@@ -2173,7 +2282,7 @@ def test_quantum_result_qcschema_field():
         properties=QCAtomicResultProperties(return_energy=-1.1644),
     )
     result = QuantumResult(
-        modality=QPUModality.GATE_BASED,
+        computing_model=ComputingModel.GATE_BASED,
         qcschema_record=QCSchemaRecord(atomic_result=atomic),
     )
     data = json.loads(result.model_dump_json())
@@ -2185,7 +2294,7 @@ def test_quantum_result_qcschema_field():
 # ---------------------------------------------------------------------------
 
 def test_atom_arrangement_square_lattice():
-    from qpubench.schemas.neutral_atom import AtomicSite, AtomArrangement, LatticeGeometryType
+    from qpubench.schemas.quera_bloqade import AtomicSite, AtomArrangement, LatticeGeometryType
     # 3×3 square lattice at 6 µm spacing, all filled
     sites = [AtomicSite(x=i * 6.0, y=j * 6.0) for i in range(3) for j in range(3)]
     arr = AtomArrangement(
@@ -2199,7 +2308,7 @@ def test_atom_arrangement_square_lattice():
 
 
 def test_atom_arrangement_chain_with_defect():
-    from qpubench.schemas.neutral_atom import AtomicSite, AtomArrangement, LatticeGeometryType
+    from qpubench.schemas.quera_bloqade import AtomicSite, AtomArrangement, LatticeGeometryType
     sites = [AtomicSite(x=i * 5.0, y=0.0) for i in range(5)]
     arr = AtomArrangement(
         sites=sites,
@@ -2213,7 +2322,7 @@ def test_atom_arrangement_chain_with_defect():
 
 
 def test_atom_arrangement_default_filling():
-    from qpubench.schemas.neutral_atom import AtomicSite, AtomArrangement
+    from qpubench.schemas.quera_bloqade import AtomicSite, AtomArrangement
     sites = [AtomicSite(x=float(i), y=0.0) for i in range(4)]
     arr = AtomArrangement(sites=sites)
     assert arr.filling == [1, 1, 1, 1]   # defaults to all-filled
@@ -2221,7 +2330,7 @@ def test_atom_arrangement_default_filling():
 
 
 def test_ahs_time_series():
-    from qpubench.schemas.neutral_atom import AHSTimeSeries
+    from qpubench.schemas.quera_bloqade import AHSTimeSeries
     # π-pulse: ramp up to Ω_max, hold, ramp down
     ts = AHSTimeSeries(
         times_us=[0.0, 0.1, 0.9, 1.0],
@@ -2232,7 +2341,7 @@ def test_ahs_time_series():
 
 
 def test_ahs_waveform_piecewise_linear():
-    from qpubench.schemas.neutral_atom import AHSWaveform, AHSWaveformType
+    from qpubench.schemas.quera_bloqade import AHSWaveform, AHSWaveformType
     wf = AHSWaveform(
         waveform_type=AHSWaveformType.PIECEWISE_LINEAR,
         durations_us=[0.3, 0.4, 0.3],
@@ -2243,7 +2352,7 @@ def test_ahs_waveform_piecewise_linear():
 
 
 def test_ahs_waveform_constant():
-    from qpubench.schemas.neutral_atom import AHSWaveform, AHSWaveformType
+    from qpubench.schemas.quera_bloqade import AHSWaveform, AHSWaveformType
     wf = AHSWaveform(
         waveform_type=AHSWaveformType.CONSTANT,
         duration_us=2.0,
@@ -2253,7 +2362,7 @@ def test_ahs_waveform_constant():
 
 
 def test_ahs_driving_field():
-    from qpubench.schemas.neutral_atom import (
+    from qpubench.schemas.quera_bloqade import (
         AHSDrivingField, AHSTimeSeries, NeutralAtomCoupling, SpatialModulationType,
     )
     times = [0.0, 0.5, 1.0, 1.5, 2.0]
@@ -2273,7 +2382,7 @@ def test_ahs_driving_field():
 
 
 def test_ahs_local_detuning():
-    from qpubench.schemas.neutral_atom import AHSLocalDetuning, AHSTimeSeries
+    from qpubench.schemas.quera_bloqade import AHSLocalDetuning, AHSTimeSeries
     ts = AHSTimeSeries(times_us=[0.0, 1.0, 2.0], values=[0.0, 50.0, 0.0])
     ld = AHSLocalDetuning(
         time_series=ts,
@@ -2284,7 +2393,7 @@ def test_ahs_local_detuning():
 
 
 def test_ahs_program_spec():
-    from qpubench.schemas.neutral_atom import (
+    from qpubench.schemas.quera_bloqade import (
         AHSProgramSpec, AtomArrangement, AtomicSite, AHSDrivingField,
         AHSTimeSeries, NeutralAtomCoupling, LatticeGeometryType,
     )
@@ -2307,7 +2416,7 @@ def test_ahs_program_spec():
 
 
 def test_ahs_batch_spec():
-    from qpubench.schemas.neutral_atom import AHSBatchSpec
+    from qpubench.schemas.quera_bloqade import AHSBatchSpec
     batch = AHSBatchSpec(
         variable_names=["detuning_end", "rabi_max"],
         parameter_values=[
@@ -2321,7 +2430,7 @@ def test_ahs_batch_spec():
 
 
 def test_aquila_device_spec_defaults():
-    from qpubench.schemas.neutral_atom import AquilaDeviceSpec
+    from qpubench.schemas.quera_bloqade import AquilaDeviceSpec
     hw = AquilaDeviceSpec()
     assert hw.max_qubits == 256
     assert hw.area_width_um == pytest.approx(75.0)
@@ -2333,7 +2442,7 @@ def test_aquila_device_spec_defaults():
 
 
 def test_ahs_shot_result_properties():
-    from qpubench.schemas.neutral_atom import AHSShotResult, AHSShotStatus
+    from qpubench.schemas.quera_bloqade import AHSShotResult, AHSShotStatus
     good = AHSShotResult(
         status=AHSShotStatus.SUCCESS,
         pre_sequence=[1, 1, 1, 1],
@@ -2353,7 +2462,7 @@ def test_ahs_shot_result_properties():
 
 
 def test_ahs_task_result_analysis():
-    from qpubench.schemas.neutral_atom import AHSTaskResult, AHSShotResult, AHSShotStatus
+    from qpubench.schemas.quera_bloqade import AHSTaskResult, AHSShotResult, AHSShotStatus
     shots = [
         AHSShotResult(status=AHSShotStatus.SUCCESS,
                       pre_sequence=[1, 1, 1], post_sequence=[1, 0, 1]),
@@ -2383,7 +2492,7 @@ def test_ahs_task_result_analysis():
 
 
 def test_ahs_task_result_roundtrip():
-    from qpubench.schemas.neutral_atom import (
+    from qpubench.schemas.quera_bloqade import (
         AHSTaskResult, AHSShotResult, AHSShotStatus, AHSExecutionMetadata,
     )
     task = AHSTaskResult(
@@ -2408,7 +2517,7 @@ def test_ahs_task_result_roundtrip():
 
 
 def test_quantum_result_ahs_field():
-    from qpubench.schemas.neutral_atom import (
+    from qpubench.schemas.quera_bloqade import (
         AHSTaskResult, AHSShotResult, AHSShotStatus,
     )
     from qpubench.schemas.result import QuantumResult
@@ -2421,16 +2530,22 @@ def test_quantum_result_ahs_field():
                           pre_sequence=[1, 1, 1], post_sequence=[0, 1, 0]),
         ],
     )
-    result = QuantumResult(modality=QPUModality.NEUTRAL_ATOM, ahs_result=task)
+    result = QuantumResult(
+        computing_model=ComputingModel.ADIABATIC,
+        qubit_modality=QubitModality.NEUTRAL_ATOM,
+        ahs_result=task,
+    )
     data = json.loads(result.model_dump_json())
-    assert data["modality"] == "neutral_atom"
+    assert data["computing_model"] == "adiabatic"
+    assert data["qubit_modality"] == "neutral_atom"
     assert data["ahs_result"]["num_shots_requested"] == 2
 
 
 def test_backend_spec_aquila():
     b = BackendSpec.aquila()
     assert b.provider == "quera"
-    assert b.qpu_modality == QPUModality.NEUTRAL_ATOM
+    assert b.computing_model == ComputingModel.ADIABATIC
+    assert b.qubit_modality == QubitModality.NEUTRAL_ATOM
     assert b.simulator is False
     assert "Aquila" in b.auth["device_arn"]
 
@@ -2438,7 +2553,8 @@ def test_backend_spec_aquila():
 def test_backend_spec_bloqade_emulator():
     b = BackendSpec.bloqade_emulator(num_qubits=12)
     assert b.provider == "bloqade"
-    assert b.qpu_modality == QPUModality.NEUTRAL_ATOM
+    assert b.computing_model == ComputingModel.ADIABATIC
+    assert b.qubit_modality == QubitModality.NEUTRAL_ATOM
     assert b.simulator is True
     assert b.num_qubits == 12
 
@@ -2448,7 +2564,7 @@ def test_backend_spec_bloqade_emulator():
 # ---------------------------------------------------------------------------
 
 def test_ucc_active_space_config():
-    from qpubench.schemas.slowquant import UCCActiveSpaceConfig
+    from qpubench.schemas.erikkjellgren_slowquant import UCCActiveSpaceConfig
     cas = UCCActiveSpaceConfig(
         num_active_electrons=2,
         num_active_orbitals=2,
@@ -2461,7 +2577,7 @@ def test_ucc_active_space_config():
 
 
 def test_ucc_wavefunction_config():
-    from qpubench.schemas.slowquant import (
+    from qpubench.schemas.erikkjellgren_slowquant import (
         UCCWavefunctionConfig, UCCActiveSpaceConfig, UCCAnsatzType, UCCExcitationLevel,
     )
     cas = UCCActiveSpaceConfig(num_active_electrons=2, num_active_orbitals=2)
@@ -2477,7 +2593,7 @@ def test_ucc_wavefunction_config():
 
 
 def test_ucc_scf_result_homo_lumo_gap():
-    from qpubench.schemas.slowquant import UCCSCFResult
+    from qpubench.schemas.erikkjellgren_slowquant import UCCSCFResult
     scf = UCCSCFResult(
         hf_energy=-1.1175,
         nuclear_repulsion=0.7137,
@@ -2493,13 +2609,13 @@ def test_ucc_scf_result_homo_lumo_gap():
 
 
 def test_ucc_scf_result_no_gap():
-    from qpubench.schemas.slowquant import UCCSCFResult
+    from qpubench.schemas.erikkjellgren_slowquant import UCCSCFResult
     scf = UCCSCFResult(hf_energy=-1.1175)
     assert scf.homo_lumo_gap is None
 
 
 def test_ucc_integral_data():
-    from qpubench.schemas.slowquant import UCCIntegralData
+    from qpubench.schemas.erikkjellgren_slowquant import UCCIntegralData
     # Minimal H2/STO-3G: 2 AOs → 4-entry h_ao, 16-entry g_ao
     nao = 2
     data = UCCIntegralData(
@@ -2514,7 +2630,7 @@ def test_ucc_integral_data():
 
 
 def test_ucc_optimization_result():
-    from qpubench.schemas.slowquant import (
+    from qpubench.schemas.erikkjellgren_slowquant import (
         UCCOptimizationResult, UCCOptimizationMethod, UCCIterationRecord,
     )
     history = [
@@ -2539,7 +2655,7 @@ def test_ucc_optimization_result():
 
 
 def test_ucc_rdm_data():
-    from qpubench.schemas.slowquant import UCCRDMData
+    from qpubench.schemas.erikkjellgren_slowquant import UCCRDMData
     # 2 active orbitals: rdm1 is 2×2=4 entries
     rdm = UCCRDMData(
         num_active_orbitals=2,
@@ -2553,7 +2669,7 @@ def test_ucc_rdm_data():
 
 
 def test_ucc_excited_state_ev_auto():
-    from qpubench.schemas.slowquant import UCCExcitedStateResult
+    from qpubench.schemas.erikkjellgren_slowquant import UCCExcitedStateResult
     # eV should be auto-filled from au value
     state = UCCExcitedStateResult(
         state_index=1,
@@ -2566,7 +2682,7 @@ def test_ucc_excited_state_ev_auto():
 
 
 def test_ucc_linear_response_result():
-    from qpubench.schemas.slowquant import (
+    from qpubench.schemas.erikkjellgren_slowquant import (
         UCCLinearResponseResult, UCCLinearResponseType, UCCExcitationLevel,
         UCCExcitedStateResult,
     )
@@ -2588,7 +2704,7 @@ def test_ucc_linear_response_result():
 
 
 def test_ucc_circuit_spec():
-    from qpubench.schemas.slowquant import UCCCircuitSpec, UCCAnsatzType, UCCExcitationLevel
+    from qpubench.schemas.erikkjellgren_slowquant import UCCCircuitSpec, UCCAnsatzType, UCCExcitationLevel
     circ = UCCCircuitSpec(
         ansatz_type=UCCAnsatzType.FUCC,
         excitation_level=UCCExcitationLevel.SD,
@@ -2604,7 +2720,7 @@ def test_ucc_circuit_spec():
 
 
 def test_slowquant_record_correlation_energy():
-    from qpubench.schemas.slowquant import (
+    from qpubench.schemas.erikkjellgren_slowquant import (
         SlowQuantRecord, UCCSCFResult, UCCOptimizationResult, UCCOptimizationMethod,
         UCCActiveSpaceConfig, UCCWavefunctionConfig, UCCAnsatzType, UCCExcitationLevel,
     )
@@ -2634,7 +2750,7 @@ def test_slowquant_record_correlation_energy():
 
 
 def test_slowquant_record_roundtrip():
-    from qpubench.schemas.slowquant import (
+    from qpubench.schemas.erikkjellgren_slowquant import (
         SlowQuantRecord, UCCSCFResult, UCCOptimizationResult, UCCOptimizationMethod,
         UCCActiveSpaceConfig, UCCWavefunctionConfig, UCCAnsatzType, UCCExcitationLevel,
         UCCLinearResponseResult, UCCLinearResponseType, UCCExcitedStateResult,
@@ -2685,7 +2801,7 @@ def test_slowquant_record_roundtrip():
 
 
 def test_quantum_result_slowquant_field():
-    from qpubench.schemas.slowquant import (
+    from qpubench.schemas.erikkjellgren_slowquant import (
         SlowQuantRecord, UCCSCFResult, UCCOptimizationResult, UCCOptimizationMethod,
     )
     from qpubench.schemas.result import QuantumResult
@@ -2703,9 +2819,525 @@ def test_quantum_result_slowquant_field():
         ucc_energy=-1.1373,
     )
     result = QuantumResult(
-        modality=QPUModality.GATE_BASED,
+        computing_model=ComputingModel.GATE_BASED,
         slowquant_record=rec,
     )
     data = json.loads(result.model_dump_json())
     assert data["slowquant_record"]["ucc_energy"] == pytest.approx(-1.1373)
     assert data["slowquant_record"]["molecule_name"] == "H2"
+
+
+# ---------------------------------------------------------------------------
+# Classiq schemas + Xenakis harmonization
+# ---------------------------------------------------------------------------
+
+from qpubench.schemas.classiq import (
+    CircuitOptimizationComparison,
+    ClassiqAnsatzType,
+    ClassiqChemistryModel,
+    ClassiqCombinatorialOptimizationSpec,
+    ClassiqConstraints,
+    ClassiqFermionMapping,
+    ClassiqMoleculeSpec,
+    ClassiqOptimizationParameter,
+    ClassiqSynthesisResult,
+    ClassiqVQEResult,
+)
+from qpubench.schemas.mqsdk_xenakis import (
+    GAGenerationRecord,
+    GARunResult,
+    GateSpec,
+    GenomeLayer,
+    LayerGenome,
+    XenakisMolecule,
+)
+
+
+def test_classiq_constraints_defaults():
+    c = ClassiqConstraints()
+    assert c.max_width is None
+    assert c.optimization_parameter == ClassiqOptimizationParameter.NONE
+
+
+def test_classiq_molecule_from_xenakis_roundtrip():
+    mol = XenakisMolecule(
+        name="H2",
+        symbols=["H", "H"],
+        coordinates_angstrom=[(0.0, 0.0, 0.0), (0.0, 0.0, 0.7414)],
+        multiplicity=1,
+    )
+    cmol = ClassiqMoleculeSpec.from_xenakis_molecule(mol)
+    assert cmol.spin == 0
+    assert cmol.atoms[1] == ("H", (0.0, 0.0, 0.7414))
+
+    back = cmol.to_xenakis_molecule(name="H2", basis="sto-3g")
+    assert back.symbols == mol.symbols
+    assert back.coordinates_angstrom == mol.coordinates_angstrom
+    assert back.multiplicity == mol.multiplicity
+
+
+def test_classiq_synthesis_result_to_circuit_spec():
+    synth = ClassiqSynthesisResult(
+        program_id="prog-1",
+        qasm3="OPENQASM 3;\nqubit[2] q;\nh q[0];\ncx q[0], q[1];\n",
+        width=2,
+        depth=2,
+        gate_count={"h": 1, "cx": 1},
+        cx_count=1,
+    )
+    spec = synth.to_circuit_spec()
+    assert spec.num_qubits == 2
+    assert spec.gate_counts == {"h": 1, "cx": 1}
+
+
+def test_classiq_synthesis_result_requires_width():
+    synth = ClassiqSynthesisResult(qasm3="OPENQASM 3;\n")
+    with pytest.raises(ValueError):
+        synth.to_circuit_spec()
+
+
+def test_classiq_vqe_result_to_vqa_config():
+    mol = XenakisMolecule(
+        name="H2", symbols=["H", "H"],
+        coordinates_angstrom=[(0.0, 0.0, 0.0), (0.0, 0.0, 0.7414)],
+    )
+    cmol = ClassiqMoleculeSpec.from_xenakis_molecule(mol)
+    model = ClassiqChemistryModel(
+        molecule=cmol,
+        mapping=ClassiqFermionMapping.JORDAN_WIGNER,
+        ansatz=ClassiqAnsatzType.UCC,
+    )
+    synth = ClassiqSynthesisResult(program_id="prog-2", qasm3="OPENQASM 3;\n", width=4, cx_count=8)
+    vqe = ClassiqVQEResult(final_energy=-1.137, optimized_parameters=[0.1, 0.2], synthesis=synth)
+
+    vqa = vqe.to_vqa_config(molecule="H2", model=model)
+    assert vqa.mapper == "JordanWigner"
+    assert vqa.ansatz == "ucc"
+    assert vqa.n_cnot == 8
+    assert vqa.classiq_synthesis_id == "prog-2"
+    assert vqa.final_eigenvalue == pytest.approx(-1.137)
+
+
+def test_classiq_combinatorial_optimization_matches_xenakis_objective():
+    spec = ClassiqCombinatorialOptimizationSpec(
+        problem_type="maxcut",
+        graph_edges=[(0, 1), (1, 2), (2, 0)],
+    )
+    assert spec.problem_type == "maxcut"   # same vocabulary as XenakisRunConfig.objective
+
+
+def test_circuit_optimization_comparison_depth_delta():
+    ga = GARunResult(
+        run_id="run-1",
+        history=[GAGenerationRecord(generation=0, best_fitness=1.0)],
+        best_fitness=1.0,
+        best_genome=LayerGenome(
+            n_qubits=2,
+            layers=[
+                GenomeLayer(gates=[GateSpec(name="h", wires=[0])]),
+                GenomeLayer(gates=[GateSpec(name="cx", wires=[0, 1])]),
+                GenomeLayer(gates=[GateSpec(name="rz", wires=[1], param=0.3)]),
+            ],
+        ),
+    )
+    synth = ClassiqSynthesisResult(program_id="prog-3", qasm3="OPENQASM 3;\n", width=2, depth=2)
+    cmp = CircuitOptimizationComparison(problem_label="H2 ansatz", ga_result=ga, classiq_result=synth)
+
+    assert cmp.depth_delta == 1   # GA genome has 3 layers vs Classiq's depth=2
+    assert "GA: 1 generations" in cmp.search_cost_label
+
+
+def test_circuit_optimization_comparison_missing_side():
+    cmp = CircuitOptimizationComparison(problem_label="H2 ansatz")
+    assert cmp.depth_delta is None
+    assert cmp.search_cost_label == "no data"
+
+
+# ---------------------------------------------------------------------------
+# mqsdk_cebule — task types confirmed against mqsdk/core/cebule.py's
+# TaskType enum (gitlab.com/mqsdk/python-sdk), revised 2026-07-08
+# ---------------------------------------------------------------------------
+
+from qpubench.schemas.mqsdk_cebule import (
+    AbInitioMDInput,
+    AbInitioMDMethod,
+    ActivityCoefficientInput,
+    AtomOrderInput,
+    CebuleTaskEnvelope,
+    CosmoInput,
+    CosmoMethod,
+    ForceFieldMDInput,
+    GeometryOptForceField,
+    GeometryOptInput,
+    GeometryOptMethod,
+    GNNDatasetCreateInput,
+    GNNDatasetExtendInput,
+    GNNDatasetGetInput,
+    GNNMoleculeChunk,
+    GNNPredictInput,
+    GNNTrainInput,
+    GroupContributionInput,
+    PeriodicGeometryOptInput,
+    SigmaInput,
+    SolubilityInput,
+)
+from qpubench.schemas.primitives import CebuleTaskType
+
+
+def test_cebule_task_type_confirmed_members_present():
+    # Every member confirmed directly against mqsdk/core/cebule.py's
+    # TaskType enum except MOL_MAP/QASM_GEN (see CebuleTaskType docstring).
+    confirmed = {
+        "cosmo", "sigma", "solubility", "car_parrinello_md",
+        "born_oppenheimer_md", "force_field_md", "geometry_opt",
+        "periodic_geometry_opt", "group_contribution", "atom_order",
+        "activity_coefficient", "gnn:dataset:create", "gnn:dataset:delete",
+        "gnn:dataset:extend", "gnn:dataset:get", "gnn:train", "gnn:predict",
+        "tn_qc_opt", "covo",
+    }
+    actual = {member.value for member in CebuleTaskType}
+    assert confirmed <= actual
+    # MOL_MAP/QASM_GEN kept but flagged unconfirmed, not removed.
+    assert CebuleTaskType.MOL_MAP.value == "mol_map"
+    assert CebuleTaskType.QASM_GEN.value == "qasm_gen"
+
+
+def test_cebule_task_envelope_defaults():
+    env = CebuleTaskEnvelope()
+    assert env.max_processors is None
+    assert env.connected_task_id is None
+
+
+def test_cosmo_input_requires_dielec_and_basis():
+    cosmo = CosmoInput(basis="6-31g**", dielec=78.0, optimize=True)
+    assert cosmo.task_type == CebuleTaskType.COSMO
+    assert cosmo.method == "dft"
+    assert cosmo.driver_convergence == "loose"
+
+
+def test_sigma_input_chains_from_cosmo_task():
+    sigma = SigmaInput(connected_task_id="cosmo-task-1", cosmo_method=CosmoMethod.COSMO_SAC)
+    assert sigma.connected_task_id == "cosmo-task-1"
+    assert sigma.cosmo_method == CosmoMethod.COSMO_SAC
+
+
+def test_solubility_input_chains_from_multiple_sigma_tasks():
+    sol = SolubilityInput(
+        connected_task_id=["sigma-solute", "sigma-solvent"],
+        temperature=298.15,
+        melting_point=350.0,
+        enthalpy_melting=20.0,
+        sol_init=0.1,
+        solv_composition=[1.0],
+        change_heat_capacity_melting=5.0,
+    )
+    assert sol.connected_task_id == ["sigma-solute", "sigma-solvent"]
+    assert sol.solv_composition == [1.0]
+
+
+def test_geometry_opt_input_force_field_and_method_enums():
+    geo = GeometryOptInput(
+        smiles_list=["O"],
+        force_field=GeometryOptForceField.MMFF94,
+        optimization_method=GeometryOptMethod.GFN2_XTB,
+    )
+    assert geo.force_field == "mmff94"
+    assert geo.optimization_method == "gfn2_xtb"
+
+
+def test_periodic_geometry_opt_input_optional_cell_params():
+    periodic = PeriodicGeometryOptInput(
+        smiles_list=["O"],
+        cell_lengths=(10.0, 10.0, 10.0),
+        cell_angles=(90.0, 90.0, 90.0),
+    )
+    assert periodic.cell_lengths == (10.0, 10.0, 10.0)
+
+
+def test_force_field_md_input_polymer_primary():
+    md = ForceFieldMDInput(
+        smiles_primary=["CC", "CC"],
+        copies_primary=1,
+        smiles_list_secondary=["O"],
+        copies_list_secondary=[100],
+        temperature=298.15,
+        box_length_nm=3.0,
+        time_fs=1000.0,
+    )
+    assert md.smiles_primary == ["CC", "CC"]
+
+
+def test_ab_initio_md_input_uses_raw_qe_text_not_kwargs():
+    bomd = AbInitioMDInput(
+        method=AbInitioMDMethod.BORN_OPPENHEIMER,
+        qe_input="&control\n calculation='cp'\n/\n",
+    )
+    assert bomd.method == AbInitioMDMethod.BORN_OPPENHEIMER
+    assert "&control" in bomd.qe_input
+
+
+def test_group_contribution_input_batch_of_mixtures():
+    gc = GroupContributionInput(
+        smiles_list=[["CCO", "O"], ["CCC", "O"]],
+        gc_type="unifac",
+    )
+    assert len(gc.smiles_list) == 2
+    assert gc.batch is True
+
+
+def test_atom_order_input_smiles_or_polymer_list():
+    single = AtomOrderInput(smiles="CCO")
+    polymer = AtomOrderInput(smiles=["CC", "CC"], geometry=[0.0] * 6)
+    assert single.geometry is None
+    assert len(polymer.geometry) == 6
+
+
+def test_activity_coefficient_input_envelope_only():
+    # No task-specific fields confirmed yet — see class docstring.
+    ac = ActivityCoefficientInput(max_processors=4)
+    assert ac.task_type == CebuleTaskType.ACTIVITY_COEFFICIENT
+
+
+def test_gnn_dataset_lifecycle_inputs():
+    create = GNNDatasetCreateInput(
+        dataset_name="ds1", includes_target_val=True, target_property="homo_lumo_gap",
+    )
+    extend = GNNDatasetExtendInput(
+        connected_dataset_id="ds1",
+        molecule_chunk=GNNMoleculeChunk(smiles=["O"], coords=[[0.0, 0.0, 0.0]], target_val=[1.2]),
+    )
+    get = GNNDatasetGetInput(connected_dataset_id="ds1", start=0, end=10)
+    assert create.target_property == "homo_lumo_gap"
+    assert extend.molecule_chunk.target_val == [1.2]
+    assert get.end == 10
+
+
+def test_gnn_train_and_predict_inputs():
+    train = GNNTrainInput(
+        connected_dataset_id="ds1", model_name="model1",
+        hyperparameters={"epochs": 75},
+    )
+    predict = GNNPredictInput(connected_dataset_id="ds1", connected_model_id="model1")
+    assert train.hyperparameters["epochs"] == 75
+    assert predict.connected_model_id == "model1"
+
+
+# ---------------------------------------------------------------------------
+# pyscf — added while checking whether InQuanto is necessary for embedding
+# and periodic-boundary quantum chemistry (it isn't; PySCF is free and
+# covers the same ground). Molecule/cell/solvation fields verified against
+# the real pyscf API where installed; embedding types are schema-only
+# (PsiEmbed/libDMET aren't on PyPI).
+# ---------------------------------------------------------------------------
+
+from qpubench.schemas.pyscf import (
+    DMETConfig,
+    EmbeddedHamiltonianResult,
+    ERIBuilderConfig,
+    ERIBuilderMethod,
+    ERIBuilderResult,
+    OrbitalOptimizerBasinHoppingConfig,
+    OrbitalOptimizerConfig,
+    OrbitalOptimizerMethod,
+    OrbitalOptimizerResult,
+    ProjectionEmbeddingConfig,
+    PySCFAtomSpec,
+    PySCFCellSpec,
+    PySCFMeanFieldConfig,
+    PySCFMeanFieldMethod,
+    PySCFMoleculeSpec,
+    PySCFSolvationConfig,
+)
+
+
+def _h2_molecule_spec() -> PySCFMoleculeSpec:
+    return PySCFMoleculeSpec(atoms=[
+        PySCFAtomSpec(symbol="H", x=0.0, y=0.0, z=0.0),
+        PySCFAtomSpec(symbol="H", x=0.0, y=0.0, z=0.7414),
+    ])
+
+
+def test_pyscf_molecule_spec_atom_string_format():
+    spec = _h2_molecule_spec()
+    assert spec.to_pyscf_atom_string() == "H 0.0 0.0 0.0; H 0.0 0.0 0.7414"
+
+
+def test_pyscf_molecule_spec_matches_real_pyscf_energy():
+    pyscf = pytest.importorskip("pyscf")
+    from pyscf import scf
+
+    spec = _h2_molecule_spec()
+    mol = pyscf.gto.M(
+        atom=spec.to_pyscf_atom_string(), basis=spec.basis,
+        charge=spec.charge, spin=spec.spin, unit=spec.unit,
+    )
+    energy = scf.RHF(mol).kernel()
+    assert math.isclose(energy, -1.1166843870853405, rel_tol=1e-8)
+
+
+def test_pyscf_cell_spec_periodic_dimension_default():
+    cell = PySCFCellSpec(
+        atoms=[PySCFAtomSpec(symbol="H", x=0, y=0, z=0),
+               PySCFAtomSpec(symbol="H", x=0.75, y=0.75, z=0.75)],
+        lattice_vectors=((3.0, 0.0, 0.0), (0.0, 3.0, 0.0), (0.0, 0.0, 3.0)),
+    )
+    assert cell.dimension == 3
+
+
+def test_pyscf_cell_spec_builds_real_periodic_cell():
+    pytest.importorskip("pyscf")
+    from pyscf.pbc import gto as pbcgto
+
+    cell_spec = PySCFCellSpec(
+        atoms=[PySCFAtomSpec(symbol="H", x=0, y=0, z=0),
+               PySCFAtomSpec(symbol="H", x=0.75, y=0.75, z=0.75)],
+        lattice_vectors=((3.0, 0.0, 0.0), (0.0, 3.0, 0.0), (0.0, 0.0, 3.0)),
+    )
+    cell = pbcgto.Cell()
+    cell.atom = cell_spec.to_pyscf_atom_string()
+    cell.a = [list(v) for v in cell_spec.lattice_vectors]
+    cell.basis = cell_spec.basis
+    cell.build()
+    assert cell.natm == 2
+
+
+def test_pyscf_mean_field_config_defaults():
+    cfg = PySCFMeanFieldConfig()
+    assert cfg.method == PySCFMeanFieldMethod.RHF
+    assert cfg.xc is None
+
+
+def test_pyscf_solvation_config_matches_real_pcm_defaults():
+    pytest.importorskip("pyscf")
+    from pyscf import gto
+    from pyscf.solvent import pcm
+
+    mol = gto.M(atom="O 0 0 0; H 0 0.757 0.587; H 0 -0.757 0.587", basis="sto-3g")
+    real_pcm = pcm.PCM(mol)
+    cfg = PySCFSolvationConfig()
+    assert cfg.method.value == real_pcm.method
+    assert math.isclose(cfg.eps, real_pcm.eps, rel_tol=1e-6)
+
+
+def test_projection_embedding_config_manby_miller_fields():
+    cfg = ProjectionEmbeddingConfig(
+        active_atom_indices=[0, 1], environment_method="b3lyp", active_method="ccsd",
+    )
+    assert cfg.level_shift_mu == 1.0e6
+
+
+def test_dmet_config_defaults():
+    cfg = DMETConfig(impurity_atom_indices=[0])
+    assert cfg.localization == "iao"
+    assert cfg.max_scf_cycles == 20
+
+
+def test_embedded_hamiltonian_result_feeds_active_space_size():
+    result = EmbeddedHamiltonianResult(
+        one_electron_integrals=[[0.0]],
+        two_electron_integrals=[[[[0.0]]]],
+        core_energy=-1.0,
+        num_active_orbitals=2,
+        num_active_electrons=2,
+    )
+    # Matches integrations/generic_adapt_vqe's num_qubits convention directly.
+    num_qubits = 2 * result.num_active_orbitals
+    assert num_qubits == 4
+
+
+def test_eri_builder_config_defaults_to_standard():
+    cfg = ERIBuilderConfig()
+    assert cfg.method == ERIBuilderMethod.STANDARD
+    assert cfg.auxbasis is None
+
+
+def test_eri_builder_standard_vs_ri_matches_real_pyscf():
+    pytest.importorskip("pyscf")
+    from pyscf import gto, scf
+
+    mol = gto.M(atom="O 0 0 0; H 0 0.757 0.587; H 0 -0.757 0.587", basis="cc-pvdz")
+    mf_std = scf.RHF(mol).run(verbose=0)
+    mf_ri = scf.RHF(mol).density_fit().run(verbose=0)
+
+    standard = ERIBuilderResult(
+        energy=mf_std.e_tot, converged=mf_std.converged, method_used=ERIBuilderMethod.STANDARD,
+    )
+    ri = ERIBuilderResult(
+        energy=mf_ri.e_tot, converged=mf_ri.converged,
+        method_used=ERIBuilderMethod.RESOLUTION_OF_IDENTITY,
+        auxbasis_used=mf_ri.with_df.auxbasis,
+    )
+    # RI is a real, small, controlled approximation of the standard ERIs.
+    assert abs(ri.energy - standard.energy) < 1.0e-3
+    assert ri.auxbasis_used is not None
+
+
+def test_orbital_optimizer_basin_hopping_config_defaults():
+    cfg = OrbitalOptimizerBasinHoppingConfig()
+    assert cfg.active is False
+    assert cfg.n_macro_iterations == 20
+
+
+def test_orbital_optimizer_config_defaults_to_newton():
+    cfg = OrbitalOptimizerConfig(active_electrons=2, active_orbitals=2)
+    assert cfg.method == OrbitalOptimizerMethod.NEWTON
+    assert cfg.basin_hopping.active is False
+
+
+def test_orbital_optimizer_newton_matches_real_casscf():
+    pytest.importorskip("pyscf")
+    from pyscf import gto, mcscf, scf
+
+    mol = gto.M(atom="H 0 0 0; H 0 0 0.74", basis="6-31g", verbose=0)
+    mf = scf.RHF(mol).run(verbose=0)
+    mc = mcscf.CASSCF(mf, ncas=2, nelecas=2)
+    mc.verbose = 0
+    e_casscf = mc.kernel()[0]
+
+    result = OrbitalOptimizerResult(
+        final_energy=e_casscf, converged=mc.converged, num_iterations=1,
+    )
+    assert result.converged
+    assert math.isclose(result.final_energy, -1.1462344220, rel_tol=1e-6)
+    assert result.kappa is None
+
+
+def test_orbital_optimizer_simple_kappa_rotation_matches_newton():
+    pytest.importorskip("pyscf")
+    import numpy as np
+    from pyscf import gto, mcscf, scf
+    from scipy.linalg import expm
+    from scipy.optimize import minimize
+
+    mol = gto.M(atom="H 0 0 0; H 0 0 0.74", basis="6-31g", verbose=0)
+    mf = scf.RHF(mol).run(verbose=0)
+    ncas, nelecas = 2, 2
+    nmo = mf.mo_coeff.shape[1]
+
+    mc = mcscf.CASSCF(mf, ncas=ncas, nelecas=nelecas)
+    mc.verbose = 0
+    e_newton = mc.kernel()[0]
+
+    # Real non-redundant kappa parametrization — PySCF's own CASSCF mask.
+    mask = mc.uniq_var_indices(nmo, mc.ncore, mc.ncas, mc.frozen)
+    idx = np.where(mask)
+    n_params = int(mask.sum())
+
+    def energy_fn(x: object) -> float:
+        kappa = np.zeros((nmo, nmo))
+        kappa[idx] = x
+        kappa = kappa - kappa.T
+        rotated_mo = mf.mo_coeff @ expm(kappa)
+        mc_ci = mcscf.CASCI(mf, ncas=ncas, nelecas=nelecas)
+        mc_ci.verbose = 0
+        return float(mc_ci.kernel(mo_coeff=rotated_mo)[0])
+
+    res = minimize(energy_fn, np.zeros(n_params), method="Powell", options={"maxiter": 100})
+    result = OrbitalOptimizerResult(
+        final_energy=float(res.fun), converged=bool(res.success),
+        num_iterations=int(res.nit), kappa=[float(v) for v in res.x],
+    )
+    # A real, independently-derived mechanism landing near the CASSCF reference.
+    assert abs(result.final_energy - e_newton) < 1.0e-3
+    assert result.kappa is not None
+    assert len(result.kappa) == n_params

@@ -11,7 +11,7 @@ import random
 from ..schemas.backend import BackendSpec
 from ..schemas.circuit import CircuitSpec
 from ..schemas.execution import ExecutionOptions
-from ..schemas.primitives import FidelityMetric, JobStatus, QPUModality
+from ..schemas.primitives import ComputingModel, FidelityMetric, JobStatus
 from ..schemas.result import (
     ExpectationResult,
     FidelityResult,
@@ -34,9 +34,9 @@ class StubGateAdapter:
 
     def validate(self, circuit: CircuitSpec) -> list[str]:
         warnings: list[str] = []
-        if circuit.modality != QPUModality.GATE_BASED:
+        if circuit.computing_model != ComputingModel.GATE_BASED:
             warnings.append(
-                f"StubGateAdapter expects GATE_BASED; got {circuit.modality}"
+                f"StubGateAdapter expects GATE_BASED; got {circuit.computing_model}"
             )
         return warnings
 
@@ -55,7 +55,7 @@ class StubGateAdapter:
             for i in range(len(circuit.observables))
         ]
         return QuantumResult(
-            modality=QPUModality.GATE_BASED,
+            computing_model=ComputingModel.GATE_BASED,
             expectation_values=ev or None,
             status=JobStatus.SUCCEEDED,
             qpu_time_s=self._rng.uniform(0.1, 2.0),
@@ -74,14 +74,14 @@ class StubMBQCAdapter:
         return BackendSpec(
             name="stub_mbqc",
             provider="mbqc",
-            qpu_modality=QPUModality.MBQC,
+            computing_model=ComputingModel.MBQC,
         )
 
     def validate(self, circuit: CircuitSpec) -> list[str]:
         warnings: list[str] = []
-        if circuit.modality != QPUModality.MBQC:
+        if circuit.computing_model != ComputingModel.MBQC:
             warnings.append(
-                f"StubMBQCAdapter expects MBQC; got {circuit.modality}"
+                f"StubMBQCAdapter expects MBQC; got {circuit.computing_model}"
             )
         return warnings
 
@@ -93,7 +93,7 @@ class StubMBQCAdapter:
         pattern = circuit.measurement_pattern
         if pattern is None:
             return QuantumResult(
-                modality=QPUModality.MBQC,
+                computing_model=ComputingModel.MBQC,
                 status=JobStatus.FAILED,
                 error_message="No measurement_pattern in CircuitSpec",
             )
@@ -119,7 +119,7 @@ class StubMBQCAdapter:
         bitstring = "".join(str(corrected[q]) for q in reversed(range(N)))
 
         return QuantumResult(
-            modality=QPUModality.MBQC,
+            computing_model=ComputingModel.MBQC,
             mbqc_rounds=rounds,
             fidelity=FidelityResult(
                 fidelity=self._fidelity + self._rng.gauss(0, 0.01),

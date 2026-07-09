@@ -4,10 +4,10 @@ from typing import Any
 
 import pydantic
 
-from .mbqc import MBQCPattern
+from .johnrscott_mbqc_fpga import MBQCPattern
 from .observable import SparsePauliObservable
-from .photonic import PhotonicCircuitSpec
-from .primitives import CircuitFormat, QPUModality
+from .dtu_photonic import PhotonicCircuitSpec
+from .primitives import CircuitFormat, ComputingModel, QubitModality
 
 
 class ParameterBinding(pydantic.BaseModel):
@@ -42,7 +42,8 @@ class CircuitSpec(pydantic.BaseModel):
     ----
     Populate measurement_pattern. serialized is optional (JSON archive copy).
     """
-    modality:            QPUModality             = QPUModality.GATE_BASED
+    computing_model:     ComputingModel          = ComputingModel.GATE_BASED
+    qubit_modality:      QubitModality | None    = None
     num_qubits:          int
     num_classical_bits:  int | None              = None
     format:              CircuitFormat           = CircuitFormat.QASM2
@@ -53,20 +54,20 @@ class CircuitSpec(pydantic.BaseModel):
     parameter_bindings:  list[ParameterBinding]  = []
     gate_counts:         dict[str, int]          = {}
     measurement_pattern: MBQCPattern | None      = None
-    photonic_circuit:    PhotonicCircuitSpec | None = None  # PHOTONIC_LINEAR_OPTICS / FUSION_BASED
+    photonic_circuit:    PhotonicCircuitSpec | None = None  # qubit_modality=PHOTONIC / FUSION_BASED
 
     model_config = pydantic.ConfigDict(arbitrary_types_allowed=True)
 
     @pydantic.model_validator(mode="after")
     def _check_consistency(self) -> CircuitSpec:
-        if self.modality == QPUModality.MBQC:
+        if self.computing_model == ComputingModel.MBQC:
             if self.measurement_pattern is None and self.serialized is None:
                 raise ValueError(
                     "MBQC CircuitSpec requires measurement_pattern or serialized"
                 )
-        if self.modality in (
-            QPUModality.PHOTONIC_LINEAR_OPTICS,
-            QPUModality.FUSION_BASED,
+        if (
+            self.computing_model == ComputingModel.FUSION_BASED
+            or self.qubit_modality == QubitModality.PHOTONIC
         ):
             if self.photonic_circuit is None and self.serialized is None:
                 raise ValueError(

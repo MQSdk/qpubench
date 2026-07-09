@@ -1,12 +1,13 @@
 # Neutral atom / AHS integration (Bloqade · Aquila)
 
-qpubench models neutral-atom Analog Hamiltonian Simulation (AHS) in `src/qpubench/schemas/neutral_atom.py`.
+qpubench models neutral-atom Analog Hamiltonian Simulation (AHS) in `src/qpubench/schemas/quera_bloqade.py`.
 
 | Component | Details |
 |---|---|
 | **SDK** | [Bloqade](https://github.com/QuEraComputing/bloqade) (QuEra) |
 | **Hardware** | Aquila 256-qubit Rydberg QPU via AWS Braket |
-| **Modality** | `QPUModality.NEUTRAL_ATOM` |
+| **Computing model** | `ComputingModel.ADIABATIC` |
+| **Qubit modality** | `QubitModality.NEUTRAL_ATOM` |
 | **Result field** | `QuantumResult.ahs_result` |
 | **Backend factories** | `BackendSpec.aquila()`, `BackendSpec.bloqade_emulator()` |
 
@@ -23,7 +24,7 @@ Measurement collapses each atom to ground (1) or Rydberg (0) state.
 ## Quick start
 
 ```python
-from qpubench.schemas.neutral_atom import (
+from qpubench.schemas.quera_bloqade import (
     AtomicSite, AtomArrangement, LatticeGeometryType,
     AHSDrivingField, AHSTimeSeries, AHSProgramSpec,
     AHSShotResult, AHSShotStatus, AHSTaskResult,
@@ -31,7 +32,7 @@ from qpubench.schemas.neutral_atom import (
 )
 from qpubench.schemas.backend import BackendSpec
 from qpubench.schemas.result import QuantumResult
-from qpubench.schemas.primitives import QPUModality
+from qpubench.schemas.primitives import ComputingModel, QubitModality
 
 # 1-D chain of 5 atoms at 6 µm spacing
 sites = [AtomicSite(x=i * 6.0, y=0.0) for i in range(5)]
@@ -77,7 +78,7 @@ print(f"Effective qubits: {program.num_qubits}")   # 5
 ### Pre-defined lattices
 
 ```python
-from qpubench.schemas.neutral_atom import AtomicSite, AtomArrangement, LatticeGeometryType
+from qpubench.schemas.quera_bloqade import AtomicSite, AtomArrangement, LatticeGeometryType
 
 # Square lattice 4×4
 sites_sq = [
@@ -116,7 +117,7 @@ print(chain.num_filled_sites)  # 5
 ### AHSTimeSeries (hardware format)
 
 ```python
-from qpubench.schemas.neutral_atom import AHSTimeSeries
+from qpubench.schemas.quera_bloqade import AHSTimeSeries
 
 # Rabi amplitude: trapezoidal π-pulse over 1 µs
 rabi = AHSTimeSeries(
@@ -138,7 +139,7 @@ det = AHSTimeSeries(
 The compact form stores segment durations + boundary values before discretization.
 
 ```python
-from qpubench.schemas.neutral_atom import AHSWaveform, AHSWaveformType
+from qpubench.schemas.quera_bloqade import AHSWaveform, AHSWaveformType
 
 # Piecewise linear Rabi (required for Ω on hardware)
 wf_rabi = AHSWaveform(
@@ -180,7 +181,7 @@ wf_poly = AHSWaveform(
 ## Driving fields and programs
 
 ```python
-from qpubench.schemas.neutral_atom import (
+from qpubench.schemas.quera_bloqade import (
     AHSDrivingField, AHSProgramSpec, AHSLocalDetuning,
     NeutralAtomCoupling, SpatialModulationType,
 )
@@ -212,7 +213,7 @@ program = AHSProgramSpec(
 ### Parametric sweeps
 
 ```python
-from qpubench.schemas.neutral_atom import AHSBatchSpec
+from qpubench.schemas.quera_bloqade import AHSBatchSpec
 
 # Sweep detuning endpoint and Rabi max across 4 parameter sets
 batch = AHSBatchSpec(
@@ -231,7 +232,7 @@ print(batch.batch_size)   # 4
 ## Hardware specification
 
 ```python
-from qpubench.schemas.neutral_atom import AquilaDeviceSpec
+from qpubench.schemas.quera_bloqade import AquilaDeviceSpec
 
 hw = AquilaDeviceSpec()   # all Aquila defaults
 print(hw.max_qubits)               # 256
@@ -249,7 +250,7 @@ custom = AquilaDeviceSpec(max_qubits=512, max_pulse_duration_us=8.0)
 ### Shot structure
 
 ```python
-from qpubench.schemas.neutral_atom import AHSShotResult, AHSShotStatus
+from qpubench.schemas.quera_bloqade import AHSShotResult, AHSShotStatus
 
 shot = AHSShotResult(
     status=AHSShotStatus.SUCCESS,
@@ -270,7 +271,7 @@ print(bad.is_perfect_fill)   # False — excluded from default analysis
 ### Task result analysis
 
 ```python
-from qpubench.schemas.neutral_atom import AHSTaskResult, AHSExecutionMetadata
+from qpubench.schemas.quera_bloqade import AHSTaskResult, AHSExecutionMetadata
 
 task = AHSTaskResult(
     metadata=AHSExecutionMetadata(
@@ -294,7 +295,8 @@ print(task.rydberg_densities)    # [0.48, 0.51, 0.47, 0.52, 0.49] — P(Rydberg)
 
 ```python
 result = QuantumResult(
-    modality=QPUModality.NEUTRAL_ATOM,
+    computing_model=ComputingModel.ADIABATIC,
+    qubit_modality=QubitModality.NEUTRAL_ATOM,
     ahs_result=task,
 )
 ```

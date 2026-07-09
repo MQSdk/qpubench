@@ -28,7 +28,7 @@ PDF  := slides.pdf
 
 # Pandoc flags shared by all targets
 PANDOC       := pandoc
-PANDOC_FLAGS := --slide-level=2 --standalone
+PANDOC_FLAGS := --slide-level=2 --standalone --highlight-style=breezedark
 
 # Beamer-specific flags
 BEAMER_FLAGS := -t beamer $(PANDOC_FLAGS)

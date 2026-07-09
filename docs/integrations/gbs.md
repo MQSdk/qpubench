@@ -1,22 +1,22 @@
 # GBS (Gaussian Boson Sampling) integration
 
-qpubench models Gaussian Boson Sampling in `src/qpubench/schemas/gbs.py`. This covers the Gaussian-state / hafnian-based formalism — **distinct from `photonic.py`** which uses the permanent-based / Fock-state formalism for linear-optics chips.
+qpubench models Gaussian Boson Sampling in `src/qpubench/schemas/dtu_gbs.py`. This covers the Gaussian-state / hafnian-based formalism — **distinct from `dtu_photonic.py`** which uses the permanent-based / Fock-state formalism for linear-optics chips.
 
-| | `photonic.py` | `gbs.py` |
+| | `dtu_photonic.py` | `dtu_gbs.py` |
 |---|---|---|
 | State representation | Fock states | Covariance matrix (Gaussian states) |
 | Amplitude formula | Permanent | Hafnian |
 | Hardware | MZI chips, boson samplers | Xanadu X8, Borealis TDM |
 | Typical gate | BeamsplitterSpec / MZISpec | SqueezingGateSpec / S2GateSpec |
 
-Modality: `QPUModality.GBS`
+Computing model: `ComputingModel.GBS`. Qubit modality: `QubitModality.PHOTONIC`
 
 ---
 
 ## Direct GBS sampling
 
 ```python
-from qpubench.schemas.gbs import (
+from qpubench.schemas.dtu_gbs import (
     SqueezingGateSpec, S2GateSpec, RotationGateSpec,
     InterferometerSpec, GBSProgramSpec, GBSMeasurementType,
     GBSSamplingConfig, GBSSamplingResult, GBSSample,
@@ -61,7 +61,7 @@ Store results in `QuantumResult.gbs_sampling`.
 ## Hafnian computation
 
 ```python
-from qpubench.schemas.gbs import (
+from qpubench.schemas.dtu_gbs import (
     GaussianStateSpec, HafnianMatrixSpec,
     HafnianComputationSpec, HafnianResult,
     QuadratureOrdering,
@@ -99,7 +99,7 @@ haf_result = HafnianResult(
 Encode a graph adjacency matrix into a GBS device via Takagi decomposition, then use the photon-number samples to find dense subgraphs (cliques).
 
 ```python
-from qpubench.schemas.gbs import (
+from qpubench.schemas.dtu_gbs import (
     GBSGraphConfig, GraphScalingMethod,
     TakagiDecompositionSpec, GBSCliqueFindingResult,
 )
@@ -145,7 +145,7 @@ Store in `QuantumResult.gbs_clique_finding`.
 Compute Frank-Condon profiles for molecular electronic transitions using GBS:
 
 ```python
-from qpubench.schemas.gbs import (
+from qpubench.schemas.dtu_gbs import (
     VibronicSpectrumConfig, NormalModeData, DuschinskyResult,
     VibronicGBSParams, VibronicSpectrumResult,
 )
@@ -206,7 +206,7 @@ Store in `QuantumResult.vibronic_spectrum`.
 Xanadu Borealis uses a time-domain multiplexed (TDM) architecture with three fibre-loop delays [1, 6, 36] to realise 216 effective modes:
 
 ```python
-from qpubench.schemas.gbs import (
+from qpubench.schemas.dtu_gbs import (
     TDMDelaySpec, TDMGBSConfig, TDMGBSResult, TDMSqueezingLevel,
 )
 
@@ -241,7 +241,7 @@ backend = BackendSpec.xanadu_borealis(via_braket=True)
 ## CV cluster states
 
 ```python
-from qpubench.schemas.gbs import ClusterStateSpec, GaussianStateType
+from qpubench.schemas.dtu_gbs import ClusterStateSpec, GaussianStateType
 import math
 
 cluster = ClusterStateSpec(

@@ -1,6 +1,6 @@
 # QCSchema / QCElemental / PennyLane integration
 
-qpubench harmonizes its quantum chemistry schemas with three interoperable standards in `src/qpubench/schemas/qcschema.py`.
+qpubench harmonizes its quantum chemistry schemas with three interoperable standards in `src/qpubench/schemas/molssi_qcschema.py`.
 
 | Standard | URL | Role |
 |---|---|---|
@@ -18,14 +18,14 @@ The schema bridges three use cases:
 ## Quick start
 
 ```python
-from qpubench.schemas.qcschema import (
+from qpubench.schemas.molssi_qcschema import (
     QCMolecule, QCModel, QCDriver,
     QCAtomicInput, QCAtomicResult, QCAtomicResultProperties,
     QCEnergyComponents, QCWavefunctionData,
     PennyLaneMolDataset, QCSchemaRecord,
 )
 from qpubench.schemas.result import QuantumResult
-from qpubench.schemas.primitives import QPUModality
+from qpubench.schemas.primitives import ComputingModel
 
 # Classical FCI reference for H2
 mol = QCMolecule(
@@ -50,7 +50,7 @@ fci_result = QCAtomicResult(
 
 # Attach to a QuantumResult as the reference
 result = QuantumResult(
-    modality=QPUModality.GATE_BASED,
+    computing_model=ComputingModel.GATE_BASED,
     qcschema_record=QCSchemaRecord(atomic_result=fci_result),
 )
 print(result.qcschema_record.reference_energy)   # -1.1516
@@ -66,7 +66,7 @@ print(result.qcschema_record.reference_energy)   # -1.1516
 - `molecular_charge` — net charge (default 0.0)
 - `molecular_multiplicity` — 2S+1 (default 1 = singlet)
 
-This differs from `MoleculeStructureSpec` in `qdk_chemistry.py`, which uses Angström coordinates and a list of `AtomSpec` objects. Both formats coexist — use `QCMolecule` for QCSchema interoperability.
+This differs from `MoleculeStructureSpec` in `microsoft_qdk.py`, which uses Angström coordinates and a list of `AtomSpec` objects. Both formats coexist — use `QCMolecule` for QCSchema interoperability.
 
 ```python
 # Water — geometry in Bohr
@@ -103,7 +103,7 @@ dimer = QCMolecule(
 ## Method and basis
 
 ```python
-from qpubench.schemas.qcschema import QCModel, QCDriver
+from qpubench.schemas.molssi_qcschema import QCModel, QCDriver
 
 # Hartree-Fock with STO-3G
 model_hf = QCModel(method="hf", basis="sto-3g")
@@ -124,7 +124,7 @@ assert QCDriver.GRADIENT.value == "gradient"
 ## Atomic computation input / result
 
 ```python
-from qpubench.schemas.qcschema import QCAtomicInput, QCAtomicResult, QCProvenance
+from qpubench.schemas.molssi_qcschema import QCAtomicInput, QCAtomicResult, QCProvenance
 
 # Computation specification
 inp = QCAtomicInput(
@@ -176,7 +176,7 @@ result_grad = QCAtomicResult(
 `QCWavefunctionData` stores SCF orbital coefficients, density matrices, Fock matrices, and overlap integrals as flat (JSON-safe) float lists. This is the primary input for QPU state preparation.
 
 ```python
-from qpubench.schemas.qcschema import QCWavefunctionData
+from qpubench.schemas.molssi_qcschema import QCWavefunctionData
 
 # H2 / STO-3G: 2 AOs, 2 MOs
 wfn = QCWavefunctionData(
@@ -197,7 +197,7 @@ wfn = QCWavefunctionData(
 ## Geometry optimization
 
 ```python
-from qpubench.schemas.qcschema import (
+from qpubench.schemas.molssi_qcschema import (
     QCOptimizationInput, QCOptimizationResult,
 )
 
@@ -233,7 +233,7 @@ print(opt_result.converged_energy)  # -1.1175
 `PennyLaneMolDataset` captures identification metadata and precomputed energies from the PennyLane qchem dataset collection. The actual HDF5 tensors (two-electron integrals, MOs) are loaded by `pennylane.data` at runtime; qpubench stores the metadata needed for benchmarking.
 
 ```python
-from qpubench.schemas.qcschema import PennyLaneMolDataset
+from qpubench.schemas.molssi_qcschema import PennyLaneMolDataset
 
 # H2 at equilibrium geometry, STO-3G basis
 h2 = PennyLaneMolDataset(
@@ -279,7 +279,7 @@ lih = PennyLaneMolDataset(
 `QCSchemaRecord` is the top-level container that attaches to `QuantumResult.qcschema_record`. Its `reference_energy` property returns the best available classical reference regardless of which sub-record is populated.
 
 ```python
-from qpubench.schemas.qcschema import QCSchemaRecord
+from qpubench.schemas.molssi_qcschema import QCSchemaRecord
 
 # From an AtomicResult
 rec1 = QCSchemaRecord(atomic_result=fci_result)
@@ -295,7 +295,7 @@ print(rec3.reference_energy)   # from pennylane_dataset.fci_energy
 
 # Attach to QuantumResult
 result = QuantumResult(
-    modality=QPUModality.GATE_BASED,
+    computing_model=ComputingModel.GATE_BASED,
     qcschema_record=rec1,
 )
 ```
@@ -304,9 +304,9 @@ result = QuantumResult(
 
 ## Interoperability with qdk_chemistry
 
-`qcschema.py` and `qdk_chemistry.py` are complementary:
+`molssi_qcschema.py` and `microsoft_qdk.py` are complementary:
 
-| Aspect | `qdk_chemistry.py` | `qcschema.py` |
+| Aspect | `microsoft_qdk.py` | `molssi_qcschema.py` |
 |---|---|---|
 | Molecule format | `MoleculeStructureSpec` (Å, per-atom objects) | `QCMolecule` (Bohr, flat arrays) |
 | SCF result | `SCFResult` (QDK-specific fields) | `QCAtomicResultProperties` (QCSchema standard) |

@@ -70,40 +70,41 @@ def inline_psi4_spec(mol_geometry: list, basis: str = "sto-6g") -> str:
 # ---------------------------------------------------------------------------
 
 from qpubench import (
+    AdaptVQEConfig,
+    AlgorithmFamily,
     AlgorithmSpec,
     BenchmarkRecord,
     BenchmarkRunner,
     ExecutionOptions,
     NDJSONStore,
 )
-from qpubench.backends.qforte_adapter import QForteAdapter
 from qpubench.schemas.circuit import CircuitSpec
 from qpubench.schemas.primitives import CircuitFormat
 
+# integrations/ is not an installed package — add the repo root so the
+# integrations/qforte/ bridge (adapter.py + converters.py) is importable
+# when running this example in place. Copy integrations/qforte/ into your
+# own project (see its README) instead of relying on this path shim.
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
+from integrations.qforte.adapter import QForteAlgorithmAdapter
 
-ALGORITHMS = [
-    AlgorithmSpec(
-        name="UCCNVQE",
-        pool_type="SD",
-        optimizer="BFGS",
-        use_analytic_grad=True,
-        opt_thresh=1.0e-5,
+
+ALGORITHMS: list[tuple[AlgorithmSpec, AdaptVQEConfig]] = [
+    (
+        AlgorithmSpec(name="UCCNVQE", family=AlgorithmFamily.UCC_VQE),
+        AdaptVQEConfig(pool_type="SD", optimizer="BFGS", use_analytic_gradient=True,
+                       energy_threshold=1.0e-5),
     ),
-    AlgorithmSpec(
-        name="UCCNVQE",
-        pool_type="SD",
-        optimizer="jacobi",
-        use_analytic_grad=True,
-        opt_thresh=1.0e-5,
+    (
+        AlgorithmSpec(name="UCCNVQE", family=AlgorithmFamily.UCC_VQE),
+        AdaptVQEConfig(pool_type="SD", optimizer="jacobi", use_analytic_gradient=True,
+                       energy_threshold=1.0e-5),
     ),
-    AlgorithmSpec(
-        name="ADAPTVQE",
-        pool_type="SD",
-        optimizer="BFGS",
-        use_analytic_grad=True,
-        avqe_thresh=1.0e-4,
-        opt_thresh=1.0e-5,
-        adapt_maxiter=20,
+    (
+        AlgorithmSpec(name="ADAPTVQE", family=AlgorithmFamily.ADAPT_VQE),
+        AdaptVQEConfig(pool_type="SD", optimizer="BFGS", use_analytic_gradient=True,
+                       gradient_threshold=1.0e-4, energy_threshold=1.0e-5,
+                       max_macro_iterations=20),
     ),
 ]
 
@@ -142,7 +143,7 @@ def main() -> None:
 
     store  = NDJSONStore(pathlib.Path("results/qforte_he_benchmark.ndjson"))
     runner = BenchmarkRunner(store=store)
-    runner.register(QForteAdapter(), name="qforte")
+    runner.register(QForteAlgorithmAdapter(), name="qforte")
 
     print("QForte VQE benchmark — He / cc-pvdz")
     print("=" * 70)
@@ -151,8 +152,8 @@ def main() -> None:
         circuits=[mol_spec],
         backend_names=["qforte"],
         options_list=[
-            ExecutionOptions(algorithm_spec=alg)
-            for alg in ALGORITHMS
+            ExecutionOptions(algorithm_spec=alg_spec, adapt_vqe_config=cfg)
+            for alg_spec, cfg in ALGORITHMS
         ],
         run_id="he_ccpvdz_vqe_sweep",
         tags=["qforte", "he", "cc-pvdz"],
@@ -171,7 +172,7 @@ def main() -> None:
 
     # Compare final energies
     energies = {
-        r.vqa.algorithm + "/" + (r.options.algorithm_spec.optimizer if r.options.algorithm_spec else "?"):
+        r.vqa.algorithm + "/" + (r.options.adapt_vqe_config.optimizer if r.options.adapt_vqe_config else "?"):
         r.result.expectation_values[0].value
         for r in records
         if r.result.expectation_values

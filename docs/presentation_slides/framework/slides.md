@@ -1,9 +1,9 @@
 ---
 title: "QPUBench"
 subtitle: "Open Source Quantum Computing Benchmark Framework"
-author: "MQS · mark@mqs.dk"
+author: "Mark Nicholas Jones · mark@mqs.dk"
 date: "2026"
-institute: "Molecular Quantum Solutions"
+institute: "Molecular Quantum Solutions (MQS)"
 theme: "metropolis"
 fonttheme: "professionalfonts"
 monofont: "DejaVu Sans Mono"
@@ -27,8 +27,8 @@ header-includes:
 
 - Separates *what* you benchmark (schemas) from *how* execution happens (adapters) and *how results are stored* (stores)
 - Typed **Pydantic v2** schema layer — zero quantum SDK dependencies in core
-- Gate-based circuits, MBQC on FPGA, molecular VQE, evolutionary circuit search, and error-mitigated runs all share one `BenchmarkRecord`
-- Schema **v1.12.0** — 21 modules, language-agnostic JSON output
+- Gate-based circuits, MBQC on FPGA, algorithm classes for quantum chemistry (VQA, KQD, SKQD, QSE, QPE), evolutionary + constrained circuit synthesis, and error-mitigated runs all share one `BenchmarkRecord`
+- Schema **v2.7.0** — 36 modules, language-agnostic JSON output
 
 \vspace{0.5em}
 \begin{block}{Core invariant}
@@ -41,7 +41,7 @@ header-includes:
 ::: {.column width="50%"}
 **Core layer** *(no SDK dependencies)*
 
-- `schemas/` — 21 Pydantic v2 modules
+- `schemas/` — 36 Pydantic v2 modules
 - `runner.py` — `BenchmarkRunner`
 - `store.py` — `NDJSONStore`, `ParquetStore`
 :::
@@ -54,11 +54,15 @@ header-includes:
 :::
 ::::::
 
-\vspace{0.5em}
+```
+┌─────────────────────┐     ┌─────────┐     ┌─────────────────┐     ┌───────┐
+│ CircuitSpec/Problem │ ──▶ │ Adapter │ ──▶ │ BenchmarkRecord │ ──▶ │ Store │
+└─────────────────────┘     └─────────┘     └─────────────────┘     └───────┘
+```
 
-```
-CircuitSpec / Problem  ──▶  Adapter  ──▶  BenchmarkRecord  ──▶  Store
-```
+\footnotesize
+**Protocol vs. stub** — `BackendAdapter` is the interface contract (`spec`/`validate`/`run`), no SDK code. A **stub** fakes that contract; real adapters (Aer, IBM, IQM, Braket) implement it with real SDK calls, verified end-to-end in this repo's tests. Swapping a stub for a real adapter needs zero code changes elsewhere.
+\normalsize
 
 ## Key Design Principles
 
@@ -79,6 +83,7 @@ pip install .
 # With optional backends
 pip install ".[qiskit]"     # Qiskit Aer + IBM Quantum Runtime V2
 pip install ".[storage]"    # Parquet store (pyarrow + pandas)
+pip install ".[s3]"         # S3 store (boto3) — AWS S3 / MinIO / HF buckets
 pip install ".[all]"        # everything on PyPI
 ```
 
@@ -88,86 +93,145 @@ pip install ".[all]"        # everything on PyPI
 
 # Schema Layer
 
-## Core Schema Modules
+## Core Schema Modules (1/3)
 
-| Module | Modality | Key types |
-|--------|----------|-----------|
-| `primitives` | all | `QPUModality`, `CircuitFormat`, `PauliLabel`, `ComplexNumber` |
-| `circuit` | all | `CircuitSpec` — `from_openqasm3()`, `bind()`, `is_parametric()` |
-| `observable` | all | `SparsePauliObservable`, `PauliTerm` |
-| `backend` | all | `BackendSpec` — 27 factory constructors |
-| `execution` | all | `ExecutionOptions`, `AlgorithmSpec`, `ZNEConfig` |
-| `error_mitigation` | all | `ErrorMitigationStrategy`, provider configs, `QuantumAdvantageRecord` |
-| `result` | all | `QuantumResult`, `ExpectationResult`, `ShotResult` |
-| `record` | all | `BenchmarkRecord`, `VQAConfig` |
+All rows are computing-model/qubit-modality **all / all** — these are the framework's own foundational types, not vendor-specific.
 
-## Domain-Specific Schema Modules
+| Module | Key types |
+|--------|-----------|
+| `primitives` | `ComputingModel`, `QubitModality`, `CircuitFormat`, `PauliLabel`, `ComplexNumber` |
+| `circuit` | `CircuitSpec` — `from_openqasm3()`, `bind()`, `is_parametric()` |
+| `observable` | `SparsePauliObservable`, `PauliTerm` |
+| `backend` | `BackendSpec` — 28 factory constructors |
 
-| Module | Modality / Framework |
+## Core Schema Modules (2/3)
+
+| Module | Key types |
+|--------|-----------|
+| `execution` | `ExecutionOptions`, `AlgorithmSpec`, `ZNEConfig` |
+| `advantage` | `QuantumAdvantageRecord` — multi-org registry, unprefixed |
+| `result` | `QuantumResult`, `ExpectationResult`, `ShotResult` |
+| `record` | `BenchmarkRecord`, `VQAConfig` |
+
+## Core Schema Modules (3/3)
+
+| Module | Key types |
+|--------|-----------|
+| `reaction` | `ReactionCoordinateSpec`, `ReactionPathResult` — ties a sweep into one reaction path / PES |
+| `optimizer_catalog` | `MINIMIZER_CATALOG`, `STOPPING_CRITERION_CATALOG` — lookup over `AdaptVQEConfig` fields |
+| `hamiltonian_library` | `HamiltonianSource`, `HamiltonianLibraryRecord` — metadata for real Hamiltonians (PennyLane qchem, HamLib, ab initio) |
+| `contraction_path` | `ContractionPathStrategy/Config/Result` — real quimb + cotengra tensor-network contraction |
+
+## Domain-Specific Schema Modules (1/2)
+
+Named `<org>_<package>.py` — who maintains it + what it's called:
+
+| Module | Computing model (qubit modality) |
 |--------|---------------------|
-| `mbqc` | MBQC-FPGA — bit-exact 16-bit program word |
-| `photonic` | Linear-optics chips, FBQC, HOM, photonic VQE/analog |
-| `gbs` | Gaussian Boson Sampling — hafnian, vibronic, TDM/Borealis |
-| `qdk_chemistry` | SCF → active space → QPE → resource estimation |
-| `qse` | Krylov Quantum Diagonalization (KQD / SQD) |
-| `qesem` | QESEM (Qedma) — noise scaling, QET, device characterisation |
-| `qcschema` | QCSchema / QCElemental / PennyLane interoperability |
-| `neutral_atom` | Bloqade / Aquila AHS, Rydberg atom arrangement |
-| `slowquant` | SlowQuant UCC/VQE — ansatz, SCF, linear response |
-| `error_mitigation` | Q-CTRL · Mitiq · Haiqu · ParityQC · QMatter · Quantum Motion · IBM V2 · Advantage Tracker |
+| `johnrscott_mbqc_fpga` | MBQC-FPGA — bit-exact 16-bit program word |
+| `dtu_photonic` | LOQC / FBQC (photonic) — Fock states, HOM, photonic VQE/analog |
+| `dtu_gbs` | GBS (photonic) — hafnian, vibronic, TDM/Borealis |
+| `microsoft_qdk` | Gate-based (QPE technique) — SCF → active space → resource estimation |
+| `mqsdk_qse` | Gate-based (KQD technique) — Krylov Quantum Diagonalization / SQD |
 
-## QPU Modalities
+## Domain-Specific Schema Modules (2/2)
 
-QPUBench natively covers **9 quantum computing paradigms**:
+| Module | Computing model (qubit modality) |
+|--------|---------------------|
+| `molssi_qcschema` | all / all — QCSchema / QCElemental / PennyLane interoperability |
+| `quera_bloqade` | Adiabatic (neutral atom) — Bloqade / Aquila AHS |
+| `erikkjellgren_slowquant` | Gate-based — SlowQuant UCC/VQE ansatz, SCF, linear response |
+| `classiq` | Gate-based — Classiq synthesis + chemistry/QAOA, harmonized with `mqsdk_xenakis` |
+| `pyscf` | Gate-based (chemistry) — molecules/cells, mean-field/DFT, PCM solvation, ERI builder, orbital optimizer (all real); DMET/projection embedding (schema-only) |
+| `polarizable_embedding` | Gate-based (chemistry) — CPPE + PyFraME real potfile format, via `pyscf.solvent.PE` |
+
+## Computing Model × Qubit Modality
+
+\footnotesize
+Two **independent, orthogonal** axes — not one flat enum. Many-to-many: some paradigms run on several QPU modalities, but not every pairing exists.
 
 :::::: {.columns}
 ::: {.column width="50%"}
-- `GATE_BASED` — qubit circuits (QASM2/3)
-- `MBQC` — measurement-based QC on FPGA
-- `PHOTONIC_LINEAR_OPTICS` — Fock-state chips
+**`ComputingModel`** (paradigm)
+
+- `GATE_BASED` — circuit model
+- `MBQC` — measurement-based
 - `FUSION_BASED` — FBQC resource states + fusion
-- `QPE` — Quantum Phase Estimation / IQPE
+- `ADIABATIC` — continuous-time evolution (AHS)
+- `ANNEALING` — quantum annealing
+- `GBS` — Gaussian Boson Sampling
+- `SAMPLING` — general sampling paradigms
 :::
 ::: {.column width="50%"}
-- `GBS` — Gaussian Boson Sampling
-- `KQD` — Krylov Quantum Diagonalization
-- `NEUTRAL_ATOM` — AHS on Rydberg atoms
-- `ANNEALING` — quantum annealing
+**`QubitModality`** (QPU modality)
+
+- `SUPERCONDUCTING` — IBM, IQM
+- `TRAPPED_ION` — Quantinuum, IonQ
+- `NEUTRAL_ATOM` — QuEra
+- `PHOTONIC` — Quandela, Xanadu
+- `SILICON_SPIN` — Quantum Motion
 :::
 ::::::
 
-\vspace{0.3em}
-All modalities share the same `BenchmarkRecord` schema.
+`GATE_BASED` alone spans superconducting, trapped-ion, silicon-spin, and photonic hardware — `GBS`/`FUSION_BASED` are photonic-only today. `QPE`/`KQD` are techniques on top of `GATE_BASED`, not separate paradigms. Every combination shares the same `BenchmarkRecord`.
+\normalsize
 
 ## CircuitSpec — One Type for All Circuits
 
 ```python
-# Gate-based (QASM2)
-circuit = CircuitSpec(
-    num_qubits=2,
-    serialized='OPENQASM 2.0;\ninclude "qelib1.inc";\n...',
-    observables=[SparsePauliObservable(num_qubits=2, terms=[
-        PauliTerm(qubit_indices=(0, 1),
-                  pauli_ops=(PauliLabel.Z, PauliLabel.Z),
-                  coefficient=ComplexNumber(re=1.0))
-    ])],
-)
+# Gate-based — read a .qasm file straight into `serialized`
+source = pathlib.Path("bell_state.qasm").read_text()
+circuit = CircuitSpec(num_qubits=2, serialized=source,   # OpenQASM 2.0
+                      observables=[...])
 
-# OpenQASM 3.0 helper
-circuit = CircuitSpec.from_openqasm3(source, num_qubits=2)
+# OpenQASM 3.0 — same file-read pattern
+circuit = CircuitSpec.from_openqasm3(
+    pathlib.Path("bell_state.qasm3").read_text(), num_qubits=2)
 
 # Parametric VQE — bind() returns a new copy
 ansatz = CircuitSpec(num_qubits=2, parameters=["theta"], ...)
 bound  = ansatz.bind({"theta": 1.2566})
-
-# Algorithm-driven (chemistry)
-mol = CircuitSpec(format=CircuitFormat.MOLECULE_JSON,
-                  serialized="/path/to/He-ccpvdz.json", num_qubits=0)
 ```
+
+## Real Hamiltonian Sources
+
+\scriptsize
+Three ways to get a real molecule's qubit Hamiltonian as a `SparsePauliObservable` (all in `hamiltonian_sources.*`) — drops into any Estimator path unmodified:
+
+| Source | Function | What it gives you |
+|---|---|---|
+| **HamLib Chemistry** | `load_hamlib_chemistry()` | HDF5 (NERSC), 4 encodings, no ref. energies |
+| **PennyLane qchem** | `load_pennylane_qchem()` | Dataset service, ships `fci_energy`/`vqe_energy` |
+| **Ab initio (new)** | `build_qubit_hamiltonian()` | *Any* geometry — PySCF HF + active-space + JW |
+
+```python
+obs, record = build_qubit_hamiltonian(
+    geometry, basis="sto-3g", active_electrons=2, active_orbitals=2)
+```
+
+Verified: HamLib's H2 Hamiltonian through the *unmodified* ADAPT-VQE engine converges to `-1.13146 Ha`, matching dense diagonalization to `7e-15` — `jordan_wigner()`'s `str()` is byte-identical to HamLib's stored strings, one parser serves both.
+\normalsize
+
+## Closing the Last 4 qrunch Guide Gaps
+
+\scriptsize
+The final 4 "no qpubench mechanism" guides — all real, closed with quimb+cotengra (per direct steer) or PySCF (already a dependency):
+
+| Guide | Mechanism | Verified |
+|---|---|---|
+| Contraction Path Finder | `quimb.tensor.Circuit` + `cotengra.HyperOptimizer` | 4/4 strategies real; `NONE` costs more (`180224` vs `248`) |
+| ERI Builder | `mol.intor('int2e')` vs `mf.density_fit()` (RI/DF) | RI matches standard ERIs to `2e-5` Ha (H2O/cc-pVDZ) |
+| FAST / Brute Force Gate Selector | `GateSelector` protocol — gradient screen vs full re-opt | Both converge to exact H2 ground state |
+| Orbital Optimizer | Newton (`CASSCF`) / Simple (kappa-rotation + `CASCI`) / Basin-Hopping | All 3 agree on H2/6-31G — Newton vs Basin-Hopping: `3e-9` Ha |
+
+A real bug found along the way: quimb's `contraction_info(optimize=False)` raises `TypeError` (cotengra's dispatch mistakes `False` for a custom path-finder callable) — worked around via `opt_einsum.contract_path()` directly.
+\normalsize
 
 # Adapters
 
 ## Three Adapter Protocols
+
+\footnotesize
 
 :::::: {.columns}
 ::: {.column width="33%"}
@@ -175,9 +239,14 @@ mol = CircuitSpec(format=CircuitFormat.MOLECULE_JSON,
 *Circuit in, result out*
 
 ```
-CircuitSpec
-    ↓ run()
-QuantumResult
+┌─────────────┐
+│ CircuitSpec │
+└──────┬──────┘
+       │ run()
+       ▼
+┌───────────────┐
+│ QuantumResult │
+└───────────────┘
 ```
 
 Aer · Qrack · IBM
@@ -188,10 +257,16 @@ IQM · MBQC-FPGA
 *Problem spec in*
 
 ```
-CircuitSpec
- (problem)
-    ↓ run_algorithm()
-(Result, VQAConfig)
+┌─────────────┐
+│ CircuitSpec │
+│  (problem)  │
+└──────┬──────┘
+       │ run_algorithm()
+       ▼
+┌────────────┐
+│  (Result,  │
+│ VQAConfig) │
+└────────────┘
 ```
 
 QForte · OpenFermion
@@ -201,11 +276,14 @@ QForte · OpenFermion
 *Wraps a BackendAdapter*
 
 ```
-inner adapter
-    ↓ run()
-mitigate/suppress
-    ↓
-QuantumResult
+┌───────────────┐
+│ inner adapter │
+└───────┬───────┘
+        │ mitigate/suppress
+        ▼
+┌───────────────┐
+│ QuantumResult │
+└───────────────┘
 ```
 
 Fire Opal · Mitiq
@@ -213,175 +291,223 @@ Haiqu · ParityQC
 :::
 ::::::
 
+\normalsize
 \vspace{0.3em}
 `BenchmarkRunner` dispatches automatically — `ErrorMitigationAdapter` registers like any `BackendAdapter`.
 
 ## BackendAdapter — Estimator vs Sampler
 
+\footnotesize
+
 ```python
 class MyBackendAdapter:
     @property
-    def spec(self) -> BackendSpec: ...          # hardware description
-
-    def validate(self, circuit: CircuitSpec) -> list[str]: ...
-
-    def run(self, circuit: CircuitSpec,
-            options: ExecutionOptions) -> QuantumResult:
-        if circuit.observables:
-            # Estimator path → expectation_values (VQE, QAOA)
-            evs = [measure_expectation(circuit, obs) for obs in circuit.observables]
-            return QuantumResult(expectation_values=evs, ...)
-        else:
-            # Sampler path → shot counts / bitstrings
-            counts = sample_bitstrings(circuit, options.shots)
-            return QuantumResult(shots=ShotResult(..., counts=counts), ...)
+    def spec(self) -> BackendSpec: ...    # hardware description
+    def validate(self, circuit) -> list[str]: ...
 ```
 
+:::::: {.columns}
+::: {.column width="50%"}
+**Estimator path** — `circuit.observables` set
+
+```python
+def run(self, circuit, options):
+    evs = [measure_expectation(circuit, obs)
+           for obs in circuit.observables]
+    return QuantumResult(
+        expectation_values=evs, ...)
+```
+
+VQE / QAOA objective values
+:::
+::: {.column width="50%"}
+**Sampler path** — no observables
+
+```python
+def run(self, circuit, options):
+    counts = sample_bitstrings(
+        circuit, options.shots)
+    return QuantumResult(
+        shots=ShotResult(
+            ..., counts=counts), ...)
+```
+
+Raw bitstring / shot counts
+:::
+::::::
+
+\normalsize
 **Rule**: SDK imports go inside the method that uses them — never at module level.
 
 ## AlgorithmAdapter (QForte example)
 
+\footnotesize
+
 ```python
 class QForteAlgorithmAdapter:
-    def validate_problem(self, circuit: CircuitSpec) -> list[str]:
-        if circuit.format != CircuitFormat.MOLECULE_JSON:
-            return [f"Expected MOLECULE_JSON, got {circuit.format!r}"]
-        return []
-
-    def run_algorithm(self, circuit: CircuitSpec,
-                      options: ExecutionOptions
-                      ) -> tuple[QuantumResult, VQAConfig]:
-        import qforte as qf                   # ← deferred SDK import
-        mol = qf.system_factory(...)
-        alg = qf.ADAPTVQE(mol, ...)
-        alg.run(pool_type="SD", optimizer="BFGS", ...)
-        energy = float(alg.get_gs_energy())
-        result = QuantumResult(expectation_values=[
-            ExpectationResult(observable_index=0, value=energy, std_error=0.0)
-        ], status=JobStatus.SUCCEEDED)
-        return result, VQAConfig(problem_type="chemistry",
-                                 final_eigenvalue=energy, ...)
 ```
 
-## Energy Evaluator Hook
+:::::: {.columns}
+::: {.column width="45%"}
+**`validate_problem()`**
 
-Advanced: QForte drives the ansatz; a qpubench backend evaluates $\langle H \rangle$
-
+```python
+def validate_problem(self, circuit):
+    if circuit.format != \
+            CircuitFormat.MOLECULE_JSON:
+        return [
+            f"Expected MOLECULE_JSON, "
+            f"got {circuit.format!r}"
+        ]
+    return []
 ```
-QForte optimizer  -->  energy_feval(params)
-                              |
-                    EnergyEvaluatorHook.evaluate()
-                              |
-                    qpubench BackendAdapter.run()
-                              |
-                    QuantumResult  -->  <H> (float)
+:::
+::: {.column width="55%"}
+**`run_algorithm()`**
+
+```python
+def run_algorithm(self, circuit, options):
+    import qforte as qf    # deferred import
+    cfg = options.adapt_vqe_config
+    mol = qf.system_factory(...)
+    alg = qf.ADAPTVQE(mol, ...)
+    alg.run(pool_type=cfg.pool_type,
+            optimizer=cfg.optimizer)
+    result = QuantumResult(
+        qforte_result=QForteRunResult(...),
+        expectation_values=[...])
+    return result, VQAConfig(...)
+```
+:::
+::::::
+\normalsize
+
+## AlgorithmFamily — Switch Implementations Freely
+
+`AlgorithmSpec` carries **identity only** (`name` + `family`) — hyperparameters live in one shared config every adapter for that family accepts:
+
+\footnotesize
+
+```python
+config = AdaptVQEConfig(pool_type="SD", optimizer="BFGS")
+opts = ExecutionOptions(algorithm_spec=AlgorithmSpec(
+    name="ADAPTVQE", family=AlgorithmFamily.ADAPT_VQE),
+    adapt_vqe_config=config)
+
+runner.run(mol, "qforte", opts)                  # native C++
+runner.run(mol, "ibm_qiskit_adapt_vqe", opts)     # from-scratch Qiskit
+runner.run(mol, "microsoft_qdk_adapt_vqe", opts)  # QDK / Azure Quantum
 ```
 
-- Enables ADAPT-VQE on **Aer, Qrack GPU, IBM hardware**, or any adapter
-- Gradient computation automatically routed through the hook
-- Falls back to QForte's internal C++ simulator on error
-- Available in `integrations/qforte/energy_hook.py`
+Three adapters implement `AlgorithmFamily.ADAPT_VQE`: `integrations/qforte/` (QForte's native C++ statevector), and `ibm_qiskit_adapt_vqe/` / `microsoft_qdk_adapt_vqe/` (thin wrappers over the pure-Python `generic_adapt_vqe/` engine — no vendor SDK needed).
+\normalsize
+
+## Xenakis $\leftrightarrow$ Classiq — Two Optimization Strategies
+
+Same underlying problem, two strategies — both converge on `CircuitSpec`.
+
+| | Xenakis | Classiq |
+|---|---|---|
+| Strategy | GA **search** | Constrained **synthesis** |
+| Objective | Soft penalty ($\lambda_\text{depth}, \lambda_\text{2q}$) | Hard bound + objective |
+| Cost | Generations $\times$ population | One solve (duration, s) |
+| Molecule | `XenakisMolecule` (coords-first) | `ClassiqMoleculeSpec` (atoms-first) |
+
+```python
+classiq_mol = ClassiqMoleculeSpec.from_xenakis_molecule(xenakis_mol)
+cmp = CircuitOptimizationComparison(ga_result=ga_run, classiq_result=synth)
+cmp.depth_delta          # GA best-genome depth − Classiq depth
+cmp.search_cost_label    # "GA: 40 generations vs Classiq: 2.30s synthesis"
+```
 
 ## Error Mitigation Providers
 
-`error_mitigation.py` — one schema module, seven provider integrations:
+One module per vendor, one shared `ErrorMitigationStrategy` enum in `primitives.py`:
 
-| Provider | Schema types | Technique |
+\footnotesize
+
+| Provider | Schema module | Technique |
 |---|---|---|
-| **Q-CTRL Fire Opal** | `FireOpalConfig`, `FireOpalResult` | Closed-box noise suppression; `fo.execute()` API |
-| **Mitiq** | `MitiqConfig` + 5 configs, `MitiqResult` | ZNE · PEC · CDR · REM · DDD |
-| **Haiqu Rivet** | `HaiquRivetConfig`, `HaiquTranspilationResult` | Hardware-aware transpilation caching |
-| **ParityQC** | `ParityQCConfig`, `ParityQCResult` | Parity encoding for QUBO / HCBO / Ising |
-| **QMatter** | `QMatterConfig`, `QMatterCompressionResult` | Quantum problem compression |
-| **Quantum Motion** | `QuantumMotionDeviceSpec` | Silicon CMOS spin-qubit characterisation |
+| **[Q-CTRL Fire Opal](https://docs.q-ctrl.com/fire-opal)** | `qctrl_fire_opal` | Closed-box noise suppression |
+| **[Mitiq](https://mitiq.readthedocs.io/)** | `unitaryfund_mitiq` | ZNE · PEC · CDR · REM · DDD |
+| **[Haiqu Rivet](https://github.com/haiqu-ai/rivet)** | `haiqu_rivet` | HW-aware transpilation caching |
+| **[ParityQC](https://parityqc.com/parityos-encoding-constraints)** | `parityqc_parityqc` | Parity encoding (QUBO/HCBO/Ising) |
+| **[QMatter](https://qmatter.xyz/)** | `qmatter_qmatter` | Quantum problem compression |
+| **[Quantum Motion](https://quantummotion.com/)** | `quantum_motion_hardware` | CMOS spin-qubit characterisation *(hardware vendor, not error mitigation)* |
+| **[QESEM (Qedma)](https://docs.qedma.io/)** | `qedma_qesem` | QET noise scaling + characterisation |
 
-\vspace{0.3em}
-`ErrorMitigationStrategy` enum extended: `FIRE_OPAL` · `MITIQ_ZNE/PEC/CDR/REM/DDD` · `HAIQU` · `PARITY_QC` · `QMATTER`
+\normalsize
 
-## IQM Hardware — Star Topology
+## Running on Real Hardware — IBM, IQM & AWS Braket
 
-:::::: {.columns}
-::: {.column width="55%"}
-**IQM Resonance cloud** (`iqm-client` + `qiskit-iqm`)
-
-```python
-# Star architecture: all qubits via COMPR1 resonator
-backend = BackendSpec.iqm_resonance(
-    "garnet",       # 20Q IQM Garnet
-    api_token_ref="IQM_TOKEN",
-)
-# BackendSpec.iqm_resonance("deneb")   # 6Q
-# BackendSpec.iqm_resonance("sirius")  # 24Q Star
-
-adapter = IQMAdapter("garnet", token=os.environ["IQM_TOKEN"])
-```
-
-Calibration via `IQMClient.get_dynamic_quantum_architecture()`:
-T1 ~28 µs · T2* ~17 µs · PRX ~99.79% · CZ ~98.42%
-:::
-::: {.column width="45%"}
-**Native gate set**
-
-| Gate | Parameters | Notes |
-|------|-----------|-------|
-| `PRX` | $\theta$, $\varphi$ | Angles in **fractions of turns** — $\theta$=0.5 $\rightarrow$ $\pi$ rotation |
-| `CZ` | — | Controlled-Z, symmetric |
-| `MOVE` | — | Qubit $\leftrightarrow$ resonator swap (Star only) |
-
-Hub-and-spoke topology gives effective all-to-all connectivity without SWAP routing.
-:::
-::::::
-
-## IBM Quantum Runtime V2
+\scriptsize
+All three adapters are **real implementations, verified end-to-end** —
+Aer/Braket run with no credentials needed (`BraketLocalBackend`); IBM/IQM
+transpile+run logic verified against bundled fake backends
+(`tests/test_backend_adapters.py`). `opts = ExecutionOptions(shots=4096)` —
+shared by all three below.
 
 :::::: {.columns}
-::: {.column width="50%"}
-**EstimatorV2 PUB**
-`(circuit, observables, params?, precision?)`
-
-```python
-# precision replaces fixed shot count
-estimator.run([(qc, obs, params, 1e-2)])
-result[i].data.evs   # expectation value
-result[i].data.stds  # statistical error
-```
-
-**SamplerV2 PUB**
-`(circuit, params?, shots?)`
-
-```python
-sampler.run([(qc, params, 4096)])
-bit_array = result[0].data.meas
-counts = bit_array.get_counts()
-```
-
-`BitArray.shape` = `(num_shots,)` or `(num_params, num_shots)`
-:::
-::: {.column width="50%"}
-**Execution modes** (`IBMExecutionMode`)
-
-| Mode | When to use |
-|------|-------------|
-| `SESSION` | VQE / adaptive — exclusive QPU hold |
-| `BATCH` | Sweeps — parallel independent jobs |
-| `SINGLE` | One-shot run (default) |
+::: {.column width="33%"}
+**IBM Quantum Runtime V2**
+(`qiskit-ibm-runtime`)
 
 ```python
 adapter = IBMAdapter(
     "ibm_torino",
-    execution_mode=IBMExecutionMode.SESSION,
+    execution_mode=
+        IBMExecutionMode.SESSION,
 )
+runner.register(adapter, "ibm")
+runner.run(circuit, "ibm", opts)
 ```
 
-**`IBMRuntimeRecord`** on `QuantumResult`:
-job\_id · session\_id · resilience\_level · `ExecutionSpan` timestamps
+Estimator/Sampler auto-chosen; `IBMRuntimeRecord` carries job/session IDs.
+:::
+::: {.column width="33%"}
+**IQM Resonance cloud**
+(`iqm-client` + `qiskit-iqm`)
 
-\vspace{0.3em}
-**CUDA-Q**: `cudaq.observe()` $\approx$ EstimatorV2; `cudaq.sample()` $\approx$ SamplerV2 — same `BackendAdapter` protocol.
+```python
+adapter = IQMAdapter(
+    "garnet",   # 20Q
+    token=os.environ[
+        "IQM_TOKEN"],
+)
+runner.register(adapter, "iqm")
+runner.run(circuit, "iqm", opts)
+```
+
+Star topology: `PRX`/`CZ` + `MOVE` via COMPR1 — no SWAP routing.
+:::
+::: {.column width="33%"}
+**AWS Braket**
+(Rigetti, IonQ, OQC, SV1/DM1/TN1)
+
+```python
+spec = BackendSpec.braket(
+    "arn:aws:braket:...:"
+    "device/qpu/rigetti/"
+    "Ankaa-3",
+    s3_bucket_ref="MY_BUCKET",
+)
+runner.register(
+    BraketAdapter(
+        spec.auth["device_arn"],
+        s3_bucket_ref="MY_BUCKET",
+    ), "braket")
+runner.run(circuit, "braket", opts)
+```
+
+Every task needs an S3 result location; `AwsDevice.run()` is async.
 :::
 ::::::
 
-## Quantum Advantage Tracker
+\tiny
+All three implement `TranspilableBackend`: IBM/IQM transpile via a Qiskit pass manager; Braket compiles natively inside `device.run()` (via `qiskit-braket-provider`). Two real, current SDK migrations found and fixed while verifying this: standalone `qiskit-iqm` is now obsolete (`iqm-client[qiskit]` replaces it) and IBM's old `channel="ibm_quantum"` no longer exists (`"ibm_quantum_platform"` does).
+\normalsize
+
+## IBM Quantum Advantage Tracker
 
 `BenchmarkRecord.advantage` holds a `QuantumAdvantageRecord`:
 
@@ -410,26 +536,40 @@ Three experiment categories: observable estimation · variational · classically
 
 ## BenchmarkRunner
 
+\scriptsize
 ```python
 runner = BenchmarkRunner(store=NDJSONStore(Path("results.ndjson")))
 runner.register(AerAdapter(), name="aer")
 runner.register(QForteAlgorithmAdapter(), name="qforte")
+record = runner.run(circuit, "aer", ExecutionOptions(shots=4096))   # single run
 
-# Single run
-record = runner.run(circuit, "aer", ExecutionOptions(shots=4096))
-
-# Cartesian product sweep: circuits × backends × options
+# Cartesian product sweep: circuits x backends x options
 records = runner.sweep(
-    circuits=[circuit_h2, circuit_lih],
-    backend_names=["aer", "qforte"],
-    options_list=[ExecutionOptions(shots=1024),
-                  ExecutionOptions(shots=8192)],
+    circuits=[circuit_h2, circuit_lih], backend_names=["aer", "qforte"],
+    options_list=[ExecutionOptions(shots=1024), ExecutionOptions(shots=8192)],
     run_id="vqe-sweep-001",
 )
-
-# Post-execution hooks
-runner.add_hook(lambda rec: log_energy(rec.vqa.final_eigenvalue))
+runner.add_hook(lambda rec: log_energy(rec.vqa.final_eigenvalue))   # post-run hook
 ```
+\normalsize
+
+## Structured Logging — `BenchmarkLogger`
+
+\footnotesize
+Built directly on `BenchmarkRunner.add_hook()` — real levels, handlers, and formatters, not one flat log line:
+
+```python
+from qpubench import BenchmarkLogger
+bench_logger = BenchmarkLogger(name="qpubench.benchmark")
+bench_logger.attach(runner)          # wires into add_hook() internally
+record = runner.run(circuit, "aer", ExecutionOptions(shots=4096))
+# {"experiment_id": "...", "backend": "aer_statevector", "status": "succeeded", ...}
+```
+
+| Levels | Handlers | Formatters |
+|---|---|---|
+| SUCCEEDED → `INFO`, FAILED → `ERROR` | any `logging.Handler` | `JSONFormatter` (default), swappable |
+\normalsize
 
 ## Data Persistence
 
@@ -455,43 +595,147 @@ df = store.to_dataframe()                     # → pandas DataFrame
 
 Every record is one JSON line — stream-able, pandas-ready, archive-safe.
 
+## S3Store — AWS S3 & Hugging Face Buckets
+
+One JSON object per record (`{prefix}/{experiment_id}.json`) — no shared file, so concurrent writers never race. `pip install "qpubench[s3]"`.
+
+:::::: {.columns}
+::: {.column width="50%"}
+**AWS S3** (or any S3-compatible endpoint)
+
+```python
+from qpubench import S3Store
+
+store = S3Store(
+    "my-results-bucket",
+    prefix="sweeps/2026-07-06",
+    region_name="eu-west-1",
+)
+```
+
+Any `boto3.client("s3", ...)` kwarg works — same code path covers MinIO too.
+:::
+::: {.column width="50%"}
+**Hugging Face Storage Buckets**
+
+```python
+store = S3Store.huggingface(
+    bucket="my-training-bucket",
+    namespace="my-username",
+    access_key_id="HFAK...",
+    secret_access_key="...",
+)
+```
+
+`.huggingface()` sets the gateway's required `Config` — path-style, single region, V2-only listing.
+:::
+::::::
+
+Same `ResultStore` protocol as `NDJSONStore`: `save()` / `load()` / `query()` / `all()`.
+
 # Integrations
 
-## Integration Ecosystem (1/3)
+## Integration Ecosystem — `BackendAdapter`
 
-| Integration | Schema module | Protocol |
-|-------------|--------------|---------|
-| Cebule SDK | `cebule` | `BackendAdapter` |
-| Xenakis GA circuit search | `xenakis` | `AlgorithmAdapter` |
-| ExcitationSolve (Fourier VQE) | `excitation_solve` | `AlgorithmAdapter` |
-| GSOpt (ground-state benchmark) | `gsopt` | `AlgorithmAdapter` |
-| Photochipsim / FBQC | `photonic` | `BackendAdapter` |
-| QDK / QuNorth chemistry | `qdk_chemistry` | `AlgorithmAdapter` |
+Schema modules are named `<org>_<package>.py` — one glance tells you who maintains it and what it's called.
 
-## Integration Ecosystem (2/3)
+| Integration | Schema module |
+|-------------|--------------|
+| Cebule SDK | `mqsdk_cebule` |
+| Photochipsim / FBQC | `dtu_photonic` |
+| DTU-GBS / photonic\_QC | `dtu_gbs` |
+| QESEM (Qedma) | `qedma_qesem` |
+| Bloqade / Aquila | `quera_bloqade` |
+| IQM Resonance (garnet · deneb · sirius) | — |
+| Quantum Motion CMOS spin-qubit | `quantum_motion_hardware` |
 
-| Integration | Schema module | Protocol |
-|-------------|--------------|---------|
-| DTU-GBS / photonic\_QC | `gbs` | `BackendAdapter` |
-| QSE / KQD | `qse` | `AlgorithmAdapter` |
-| QESEM (Qedma) | `qesem` | `BackendAdapter` |
-| QCSchema / PennyLane | `qcschema` | cross-format interop |
-| Bloqade / Aquila | `neutral_atom` | `BackendAdapter` |
-| SlowQuant UCC/VQE | `slowquant` | `AlgorithmAdapter` |
+## Integration Ecosystem — `AlgorithmAdapter`
 
-## Integration Ecosystem (3/3) — Error Mitigation & Hardware
+\footnotesize
 
-| Integration | Schema module | Protocol |
-|-------------|--------------|---------|
-| Q-CTRL Fire Opal | `error_mitigation` | `ErrorMitigationAdapter` |
-| Mitiq (ZNE · PEC · CDR · REM · DDD) | `error_mitigation` | `ErrorMitigationAdapter` |
-| Haiqu Rivet transpiler | `error_mitigation` | `ErrorMitigationAdapter` |
-| ParityQC parity encoding | `error_mitigation` | `ErrorMitigationAdapter` |
-| QMatter problem compression | `error_mitigation` | `ErrorMitigationAdapter` |
-| IQM Resonance (garnet · deneb · sirius) | — | `BackendAdapter` |
-| Quantum Motion CMOS spin-qubit | `error_mitigation` | `BackendAdapter` |
+| Integration | Schema module |
+|-------------|--------------|
+| Xenakis GA circuit search | `mqsdk_xenakis` |
+| QForte (ADAPT-VQE, UCCN-VQE, ...) | `evangelistalab_qforte` |
+| Classiq circuit synthesis | `classiq` |
+| ExcitationSolve (Fourier VQE) | `dlr_excitation_solve` |
+| GSOpt (ground-state benchmark) | `bestquark_gsopt` |
+| QDK / QuNorth chemistry | `microsoft_qdk` |
+| QSE / KQD | `mqsdk_qse` |
+| SlowQuant UCC/VQE (`integrations/slowquant/`, real code, not on PyPI) | `erikkjellgren_slowquant` |
+\normalsize
+
+## Integration Ecosystem — `ErrorMitigationAdapter`
+
+One module per vendor now — previously all bundled into a single `error_mitigation` grab-bag (including a hardware vendor miscategorized as "error mitigation").
+
+| Integration | Schema module |
+|-------------|--------------|
+| Q-CTRL Fire Opal | `qctrl_fire_opal` |
+| Mitiq (ZNE · PEC · CDR · REM · DDD) | `unitaryfund_mitiq` |
+| Haiqu Rivet transpiler | `haiqu_rivet` |
+| ParityQC parity encoding | `parityqc_parityqc` |
+| QMatter problem compression | `qmatter_qmatter` |
+
+## Orchestration — Kubeflow Pipelines
+
+\footnotesize
+
+Different from every integration above: not a schema bridge, but how algorithmic steps get **run** as scheduled, dashboard-visible components.
+
+Two Kubeflow SDKs, two roles:
+
+| SDK | Role here |
+|-----|-----------|
+| **`kfp`** (Pipelines) | Owns the DAG + Central Dashboard — every step is a native `@dsl.component` |
+| **Unified SDK** | Narrow, opt-in (`TrainerClient`/`OptimizerClient`) — called *inside* one component body only, for multi-node dispatch or Katib search |
+
+\vspace{0.3em}
+\begin{block}{Why not the unified SDK as the top-level abstraction?}
+Its own docs list Pipelines support as "Planned," not shipped — and \texttt{TrainerClient}/\texttt{CustomTrainer} are shaped around ML training, a frame that fits nothing here. \texttt{kfp} already gives DAG construction, branching, artifacts, and caching natively.
+\end{block}
+\normalsize
+
+## Component Taxonomy
+
+\footnotesize
+
+Every pipeline decomposes into two kinds of `kfp` node — same shape, different resource profile:
+
+| Kind | Shape | Examples |
+|------|-------|----------|
+| **Transform** | pydantic-in → pydantic-out, no `BackendAdapter` | SCF, active-space selection, Cebule MOL\_MAP/TN\_QC\_OPT |
+| **Execution** | `BenchmarkRunner.run()` against a registered adapter | GPU sim (Qrack) · real QPU (IBM, IQM, QESEM) |
+
+\vspace{0.3em}
+Kubeflow can't reach a QPU directly — an Execution component targeting real hardware does what `BackendAdapter.run()` already does: call the vendor SDK, submit to *their* queue, poll, return. Kubeflow's role is a scheduled, credentialed place to host that client, not compute.
+
+**Iterative loops stay one job** — TN\_QC\_OPT's `n_iterations`, ADAPT-VQE's macro/micro-iterations never explode into one DAG node per iteration.
+\normalsize
+
+## Worked Example — Cebule Task Chain as a `kfp` DAG
+
+\footnotesize
+
+`integrations/kubeflow/` — four DAG nodes, matching the Cebule SDK's own documented task order:
+
+```
+┌─────────┐    ┌─────────────┐    ┌──────────┐    ┌───────────────────┐
+│ mol_map │ ─▶ │ tn_qc_opt   │ ─▶ │ qasm_gen │ ─▶ │ execute_circuits  │
+│(Transform)   │(Transform,  │    │(Transform)     │(Execution — stub │
+│         │    │ 1 job for   │    │          │    │ BackendAdapter,  │
+│         │    │ whole loop) │    │          │    │ swap for real)   │
+└─────────┘    └─────────────┘    └──────────┘    └───────────────────┘
+```
+
+Verified by actually compiling against `kfp==2.16.1`, not just reading the API — surfaced a real gotcha: `from __future__ import annotations` breaks kfp's component introspection (it needs live type objects, not PEP 563 strings), unlike the rest of this repo's convention.
+
+Credentials injected via `kfp-kubernetes`'s `use_secret_as_env` — never as plain pipeline parameters (those land in the dashboard's recorded run history). See `docs/integrations/kubeflow.md`.
+\normalsize
 
 ## Cross-Framework Compatibility
+
+\footnotesize
 
 **Pauli encoding** — explicit converters prevent silent convention bugs:
 
@@ -508,17 +752,20 @@ PauliLabel.X.to_qiskit_c_bit_term()   # → 0b0010
 
 **Complex numbers**: stored as `{"re": 1.0, "im": 0.5}` — valid JSON without Python eval
 
-**QCSchema / QCElemental / PennyLane** interoperability via the `qcschema` module
+**QCSchema / QCElemental / PennyLane** interoperability via the `molssi_qcschema` module
+\normalsize
 
 # Code Quality
 
 ## Python Quality Toolchain
 
+\footnotesize
 ```bash
 ruff check src/ tests/    # lint (line-length 100, target py311)
 ruff format src/ tests/   # format
 mypy src/                 # static types (strict = true)
-pytest tests/ -q          # 156 tests — no quantum SDK required
+pytest tests/ -q          # 259 tests — SDK-dependent ones skip cleanly
+                           # if qiskit/braket/iqm/openfermion aren't installed
 ```
 
 | Tool | Role |
@@ -528,6 +775,56 @@ pytest tests/ -q          # 156 tests — no quantum SDK required
 | **mypy strict** | Full type coverage — `Any` only where unavoidable |
 | **pytest** | Schema-only test suite runs with `pip install .` alone |
 | **ponytail** | Agent code-quality enforcement via decision ladder |
+\normalsize
+
+# Case Study — qrunch Guide Parity
+
+## Can qpubench Reproduce a Competitor's Guide Catalog? (1/2)
+
+\footnotesize
+Audited every [qrunch](https://qrunch.docs.kvantify.net) how-to guide, demo, and tutorial (Kvantify's VQE chemistry package) against qpubench — **without installing qrunch**, with **FAST-VQE/BEAST-VQE substituted by ADAPT-VQE** everywhere (qrunch's algorithms are proprietary).
+
+| | Guides (22) | Demos (6) | Tutorials (5) |
+|---|---|---|---|
+| **Yes** | **22** | 3 | 0 |
+| **Partial** | 0 | 3 | 5 |
+| **No** | **0** | 0 | 0 |
+
+Four passes, each rechecked against real sources (docs.mqs.dk, Cebule SDK source, PySCF): pass 1-2 closed embedding gaps (**InQuanto checked, not required**) and 2 more via `pip install pyscf`. Pass 3 made **backend adapters real implementations** (not `NotImplementedError` stubs), Active Space run real PySCF AVAS, and added real Minimizer/Logger/Polarizable-Embedding mechanisms. **Pass 4 closed the last 4 Guides** — Contraction Path Finder, ERI Builder, Gate Selectors, Orbital Optimizer — **Guides are now 22/22 "Yes".**
+\normalsize
+
+## Can qpubench Reproduce a Competitor's Guide Catalog? (2/2)
+
+\footnotesize
+Tutorials stay 5/5 "Partial" numerically, but 3 upgraded from an *invented toy Hamiltonian* to a *real ab initio one* on the actual qrunch molecule/mechanism — checked the real qrunch tutorial notebooks directly (github.com/Kvantify/qrunch\_tutorials), not guessed: butyronitrile's real C\#N bond, a real carboxylate-mediated SN2 (matching the dehalogenase notebook's own embedding), and cathepsin K's real nitrile-cysteine covalent mechanism (not the Michael-addition guess first assumed).
+
+**25+ new runnable examples**, plus `reaction.py`, AWS Braket, `schemas/pyscf.py`, `schemas/polarizable_embedding.py`, `schemas/optimizer_catalog.py`, `schemas/contraction_path.py`, `observability.py`, a real `integrations/slowquant/` adapter, `hamiltonian_sources/` (HamLib + PennyLane + ab initio), and `tensor_network/contraction_path.py` + a refactored, swappable `GateSelector`.
+\normalsize
+
+## Methodology — Honest by Construction
+
+\footnotesize
+
+Two temptations avoided:
+
+\begin{block}{No fabricated chemistry}
+Illustrative qubit Hamiltonians (\texttt{toy\_hamiltonians.py}) stay explicitly labeled, never presented as physically accurate. Real molecules: \texttt{qforte\_vqe\_benchmark.py} (He/cc-pVDZ), and now \texttt{hamiltonian\_sources/} — real ab initio Hamiltonians replaced the toy ones in 3 tutorials, checked against real qrunch notebooks rather than guessed stand-ins.
+\end{block}
+
+\begin{block}{No random numbers standing in for physics}
+\texttt{StubGateAdapter} returns \emph{random} expectation values — useless as an ADAPT-VQE energy oracle (the optimizer would chase noise). Built \texttt{ToyStatevectorAdapter}: a real, small, dense-matrix statevector simulator instead.
+\end{block}
+
+\begin{block}{No fabricated API calls either}
+PsiEmbed, libDMET, and SlowQuant aren't on PyPI. Their adapters call each package's \emph{actual documented API} — checked field-by-field against real GitHub source, not guessed — behind an \texttt{ImportError} guard: real code, honestly unexecuted until installed from source.
+\end{block}
+
+```python
+# HF reference:          -4.000000
+# ADAPT-VQE (3 iters):   -4.472136
+# exact diagonalization: -4.472136   <- matches to 1e-12
+```
+\normalsize
 
 # Summary
 
@@ -536,19 +833,13 @@ pytest tests/ -q          # 156 tests — no quantum SDK required
 ```python
 from qpubench import (
     BenchmarkRunner, NDJSONStore, StubGateAdapter,
-    CircuitSpec, ExecutionOptions,
-    SparsePauliObservable, PauliTerm, PauliLabel, ComplexNumber,
+    CircuitSpec, ExecutionOptions, SparsePauliObservable,
 )
 import pathlib
 
 circuit = CircuitSpec(
-    num_qubits=2,
-    serialized='OPENQASM 2.0;\ninclude "qelib1.inc";\nqreg q[2];\nh q[0];\ncx q[0],q[1];',
-    observables=[SparsePauliObservable(num_qubits=2, terms=[
-        PauliTerm(qubit_indices=(0, 1),
-                  pauli_ops=(PauliLabel.Z, PauliLabel.Z),
-                  coefficient=ComplexNumber(re=1.0))
-    ])],
+    num_qubits=2, serialized=pathlib.Path("bell_state.qasm").read_text(),
+    observables=[SparsePauliObservable(num_qubits=2, terms=[...])],
 )
 runner = BenchmarkRunner(store=NDJSONStore(pathlib.Path("results.ndjson")))
 runner.register(StubGateAdapter(seed=42), name="stub")
@@ -560,7 +851,7 @@ print(f"<ZZ> = {record.result.expectation_values[0].value:.4f}")
 
 **Repository**: `github.com/mqsdk/qpubench`
 
-**Schema v1.12.0** — 21 modules · 9 QPU modalities · zero quantum SDK deps in core
+**Schema v2.7.0** — 36 modules · 7 computing models × 5 qubit modalities · zero quantum SDK deps in core
 
 \vspace{0.5em}
 

@@ -10,12 +10,20 @@ from pathlib import Path
 from typing import Any
 
 from qpubench.schemas.circuit import CircuitSpec
-from qpubench.schemas.execution import AlgorithmSpec, ExecutionOptions
-from qpubench.schemas.observable import PauliTerm, SparsePauliObservable
-from qpubench.schemas.primitives import CircuitFormat, ComplexNumber, PauliLabel
+from qpubench.schemas.evangelistalab_qforte import (
+    QForteAlgorithmConfig,
+    QForteCircuitSpec,
+    QForteGateSpec,
+    QForteQubitOperatorSpec,
+    QForteQubitOperatorTerm,
+    QForteRunResult,
+)
+from qpubench.schemas.execution import AlgorithmSpec
+from qpubench.schemas.observable import SparsePauliObservable
+from qpubench.schemas.primitives import CircuitFormat, ComplexNumber
 from qpubench.schemas.record import VQAConfig
 from qpubench.schemas.result import AdaptIteration, ExpectationResult, QuantumResult
-from qpubench.schemas.primitives import JobStatus, QPUModality
+from qpubench.schemas.primitives import ComputingModel, JobStatus
 
 
 # ---------------------------------------------------------------------------
@@ -79,56 +87,84 @@ def molecule_spec_from_geometry(
 
 
 # ---------------------------------------------------------------------------
-# QForte QuantumOperator → SparsePauliObservable
+# QForte pybind11 objects → typed schemas (schemas/evangelistalab_qforte.py)
 # ---------------------------------------------------------------------------
 
-_QFORTE_GATE_TO_PAULI = {"X": PauliLabel.X, "Y": PauliLabel.Y, "Z": PauliLabel.Z}
+_QFORTE_PAULI_GATES = frozenset({"X", "Y", "Z"})
 
 
-def qforte_op_to_sparse_pauli(
-    qb_ham: Any,
-    num_qubits: int,
-) -> SparsePauliObservable:
-    """Convert a QForte QuantumOperator to a qpubench SparsePauliObservable.
+def qforte_op_to_qforte_spec(qb_ham: Any, num_qubits: int) -> QForteQubitOperatorSpec:
+    """Read a live QForte QubitOperator (pybind11) into QForteQubitOperatorSpec.
 
-    QForte stores the qubit Hamiltonian as a list of (coeff, QuantumCircuit)
-    pairs where each circuit is a Pauli string (X/Y/Z single-qubit gates).
-
-    Falls back to an empty observable if the conversion fails — callers
-    should check len(observable.terms) > 0 before using it.
+    QForte exposes the operator as QubitOperator.terms() → list of
+    (coeff, Circuit) pairs where each Circuit is a Pauli string
+    (Circuit.is_pauli() == True). This is the one place that reads the
+    pybind11 object directly; everything downstream uses the typed schema.
     """
-    terms: list[PauliTerm] = []
-    try:
-        for coeff, pauli_circ in qb_ham.terms():
-            qubit_indices: list[int] = []
-            pauli_ops: list[PauliLabel] = []
-            for gate in pauli_circ.gates():
-                label = _QFORTE_GATE_TO_PAULI.get(gate.gate_id())
-                if label is not None:
-                    qubit_indices.append(gate.target())
-                    pauli_ops.append(label)
-            if qubit_indices:
-                terms.append(PauliTerm(
-                    qubit_indices=tuple(qubit_indices),
-                    pauli_ops=tuple(pauli_ops),
-                    coefficient=ComplexNumber(re=float(coeff.real), im=float(coeff.imag)),
-                ))
-    except Exception:
-        pass
-    return SparsePauliObservable(num_qubits=num_qubits, terms=terms)
+    terms: list[QForteQubitOperatorTerm] = []
+    for coeff, pauli_circ in qb_ham.terms():
+        gates = [
+            QForteGateSpec(gate_id=gate.gate_id(), target=gate.target())
+            for gate in pauli_circ.gates()
+            if gate.gate_id() in _QFORTE_PAULI_GATES
+        ]
+        terms.append(QForteQubitOperatorTerm(
+            coefficient=ComplexNumber(re=float(coeff.real), im=float(coeff.imag)),
+            pauli_circuit=QForteCircuitSpec(gates=gates, is_pauli=True),
+        ))
+    return QForteQubitOperatorSpec(terms=terms, num_qubits=num_qubits)
+
+
+def qforte_op_to_sparse_pauli(qb_ham: Any, num_qubits: int) -> SparsePauliObservable:
+    """Convert a live QForte QubitOperator directly to a SparsePauliObservable.
+
+    Convenience wrapper around qforte_op_to_qforte_spec(...).to_sparse_pauli_observable()
+    for callers (e.g. ExternalEvalAlgorithmAdapter) that only need the
+    cross-package Pauli representation, not the QForte-specific one.
+    """
+    return qforte_op_to_qforte_spec(qb_ham, num_qubits).to_sparse_pauli_observable()
 
 
 # ---------------------------------------------------------------------------
-# QForte algorithm state → qpubench result schemas
+# QForte algorithm state → typed schemas
 # ---------------------------------------------------------------------------
 
-def extract_adapt_history(alg: Any) -> list[AdaptIteration]:
-    """Reconstruct per-macro-iteration metrics from a completed ADAPTVQE object."""
-    energies   = list(getattr(alg, "_energies", []))
-    grad_norms = list(getattr(alg, "_grad_norms", []))
-    cnot_lst   = list(getattr(alg, "_n_cnot_lst", []))
-    param_lst  = list(getattr(alg, "_n_classical_params_lst", []))
-    pauli_lst  = list(getattr(alg, "_n_pauli_trm_measures_lst", []))
+def extract_qforte_run_result(alg: Any) -> QForteRunResult:
+    """Read a completed QForte Algorithm/AnsatzAlgorithm/ADAPTVQE object.
+
+    Field ↔ attribute mapping is documented on QForteRunResult itself —
+    verified against upstream evangelistalab/qforte source. getattr() with
+    a default is unavoidable here (this is the pybind11 boundary); every
+    downstream consumer works with the typed QForteRunResult instead.
+    """
+    umaxdepth = getattr(alg, "_Umaxdepth", None)
+    return QForteRunResult(
+        final_energy=float(alg.get_gs_energy()),
+        hf_energy=getattr(alg, "_hf_energy", None),
+        n_qubits=getattr(alg, "_nqb", None),
+        converged=bool(getattr(alg, "_converged", True)),
+        final_gradient_norm=getattr(alg, "_curr_grad_norm", None),
+        selected_operators=list(getattr(alg, "_tops", [])),
+        amplitudes=list(getattr(alg, "_tamps", [])),
+        n_cnot=int(getattr(alg, "_n_cnot", 0)),
+        n_classical_params=int(getattr(alg, "_n_classical_params", 0)),
+        n_pauli_trm_measures=int(getattr(alg, "_n_pauli_trm_measures", 0)),
+        n_ham_measurements=getattr(alg, "_n_ham_measurements", None),
+        n_commut_measurements=getattr(alg, "_n_commut_measurements", None),
+        energies_history=list(getattr(alg, "_energies", [])),
+        grad_norms_history=list(getattr(alg, "_grad_norms", [])),
+        n_cnot_history=list(getattr(alg, "_n_cnot_lst", [])),
+        n_classical_params_history=list(getattr(alg, "_n_classical_params_lst", [])),
+        n_pauli_trm_measures_history=list(getattr(alg, "_n_pauli_trm_measures_lst", [])),
+        max_circuit_depth_repr=str(umaxdepth) if umaxdepth is not None else None,
+    )
+
+
+def extract_adapt_history(qforte_result: QForteRunResult) -> list[AdaptIteration]:
+    """Reconstruct per-macro-iteration metrics from a QForteRunResult."""
+    energies, grad_norms = qforte_result.energies_history, qforte_result.grad_norms_history
+    cnot_lst, param_lst = qforte_result.n_cnot_history, qforte_result.n_classical_params_history
+    pauli_lst = qforte_result.n_pauli_trm_measures_history
     n = len(energies)
     return [
         AdaptIteration(
@@ -146,61 +182,46 @@ def extract_adapt_history(alg: Any) -> list[AdaptIteration]:
 
 def extract_quantum_result(alg: Any, alg_spec: AlgorithmSpec) -> QuantumResult:
     """Build a QuantumResult from any completed QForte algorithm object."""
-    energy   = float(alg.get_gs_energy())
-    n_cnot   = int(getattr(alg, "_n_cnot", 0))
-    n_params = int(getattr(alg, "_n_classical_params", 0))
-    n_pauli  = int(getattr(alg, "_n_pauli_trm_measures", 0))
-    converged = bool(getattr(alg, "_converged", True))
-
-    adapt_history: list[AdaptIteration] | None = None
-    if alg_spec.name.upper() == "ADAPTVQE":
-        adapt_history = extract_adapt_history(alg)
-
-    transpiled_circuit: str | None = None
-    try:
-        u = getattr(alg, "_Umaxdepth", None)
-        if u is not None:
-            transpiled_circuit = str(u)
-    except Exception:
-        pass
-
+    qforte_result = extract_qforte_run_result(alg)
+    adapt_history = (
+        extract_adapt_history(qforte_result) if alg_spec.name.upper() == "ADAPTVQE" else None
+    )
     return QuantumResult(
-        modality=QPUModality.GATE_BASED,
+        computing_model=ComputingModel.GATE_BASED,
         expectation_values=[
-            ExpectationResult(observable_index=0, value=energy, std_error=0.0)
+            ExpectationResult(observable_index=0, value=qforte_result.final_energy, std_error=0.0)
         ],
         adapt_history=adapt_history,
-        transpiled_circuit=transpiled_circuit,
+        transpiled_circuit=qforte_result.max_circuit_depth_repr,
         status=JobStatus.SUCCEEDED,
-        metadata={
-            "n_cnot":               n_cnot,
-            "n_classical_params":   n_params,
-            "n_pauli_trm_measures": n_pauli,
-            "converged":            converged,
-        },
+        qforte_result=qforte_result,
     )
 
 
-def extract_vqa_config(alg: Any, mol: Any, alg_spec: AlgorithmSpec) -> VQAConfig:
+def extract_vqa_config(
+    alg: Any,
+    mol: Any,
+    alg_spec: AlgorithmSpec,
+    qforte_config: QForteAlgorithmConfig,
+) -> VQAConfig:
     """Build a VQAConfig from a completed QForte algorithm + molecule."""
-    hf_energy  = float(getattr(alg, "_hf_energy", getattr(mol, "hf_energy", 0.0)))
-    fci_energy = float(getattr(mol, "fci_energy", 0.0))
-    energy_hist = list(getattr(alg, "_energies", []))
-    adapts_reached = (
-        alg_spec.name.upper() == "ADAPTVQE"
-        and not bool(getattr(alg, "_converged", True))
+    qforte_result = extract_qforte_run_result(alg)
+    hf_energy  = qforte_result.hf_energy if qforte_result.hf_energy is not None else float(
+        getattr(mol, "hf_energy", 0.0)
     )
+    fci_energy = float(getattr(mol, "fci_energy", 0.0))
+    adapts_reached = alg_spec.name.upper() == "ADAPTVQE" and not qforte_result.converged
     return VQAConfig(
         problem_type="chemistry",
         hf_energy=hf_energy,
         algorithm=alg_spec.name,
-        pool_type=alg_spec.pool_type,
-        optimizer=alg_spec.optimizer,
-        num_parameters=int(getattr(alg, "_n_classical_params", 0)),
-        n_cnot=int(getattr(alg, "_n_cnot", 0)),
-        n_pauli_trm_measures=int(getattr(alg, "_n_pauli_trm_measures", 0)),
-        convergence_values=energy_hist,
+        pool_type=qforte_config.base.pool_type,
+        optimizer=qforte_config.base.optimizer,
+        num_parameters=qforte_result.n_classical_params,
+        n_cnot=qforte_result.n_cnot,
+        n_pauli_trm_measures=qforte_result.n_pauli_trm_measures,
+        convergence_values=qforte_result.energies_history,
         adapt_maxiter_reached=adapts_reached,
-        final_eigenvalue=float(alg.get_gs_energy()),
+        final_eigenvalue=qforte_result.final_energy,
         ground_truth=fci_energy if fci_energy != 0.0 else None,
     )

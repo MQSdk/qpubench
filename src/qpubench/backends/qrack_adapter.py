@@ -24,7 +24,7 @@ from ..schemas.primitives import (
     FidelityMetric,
     JobStatus,
     PauliLabel,
-    QPUModality,
+    ComputingModel,
 )
 from ..schemas.result import (
     ExpectationResult,
@@ -71,9 +71,9 @@ class QrackAdapter:
 
     def validate(self, circuit: CircuitSpec) -> list[str]:
         warnings: list[str] = []
-        if circuit.modality != QPUModality.GATE_BASED:
+        if circuit.computing_model != ComputingModel.GATE_BASED:
             warnings.append(
-                f"QrackAdapter expects GATE_BASED; got {circuit.modality}"
+                f"QrackAdapter expects GATE_BASED; got {circuit.computing_model}"
             )
         if circuit.num_qubits != self._num_qubits:
             warnings.append(
@@ -128,7 +128,7 @@ class QrackAdapter:
             qsim.release()
 
             return QuantumResult(
-                modality=QPUModality.GATE_BASED,
+                computing_model=ComputingModel.GATE_BASED,
                 expectation_values=evs,
                 fidelity=FidelityResult(
                     fidelity=fidelity,
@@ -158,7 +158,7 @@ class QrackAdapter:
 
             qsim.release()
             return QuantumResult(
-                modality=QPUModality.GATE_BASED,
+                computing_model=ComputingModel.GATE_BASED,
                 shots=ShotResult(
                     num_qubits=self._num_qubits,
                     num_shots=shots,

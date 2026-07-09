@@ -1,5 +1,6 @@
 """qpubench — modality-agnostic quantum benchmark framework."""
 from .backends import AlgorithmAdapter, BackendAdapter, StubGateAdapter, StubMBQCAdapter
+from .observability import BenchmarkLogger, JSONFormatter
 from .runner import BenchmarkRunner
 from .schemas import (
     AdaptIteration,
@@ -9,6 +10,7 @@ from .schemas import (
     CircuitFormat,
     CircuitSpec,
     ComplexNumber,
+    ComputingModel,
     ErrorMitigationStrategy,
     ExecutionOptions,
     ExpectationResult,
@@ -21,14 +23,16 @@ from .schemas import (
     MBQCRoundResult,
     PauliLabel,
     PauliTerm,
-    QPUModality,
     QuantumResult,
+    QubitModality,
+    ReactionCoordinateSpec,
+    ReactionPathResult,
     ShotResult,
     SparsePauliObservable,
     VQAConfig,
     ZNEConfig,
 )
-from .store import NDJSONStore, ParquetStore
+from .store import NDJSONStore, ParquetStore, S3Store
 
 __version__ = "0.1.0"
 
@@ -39,16 +43,19 @@ __all__ = [
     "AlgorithmSpec",
     "BackendAdapter",
     "BackendSpec",
+    "BenchmarkLogger",
     "BenchmarkRecord",
     "BenchmarkRunner",
     "CircuitFormat",
     "CircuitSpec",
     "ComplexNumber",
+    "ComputingModel",
     "ErrorMitigationStrategy",
     "ExecutionOptions",
     "ExpectationResult",
     "FidelityMetric",
     "FidelityResult",
+    "JSONFormatter",
     "JobStatus",
     "MBQCPattern",
     "MBQCProgramWord",
@@ -58,8 +65,11 @@ __all__ = [
     "ParquetStore",
     "PauliLabel",
     "PauliTerm",
-    "QPUModality",
     "QuantumResult",
+    "QubitModality",
+    "ReactionCoordinateSpec",
+    "ReactionPathResult",
+    "S3Store",
     "ShotResult",
     "SparsePauliObservable",
     "StubGateAdapter",

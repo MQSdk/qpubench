@@ -216,3 +216,7 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# qpubench — downloaded/cached Hamiltonian datasets (HamLib, PennyLane qchem, etc.)
+# Pulled on demand by hamiltonian_sources/*; never part of the repo itself.
+datasets/

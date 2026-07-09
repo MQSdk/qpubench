@@ -1,8 +1,8 @@
 # QDK Chemistry integration
 
-qpubench models the Microsoft QDK quantum chemistry pipeline in `src/qpubench/schemas/qdk_chemistry.py`. The schemas cover the full pipeline from molecular structure through SCF, active-space selection, Hamiltonian construction, qubit encoding, state preparation, QPE/IQPE phase estimation, and Azure Quantum resource estimation.
+qpubench models the Microsoft QDK quantum chemistry pipeline in `src/qpubench/schemas/microsoft_qdk.py`. The schemas cover the full pipeline from molecular structure through SCF, active-space selection, Hamiltonian construction, qubit encoding, state preparation, QPE/IQPE phase estimation, and Azure Quantum resource estimation.
 
-Modality: `QPUModality.QPE`
+Computing model: `ComputingModel.GATE_BASED` (QPE/IQPE is an algorithmic technique on top of gate-based circuits — see `QPEMethod`, not a separate paradigm)
 
 ---
 
@@ -28,7 +28,7 @@ All stages are captured in `QChemPipelineSpec` stored in `QuantumResult.qchem_pi
 ## Molecular structure and SCF
 
 ```python
-from qpubench.schemas.qdk_chemistry import (
+from qpubench.schemas.microsoft_qdk import (
     AtomSpec, MoleculeStructureSpec, CoordinateUnit,
     SCFRunConfig, SCFResult, SCFMethod,
 )
@@ -69,7 +69,7 @@ scf_result = SCFResult(
 ## Orbital localization and active space
 
 ```python
-from qpubench.schemas.qdk_chemistry import (
+from qpubench.schemas.microsoft_qdk import (
     OrbitalLocalizationConfig, OrbitalLocalizationResult, OrbitalLocalizerType,
     OrbitalEntanglementEntropies,
     ActiveSpaceSelectionConfig, ActiveSpaceSelectionResult, ActiveSpaceSelectorType,
@@ -115,7 +115,7 @@ as_result = ActiveSpaceSelectionResult(
 ## Fermionic and qubit Hamiltonians
 
 ```python
-from qpubench.schemas.qdk_chemistry import (
+from qpubench.schemas.microsoft_qdk import (
     FermionicHamiltonianSpec, QubitHamiltonianSpec,
     PauliStringTerm, QubitEncodingType,
 )
@@ -147,7 +147,7 @@ h_qubit = QubitHamiltonianSpec(
 ## QPE / IQPE
 
 ```python
-from qpubench.schemas.qdk_chemistry import (
+from qpubench.schemas.microsoft_qdk import (
     QPEConfig, QPEResult, QPEMethod,
     TimeEvolutionConfig, TimeEvolutionBuilderType,
     StatePrepConfig, StatePrepCircuitResult, StatePrepMethod,
@@ -198,7 +198,7 @@ iqpe_result = QPEResult(
 ## Resource estimation (Azure Quantum)
 
 ```python
-from qpubench.schemas.qdk_chemistry import (
+from qpubench.schemas.microsoft_qdk import (
     ResourceEstimatorConfig, ResourceEstimationResult,
     ErrorBudgetPartition, QubitParamsType, QECScheme,
 )
@@ -230,7 +230,7 @@ est_result = ResourceEstimationResult(
 Use model Hamiltonians instead of a molecular structure for condensed-matter benchmarks:
 
 ```python
-from qpubench.schemas.qdk_chemistry import (
+from qpubench.schemas.microsoft_qdk import (
     ModelHamiltonianSpec, ModelHamiltonianType,
     LatticeGraphSpec, LatticeTopology,
     IsingParams, HeisenbergParams, HubbardParams,
@@ -265,9 +265,9 @@ Only one parameter block (`ising`, `heisenberg`, `hubbard`, `huckel`, `ppp`) may
 ## Full pipeline record
 
 ```python
-from qpubench.schemas.qdk_chemistry import QChemPipelineSpec
+from qpubench.schemas.microsoft_qdk import QChemPipelineSpec
 from qpubench.schemas.result import QuantumResult
-from qpubench.schemas.primitives import QPUModality
+from qpubench.schemas.primitives import ComputingModel
 
 pipeline = QChemPipelineSpec(
     molecule=mol,
@@ -285,7 +285,7 @@ pipeline = QChemPipelineSpec(
 )
 
 result = QuantumResult(
-    modality=QPUModality.QPE,
+    computing_model=ComputingModel.GATE_BASED,
     qpe_result=iqpe_result,
     qchem_pipeline=pipeline,
 )

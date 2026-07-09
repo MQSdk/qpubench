@@ -41,7 +41,7 @@ import enum
 import pydantic
 
 from .result import ExpectationResult, QuantumResult
-from .primitives import JobStatus, QPUModality
+from .primitives import ComputingModel, JobStatus
 
 
 # ---------------------------------------------------------------------------
@@ -190,7 +190,7 @@ class ExcitationSolveResult(pydantic.BaseModel):
     def to_quantum_result(self) -> QuantumResult:
         """Convert to a qpubench QuantumResult for BenchmarkRecord."""
         return QuantumResult(
-            modality=QPUModality.GATE_BASED,
+            computing_model=ComputingModel.GATE_BASED,
             expectation_values=[self.to_expectation_result()],
             status=JobStatus.SUCCEEDED,
             metadata={
@@ -268,7 +268,7 @@ class ExcitationAdaptResult(pydantic.BaseModel):
 
     def to_quantum_result(self) -> QuantumResult:
         return QuantumResult(
-            modality=QPUModality.GATE_BASED,
+            computing_model=ComputingModel.GATE_BASED,
             expectation_values=[
                 ExpectationResult(
                     observable_index=0,

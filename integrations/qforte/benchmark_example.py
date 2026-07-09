@@ -128,7 +128,7 @@ def main() -> None:
         mol,
         pool_type="SD",
         optimizers=["BFGS", "jacobi"],
-        avqe_thresh=1.0e-4,
+        gradient_threshold=1.0e-4,
         run_id="he_adapt_optimizers",
     )
     _print_summary(AdaptVQERunner.summary_table(records_opt))
@@ -142,7 +142,7 @@ def main() -> None:
         mol,
         pool_types=["SD", "GSD"],
         optimizer="BFGS",
-        avqe_thresh=1.0e-4,
+        gradient_threshold=1.0e-4,
         run_id="he_adapt_pools",
     )
     _print_summary(AdaptVQERunner.summary_table(records_pool))

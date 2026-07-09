@@ -132,7 +132,23 @@ class MyTranspilableBackend:
 ## 2. Implementing AlgorithmAdapter (worked example: QForte)
 
 Copy `integrations/template/algorithm_adapter_template.py` into your project.
-The QForte integration in `integrations/qforte/` is the reference implementation.
+`integrations/qforte/` is one worked example of an `AlgorithmAdapter` — not
+the only one. `AlgorithmFamily.ADAPT_VQE` (see `AlgorithmSpec.family`) is
+implemented three ways in this repo: QForte's native C++ engine
+(`integrations/qforte/`), a from-scratch Qiskit-circuit-convention engine
+(`integrations/ibm_qiskit_adapt_vqe/`), and a QDK/Azure Quantum-flavored
+one (`integrations/microsoft_qdk_adapt_vqe/`) — the latter two share a
+single package-agnostic engine (`integrations/generic_adapt_vqe/`) and
+differ only in `BackendSpec` naming. Register any of the three under
+different names and switch between them with the same `AdaptVQEConfig`:
+
+```python
+runner.register(QForteAlgorithmAdapter(), name="qforte")
+runner.register(IBMQiskitAdaptVQEAdapter(energy_backend=aer), name="ibm_qiskit")
+config = AdaptVQEConfig(pool_type="SD", optimizer="BFGS")
+record = runner.run(mol, "qforte", ExecutionOptions(adapt_vqe_config=config))       # or:
+record = runner.run(mol, "ibm_qiskit", ExecutionOptions(adapt_vqe_config=config))   # same config, different implementation
+```
 
 ### Step 1 — Represent the problem as a CircuitSpec
 
@@ -152,24 +168,30 @@ mol_spec = CircuitSpec(
 The `serialized` field carries whatever your library needs to build the system:
 a file path, an inline JSON dict, a SMILES string, a graph adjacency matrix, etc.
 
-### Step 2 — Specify the algorithm via AlgorithmSpec
+### Step 2 — Specify the algorithm via AlgorithmSpec + a hyperparameter config
+
+`AlgorithmSpec` only carries identity (`name` + `family`); hyperparameters
+live in a family-specific config so they aren't duplicated per adapter.
+`AlgorithmFamily.ADAPT_VQE` uses the package-agnostic `AdaptVQEConfig`,
+shared by every ADAPT-VQE-family adapter:
 
 ```python
-from qpubench import AlgorithmSpec, ExecutionOptions
+from qpubench import AdaptVQEConfig, AlgorithmFamily, AlgorithmSpec, ExecutionOptions
 
 options = ExecutionOptions(
-    algorithm_spec=AlgorithmSpec(
-        name="ADAPTVQE",
+    algorithm_spec=AlgorithmSpec(name="ADAPTVQE", family=AlgorithmFamily.ADAPT_VQE),
+    adapt_vqe_config=AdaptVQEConfig(
         pool_type="SD",
         optimizer="BFGS",
-        avqe_thresh=1.0e-4,
-        adapt_maxiter=20,
-    )
+        gradient_threshold=1.0e-4,
+        max_macro_iterations=20,
+    ),
 )
 ```
 
-`AlgorithmSpec.extra_params` is an escape hatch for any algorithm-specific
-keyword arguments your library needs that are not covered by the standard fields.
+`AlgorithmSpec.extra_params` is an escape hatch for adapter-specific kwargs
+not covered by the typed config (e.g. QForte-only knobs like
+`diis_max_dim` — see `evangelistalab_qforte.QForteAlgorithmConfig`).
 
 ### Step 3 — Implement the adapter
 
@@ -181,8 +203,8 @@ import qforte as qf                      # ← only import here
 from qpubench.backends.base import AlgorithmAdapter
 from qpubench.schemas.backend import BackendSpec
 from qpubench.schemas.circuit import CircuitSpec
-from qpubench.schemas.execution import ExecutionOptions
-from qpubench.schemas.primitives import CircuitFormat, JobStatus, QPUModality
+from qpubench.schemas.execution import AdaptVQEConfig, ExecutionOptions
+from qpubench.schemas.primitives import CircuitFormat, ComputingModel, JobStatus
 from qpubench.schemas.record import VQAConfig
 from qpubench.schemas.result import ExpectationResult, QuantumResult
 
@@ -208,16 +230,17 @@ class QForteAdapter:
         )
         # 2. Run algorithm
         alg_spec = options.algorithm_spec
+        cfg      = options.adapt_vqe_config or AdaptVQEConfig()
         alg = getattr(qf, alg_spec.name)(mol, print_summary_file=False)
         alg.run(
-            pool_type=alg_spec.pool_type,
-            optimizer=alg_spec.optimizer,
-            opt_thresh=alg_spec.opt_thresh,
+            pool_type=cfg.pool_type,
+            optimizer=cfg.optimizer,
+            opt_thresh=cfg.energy_threshold,
         )
         # 3. Extract results
         energy = float(alg.get_gs_energy())
         result = QuantumResult(
-            modality=QPUModality.GATE_BASED,
+            computing_model=ComputingModel.GATE_BASED,
             expectation_values=[ExpectationResult(observable_index=0,
                                                   value=energy, std_error=0.0)],
             status=JobStatus.SUCCEEDED,
@@ -246,12 +269,30 @@ print(record.vqa.chemical_accuracy)
 ### Complete QForte integration
 
 `integrations/qforte/` contains a production-ready version covering:
-- `QForteAlgorithmAdapter` — uses QForte's internal C++ statevector
+- `QForteAlgorithmAdapter` — uses QForte's internal C++ statevector; results
+  are captured as a typed `evangelistalab_qforte.QForteRunResult` (both the
+  pybind11 object layer — `QForteCircuitSpec`, `QForteQubitOperatorSpec` —
+  and the algorithm-attribute layer are modeled in `schemas/evangelistalab_qforte.py`)
 - `ExternalEvalAlgorithmAdapter` — overrides `energy_feval()` to forward each
   energy evaluation to any qpubench `BackendAdapter` (Aer, Qrack GPU, IBM, …)
 - `AdaptVQERunner` — compare optimizers, pool types, and algorithms
 - `ExternalEvalAdaptVQERunner` — same comparisons on an external backend
 - QASM2 converter, HF state prep, convergence table helpers
+
+### Other AlgorithmFamily.ADAPT_VQE implementations
+
+Two more adapters implement the same family without needing QForte
+installed at all — `integrations/generic_adapt_vqe/` is a pure-Python
+(+ scipy) ADAPT-VQE engine (fermionic singles+doubles pool, Jordan-Wigner
+mapping, Pauli-exponential circuit synthesis, finite-difference gradient
+screening — all independently verified against dense-matrix ground truth
+in `tests/test_generic_adapt_vqe.py`) that any qpubench `BackendAdapter`
+can drive:
+- `integrations/ibm_qiskit_adapt_vqe/` — Qiskit-style OpenQASM 3.0 circuits
+- `integrations/microsoft_qdk_adapt_vqe/` — QDK / Azure Quantum defaults
+
+Register any of the three under different names and pass the same
+`AdaptVQEConfig` to compare them directly in the same `BenchmarkRecord` format.
 
 ---
 
@@ -311,7 +352,8 @@ from qpubench import (
     NDJSONStore,          # append-only result store
     PauliLabel,           # I/X/Y/Z with Qrack/Qiskit-C converters
     PauliTerm,            # one term in a sparse Pauli sum
-    QPUModality,          # GATE_BASED or MBQC
+    ComputingModel,       # GATE_BASED, MBQC, GBS, ADIABATIC, ...
+    QubitModality,        # SUPERCONDUCTING, TRAPPED_ION, NEUTRAL_ATOM, PHOTONIC, SILICON_SPIN
     QuantumResult,        # top-level execution result
     ShotResult,           # bitstring counts + optional per-shot memory
     SparsePauliObservable,
@@ -387,6 +429,7 @@ shows 61 tests that run entirely without any quantum SDK.
 | `src/qpubench/backends/aer_adapter.py` | Qiskit Aer | `BackendAdapter` + `TranspilableBackend` (fill TODOs) |
 | `src/qpubench/backends/ibm_adapter.py` | IBM Quantum Runtime V2 | `BackendAdapter` + `TranspilableBackend` (fill TODOs) |
 | `src/qpubench/backends/qrack_adapter.py` | PyQrack GPU simulator | `BackendAdapter` (fill TODOs) |
+| `src/qpubench/backends/braket_adapter.py` | AWS Braket (Rigetti/IonQ/OQC/SV1/DM1/TN1) | `BackendAdapter` (fill TODOs) |
 | `integrations/template/backend_adapter_template.py` | Generic gate-based | `BackendAdapter` template |
 | `integrations/template/algorithm_adapter_template.py` | Generic algorithm library | `AlgorithmAdapter` template |
 | `integrations/qforte/adapter.py` | QForte (UCCNVQE, ADAPT-VQE) | `AlgorithmAdapter` — complete implementation |

@@ -26,8 +26,9 @@ from typing import Any
 from qpubench.backends.base import AlgorithmAdapter
 from qpubench.schemas.backend import BackendSpec
 from qpubench.schemas.circuit import CircuitSpec
-from qpubench.schemas.execution import AlgorithmSpec, ExecutionOptions
-from qpubench.schemas.primitives import CircuitFormat, QPUModality
+from qpubench.schemas.evangelistalab_qforte import QForteAlgorithmConfig
+from qpubench.schemas.execution import AdaptVQEConfig, AlgorithmSpec, ExecutionOptions
+from qpubench.schemas.primitives import AlgorithmFamily, CircuitFormat, ComputingModel
 from qpubench.schemas.record import VQAConfig
 from qpubench.schemas.result import QuantumResult, JobStatus
 
@@ -104,48 +105,53 @@ def _build_system(qf: Any, circuit: CircuitSpec) -> Any:
     raise ValueError(f"Unknown build_type: {build_type!r}")
 
 
+def _build_qforte_config(
+    alg_spec: AlgorithmSpec,
+    adapt_vqe_config: AdaptVQEConfig | None,
+) -> QForteAlgorithmConfig:
+    """Compose the package-agnostic AdaptVQEConfig with QForte-only extras.
+
+    QForte-only knobs (diis_max_dim, use_cumulative_thresh, add_equiv_ops,
+    qubit_excitations, compact_excitations, opt_ftol, noise_factor) are
+    passed via AlgorithmSpec.extra_params — the escape hatch documented on
+    AlgorithmSpec for adapter-specific kwargs.
+    """
+    base = adapt_vqe_config or AdaptVQEConfig()
+    extras = {
+        k: v for k, v in alg_spec.extra_params.items()
+        if k in QForteAlgorithmConfig.model_fields and k != "base"
+    }
+    return QForteAlgorithmConfig(base=base, **extras)
+
+
 def _make_algorithm(
     qf: Any,
     mol: Any,
-    alg_spec: AlgorithmSpec,
+    alg_name: str,
+    qforte_config: QForteAlgorithmConfig,
     cls_override: Any = None,
 ) -> Any:
     """Instantiate a QForte algorithm (does NOT call run())."""
-    name = alg_spec.name.upper()
+    name = alg_name.upper()
     if name not in _SUPPORTED_ALGORITHMS:
         raise ValueError(
-            f"Unsupported algorithm {alg_spec.name!r}. "
+            f"Unsupported algorithm {alg_name!r}. "
             f"Supported: {sorted(_SUPPORTED_ALGORITHMS)}"
         )
     cls = cls_override if cls_override is not None else getattr(qf, name)
     kwargs: dict[str, Any] = {}
-    if alg_spec.compact_excitations:
+    if qforte_config.compact_excitations:
         kwargs["compact_excitations"] = True
-    if alg_spec.qubit_excitations:
+    if qforte_config.qubit_excitations:
         kwargs["qubit_excitations"] = True
-    if alg_spec.diis_max_dim > 0:
-        kwargs["diis_max_dim"] = alg_spec.diis_max_dim
+    if qforte_config.diis_max_dim > 0:
+        kwargs["diis_max_dim"] = qforte_config.diis_max_dim
     return cls(mol, print_summary_file=False, **kwargs)
 
 
-def _execute_algorithm(alg: Any, alg_spec: AlgorithmSpec) -> None:
-    """Call alg.run() with parameters from alg_spec."""
-    name = alg_spec.name.upper()
-    run_kwargs: dict[str, Any] = dict(
-        pool_type=alg_spec.pool_type,
-        optimizer=alg_spec.optimizer,
-        use_analytic_grad=alg_spec.use_analytic_grad,
-        opt_thresh=alg_spec.opt_thresh,
-        opt_maxiter=alg_spec.opt_maxiter,
-    )
-    if name == "UCCNVQE":
-        run_kwargs["opt_ftol"]     = alg_spec.opt_ftol
-        run_kwargs["noise_factor"] = alg_spec.noise_factor
-    elif name == "ADAPTVQE":
-        run_kwargs["avqe_thresh"]   = alg_spec.avqe_thresh
-        run_kwargs["adapt_maxiter"] = alg_spec.adapt_maxiter
-    run_kwargs.update(alg_spec.extra_params)
-    alg.run(**run_kwargs)
+def _execute_algorithm(alg: Any, alg_name: str, qforte_config: QForteAlgorithmConfig) -> None:
+    """Call alg.run() with parameters translated from qforte_config."""
+    alg.run(**qforte_config.to_run_kwargs(alg_name))
 
 
 # ---------------------------------------------------------------------------
@@ -178,7 +184,7 @@ class QForteAlgorithmAdapter:
             name="qforte_statevector",
             provider="qforte",
             simulator=True,
-            qpu_modality=QPUModality.GATE_BASED,
+            computing_model=ComputingModel.GATE_BASED,
         )
 
     def validate_problem(self, circuit: CircuitSpec) -> list[str]:
@@ -197,13 +203,16 @@ class QForteAlgorithmAdapter:
         circuit: CircuitSpec,
         options: ExecutionOptions,
     ) -> tuple[QuantumResult, VQAConfig]:
-        qf       = _require_qforte()
-        alg_spec = options.algorithm_spec or AlgorithmSpec(name=self._default)
-        mol      = _build_system(qf, circuit)
-        alg      = _make_algorithm(qf, mol, alg_spec)
-        _execute_algorithm(alg, alg_spec)
-        result   = extract_quantum_result(alg, alg_spec)
-        vqa      = extract_vqa_config(alg, mol, alg_spec)
+        qf            = _require_qforte()
+        alg_spec      = options.algorithm_spec or AlgorithmSpec(
+            name=self._default, family=AlgorithmFamily.ADAPT_VQE
+        )
+        qforte_config = _build_qforte_config(alg_spec, options.adapt_vqe_config)
+        mol           = _build_system(qf, circuit)
+        alg           = _make_algorithm(qf, mol, alg_spec.name, qforte_config)
+        _execute_algorithm(alg, alg_spec.name, qforte_config)
+        result        = extract_quantum_result(alg, alg_spec)
+        vqa           = extract_vqa_config(alg, mol, alg_spec, qforte_config)
         return result, vqa
 
 
@@ -250,7 +259,7 @@ class ExternalEvalAlgorithmAdapter:
             name=f"qforte+{self._energy_backend.spec.name}",
             provider="qforte_hybrid",
             simulator=self._energy_backend.spec.simulator,
-            qpu_modality=QPUModality.GATE_BASED,
+            computing_model=ComputingModel.GATE_BASED,
         )
 
     def validate_problem(self, circuit: CircuitSpec) -> list[str]:
@@ -271,9 +280,12 @@ class ExternalEvalAlgorithmAdapter:
     ) -> tuple[QuantumResult, VQAConfig]:
         from .energy_hook import EnergyEvaluatorHook, make_hooked_class
 
-        qf       = _require_qforte()
-        alg_spec = options.algorithm_spec or AlgorithmSpec(name=self._default)
-        mol      = _build_system(qf, circuit)
+        qf            = _require_qforte()
+        alg_spec      = options.algorithm_spec or AlgorithmSpec(
+            name=self._default, family=AlgorithmFamily.ADAPT_VQE
+        )
+        qforte_config = _build_qforte_config(alg_spec, options.adapt_vqe_config)
+        mol           = _build_system(qf, circuit)
 
         # Probe the base algorithm for system metadata (no run)
         base_cls  = getattr(qf, alg_spec.name.upper())
@@ -294,11 +306,11 @@ class ExternalEvalAlgorithmAdapter:
 
         # Build the hooked algorithm and run it
         HookedCls = make_hooked_class(base_cls, hook)
-        alg       = _make_algorithm(qf, mol, alg_spec, cls_override=HookedCls)
-        _execute_algorithm(alg, alg_spec)
+        alg       = _make_algorithm(qf, mol, alg_spec.name, qforte_config, cls_override=HookedCls)
+        _execute_algorithm(alg, alg_spec.name, qforte_config)
 
         result = extract_quantum_result(alg, alg_spec)
-        vqa    = extract_vqa_config(alg, mol, alg_spec)
+        vqa    = extract_vqa_config(alg, mol, alg_spec, qforte_config)
 
         # Annotate result with hook telemetry
         result = result.model_copy(update={

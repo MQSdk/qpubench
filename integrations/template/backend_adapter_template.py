@@ -7,7 +7,7 @@ Backends that fit this pattern
 -------------------------------
   Gate-based simulators   (Aer, Qrack, custom statevector)
   Gate-based QPU hardware (IBM, IQM, Qibo, any cloud provider)
-  MBQC-FPGA               (set circuit.modality = QPUModality.MBQC)
+  MBQC-FPGA               (set circuit.computing_model = ComputingModel.MBQC)
 
 Backends that do NOT fit — use AlgorithmAdapterTemplate instead
 ---------------------------------------------------------------
@@ -19,7 +19,7 @@ from __future__ import annotations
 from qpubench.schemas.backend import BackendSpec
 from qpubench.schemas.circuit import CircuitSpec
 from qpubench.schemas.execution import ExecutionOptions
-from qpubench.schemas.primitives import JobStatus, QPUModality
+from qpubench.schemas.primitives import ComputingModel, JobStatus
 from qpubench.schemas.result import (
     ExpectationResult,
     QuantumResult,
@@ -45,7 +45,7 @@ class MyBackendAdapter:
             name="my_backend",           # TODO: your backend's canonical name
             provider="my_provider",      # TODO: provider string
             simulator=True,              # TODO: True if simulator, False if hardware
-            qpu_modality=QPUModality.GATE_BASED,
+            computing_model=ComputingModel.GATE_BASED,
             num_qubits=None,             # TODO: max qubits if fixed
             native_gates=[],             # TODO: list of supported gate names
         )
@@ -106,7 +106,8 @@ class MyBackendAdapter:
                 return self._run_sampler(circuit, options)
         except Exception as exc:
             return QuantumResult(
-                modality=circuit.modality,
+                computing_model=circuit.computing_model,
+            qubit_modality=circuit.qubit_modality,
                 status=JobStatus.FAILED,
                 error_message=str(exc),
             )
@@ -145,7 +146,8 @@ class MyBackendAdapter:
             for i in range(len(circuit.observables))
         ]
         return QuantumResult(
-            modality=circuit.modality,
+            computing_model=circuit.computing_model,
+            qubit_modality=circuit.qubit_modality,
             expectation_values=evs,
             status=JobStatus.SUCCEEDED,
             qpu_time_s=None,        # TODO: fill from backend timing
@@ -166,7 +168,8 @@ class MyBackendAdapter:
         counts: dict[str, int] = {}   # TODO: replace with real counts
 
         return QuantumResult(
-            modality=circuit.modality,
+            computing_model=circuit.computing_model,
+            qubit_modality=circuit.qubit_modality,
             shots=ShotResult(
                 num_qubits=circuit.num_qubits,
                 num_shots=shots,

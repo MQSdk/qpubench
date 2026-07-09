@@ -1,6 +1,17 @@
 # QForte integration
 
 Self-contained example showing how to run QForte VQE algorithms via qpubench.
+QForte's pybind11 object model (Circuit, Gate, QubitOperator, ...) and its
+Algorithm/AnsatzAlgorithm/ADAPTVQE attribute surface are modeled as typed
+schemas in `schemas/evangelistalab_qforte.py` — no more ad hoc `getattr()`
+scraping of private attributes with an untyped contract.
+
+This is one of three implementations of `AlgorithmFamily.ADAPT_VQE` in this
+repo — `integrations/ibm_qiskit_adapt_vqe/` and
+`integrations/microsoft_qdk_adapt_vqe/` implement the same family without
+requiring QForte, sharing a package-agnostic engine
+(`integrations/generic_adapt_vqe/`). Register any of the three under a
+different name and drive them with the same `AdaptVQEConfig`.
 
 ## Files
 
@@ -52,6 +63,7 @@ table   = AdaptVQERunner.summary_table(records)
 ## Running on an external backend (Aer, Qrack, IBM)
 
 ```python
+from qpubench import AdaptVQEConfig, AlgorithmFamily
 from qpubench.backends.aer_adapter import AerAdapter   # fill the TODOs first
 from qforte_adapter.adapter import ExternalEvalAlgorithmAdapter
 from qforte_adapter.adapt_vqe import ExternalEvalAdaptVQERunner
@@ -61,7 +73,11 @@ runner.register(
     name="qforte+aer",
 )
 ext = ExternalEvalAdaptVQERunner(runner, "qforte+aer")
-record = ext.run(mol, AlgorithmSpec(name="ADAPTVQE", pool_type="SD"))
+record = ext.run(
+    mol,
+    AlgorithmSpec(name="ADAPTVQE", family=AlgorithmFamily.ADAPT_VQE),
+    AdaptVQEConfig(pool_type="SD"),
+)
 print(record.result.metadata["hook_call_count"])
 ```
 

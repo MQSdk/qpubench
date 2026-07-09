@@ -89,7 +89,8 @@ class BenchmarkRunner:
             except Exception as exc:
                 logger.exception("AlgorithmAdapter %r raised", backend_name)
                 result = QuantumResult(
-                    modality=circuit.modality,
+                    computing_model=circuit.computing_model,
+                    qubit_modality=circuit.qubit_modality,
                     status=JobStatus.FAILED,
                     error_message=str(exc),
                 )
@@ -111,7 +112,8 @@ class BenchmarkRunner:
             except Exception as exc:
                 logger.exception("BackendAdapter %r raised", backend_name)
                 result = QuantumResult(
-                    modality=circuit.modality,
+                    computing_model=circuit.computing_model,
+                    qubit_modality=circuit.qubit_modality,
                     status=JobStatus.FAILED,
                     error_message=str(exc),
                 )

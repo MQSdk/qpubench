@@ -1,5 +1,5 @@
 from .backend import BackendSpec, GateCharacteristics, QubitCharacteristics
-from .excitation_solve import (
+from .dlr_excitation_solve import (
     AdaptVQEStep,
     ExcitationAdaptResult,
     ExcitationSolveConfig,
@@ -9,7 +9,7 @@ from .excitation_solve import (
     ExcitationSolveSweep,
     ParameterSample,
 )
-from .gsopt import (
+from .bestquark_gsopt import (
     REFERENCE_ENERGIES,
     ActiveSpaceSpec,
     GSOptBenchmarkLane,
@@ -20,7 +20,7 @@ from .gsopt import (
     VQERunConfig,
     reference_energy,
 )
-from .xenakis import (
+from .mqsdk_xenakis import (
     BitstringGenome,
     GAConfig,
     GAGenerationRecord,
@@ -36,20 +36,126 @@ from .xenakis import (
     XenakisMolecule,
     XenakisRunConfig,
 )
-from .cebule import (
+from .mqsdk_cebule import (
+    ActivityCoefficientInput,
+    ActivityCoefficientResult,
+    AbInitioMDInput,
+    AbInitioMDMethod,
+    AbInitioMDResult,
+    AtomOrderInput,
+    AtomOrderResult,
+    CebuleTaskEnvelope,
+    CosmoInput,
+    CosmoMethod,
+    CosmoResult,
     COVOInput,
     COVOResult,
+    ForceFieldMDInput,
+    ForceFieldMDResult,
+    GeometryOptForceField,
+    GeometryOptInput,
+    GeometryOptMethod,
+    GeometryOptResult,
+    GNNDatasetCreateInput,
+    GNNDatasetCreateResult,
+    GNNDatasetDeleteInput,
+    GNNDatasetExtendInput,
+    GNNDatasetGetInput,
+    GNNMoleculeChunk,
+    GNNPredictInput,
+    GNNPredictResult,
+    GNNTrainInput,
+    GNNTrainResult,
+    GroupContributionInput,
+    GroupContributionResult,
     MolMapInput,
     MolMapResult,
     MolecularGeometry,
+    PeriodicGeometryOptInput,
+    PeriodicGeometryOptResult,
     QASMGenInput,
     QASMGenResult,
+    SigmaInput,
+    SigmaResult,
+    SolubilityInput,
+    SolubilityResult,
     TNQCOptInput,
     TNQCOptResult,
 )
+from .classiq import (
+    CircuitOptimizationComparison,
+    ClassiqAnsatzType,
+    ClassiqBackendPreferences,
+    ClassiqBackendProvider,
+    ClassiqChemistryModel,
+    ClassiqCombinatorialOptimizationSpec,
+    ClassiqConstraints,
+    ClassiqExecutionPreferences,
+    ClassiqExecutionResult,
+    ClassiqFermionMapping,
+    ClassiqModel,
+    ClassiqMoleculeSpec,
+    ClassiqOptimizationParameter,
+    ClassiqPreferences,
+    ClassiqQuantumFormat,
+    ClassiqSynthesisResult,
+    ClassiqTranspilationOption,
+    ClassiqVQEResult,
+)
+from .pyscf import (
+    DMETConfig,
+    EmbeddedHamiltonianResult,
+    ERIBuilderConfig,
+    ERIBuilderMethod,
+    ERIBuilderResult,
+    OrbitalOptimizerBasinHoppingConfig,
+    OrbitalOptimizerConfig,
+    OrbitalOptimizerMethod,
+    OrbitalOptimizerResult,
+    PCMMethod,
+    ProjectionEmbeddingConfig,
+    PySCFAtomSpec,
+    PySCFCellSpec,
+    PySCFMeanFieldConfig,
+    PySCFMeanFieldMethod,
+    PySCFMeanFieldResult,
+    PySCFMoleculeSpec,
+    PySCFSolvationConfig,
+    PySCFSolvationResult,
+)
+from .polarizable_embedding import (
+    PolarizableEmbeddingConfig,
+    PolarizableEmbeddingResult,
+    PolarizableEmbeddingSite,
+)
+from .optimizer_catalog import (
+    MINIMIZER_CATALOG,
+    STOPPING_CRITERION_CATALOG,
+    MinimizerCatalogEntry,
+    StoppingCriterionCatalogEntry,
+)
+from .hamiltonian_library import (
+    HamiltonianLibraryRecord,
+    HamiltonianSource,
+)
+from .contraction_path import (
+    ContractionPathConfig,
+    ContractionPathResult,
+    ContractionPathStrategy,
+)
 from .circuit import CircuitSpec, ParameterBinding
-from .execution import AlgorithmSpec, ExecutionOptions, TranspilerConfig, ZNEConfig
-from .photonic import (
+from .execution import AdaptVQEConfig, AlgorithmSpec, ExecutionOptions, TranspilerConfig, ZNEConfig
+from .evangelistalab_qforte import (
+    QForteAlgorithmConfig,
+    QForteCircuitSpec,
+    QForteGateSpec,
+    QForteQubitOpPoolSpec,
+    QForteQubitOperatorSpec,
+    QForteQubitOperatorTerm,
+    QForteRunResult,
+    QForteSqOpPoolSpec,
+)
+from .dtu_photonic import (
     BeamsplitterSpec,
     FBQCRunConfig,
     FockAmplitude,
@@ -81,7 +187,7 @@ from .photonic import (
     SinglePhotonSourceSpec,
     SobolParameterResult,
 )
-from .mbqc import (
+from .johnrscott_mbqc_fpga import (
     AdaptiveSpec,
     ByproductUpdateSpec,
     CommutationSpec,
@@ -91,7 +197,7 @@ from .mbqc import (
     MBQCQubitState,
     MBQCRound,
 )
-from .gbs import (
+from .dtu_gbs import (
     ClusterStateSpec,
     DuschinskyResult,
     GBSBackendType,
@@ -124,7 +230,7 @@ from .gbs import (
     VibronicSpectrumConfig,
     VibronicSpectrumResult,
 )
-from .qdk_chemistry import (
+from .microsoft_qdk import (
     ActiveSpaceSelectionConfig,
     ActiveSpaceSelectionResult,
     ActiveSpaceSelectorType,
@@ -176,7 +282,7 @@ from .qdk_chemistry import (
     TimeEvolutionConfig,
     TrotterConfig,
 )
-from .qesem import (
+from .qedma_qesem import (
     QESEMCharacterizationResult,
     QESEMCharacterizationStatus,
     QESEMCircuitObservableResult,
@@ -200,7 +306,7 @@ from .qesem import (
     QESEMTranspiledCircuit,
     QESEMTranspilationLevel,
 )
-from .qse import (
+from .mqsdk_qse import (
     CholeskyDecompositionSpec,
     CumulativeKrylovCounts,
     EigensolverMethod,
@@ -225,7 +331,7 @@ from .qse import (
     SQDStep,
     SlaterDeterminantRef,
 )
-from .slowquant import (
+from .erikkjellgren_slowquant import (
     SlowQuantRecord,
     UCCActiveSpaceConfig,
     UCCAnsatzType,
@@ -243,7 +349,7 @@ from .slowquant import (
     UCCSCFResult,
     UCCWavefunctionConfig,
 )
-from .neutral_atom import (
+from .quera_bloqade import (
     AHSBatchSpec,
     AHSDrivingField,
     AHSExecutionMetadata,
@@ -262,7 +368,7 @@ from .neutral_atom import (
     NeutralAtomCoupling,
     SpatialModulationType,
 )
-from .qcschema import (
+from .molssi_qcschema import (
     PennyLaneMolDataset,
     QCAtomicInput,
     QCAtomicResult,
@@ -278,13 +384,14 @@ from .qcschema import (
     QCSchemaRecord,
     QCWavefunctionData,
 )
-from .error_mitigation import (
+from .advantage import (
     AdvantageExperimentType,
     ClassicalComparisonMethod,
-    FireOpalConfig,
-    FireOpalResult,
-    HaiquRivetConfig,
-    HaiquTranspilationResult,
+    QuantumAdvantageRecord,
+)
+from .qctrl_fire_opal import FireOpalConfig, FireOpalResult
+from .haiqu_rivet import HaiquRivetConfig, HaiquTranspilationResult
+from .ibm_runtime_v2 import (
     IBMBitArrayMeta,
     IBMEstimatorPUB,
     IBMExecutionMode,
@@ -292,6 +399,8 @@ from .error_mitigation import (
     IBMPrimitiveType,
     IBMRuntimeRecord,
     IBMSamplerPUB,
+)
+from .unitaryfund_mitiq import (
     MitiqCDRConfig,
     MitiqConfig,
     MitiqDDDConfig,
@@ -303,26 +412,29 @@ from .error_mitigation import (
     MitiqTechnique,
     MitiqZNEConfig,
     MitiqZNEFactory,
+)
+from .parityqc_parityqc import (
     ParityQCConfig,
     ParityQCProblemEncoding,
     ParityQCResult,
-    QMatterCompressionResult,
-    QMatterConfig,
-    QuantumAdvantageRecord,
-    QuantumMotionDeviceSpec,
 )
+from .qmatter_qmatter import QMatterCompressionResult, QMatterConfig
+from .quantum_motion_hardware import QuantumMotionDeviceSpec
 from .observable import PauliTerm, SparsePauliObservable
 from .primitives import (
+    AlgorithmFamily,
     CebuleTaskType,
     CircuitFormat,
     ComplexNumber,
+    ComputingModel,
     ErrorMitigationStrategy,
     FidelityMetric,
     JobStatus,
     PauliLabel,
-    QPUModality,
+    QubitModality,
 )
 from .record import BenchmarkRecord, VQAConfig
+from .reaction import ReactionCoordinateSpec, ReactionPathResult
 from .result import (
     AdaptIteration,
     ExpectationResult,
@@ -334,13 +446,17 @@ from .result import (
 )
 
 __all__ = [
-    # error_mitigation
+    # advantage
     "AdvantageExperimentType",
     "ClassicalComparisonMethod",
+    "QuantumAdvantageRecord",
+    # qctrl_fire_opal
     "FireOpalConfig",
     "FireOpalResult",
+    # haiqu_rivet
     "HaiquRivetConfig",
     "HaiquTranspilationResult",
+    # ibm_runtime_v2
     "IBMBitArrayMeta",
     "IBMEstimatorPUB",
     "IBMExecutionMode",
@@ -348,6 +464,7 @@ __all__ = [
     "IBMPrimitiveType",
     "IBMRuntimeRecord",
     "IBMSamplerPUB",
+    # unitaryfund_mitiq
     "MitiqCDRConfig",
     "MitiqConfig",
     "MitiqDDDConfig",
@@ -359,14 +476,16 @@ __all__ = [
     "MitiqTechnique",
     "MitiqZNEConfig",
     "MitiqZNEFactory",
+    # parityqc_parityqc
     "ParityQCConfig",
     "ParityQCProblemEncoding",
     "ParityQCResult",
+    # qmatter_qmatter
     "QMatterCompressionResult",
     "QMatterConfig",
-    "QuantumAdvantageRecord",
+    # quantum_motion_hardware
     "QuantumMotionDeviceSpec",
-    # photonic
+    # dtu_photonic
     "BeamsplitterSpec",
     "FBQCRunConfig",
     "FockAmplitude",
@@ -405,7 +524,7 @@ __all__ = [
     "QuantumResult",
     "ShotResult",
     "TranspileLayout",
-    # mbqc
+    # johnrscott_mbqc_fpga
     "AdaptiveSpec",
     "ByproductUpdateSpec",
     "CommutationSpec",
@@ -415,10 +534,20 @@ __all__ = [
     "MBQCQubitState",
     "MBQCRound",
     # execution
+    "AdaptVQEConfig",
     "AlgorithmSpec",
     "ExecutionOptions",
     "TranspilerConfig",
     "ZNEConfig",
+    # evangelistalab_qforte
+    "QForteAlgorithmConfig",
+    "QForteCircuitSpec",
+    "QForteGateSpec",
+    "QForteQubitOpPoolSpec",
+    "QForteQubitOperatorSpec",
+    "QForteQubitOperatorTerm",
+    "QForteRunResult",
+    "QForteSqOpPoolSpec",
     # backend
     "BackendSpec",
     "GateCharacteristics",
@@ -426,6 +555,9 @@ __all__ = [
     # record
     "BenchmarkRecord",
     "VQAConfig",
+    # reaction
+    "ReactionCoordinateSpec",
+    "ReactionPathResult",
     # circuit
     "CircuitSpec",
     "ParameterBinding",
@@ -433,25 +565,117 @@ __all__ = [
     "PauliTerm",
     "SparsePauliObservable",
     # primitives
+    "AlgorithmFamily",
     "CebuleTaskType",
     "CircuitFormat",
     "ComplexNumber",
+    "ComputingModel",
     "ErrorMitigationStrategy",
     "FidelityMetric",
     "JobStatus",
     "PauliLabel",
-    "QPUModality",
-    # cebule
+    "QubitModality",
+    # mqsdk_cebule
+    "ActivityCoefficientInput",
+    "ActivityCoefficientResult",
+    "AbInitioMDInput",
+    "AbInitioMDMethod",
+    "AbInitioMDResult",
+    "AtomOrderInput",
+    "AtomOrderResult",
+    "CebuleTaskEnvelope",
+    "CosmoInput",
+    "CosmoMethod",
+    "CosmoResult",
     "COVOInput",
     "COVOResult",
+    "ForceFieldMDInput",
+    "ForceFieldMDResult",
+    "GeometryOptForceField",
+    "GeometryOptInput",
+    "GeometryOptMethod",
+    "GeometryOptResult",
+    "GNNDatasetCreateInput",
+    "GNNDatasetCreateResult",
+    "GNNDatasetDeleteInput",
+    "GNNDatasetExtendInput",
+    "GNNDatasetGetInput",
+    "GNNMoleculeChunk",
+    "GNNPredictInput",
+    "GNNPredictResult",
+    "GNNTrainInput",
+    "GNNTrainResult",
+    "GroupContributionInput",
+    "GroupContributionResult",
     "MolMapInput",
     "MolMapResult",
     "MolecularGeometry",
+    "PeriodicGeometryOptInput",
+    "PeriodicGeometryOptResult",
     "QASMGenInput",
     "QASMGenResult",
+    "SigmaInput",
+    "SigmaResult",
+    "SolubilityInput",
+    "SolubilityResult",
     "TNQCOptInput",
     "TNQCOptResult",
-    # excitation_solve
+    # classiq
+    "CircuitOptimizationComparison",
+    "ClassiqAnsatzType",
+    "ClassiqBackendPreferences",
+    "ClassiqBackendProvider",
+    "ClassiqChemistryModel",
+    "ClassiqCombinatorialOptimizationSpec",
+    "ClassiqConstraints",
+    "ClassiqExecutionPreferences",
+    "ClassiqExecutionResult",
+    "ClassiqFermionMapping",
+    "ClassiqModel",
+    "ClassiqMoleculeSpec",
+    "ClassiqOptimizationParameter",
+    "ClassiqPreferences",
+    "ClassiqQuantumFormat",
+    "ClassiqSynthesisResult",
+    "ClassiqTranspilationOption",
+    "ClassiqVQEResult",
+    # pyscf
+    "DMETConfig",
+    "EmbeddedHamiltonianResult",
+    "ERIBuilderConfig",
+    "ERIBuilderMethod",
+    "ERIBuilderResult",
+    "OrbitalOptimizerBasinHoppingConfig",
+    "OrbitalOptimizerConfig",
+    "OrbitalOptimizerMethod",
+    "OrbitalOptimizerResult",
+    "PCMMethod",
+    "ProjectionEmbeddingConfig",
+    "PySCFAtomSpec",
+    "PySCFCellSpec",
+    "PySCFMeanFieldConfig",
+    "PySCFMeanFieldMethod",
+    "PySCFMeanFieldResult",
+    "PySCFMoleculeSpec",
+    "PySCFSolvationConfig",
+    "PySCFSolvationResult",
+    # polarizable_embedding
+    "PolarizableEmbeddingConfig",
+    "PolarizableEmbeddingResult",
+    "PolarizableEmbeddingSite",
+    # optimizer_catalog
+    "MINIMIZER_CATALOG",
+    "STOPPING_CRITERION_CATALOG",
+    "MinimizerCatalogEntry",
+    "StoppingCriterionCatalogEntry",
+    # hamiltonian_library
+    "HamiltonianLibraryRecord",
+    "HamiltonianSource",
+    # contraction_path
+    "ContractionPathConfig",
+    "ContractionPathResult",
+    "ContractionPathStrategy",
+    # dlr_excitation_solve
     "AdaptVQEStep",
     "ExcitationAdaptResult",
     "ExcitationSolveConfig",
@@ -460,7 +684,7 @@ __all__ = [
     "ExcitationSolveResult",
     "ExcitationSolveSweep",
     "ParameterSample",
-    # gsopt
+    # bestquark_gsopt
     "REFERENCE_ENERGIES",
     "ActiveSpaceSpec",
     "GSOptBenchmarkLane",
@@ -470,7 +694,7 @@ __all__ = [
     "VQEOptimizerType",
     "VQERunConfig",
     "reference_energy",
-    # xenakis
+    # mqsdk_xenakis
     "BitstringGenome",
     "GAConfig",
     "GAGenerationRecord",
@@ -485,7 +709,7 @@ __all__ = [
     "QNEATLayerEntry",
     "XenakisMolecule",
     "XenakisRunConfig",
-    # gbs
+    # dtu_gbs
     "ClusterStateSpec",
     "DuschinskyResult",
     "GBSBackendType",
@@ -517,7 +741,7 @@ __all__ = [
     "VibronicGBSParams",
     "VibronicSpectrumConfig",
     "VibronicSpectrumResult",
-    # qesem
+    # qedma_qesem
     "QESEMCharacterizationResult",
     "QESEMCharacterizationStatus",
     "QESEMCircuitObservableResult",
@@ -540,7 +764,7 @@ __all__ = [
     "QESEMScaleExpectationValue",
     "QESEMTranspiledCircuit",
     "QESEMTranspilationLevel",
-    # qse
+    # mqsdk_qse
     "CholeskyDecompositionSpec",
     "CumulativeKrylovCounts",
     "EigensolverMethod",
@@ -564,7 +788,7 @@ __all__ = [
     "SQDPostselectionConfig",
     "SQDStep",
     "SlaterDeterminantRef",
-    # slowquant
+    # erikkjellgren_slowquant
     "SlowQuantRecord",
     "UCCActiveSpaceConfig",
     "UCCAnsatzType",
@@ -581,7 +805,7 @@ __all__ = [
     "UCCRDMData",
     "UCCSCFResult",
     "UCCWavefunctionConfig",
-    # neutral_atom
+    # quera_bloqade
     "AHSBatchSpec",
     "AHSDrivingField",
     "AHSExecutionMetadata",
@@ -599,7 +823,7 @@ __all__ = [
     "LatticeGeometryType",
     "NeutralAtomCoupling",
     "SpatialModulationType",
-    # qcschema
+    # molssi_qcschema
     "PennyLaneMolDataset",
     "QCAtomicInput",
     "QCAtomicResult",
@@ -614,7 +838,7 @@ __all__ = [
     "QCProvenance",
     "QCSchemaRecord",
     "QCWavefunctionData",
-    # qdk_chemistry
+    # microsoft_qdk
     "ActiveSpaceSelectionConfig",
     "ActiveSpaceSelectionResult",
     "ActiveSpaceSelectorType",

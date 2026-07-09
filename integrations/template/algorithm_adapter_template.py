@@ -26,7 +26,7 @@ from __future__ import annotations
 from qpubench.schemas.backend import BackendSpec
 from qpubench.schemas.circuit import CircuitSpec
 from qpubench.schemas.execution import AlgorithmSpec, ExecutionOptions
-from qpubench.schemas.primitives import CircuitFormat, JobStatus, QPUModality
+from qpubench.schemas.primitives import CircuitFormat, JobStatus, ComputingModel
 from qpubench.schemas.record import VQAConfig
 from qpubench.schemas.result import (
     AdaptIteration,
@@ -59,7 +59,7 @@ class MyAlgorithmAdapter:
             name="my_algorithm_library",   # TODO
             provider="my_library",         # TODO
             simulator=True,
-            qpu_modality=QPUModality.GATE_BASED,
+            computing_model=ComputingModel.GATE_BASED,
         )
 
     def validate_problem(self, circuit: CircuitSpec) -> list[str]:
@@ -96,9 +96,12 @@ class MyAlgorithmAdapter:
         # problem = load_problem(circuit.serialized)
 
         # TODO: step 2 — read algorithm config
+        # AlgorithmSpec carries name + AlgorithmFamily; hyperparameters live
+        # in a family-specific config (e.g. options.adapt_vqe_config for
+        # AlgorithmFamily.ADAPT_VQE) or in AlgorithmSpec.extra_params.
         alg_spec = options.algorithm_spec
         # name       = alg_spec.name if alg_spec else "MY_DEFAULT_ALG"
-        # optimizer  = alg_spec.optimizer if alg_spec else "BFGS"
+        # optimizer  = options.adapt_vqe_config.optimizer if options.adapt_vqe_config else "BFGS"
 
         # TODO: step 3 — run algorithm
         # alg = mylib.MyAlgorithm(problem)
@@ -111,7 +114,7 @@ class MyAlgorithmAdapter:
         n_qubits     = circuit.num_qubits
 
         result = QuantumResult(
-            modality=QPUModality.GATE_BASED,
+            computing_model=ComputingModel.GATE_BASED,
             expectation_values=[
                 ExpectationResult(
                     observable_index=0,
@@ -138,7 +141,7 @@ class MyAlgorithmAdapter:
             problem_type="chemistry",      # TODO: or "optimization", "ml"
             # molecule=...,               # TODO: molecule name if applicable
             algorithm=alg_spec.name if alg_spec else None,
-            optimizer=alg_spec.optimizer if alg_spec else None,
+            optimizer=options.adapt_vqe_config.optimizer if options.adapt_vqe_config else None,
             final_eigenvalue=final_energy,
             ground_truth=None,             # TODO: FCI reference if available
         )
