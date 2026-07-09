@@ -49,7 +49,7 @@ tests/             ← Schema-only unit tests
 - **No quantum SDK imports inside `src/qpubench/`**. Only adapters (in your project or `integrations/`) import external SDKs. The test suite must pass with `pip install .` alone.
 - **Never change a schema field name or type without bumping `schema_version`** in `src/qpubench/schemas/record.py`. Existing stored records break silently otherwise.
 - **Pauli encoding is non-standard for Qrack**: I=0, X=1, **Z=2, Y=3** (Q# convention). Always use `PauliLabel.to_qrack_int()`, never raw integers.
-- **MBQC byproduct register bit order**: bit 0 = Z, bit 1 = X — reversed from gate-based convention. See `schemas/mbqc.py`.
+- **MBQC byproduct register bit order**: bit 0 = Z, bit 1 = X — reversed from gate-based convention. See `schemas/johnrscott_mbqc_fpga.py`.
 - **`AlgorithmAdapter` detection is duck-typed**: your class must have both `validate_problem` and `run_algorithm` methods, or the runner silently falls through to the `BackendAdapter` path.
 
 ## Adding a new schema module

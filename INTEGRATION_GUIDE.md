@@ -415,7 +415,7 @@ shows 61 tests that run entirely without any quantum SDK.
 |-------|-------|-----|
 | `PauliLabel.Z.to_qrack_int()` returns 2, not 3 | Qrack uses Q# convention: I=0, X=1, **Z=2**, **Y=3** | Always use `PauliLabel.to_qrack_int()`, never raw integers |
 | Qiskit C API gets wrong amplitudes | `QkComplex64` is two `float32`, not `float64` | Use `numpy.complex64`, not Python `complex` |
-| MBQC byproduct update is wrong | `ops` register: **bit 0 = Z, bit 1 = X** (reversed from gate-based convention) | See `schemas/mbqc.py` |
+| MBQC byproduct update is wrong | `ops` register: **bit 0 = Z, bit 1 = X** (reversed from gate-based convention) | See `schemas/johnrscott_mbqc_fpga.py` |
 | Algorithm adapter not detected | `AlgorithmAdapter` check uses `isinstance()` | Your class must have `validate_problem` and `run_algorithm` methods |
 | Tests fail without QForte installed | Adapter imports qforte at module level | Move the `import qforte` inside the method that uses it |
 
