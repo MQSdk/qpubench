@@ -95,6 +95,16 @@ class AlgorithmFamily(str, enum.Enum):
     QDK/Azure Quantum variational pipeline — all under AlgorithmFamily.ADAPT_VQE.
     AlgorithmSpec.name stays the library-specific label; family is what
     lets a caller compare runs of "the same algorithm" across adapters.
+
+    Current real cross-adapter coverage (as of schema v2.7.0): only
+    ADAPT_VQE has more than one implementation actually registered as an
+    AlgorithmAdapter (evangelistalab_qforte, ibm_qiskit_adapt_vqe,
+    microsoft_qdk_adapt_vqe — all sharing execution.AdaptVQEConfig). Every
+    other value below has exactly one implementing module today; the
+    family tag still exists so a second implementation has something to
+    converge on, rather than each package inventing its own ad hoc label.
+    QPE is schema/metadata only (microsoft_qdk.QPEConfig, part of the QDK
+    chemistry pipeline record) — no AlgorithmAdapter runs it yet.
     """
     ADAPT_VQE         = "adapt_vqe"          # adaptive derivative-assembled pseudo-Trotterized VQE
     UCC_VQE           = "ucc_vqe"            # disentangled / fixed-pool UCC VQE
@@ -103,6 +113,7 @@ class AlgorithmFamily(str, enum.Enum):
     EXCITATION_SOLVE  = "excitation_solve"   # Fourier-series VQE parameter optimizer
     TN_QC_OPT         = "tn_qc_opt"          # tensor-network + circuit hybrid VQE (Cebule)
     GA_CIRCUIT_SEARCH = "ga_circuit_search"  # evolutionary circuit search (Xenakis)
+    QPE               = "qpe"                # quantum phase estimation (iterative or textbook)
 
 
 class FidelityMetric(str, enum.Enum):
@@ -124,17 +135,23 @@ class CebuleTaskType(str, enum.Enum):
     """Cebule (MQS) task types.
 
     Confirmed directly against ``mqsdk/core/cebule.py``'s ``TaskType`` enum
-    at github.com/mqsdk/python-sdk (checked 2026-07-08): every member below
-    except ``MOL_MAP``/``QASM_GEN`` matches that source exactly.
+    at gitlab.com/mqsdk/python-sdk (re-checked 2026-07-10): every member up
+    to and including ``MAP_TO_QASM`` matches that source exactly —
+    ``MOL_MAP``/``QASM_GEN`` were flagged "unconfirmed" in an earlier
+    revision of this docstring (checked 2026-07-08); the SDK has since
+    added them for real, plus a new ``MAP_TO_QASM`` member neither this
+    module nor that earlier check knew about.
 
-    ``MOL_MAP``/``QASM_GEN`` do NOT appear in that enum. They are kept here
-    rather than removed because docs.mqs.dk and this framework's own
-    Kubeflow integration (``integrations/kubeflow/``) describe them as part
-    of a documented "mol_map -> tn_qc_opt -> qasm_gen -> execute_circuits"
-    pipeline — they may live in a newer/enterprise API surface not yet
-    reflected in the public SDK repo snapshot checked here, rather than
-    being simply wrong. Treat them as unconfirmed against source, not as
-    verified the way every other member is.
+    ``RXN_OPT``/catalyst-design members below are a different situation:
+    real per docs.mqs.dk's "RN Catalyst Design" section, but genuinely
+    absent from the public SDK repo — checked directly (2026-07-10)
+    against every file in gitlab.com/mqsdk/python-sdk's tree (``cebule.py``,
+    ``core.py``, ``data.py``, ``models.py``, ``utils/tasks.py``): zero
+    matches for "rxn", "catalyst", "surface", "wulff", or "tof" anywhere.
+    Likely a newer/enterprise API surface not yet reflected in the public
+    repo snapshot, same situation ``MOL_MAP``/``QASM_GEN`` were in before —
+    treat these as unconfirmed against source, not verified the way the
+    members above them are.
     """
     # Confirmed in the public SDK's TaskType enum.
     COSMO                 = "cosmo"                  # continuum solvation (dielectric + VDW radii)
@@ -156,9 +173,16 @@ class CebuleTaskType(str, enum.Enum):
     GNN_PREDICT              = "gnn:predict"
     TN_QC_OPT  = "tn_qc_opt"  # tensor-network + quantum circuit VQE
     COVO       = "covo"        # correlation-optimised virtual orbitals
-    # Not found in the public SDK's TaskType enum — see class docstring.
-    MOL_MAP    = "mol_map"     # molecular-to-qubit Hamiltonian mapping (unconfirmed)
-    QASM_GEN   = "qasm_gen"    # OpenQASM measurement circuit generation (unconfirmed)
+    MOL_MAP    = "mol_map"     # molecular-to-qubit Hamiltonian mapping — now confirmed, see class docstring
+    QASM_GEN   = "qasm_gen"    # OpenQASM measurement circuit generation — now confirmed, see class docstring
+    MAP_TO_QASM = "map_to_qasm"  # newly discovered 2026-07-10; exact semantics vs. QASM_GEN not yet confirmed
+    # Not found anywhere in the public SDK repo — see class docstring.
+    RXN_OPT                    = "rxn_opt"                     # reaction-network flux optimisation (unconfirmed)
+    GAS_SPECIES_ENERGY          = "gas_species_energy"           # gas-phase reference energies (unconfirmed)
+    SURFACE_REACTION_ENERGIES   = "surface_reaction_energies"    # per-surface adsorption/reaction energies (unconfirmed)
+    GAN_TOF                     = "gan_tof"                       # GAN-based catalyst composition search (unconfirmed)
+    MAKE_SURF                    = "make_surf"                     # bimetallic alloy surface dataset generation (unconfirmed)
+    WULFF_CONSTRUCTION           = "wulff_construction"             # equilibrium crystal shape via Wulff geometry (unconfirmed)
 
 
 class ComplexNumber(pydantic.BaseModel):

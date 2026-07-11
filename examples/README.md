@@ -65,7 +65,7 @@ that runs ADAPT-VQE or exact diagonalization.
 | Choose a Data Persister Manager | Yes | `data_persister_manager.py` |
 | Using the Logger | **Yes** | `logging_hook.py` — real `BenchmarkLogger` (levels/handlers/formatters) |
 | Run basic QI use cases | Yes | already covered — see `../gate_based_example.py`, not duplicated here |
-| Create a ReactionConfiguration | Yes | `schemas/reaction.py`'s `ReactionCoordinateSpec` — see `../demos/reaction_path_pes_sweep.py` |
+| Create a ReactionConfiguration | Yes | `schemas/reactions.py`'s `ReactionCoordinateSpec` — see `../demos/reaction_path_pes_sweep.py` |
 | Construct a Reaction-Path Problem | Yes | same mechanism, same demo |
 | Calculate Reaction Path Energies | Yes | `ReactionPathResult.reaction_energy` / `.barrier_height`, same demo |
 | Create a Solvent Model | **Yes** | `create_solvent_model.py` — real PySCF PCM-solvated HF |
@@ -371,12 +371,21 @@ embedding-schema, and partial-guide gaps:
 
 **Earlier passes (schema v2.1.0 → v2.3.0)**:
 
-- **`src/qpubench/schemas/reaction.py`** (new module) — `ReactionCoordinateSpec`
-  / `ReactionPathResult` tie a sweep of point calculations into one reaction
-  path / PES, with `.barrier_height`, `.reaction_energy`,
-  `.to_dict_for_plot()`. Used by `demos/reaction_path_pes_sweep.py` and both
+- **`src/qpubench/schemas/reactions.py`** (renamed from `reaction.py`,
+  moved out of the framework-core module group, and expanded) —
+  `ReactionCoordinateSpec`/`ReactionPathResult` tie a sweep of point
+  calculations into one reaction path / PES, with `.barrier_height`,
+  `.reaction_energy`, `.to_dict_for_plot()`, and now
+  `.rate_constant()`/`.to_arrhenius_rate_constant()` (PennyLane-demo-style
+  quantum-barrier → classical Arrhenius rate constant). Also adds real
+  Cantera-style kinetics types (`ArrheniusRateConstant`,
+  `KineticsSpeciesSpec`, `KineticsReactionSpec`, `ReactionMechanism`) —
+  `ReactionMechanism.to_cantera_yaml()` produces a mechanism file real
+  Cantera loads and evaluates rate constants from directly, verified
+  against `cantera==3.2.0` in this repo's own sandbox. Used by
+  `demos/reaction_path_pes_sweep.py` and both
   `tutorials/bond_dissociation_curve.py` and `tutorials/reaction_path_sn2.py`.
-  See `../../docs/schemas.md#reaction`.
+  See `../../docs/schemas.md#reactions`.
 - **`BackendSpec.braket()` + `src/qpubench/backends/braket_adapter.py`** (new)
   — generic gate-based AWS Braket access (Rigetti/IonQ/OQC QPUs, SV1/DM1/TN1
   simulators), distinct from the Borealis/Aquila-specific Braket wiring that
@@ -391,7 +400,7 @@ embedding-schema, and partial-guide gaps:
   capable), `FORCE_FIELD_MD`, `GEOMETRY_OPT`/`PERIODIC_GEOMETRY_OPT`,
   `GROUP_CONTRIBUTION`, `ATOM_ORDER`, `ACTIVITY_COEFFICIENT`, and the GNN
   dataset/model lifecycle. See `../../docs/integrations/cebule.md`.
-- **`src/qpubench/schemas/pyscf.py`** (new module) — molecule/cell/mean-
+- **`src/qpubench/schemas/pyscf_pyscf.py`** (new module) — molecule/cell/mean-
   field/DFT/PCM-solvation types verified directly against the real PySCF
   API; DMET/projection-based-embedding types schema-only (PsiEmbed/libDMET
   aren't on PyPI). See `../../docs/integrations/pyscf.md`.

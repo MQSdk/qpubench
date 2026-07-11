@@ -39,7 +39,7 @@ from qpubench import BenchmarkRunner, NDJSONStore, ExecutionOptions
 
 from classiq_adapter.adapter import ClassiqAlgorithmAdapter
 from classiq_adapter.converters import problem_spec_from_qmod
-from qpubench.schemas.classiq import ClassiqConstraints, ClassiqOptimizationParameter
+from qpubench.schemas.classiq_classiq import ClassiqConstraints, ClassiqOptimizationParameter
 
 @classiq.qfunc
 def main(q: classiq.QArray[classiq.QBit]) -> None:
@@ -89,7 +89,7 @@ same `CircuitSpec` type (`GARunResult.best_circuit_spec()`).
 ## Comparing against a Xenakis GA search
 
 ```python
-from qpubench.schemas.classiq import CircuitOptimizationComparison
+from qpubench.schemas.classiq_classiq import CircuitOptimizationComparison
 
 comparison = CircuitOptimizationComparison(
     problem_label="H2 UCCSD ansatz, sto-3g",

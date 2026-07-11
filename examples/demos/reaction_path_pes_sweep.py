@@ -1,6 +1,6 @@
 """qrunch demo: "Performing a Reaction-Path Potential Energy Surface (PES) Study"
 
-Verdict: Yes — this is the first real exercise of schemas/reaction.py
+Verdict: Yes — this is the first real exercise of schemas/reactions.py
 (added alongside these examples specifically to close this gap): a sweep of
 point calculations tied together as one ReactionCoordinateSpec /
 ReactionPathResult, rather than a bare list of unrelated BenchmarkRecords.
@@ -26,7 +26,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
 from qpubench import AlgorithmSpec, BenchmarkRunner, CircuitSpec, ExecutionOptions
 from qpubench.schemas.execution import AdaptVQEConfig
 from qpubench.schemas.primitives import AlgorithmFamily, CircuitFormat
-from qpubench.schemas.reaction import ReactionCoordinateSpec, ReactionPathResult
+from qpubench.schemas.reactions import ReactionCoordinateSpec, ReactionPathResult
 
 from examples.common.toy_hamiltonians import NUM_ELECTRONS, NUM_QUBITS, toy_bond_hamiltonian
 from examples.common.toy_statevector_backend import ToyStatevectorAdapter

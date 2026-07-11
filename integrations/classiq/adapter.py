@@ -37,7 +37,7 @@ from qpubench.backends.base import AlgorithmAdapter
 from qpubench.schemas.backend import BackendSpec
 from qpubench.schemas.circuit import CircuitSpec
 from qpubench.schemas.execution import ExecutionOptions
-from qpubench.schemas.classiq import ClassiqConstraints, ClassiqPreferences
+from qpubench.schemas.classiq_classiq import ClassiqConstraints, ClassiqPreferences
 from qpubench.schemas.primitives import CircuitFormat, ComputingModel, JobStatus
 from qpubench.schemas.record import VQAConfig
 from qpubench.schemas.result import QuantumResult

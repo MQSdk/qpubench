@@ -69,6 +69,24 @@ Fixes made during QPUBench development under ponytail review:
 
 **Result**: fewer lines, cleaner types, one real bug found.
 
+## Python Quality Toolchain — QPUBench
+
+\footnotesize
+```bash
+ruff check src/ tests/    # lint (line-length 100, target py311)
+ruff format src/ tests/   # format
+mypy src/                 # static types (strict = true)
+pytest tests/ -q          # 259 tests, SDK-dependent ones skip cleanly
+```
+
+| Tool | Role |
+|------|------|
+| **Pydantic v2** | Runtime-validated schemas — field types enforced at parse time |
+| **ruff** | Linting + auto-formatting, replaces flake8/isort/black |
+| **mypy strict** | Full type coverage — `Any` only where unavoidable |
+| **pytest** | Schema-only test suite runs with `pip install .` alone |
+\normalsize
+
 ## Ponytail — Install & Use
 
 ```bash

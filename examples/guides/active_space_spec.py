@@ -34,7 +34,7 @@ from qpubench.schemas.microsoft_qdk import (
     ActiveSpaceSelectionResult,
     ActiveSpaceSelectorType,
 )
-from qpubench.schemas.pyscf import PySCFAtomSpec, PySCFMoleculeSpec
+from qpubench.schemas.pyscf_pyscf import PySCFAtomSpec, PySCFMoleculeSpec
 
 from integrations.generic_adapt_vqe.pool import generate_singles_doubles_pool
 

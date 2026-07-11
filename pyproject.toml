@@ -49,13 +49,15 @@ qrack   = ["pyqrack"]
 braket  = ["amazon-braket-sdk", "qiskit-braket-provider"]   # generic gate-based AWS Braket adapter (backends/braket_adapter.py)
 iqm     = ["iqm-client[qiskit]"]   # IQM hardware adapter (backends/iqm_adapter.py) — standalone qiskit-iqm is obsolete, bundled here instead
 classiq = ["classiq"]
-pyscf   = ["pyscf"]   # mean-field/DFT, PCM/COSMO solvation, periodic pbc — schemas/pyscf.py
+mitiq   = ["mitiq", "ply"]   # Mitiq ZNE error-mitigation adapter (backends/unitaryfund_mitiq_adapter.py) — ply works around a real cirq-core QASM-import gap, see that module's docstring
+pyscf   = ["pyscf"]   # mean-field/DFT, PCM/COSMO solvation, periodic pbc — schemas/pyscf_pyscf.py
 hamlib  = ["h5py", "requests"]   # HamLib Chemistry loader (hamiltonian_sources/hamlib.py)
 bse     = ["basis_set_exchange"]   # Basis Set Exchange basis-function-count loader (hamiltonian_sources/basis_set_exchange.py)
 qvszp   = ["requests"]   # q-vSZP basis-set downloader/parser, no ORCA needed (hamiltonian_sources/qvszp.py)
-pennylane = ["pennylane", "aiohttp", "fsspec", "h5py"]   # PennyLane qchem dataset loader (hamiltonian_sources/pennylane_qchem.py)
+pennylane = ["pennylane", "pennylane-qiskit", "aiohttp", "fsspec", "h5py"]   # PennyLane qchem dataset loader (hamiltonian_sources/pennylane_qchem.py) + lightning.qubit BackendAdapter (backends/pennylane_lightning_adapter.py, ships with pennylane; pennylane-qiskit loads the CircuitSpec's QASM)
 openfermion = ["openfermion", "openfermionpyscf", "pyscf"]   # ab initio Hamiltonian construction (hamiltonian_sources/ab_initio.py)
 tensor_network = ["quimb", "cotengra"]   # contraction path selection (tensor_network/contraction_path.py)
+cantera = ["pyyaml"]   # ReactionMechanism.to_cantera_yaml() (schemas/reactions.py) — real cantera package only needed to load/run the exported mechanism, not to build it
 storage = ["pyarrow", "pandas"]
 s3      = ["boto3"]   # S3 / S3-compatible object stores (AWS S3, MinIO, HF Storage Buckets)
 cudaq   = []   # CUDA-Q installed separately via conda/pip per NVIDIA docs
@@ -73,12 +75,14 @@ all     = [
     "amazon-braket-sdk", "qiskit-braket-provider",
     "iqm-client[qiskit]",
     "classiq",
+    "mitiq", "ply",
     "pyscf",
     "h5py", "requests",
     "basis_set_exchange",
-    "pennylane", "aiohttp", "fsspec",
+    "pennylane", "pennylane-qiskit", "aiohttp", "fsspec",
     "openfermion", "openfermionpyscf",
     "quimb", "cotengra",
+    "pyyaml",
     "pyarrow", "pandas",
     "boto3",
     "scipy", "numpy",

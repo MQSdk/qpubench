@@ -25,7 +25,7 @@ guessed:
     ``two_particle``/``observable`` Jordan-Wigner mapping. Exact
     lattice/solver keyword arguments are illustrative — verify against
     whichever libdmet commit you install, same caveat as the schema module
-    itself (``qpubench.schemas.pyscf.DMETConfig``).
+    itself (``qpubench.schemas.pyscf_pyscf.DMETConfig``).
 
 Requires (to actually run either branch):
     pip install git+https://github.com/danclaudino/PsiEmbed
@@ -43,7 +43,7 @@ import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
 
-from qpubench.schemas.pyscf import DMETConfig, ProjectionEmbeddingConfig
+from qpubench.schemas.pyscf_pyscf import DMETConfig, ProjectionEmbeddingConfig
 
 _WATER_ETHANOL_GEOMETRY = """
 O       -1.1867 -0.2472  0.0000

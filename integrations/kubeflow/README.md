@@ -3,7 +3,7 @@
 Worked example showing qpubench algorithmic steps run as **kfp components**,
 visible in the Kubeflow Central Dashboard as a real pipeline graph — the
 Cebule SDK task chain (`MOL_MAP -> TN_QC_OPT -> QASM_GEN -> circuit
-execution`) as four DAG nodes.
+execution`) as DAG nodes.
 
 This is **Path 1** of the qpubench/Kubeflow integration analysis: kfp owns
 the DAG and the dashboard. The unified Kubeflow SDK (`TrainerClient`,
@@ -13,21 +13,52 @@ and for the narrower cases (multi-node distributed simulation, Katib
 hyperparameter search) where it's worth reaching for inside a component
 body.
 
+## Four pipelines, one per `Mapper` category
+
+[`data/IBM_VQE_Test_Benchmark.csv`](../../data/IBM_VQE_Test_Benchmark.csv)
+(see [`data/README.md`](../../data/README.md)) has four `Mapper`
+categories, and each gets its own `@dsl.pipeline` — `Mapper` is the one
+axis that changes which components exist (a component change), so it's the
+one thing that gets its own DAG:
+
+| Pipeline | Mapper category | Components |
+|---|---|---|
+| `cebule_molecular_vqe_pipeline` | `tn_qc_opt+mol_map` | `mol_map_component -> tn_qc_opt_component -> qasm_gen_component -> execute_circuits_component` |
+| `cebule_tn_vqe_pipeline` | `tn_qc_opt` | `jw_map_component -> tn_qc_opt_component -> qasm_gen_component -> execute_circuits_component` |
+| `mol_map_measurement_pipeline` | `mol_map` | `mol_map_component -> execute_static_hamiltonian_component` |
+| `jw_baseline_pipeline` | `JW` | `jw_map_component -> execute_static_hamiltonian_component` |
+
+Every other benchmark dimension — `TN_Layers_Network`, `TN_Layers_Circuit`,
+`Rotation_Type`, `Measurement_Method`, `Shots`, `Qiskit_Opt_Level` — is a
+**parameter value**, not a different pipeline: it's resolved *inside* one
+of the four DAGs above via `dsl.ParallelFor` (the Cebule-task-level knobs)
+and `BenchmarkRunner.sweep()` inside the Execution components (the
+execution-option knobs). One run of one pipeline, however many sweep
+points it fans out to, is one graph in the dashboard — not one DAG per CSV
+row. See `components.py`'s and `pipelines.py`'s module docstrings for the
+full reasoning.
+
+`mol_map`/`JW` (no VQE ansatz — `Ansatz` is blank for both in
+`data/README.md`) measure the fixed Hartree-Fock reference state instead of
+an optimized state; see `execute_static_hamiltonian_component`'s docstring.
+
 ## Files
 
 | File | Purpose |
 |------|---------|
-| `components.py` | Four `@dsl.component` functions — the DAG nodes |
-| `pipelines.py` | `cebule_molecular_vqe_pipeline` — the `@dsl.pipeline` wiring them together |
+| `components.py` | `@dsl.component` functions — the DAG nodes, shared across the four pipelines where the same step applies |
+| `pipelines.py` | The four `@dsl.pipeline` functions wiring components together, one per Mapper category |
 
 ## Component kinds
 
 | Component | Kind | Backend calls |
 |---|---|---|
+| `jw_map_component` | Transform | None — local PySCF/OpenFermion (`hamiltonian_sources/ab_initio.py`) |
 | `mol_map_component` | Transform | Cebule cloud API (MOL_MAP) |
 | `tn_qc_opt_component` | Transform (one job, whole optimizer loop inside) | Cebule cloud API (TN_QC_OPT) |
 | `qasm_gen_component` | Transform | Cebule cloud API (QASM_GEN) |
-| `execute_circuits_component` | Execution | qpubench `BenchmarkRunner` against a registered `BackendAdapter` (stub by default) |
+| `execute_circuits_component` | Execution | qpubench `BenchmarkRunner` against a registered `BackendAdapter` (stub by default) — `tn_qc_opt`/`tn_qc_opt+mol_map` pipelines |
+| `execute_static_hamiltonian_component` | Execution | qpubench `BenchmarkRunner`, plus Cebule QASM_GEN for the `qasm_gen_grouped` branch only — `mol_map`/`JW` pipelines |
 
 ## Setup
 
@@ -35,13 +66,20 @@ body.
 pip install kfp kfp-kubernetes
 ```
 
-Build and publish a container image with `qpubench` + `mqsdk` installed
+Build and publish container images with `qpubench` + `mqsdk` installed
 (referenced as `_QPUBENCH_IMAGE`/`_QPUBENCH_SIM_IMAGE` in `components.py` —
-replace the placeholder tags with your own registry):
+replace the placeholder tags with your own registry), plus a separate image
+with `qpubench[openfermion]` for `jw_map_component` (`_QPUBENCH_CHEM_IMAGE`
+— PySCF/OpenFermion, no Cebule credentials needed):
 
 ```dockerfile
 FROM python:3.11-slim
 RUN pip install qpubench mqsdk
+```
+
+```dockerfile
+FROM python:3.11-slim
+RUN pip install "qpubench[openfermion]"
 ```
 
 Create the Cebule credentials secret once per cluster/namespace:
@@ -61,43 +99,121 @@ from pipelines import cebule_molecular_vqe_pipeline
 compiler.Compiler().compile(cebule_molecular_vqe_pipeline, "cebule_pipeline.yaml")
 ```
 
-Upload `cebule_pipeline.yaml` through the dashboard's Pipelines UI, or
-submit programmatically:
+Or compile all four at once: `python -m integrations.kubeflow.pipelines`
+(writes `<pipeline_name>.yaml` for each of the four).
+
+Upload the YAML through the dashboard's Pipelines UI, or submit
+programmatically — e.g. running the full `TN_Layers_Network x
+TN_Layers_Circuit x Rotation_Type x Measurement_Method` sweep from
+`data/IBM_VQE_Test_Benchmark.csv` as **one** pipeline run:
 
 ```python
 import kfp
 
 client = kfp.Client(host="https://<your-kubeflow-endpoint>")
 client.create_run_from_pipeline_package(
-    "cebule_pipeline.yaml",
+    "cebule_molecular_vqe_pipeline.yaml",
     arguments={
         "geometry": [0.0, 0.0, 0.0, 0.0, 0.0, 0.7414],
         "symbols": ["H", "H"],
+        "tn_layers_network_values": [0, 1, 2, 3],
+        "tn_layers_circuit_values": [1, 2, 3, 4],
+        "rotation_types": [True, False],
+        "measurement_methods": ["pauli", "qasm_gen_grouped"],
+        "shots_values": [1024],
+        "optimization_levels": [1],
     },
 )
 ```
 
-The run appears immediately in the dashboard: graph, per-step logs,
+The run appears immediately in the dashboard: one graph (fanned out by
+`dsl.ParallelFor` into every sweep-point branch above), per-step logs,
 artifacts, and caching status.
 
-Verified against `kfp==2.16.1` by actually compiling this pipeline, not just
-reading it — see the note below on `from __future__ import annotations`,
-which surfaced from that test.
+Verified against `kfp==2.16.1` by actually compiling all four pipelines,
+not just reading them (nested 4-deep `dsl.ParallelFor` included) — see the
+note below on `from __future__ import annotations`, which surfaced from
+that test. The pure-Python logic inside each component body (JSON
+artifact reads, the pauli/Estimator vs qasm_gen_grouped/Sampler branch,
+`jw_map_component`'s real PySCF/OpenFermion call, `BenchmarkRunner.sweep()`
+against `StubGateAdapter`) was also run directly (outside a container,
+calling each `@dsl.component`'s `.python_func`) — real, not just
+compile-checked. Only the actual Cebule `create_task` calls
+(`mol_map_component`, `tn_qc_opt_component`, `qasm_gen_component`, and
+`execute_static_hamiltonian_component`'s `qasm_gen_grouped` branch) are
+untested here, same as before this change — they need real Cebule
+credentials this environment doesn't have.
 
 ## Known placeholders (read before running against real Cebule credentials)
 
-- `qasm_gen_component` needs a Pauli-term → dense-Hermitian-matrix
-  conversion that qpubench doesn't ship yet (`schemas/observable.py` only
-  implements the reverse direction, `from_cebule_operators`). It's a marked
-  `TODO` in `components.py`, not silently fabricated math.
+qpubench ships no Pauli-term <-> dense-Hermitian-matrix conversion utility
+in *either* direction (`schemas/observable.py` only implements
+`from_cebule_operators`, sparse-terms-in). That gates exactly the
+combinations where the Hamiltonian representation you have doesn't match
+what the next call needs — each one raises `NotImplementedError` with a
+pointer back here, rather than fabricating the conversion:
+
+| Component | Gap |
+|---|---|
+| `qasm_gen_component` (`tn_qc_opt`/`tn_qc_opt+mol_map` pipelines) | needs TN_QC_OPT's sparse `qubit_operators`/`h_tn_opt_qubit` converted to `QASMGenInput.operator`'s dense matrix — marked `TODO` in `components.py` |
+| `execute_static_hamiltonian_component(hamiltonian_kind="dense", measurement_method="pauli")` (`mol_map_measurement_pipeline`) | needs `mol_map`'s dense `mapped_hamiltonian` converted to a `SparsePauliObservable` for the Estimator path |
+| `execute_static_hamiltonian_component(hamiltonian_kind="sparse", measurement_method="qasm_gen_grouped")` (`jw_baseline_pipeline`) | needs the JW mapping's sparse Pauli terms converted to a dense matrix — the same gap as `qasm_gen_component`'s |
+
+The three combinations *not* in that table (`tn_qc_opt`'s `pauli` branch;
+`mol_map`'s `qasm_gen_grouped` branch; `JW`'s `pauli` branch) are real,
+tested code paths, not placeholders.
+
+### TODO — closing the three `NotImplementedError` gaps
+
+- [ ] **`SparsePauliObservable.to_dense_matrix(num_qubits) -> list[list[float]]`**
+  (new method, `schemas/observable.py`) — sparse → dense, standard Pauli
+  tensor-product expansion (`sum_i coeff_i * kron(*pauli_ops_i)` over each
+  term's `2x2` Pauli matrices, embedded with identities on the untouched
+  qubits). Symmetric counterpart to the existing `from_cebule_operators`
+  (which only goes dense/string → sparse).
+  Unblocks: `qasm_gen_component`'s `TODO` (both `tn_qc_opt` pipelines) and
+  `execute_static_hamiltonian_component(hamiltonian_kind="sparse",
+  measurement_method="qasm_gen_grouped")` (`jw_baseline_pipeline`).
+- [ ] **`SparsePauliObservable.from_dense_matrix(matrix, num_qubits, *,
+  atol=1e-10) -> SparsePauliObservable`** (new classmethod, same module) —
+  dense → sparse, standard Pauli decomposition
+  (`coeff_P = Tr(P @ H) / 2**num_qubits` for each of the `4**num_qubits`
+  Pauli strings, keeping only `|coeff_P| > atol`).
+  Unblocks: `execute_static_hamiltonian_component(hamiltonian_kind="dense",
+  measurement_method="pauli")` (`mol_map_measurement_pipeline`).
+- [ ] Both conversions are `O(4**num_qubits)` — fine for this benchmark's
+  actual `mol_map`/small-`JW` qubit counts (the dense matrix side is
+  already `2**n x 2**n`, so nothing here is more exponential than what's
+  already being carried around), but **do not** reuse either as a
+  general-purpose utility for large qubit counts without an explicit size
+  guard.
+- [ ] Once both land: delete the three `NotImplementedError` branches
+  above, delete this TODO section and the table above it, and re-verify
+  all four pipelines' Execution components against real Cebule
+  credentials (everything in this repo so far has only been verified
+  against the stub backend + compile-checked DAG structure — see
+  "Compile and run" above for exactly what has and hasn't been run for
+  real).
+- [ ] Separately, unrelated to the conversion gap: confirm
+  `mqsdk.TaskType`'s exact import path against your installed `mqsdk`
+  version (flagged below too — `docs/integrations/cebule.md`'s
+  session-pattern example doesn't pin it down).
+
+Other things to know before a real run:
+
 - `mqsdk.TaskType`'s exact import path isn't pinned down by
   `docs/integrations/cebule.md`'s existing session-pattern example — confirm
   it against your installed `mqsdk` version.
-- Swapping `execute_circuits_component`'s `StubGateAdapter` for a real
+- Swapping either Execution component's `StubGateAdapter` for a real
   backend (Aer/Qrack/IBM) means changing that one component's `base_image`
   and adapter registration, and its resource request in `pipelines.py`
   (`.set_cpu_limit(...)` / `.set_accelerator_type("nvidia.com/gpu")...` for a
   GPU simulator) — no other component changes.
+- `execute_static_hamiltonian_component`'s one-hot `state_vector` for the
+  HF reference state, and `jw_map_component`'s HF occupation-number
+  `hf_state` convention, both scale as `2**num_qubits`/are only meaningful
+  for the small qubit counts this benchmark's `mol_map`/`JW` rows actually
+  use — not a general-purpose statevector builder.
 - Neither `components.py` nor `pipelines.py` uses
   `from __future__ import annotations`, unlike the rest of this repo — kfp's
   `@dsl.component`/`@dsl.pipeline` decorators inspect live type objects at

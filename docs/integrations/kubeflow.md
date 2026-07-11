@@ -80,12 +80,12 @@ pod calling `TrainerClient().train()` or `OptimizerClient().optimize()`
 needs its service account granted RBAC on `trainjobs.trainer.kubeflow.org`
 (and Katib's experiment CRD) — not granted by default to kfp-launched pods.
 
-## Worked example: the Cebule pipeline
+## Worked example: the Cebule pipeline(s)
 
 [`integrations/kubeflow/`](../../integrations/kubeflow/) implements the
 Cebule SDK's documented task chain — `MolMapResult.to_sparse_pauli_observable`
 in `schemas/mqsdk_cebule.py` explicitly notes TN_QC_OPT is "a follow-up" to
-MOL_MAP — as four `kfp` DAG nodes:
+MOL_MAP — as `kfp` DAG nodes:
 
 ```
 mol_map_component  →  tn_qc_opt_component  →  qasm_gen_component  →  execute_circuits_component
@@ -95,10 +95,45 @@ mol_map_component  →  tn_qc_opt_component  →  qasm_gen_component  →  execu
 ```
 
 See `integrations/kubeflow/README.md` for setup, compilation, and
-submission, and its "Known placeholders" section for the two gaps left
-honestly unfilled (a Pauli-term ↔ dense-matrix conversion qpubench doesn't
-ship yet, and confirming `mqsdk.TaskType`'s import path against your
-installed version) rather than papered over with invented conversion logic.
+submission, and its "Known placeholders" section for the gaps left
+honestly unfilled (qpubench ships no Pauli-term ↔ dense-matrix conversion
+in either direction, and confirming `mqsdk.TaskType`'s import path against
+your installed version) rather than papered over with invented conversion
+logic — its "TODO — closing the three `NotImplementedError` gaps"
+checklist right below that section is the concrete work item list
+(two `SparsePauliObservable` conversion methods to add in
+`schemas/observable.py`, plus which of the four pipelines' Execution
+components each one unblocks).
+
+## Mapper category = new DAG; sweep point = parameter inside one DAG
+
+`data/IBM_VQE_Test_Benchmark.csv` (see `data/README.md`) is the concrete
+test of the component-boundary rule above: it has four `Mapper` categories
+(`JW`, `mol_map`, `tn_qc_opt`, `tn_qc_opt+mol_map`), each requiring a
+different set of components — so each gets its **own** `@dsl.pipeline` in
+`integrations/kubeflow/pipelines.py`. Everything else in that CSV —
+`TN_Layers_Network`, `TN_Layers_Circuit`, `Rotation_Type`,
+`Measurement_Method`, `Shots`, `Qiskit_Opt_Level` — is a parameter value
+that doesn't change which components run, so none of it gets its own
+pipeline:
+
+- `TN_Layers_Network`/`TN_Layers_Circuit`/`Rotation_Type`/
+  `Measurement_Method` are Cebule TN_QC_OPT task-call parameters — swept
+  via nested `dsl.ParallelFor` inside the one relevant pipeline, so a
+  single pipeline *run* fans out into every sweep point as branches of the
+  same dashboard graph, not one run (let alone one pipeline) per
+  combination.
+- `Shots`/`Qiskit_Opt_Level` are execution options, not different Cebule
+  calls — resolved inside the Execution component itself via
+  `BenchmarkRunner.sweep()`'s cartesian product, the same "stays inside one
+  component/job" treatment TN_QC_OPT's own `n_iterations` optimizer loop
+  already gets.
+
+Running the CSV's full 2,436-row matrix (or any `data/batches/` tranche)
+against real hardware means: pick the pipeline matching each row's
+`Mapper`, then group rows by every other column into one
+`create_run_from_pipeline_package(...)` call per Mapper with all the
+distinct sweep values as list-valued arguments — not one run per row.
 
 ## Why not build a custom DAG driver over `TrainerClient` instead
 

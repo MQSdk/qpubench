@@ -50,8 +50,15 @@ from .mqsdk_cebule import (
     CosmoResult,
     COVOInput,
     COVOResult,
+    CRNReaction,
+    CRNSpecies,
     ForceFieldMDInput,
     ForceFieldMDResult,
+    GANTOFInput,
+    GANTOFResult,
+    GasSpeciesEnergyInput,
+    GasSpeciesEnergyResult,
+    GeneratedCatalyst,
     GeometryOptForceField,
     GeometryOptInput,
     GeometryOptMethod,
@@ -68,6 +75,8 @@ from .mqsdk_cebule import (
     GNNTrainResult,
     GroupContributionInput,
     GroupContributionResult,
+    MakeSurfInput,
+    MakeSurfResult,
     MolMapInput,
     MolMapResult,
     MolecularGeometry,
@@ -75,14 +84,21 @@ from .mqsdk_cebule import (
     PeriodicGeometryOptResult,
     QASMGenInput,
     QASMGenResult,
+    RXNOptInput,
+    RXNOptResult,
     SigmaInput,
     SigmaResult,
     SolubilityInput,
     SolubilityResult,
+    SurfaceReactionEnergiesInput,
+    SurfaceReactionEnergiesResult,
     TNQCOptInput,
     TNQCOptResult,
+    WulffConstructionInput,
+    WulffConstructionResult,
+    WulffFacet,
 )
-from .classiq import (
+from .classiq_classiq import (
     CircuitOptimizationComparison,
     ClassiqAnsatzType,
     ClassiqBackendPreferences,
@@ -102,7 +118,7 @@ from .classiq import (
     ClassiqTranspilationOption,
     ClassiqVQEResult,
 )
-from .pyscf import (
+from .pyscf_pyscf import (
     DMETConfig,
     EmbeddedHamiltonianResult,
     ERIBuilderConfig,
@@ -456,7 +472,15 @@ from .primitives import (
     QubitModality,
 )
 from .record import BenchmarkRecord, VQAConfig
-from .reaction import ReactionCoordinateSpec, ReactionPathResult
+from .reactions import (
+    ArrheniusRateConstant,
+    KineticsReactionSpec,
+    KineticsSpeciesSpec,
+    ReactionCoordinateSpec,
+    ReactionMechanism,
+    ReactionPathResult,
+    ReactionType,
+)
 from .result import (
     AdaptIteration,
     ExpectationResult,
@@ -589,9 +613,14 @@ __all__ = [
     # record
     "BenchmarkRecord",
     "VQAConfig",
-    # reaction
+    # reactions
+    "ArrheniusRateConstant",
+    "KineticsReactionSpec",
+    "KineticsSpeciesSpec",
     "ReactionCoordinateSpec",
+    "ReactionMechanism",
     "ReactionPathResult",
+    "ReactionType",
     # circuit
     "CircuitSpec",
     "ParameterBinding",
@@ -623,8 +652,15 @@ __all__ = [
     "CosmoResult",
     "COVOInput",
     "COVOResult",
+    "CRNReaction",
+    "CRNSpecies",
     "ForceFieldMDInput",
     "ForceFieldMDResult",
+    "GANTOFInput",
+    "GANTOFResult",
+    "GasSpeciesEnergyInput",
+    "GasSpeciesEnergyResult",
+    "GeneratedCatalyst",
     "GeometryOptForceField",
     "GeometryOptInput",
     "GeometryOptMethod",
@@ -641,6 +677,8 @@ __all__ = [
     "GNNTrainResult",
     "GroupContributionInput",
     "GroupContributionResult",
+    "MakeSurfInput",
+    "MakeSurfResult",
     "MolMapInput",
     "MolMapResult",
     "MolecularGeometry",
@@ -648,13 +686,20 @@ __all__ = [
     "PeriodicGeometryOptResult",
     "QASMGenInput",
     "QASMGenResult",
+    "RXNOptInput",
+    "RXNOptResult",
     "SigmaInput",
     "SigmaResult",
     "SolubilityInput",
     "SolubilityResult",
+    "SurfaceReactionEnergiesInput",
+    "SurfaceReactionEnergiesResult",
     "TNQCOptInput",
     "TNQCOptResult",
-    # classiq
+    "WulffConstructionInput",
+    "WulffConstructionResult",
+    "WulffFacet",
+    # classiq_classiq
     "CircuitOptimizationComparison",
     "ClassiqAnsatzType",
     "ClassiqBackendPreferences",
@@ -673,7 +718,7 @@ __all__ = [
     "ClassiqSynthesisResult",
     "ClassiqTranspilationOption",
     "ClassiqVQEResult",
-    # pyscf
+    # pyscf_pyscf
     "DMETConfig",
     "EmbeddedHamiltonianResult",
     "ERIBuilderConfig",

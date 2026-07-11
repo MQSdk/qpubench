@@ -25,7 +25,7 @@ import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
 
-from qpubench.schemas.pyscf import (
+from qpubench.schemas.pyscf_pyscf import (
     ERIBuilderConfig,
     ERIBuilderMethod,
     ERIBuilderResult,

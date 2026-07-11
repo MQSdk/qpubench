@@ -4,7 +4,7 @@
 compiler required — pure wheel), and already the engine behind
 `erikkjellgren_slowquant.py`. qpubench models molecules, periodic cells,
 mean-field/DFT, solvation, and embedding problem specs as typed Pydantic
-schemas in `src/qpubench/schemas/pyscf.py`.
+schemas in `src/qpubench/schemas/pyscf_pyscf.py`.
 
 **Why this module exists.** While checking whether Quantinuum's InQuanto is
 necessary for embedding and periodic-boundary quantum chemistry, the answer
@@ -31,7 +31,7 @@ No C/Fortran compiler needed — PySCF ships a `manylinux` wheel.
 through the real API:
 
 ```python
-from qpubench.schemas.pyscf import PySCFAtomSpec, PySCFMoleculeSpec
+from qpubench.schemas.pyscf_pyscf import PySCFAtomSpec, PySCFMoleculeSpec
 from pyscf import gto, scf
 
 spec = PySCFMoleculeSpec(atoms=[
@@ -54,7 +54,7 @@ periodic boundary conditions — builds a real `pbc.gto.Cell()` (verified in
 ## Solvation — real, verified; the free equivalent of Cebule's `COSMO`
 
 ```python
-from qpubench.schemas.pyscf import PCMMethod, PySCFSolvationConfig
+from qpubench.schemas.pyscf_pyscf import PCMMethod, PySCFSolvationConfig
 from pyscf import gto, scf
 
 mol = gto.M(atom="O 0 0 0; H 0 0.757 0.587; H 0 -0.757 0.587", basis="sto-3g")
@@ -88,7 +88,7 @@ exact technique InQuanto's `InQ_tut_wft_dft` tutorial demonstrates
 commercially):
 
 ```python
-from qpubench.schemas.pyscf import ProjectionEmbeddingConfig
+from qpubench.schemas.pyscf_pyscf import ProjectionEmbeddingConfig
 
 config = ProjectionEmbeddingConfig(
     active_atom_indices=[0, 1],      # 0-based indices into the full molecule
@@ -105,7 +105,7 @@ demo](https://pennylane.ai/demos/tutorial_dmet_embedding) runs this
 end-to-end, including on a periodic hydrogen chain):
 
 ```python
-from qpubench.schemas.pyscf import DMETConfig
+from qpubench.schemas.pyscf_pyscf import DMETConfig
 
 config = DMETConfig(impurity_atom_indices=[0], localization="iao")
 ```

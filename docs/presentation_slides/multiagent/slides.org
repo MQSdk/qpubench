@@ -1,9 +1,3 @@
-#+OPTIONS: H:2 toc:nil num:nil
-#+BEAMER_THEME: metropolis
-#+BEAMER_HEADER: \metroset{block=fill}
-#+BEAMER_HEADER: \setbeamertemplate{navigation symbols}{}
-#+LATEX_HEADER: \usepackage{booktabs}
-
 #+title: Lean Agent Code & Multi-Agent Systems
 
 #+author: MQS · mark@mqs.dk
@@ -75,6 +69,26 @@ Fixes made during QPUBench development under ponytail review:
 
 *Result*: fewer lines, cleaner types, one real bug found.
 
+** Python Quality Toolchain --- QPUBench
+:PROPERTIES:
+:CUSTOM_ID: python-quality-toolchain-qpubench
+:END:
+\footnotesize
+#+begin_src sh
+ruff check src/ tests/    # lint (line-length 100, target py311)
+ruff format src/ tests/   # format
+mypy src/                 # static types (strict = true)
+pytest tests/ -q          # 259 tests, SDK-dependent ones skip cleanly
+#+end_src
+
+| Tool          | Role                                                             |
+|---------------+------------------------------------------------------------------|
+| *Pydantic v2* | Runtime-validated schemas --- field types enforced at parse time |
+| *ruff*        | Linting + auto-formatting, replaces flake8/isort/black           |
+| *mypy strict* | Full type coverage --- =Any= only where unavoidable              |
+| *pytest*      | Schema-only test suite runs with =pip install .= alone           |
+
+\normalsize
 ** Ponytail --- Install & Use
 :PROPERTIES:
 :CUSTOM_ID: ponytail-install-use

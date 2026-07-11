@@ -88,6 +88,16 @@ assert record.result.status == JobStatus.SUCCEEDED
 
 See `INTEGRATION_GUIDE.md §5` for the full pattern.
 
+## Tracking feedback and follow-ups
+
+External feedback (reviews, bug reports) is tracked with
+[git-bug](https://github.com/git-bug/git-bug) — bugs are git objects
+(`refs/bugs/*`), not a separate service, and bridge to GitHub Issues for
+collaborators who don't use git-bug. See `docs/feedback_workflow.md` for
+setup and the intake convention (one bug per discrete point, labeled,
+closed with the resolution recorded). Run `git bug bug` to see current
+open/closed items.
+
 ## What not to do
 
 - Don't create migration scripts or version-conversion code — the schema is append-only; add new optional fields instead of changing existing ones.

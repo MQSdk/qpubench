@@ -14,6 +14,7 @@ parsing) runs for real, same as it would against a live device.
 Each SDK stack is optional; every test module is skipped cleanly if its
 package isn't installed (pip install 'qpubench[qiskit,braket,iqm]').
 """
+
 from __future__ import annotations
 
 from unittest.mock import patch
@@ -80,6 +81,114 @@ class TestAerAdapter:
         tqc, _layout = adapter.transpile(_bell_circuit(), ExecutionOptions())
         assert tqc.format == CircuitFormat.QASM3
         assert tqc.gate_counts
+
+
+# ---------------------------------------------------------------------------
+# PennyLane lightning.qubit — fully real, no credentials needed
+# ---------------------------------------------------------------------------
+
+pennylane = pytest.importorskip("pennylane")
+pennylane_qiskit = pytest.importorskip("pennylane_qiskit")
+
+
+class TestPennyLaneLightningAdapter:
+    def test_sampler(self) -> None:
+        from qpubench.backends.pennylane_lightning_adapter import PennyLaneLightningAdapter
+
+        adapter = PennyLaneLightningAdapter()
+        result = adapter.run(_bell_circuit(), ExecutionOptions(shots=1000))
+        assert result.status == JobStatus.SUCCEEDED
+        assert result.shots is not None
+        _assert_bell_counts(result.shots.counts)
+
+    def test_estimator_exact(self) -> None:
+        from qpubench.backends.pennylane_lightning_adapter import PennyLaneLightningAdapter
+
+        adapter = PennyLaneLightningAdapter()
+        result = adapter.run(_bell_circuit(with_observable=True), ExecutionOptions())
+        assert result.status == JobStatus.SUCCEEDED
+        assert result.expectation_values[0].value == pytest.approx(1.0, abs=1e-9)
+        assert result.expectation_values[0].std_error == 0.0
+
+    def test_estimator_with_shots_reports_std_error(self) -> None:
+        from qpubench.backends.pennylane_lightning_adapter import PennyLaneLightningAdapter
+
+        adapter = PennyLaneLightningAdapter()
+        result = adapter.run(_bell_circuit(with_observable=True), ExecutionOptions(shots=2048))
+        assert result.expectation_values[0].num_shots == 2048
+        # Bell state ZZ is an eigenstate (variance 0) so std_error is exactly 0,
+        # unlike a generic observable — this only checks the field is populated.
+        assert result.expectation_values[0].std_error == pytest.approx(0.0, abs=1e-9)
+
+
+# ---------------------------------------------------------------------------
+# MitiqZNEAdapter — fully real, wraps a noisy Aer simulator
+# ---------------------------------------------------------------------------
+
+mitiq = pytest.importorskip("mitiq")
+pytest.importorskip("ply")  # cirq-core's QASM import needs this; see module docstring
+
+
+def _noisy_aer_adapter():
+    import json
+
+    from qiskit_aer.noise import NoiseModel, depolarizing_error
+
+    from qpubench.backends.aer_adapter import AerAdapter
+
+    noise_model = NoiseModel()
+    noise_model.add_all_qubit_quantum_error(depolarizing_error(0.02, 1), ["h"])
+    noise_model.add_all_qubit_quantum_error(depolarizing_error(0.05, 2), ["cx"])
+    return AerAdapter(noise_model_json=json.dumps(noise_model.to_dict()))
+
+
+class TestMitiqZNEAdapter:
+    def test_zne_reduces_bias_vs_raw_noisy_estimate(self) -> None:
+        from qpubench.backends.unitaryfund_mitiq_adapter import MitiqZNEAdapter
+
+        circuit = _bell_circuit(with_observable=True)
+        noisy_inner = _noisy_aer_adapter()
+        raw = noisy_inner.run(circuit, ExecutionOptions())
+        assert raw.expectation_values is not None
+        raw_value = raw.expectation_values[0].value
+
+        adapter = MitiqZNEAdapter(noisy_inner)
+        mitigated = adapter.run(circuit, ExecutionOptions())
+        assert mitigated.status == JobStatus.SUCCEEDED
+        mitigated_value = mitigated.expectation_values[0].value
+
+        # Exact (noiseless) value is 1.0 — ZNE should land closer to it.
+        assert abs(mitigated_value - 1.0) < abs(raw_value - 1.0)
+        assert mitigated.expectation_values[0].raw_values
+
+    def test_linear_factory_reports_extrapolation_error(self) -> None:
+        from qpubench.backends.unitaryfund_mitiq_adapter import MitiqZNEAdapter
+        from qpubench.schemas.unitaryfund_mitiq import MitiqZNEConfig, MitiqZNEFactory
+
+        adapter = MitiqZNEAdapter(
+            _noisy_aer_adapter(), MitiqZNEConfig(factory=MitiqZNEFactory.LINEAR)
+        )
+        result = adapter.run(_bell_circuit(with_observable=True), ExecutionOptions())
+        # Unlike RichardsonFactory (exact interpolation, 0 residual DOF),
+        # LinearFactory under-fits 3 points and has a real covariance-based error.
+        assert result.expectation_values[0].std_error > 0.0
+
+    def test_sampler_path_passes_through_unmitigated(self) -> None:
+        from qpubench.backends.unitaryfund_mitiq_adapter import MitiqZNEAdapter
+
+        adapter = MitiqZNEAdapter(_noisy_aer_adapter())
+        result = adapter.run(_bell_circuit(), ExecutionOptions(shots=1000))
+        assert result.status == JobStatus.SUCCEEDED
+        assert result.shots is not None
+
+    def test_spec_and_inner_delegate(self) -> None:
+        from qpubench.backends.unitaryfund_mitiq_adapter import MitiqZNEAdapter
+
+        inner = _noisy_aer_adapter()
+        adapter = MitiqZNEAdapter(inner)
+        assert adapter.spec == inner.spec
+        assert adapter.inner is inner
+        assert adapter.validate(_bell_circuit()) == inner.validate(_bell_circuit())
 
 
 # ---------------------------------------------------------------------------

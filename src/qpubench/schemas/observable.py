@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 import pydantic
 
 from .primitives import ComplexNumber, PauliLabel
@@ -13,11 +15,10 @@ class PauliTerm(pydantic.BaseModel):
       - Qiskit C: QkObsTerm {coeff, bit_terms[], indices[]} via to_qiskit_c_arrays()
       - VQEBench legacy: dict["X1,Z3", float] via SparsePauliObservable.from_legacy_dict()
     """
+
     qubit_indices: tuple[int, ...]
-    pauli_ops:     tuple[PauliLabel, ...]
-    coefficient:   ComplexNumber = pydantic.Field(
-        default_factory=lambda: ComplexNumber(re=1.0)
-    )
+    pauli_ops: tuple[PauliLabel, ...]
+    coefficient: ComplexNumber = pydantic.Field(default_factory=lambda: ComplexNumber(re=1.0))
 
     @pydantic.model_validator(mode="after")
     def _lengths_match(self) -> PauliTerm:
@@ -52,6 +53,7 @@ class SparsePauliObservable(pydantic.BaseModel):
     The internal representation is modality-agnostic; backend adapters convert
     to their own encoding via the helper methods.
     """
+
     num_qubits: int
     terms: list[PauliTerm]
 
@@ -72,11 +74,13 @@ class SparsePauliObservable(pydantic.BaseModel):
             for part in pauli_str.split(","):
                 ops.append(PauliLabel(part[0]))
                 indices.append(int(part[1:]))
-            terms.append(PauliTerm(
-                qubit_indices=tuple(indices),
-                pauli_ops=tuple(ops),
-                coefficient=ComplexNumber(re=float(coeff)),
-            ))
+            terms.append(
+                PauliTerm(
+                    qubit_indices=tuple(indices),
+                    pauli_ops=tuple(ops),
+                    coefficient=ComplexNumber(re=float(coeff)),
+                )
+            )
         return cls(num_qubits=num_qubits, terms=terms)
 
     @classmethod
@@ -103,11 +107,13 @@ class SparsePauliObservable(pydantic.BaseModel):
             for token in op_str.split():
                 ops.append(PauliLabel(token[0]))
                 indices.append(int(token[1:]))
-            terms.append(PauliTerm(
-                qubit_indices=tuple(indices),
-                pauli_ops=tuple(ops),
-                coefficient=ComplexNumber(re=float(coeff)),
-            ))
+            terms.append(
+                PauliTerm(
+                    qubit_indices=tuple(indices),
+                    pauli_ops=tuple(ops),
+                    coefficient=ComplexNumber(re=float(coeff)),
+                )
+            )
         return cls(num_qubits=num_qubits, terms=terms)
 
     def to_qiskit_pauli_list(self, num_qubits: int) -> list[tuple[str, complex]]:
@@ -127,6 +133,41 @@ class SparsePauliObservable(pydantic.BaseModel):
             label = "".join(reversed(chars))
             pairs.append((label, term.coefficient.value))
         return pairs
+
+    def to_pennylane_observable(self) -> Any:
+        """Build a `pennylane.Hamiltonian` equivalent to this observable.
+
+        Requires `pennylane` to be installed (imported lazily). Coefficients
+        must be real — a Hermitian observable's Pauli-sum coefficients are
+        real by construction; a non-zero imaginary part means the sum isn't
+        Hermitian and raises rather than silently discarding it.
+        """
+        import pennylane as qml
+
+        pauli_factory = {
+            PauliLabel.X: qml.PauliX,
+            PauliLabel.Y: qml.PauliY,
+            PauliLabel.Z: qml.PauliZ,
+        }
+        coeffs: list[float] = []
+        observables: list[Any] = []
+        for term in self.terms:
+            if abs(term.coefficient.im) > 1e-12:
+                raise ValueError(
+                    f"Non-Hermitian term coefficient {term.coefficient.value!r} "
+                    "has no real PennyLane Hamiltonian equivalent"
+                )
+            factors = [
+                pauli_factory[op](idx)
+                for idx, op in zip(term.qubit_indices, term.pauli_ops)
+                if op != PauliLabel.I
+            ]
+            observable = factors[0] if factors else qml.Identity(0)
+            for factor in factors[1:]:
+                observable = observable @ factor
+            coeffs.append(term.coefficient.re)
+            observables.append(observable)
+        return qml.Hamiltonian(coeffs, observables)
 
     def to_qrack_flat_arrays(self) -> tuple[list[int], list[int]]:
         """Flatten all terms into a single (qubits, paulis) pair for Qrack.

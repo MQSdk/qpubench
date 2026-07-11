@@ -131,7 +131,9 @@ class ErrorMitigationAdapter(Protocol):
     intercepts run() to apply pre/post processing (noise scaling, compilation,
     randomised compiling, readout correction, etc.).
 
-    Implementations: FireOpalAdapter, MitiqAdapter, HaiquAdapter.
+    Implementations: MitiqZNEAdapter (unitaryfund_mitiq_adapter.py, real
+    Mitiq zero-noise extrapolation). Fire Opal and Haiqu Rivet have schema
+    modules (qctrl_fire_opal.py, haiqu_rivet.py) but no adapter yet.
 
     The inner BackendAdapter is not registered with the runner separately;
     it is composed inside the ErrorMitigationAdapter at construction time.

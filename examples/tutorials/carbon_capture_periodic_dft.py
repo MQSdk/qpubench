@@ -57,7 +57,7 @@ import time
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
 
 from qpubench.schemas.execution import AdaptVQEConfig
-from qpubench.schemas.pyscf import PySCFAtomSpec, PySCFCellSpec, PySCFMeanFieldConfig, PySCFMeanFieldMethod
+from qpubench.schemas.pyscf_pyscf import PySCFAtomSpec, PySCFCellSpec, PySCFMeanFieldConfig, PySCFMeanFieldMethod
 
 from examples.common.real_molecules import (
     BOUND_CN_DISTANCE,

@@ -7,13 +7,24 @@ Central Dashboard (graph, per-step logs, artifacts, caching).
 Two kinds of component, per the design notes in docs/integrations/kubeflow.md:
 
   Transform  — pydantic-in, pydantic-out, no qpubench BackendAdapter involved
-               (mol_map_component, tn_qc_opt_component, qasm_gen_component)
+               (jw_map_component, mol_map_component, tn_qc_opt_component,
+               qasm_gen_component)
   Execution  — drives a qpubench BenchmarkRunner against a registered
-               BackendAdapter (execute_circuits_component)
+               BackendAdapter (execute_circuits_component,
+               execute_static_hamiltonian_component)
 
 TN_QC_OPT's n_iterations optimizer loop runs entirely inside
 tn_qc_opt_component — it is one job, never exploded into one DAG node per
-iteration.
+iteration. Likewise, the Shots x Qiskit_Opt_Level execution-option sweep
+(see data/README.md) runs entirely inside the Execution components via
+BenchmarkRunner.sweep() — it is one job, not one DAG node per (shots,
+opt_level) pair. Only the `Mapper` axis (JW / mol_map / tn_qc_opt /
+tn_qc_opt+mol_map — see data/README.md) changes which components exist;
+everything else in the benchmark matrix (TN_Layers_Network,
+TN_Layers_Circuit, Rotation_Type, Measurement_Method, Shots,
+Qiskit_Opt_Level) is a parameter value swept via dsl.ParallelFor /
+BenchmarkRunner.sweep() inside a *single* pipeline definition — see
+pipelines.py and docs/integrations/kubeflow.md.
 
 Vendor imports (mqsdk, qpubench) are deferred to inside each function body
 so this module can be *parsed* by the kfp compiler in an environment that has
@@ -21,10 +32,10 @@ neither package installed — only the container image named in base_image
 needs them at run time (mirrors the "import qforte inside the method, not at
 module level" rule in INTEGRATION_GUIDE.md).
 
-No `from __future__ import annotations` here (unlike the rest of this repo):
-kfp's component decorator inspects live type objects at decoration time and
-misparses stringified (PEP 563) annotations — confirmed by actually
-compiling this module against kfp 2.16.1.
+No `from __future__ import annotations` here (unlike the rest of this
+repo): kfp's component decorator inspects live type objects at decoration
+time and misparses stringified (PEP 563) annotations — confirmed by
+actually compiling this module against kfp 2.16.1.
 """
 from kfp import dsl
 from kfp.dsl import Dataset, Input, Output
@@ -35,6 +46,10 @@ from kfp.dsl import Dataset, Input, Output
 # the stub in execute_circuits_component.
 _QPUBENCH_IMAGE = "ghcr.io/mqsdk/qpubench-slim:latest"
 _QPUBENCH_SIM_IMAGE = "ghcr.io/mqsdk/qpubench-slim:latest"
+# jw_map_component is the only component that needs a real quantum-chemistry
+# stack (PySCF/OpenFermion) rather than just qpubench+mqsdk — it is the one
+# Mapper category (`JW`) that never calls Cebule at all (see data/README.md).
+_QPUBENCH_CHEM_IMAGE = "ghcr.io/mqsdk/qpubench-chem:latest"
 
 
 @dsl.component(base_image=_QPUBENCH_IMAGE, packages_to_install=["qpubench", "mqsdk"])
@@ -71,41 +86,122 @@ def mol_map_component(
         f.write(result.model_dump_json())
 
 
+@dsl.component(base_image=_QPUBENCH_CHEM_IMAGE, packages_to_install=["qpubench[openfermion]"])
+def jw_map_component(
+    geometry: list[float],
+    symbols: list[str],
+    basis: str,
+    charge: int,
+    multiplicity: int,
+    active_electrons: int,
+    active_orbitals: int,
+    jw_map_result: Output[Dataset],
+) -> None:
+    """Plain Jordan-Wigner mapping: molecular geometry -> qubit Hamiltonian.
+
+    The `JW` Mapper category (data/README.md) never calls Cebule at all —
+    this is the one component in the whole integration with no MQS
+    credentials involved, computed entirely locally via
+    `qpubench.hamiltonian_sources.ab_initio.build_qubit_hamiltonian`
+    (real PySCF HF + OpenFermion Jordan-Wigner, not a stub).
+
+    active_electrons/active_orbitals: pass 0/0 for "full space, no
+    active-space reduction" (build_qubit_hamiltonian treats that the same
+    as None — see its docstring); anything else requests a frozen-core
+    active-space reduction. kfp component parameters can't be `int | None`
+    cleanly, hence the 0-means-unset convention here.
+
+    Output JSON keys deliberately mirror MolMapResult's own field names
+    (`num_qubits`, `hf_state`) so downstream components
+    (tn_qc_opt_component, qasm_gen_component,
+    execute_static_hamiltonian_component) can read either a mol_map_result
+    or a jw_map_result the same generic way — see their `mapper_result`
+    docstrings.
+    """
+    import json
+
+    from qpubench.hamiltonian_sources.ab_initio import build_qubit_hamiltonian
+
+    geom = [
+        (symbols[i], (geometry[3 * i], geometry[3 * i + 1], geometry[3 * i + 2]))
+        for i in range(len(symbols))
+    ]
+    observable, record = build_qubit_hamiltonian(
+        geom,
+        basis=basis,
+        charge=charge,
+        multiplicity=multiplicity,
+        active_electrons=active_electrons or None,
+        active_orbitals=active_orbitals or None,
+    )
+
+    # Standard JW/occupation-number Hartree-Fock reference: the
+    # lowest-index `num_electrons` spin-orbitals occupied, the rest empty
+    # (same convention OpenFermion's own MolecularData/HF machinery uses,
+    # and what build_qubit_hamiltonian's `occupied_indices` maps onto) —
+    # not a fabricated ordering.
+    num_electrons = record.num_electrons or 0
+    hf_state = [1] * num_electrons + [0] * (record.num_qubits - num_electrons)
+
+    with open(jw_map_result.path, "w") as f:
+        json.dump(
+            {
+                "num_qubits": record.num_qubits,
+                "hf_state": hf_state,
+                "hf_energy": record.hf_energy,
+                "observable": observable.model_dump(mode="json"),
+            },
+            f,
+        )
+
+
 @dsl.component(base_image=_QPUBENCH_IMAGE, packages_to_install=["qpubench", "mqsdk"])
 def tn_qc_opt_component(
-    mol_map_result: Input[Dataset],
+    mapper_result: Input[Dataset],
     h_coeff_values: list[float],
     h_operators: list[str],
     n_iterations: int,
     n_layers_network: int,
     n_layers_circuit: int,
+    three_para_tn: bool,
     opt_method: str,
+    measurement_method: str,
+    optimization_mode: str,
     backend: str,
     email_env: str,
     password_env: str,
     tn_qc_opt_result: Output[Dataset],
 ) -> None:
     """Cebule TN_QC_OPT: hybrid tensor-network + circuit VQE, run as a
-    documented follow-up to MOL_MAP (see MolMapResult.to_sparse_pauli_observable
-    in schemas/mqsdk_cebule.py).
+    documented follow-up to MOL_MAP or a plain JW mapping (see
+    MolMapResult.to_sparse_pauli_observable in schemas/mqsdk_cebule.py).
 
     The entire n_iterations optimizer loop executes inside this one
     component/pod — it is not decomposed into per-iteration DAG nodes.
 
-    h_coeff_values/h_operators are the qubit-operator decomposition of
-    MolMapResult.mapped_hamiltonian. qpubench does not ship a dense-matrix
-    -> Pauli-term decomposition utility, so the caller supplies this
-    directly (from whatever produced the geometry, or a future qpubench
-    helper) rather than this component inventing one.
+    mapper_result is whichever upstream mapping produced the Hamiltonian
+    this call optimizes (mol_map_component's MolMapResult for the
+    `tn_qc_opt+mol_map` Mapper category, or jw_map_component's JSON for the
+    plain `tn_qc_opt` category) — read here only for DAG lineage/caching,
+    not parsed into a specific schema, since h_coeff_values/h_operators
+    are supplied directly by the caller either way (qpubench does not ship
+    a dense-matrix -> Pauli-term decomposition utility, so neither
+    upstream result can be auto-converted into TN_QC_OPT's input shape).
+
+    n_layers_network/n_layers_circuit/three_para_tn/measurement_method
+    sweep over data/README.md's TN_Layers_Network / TN_Layers_Circuit /
+    Rotation_Type / Measurement_Method columns — resolved by
+    dsl.ParallelFor in pipelines.py, not by separate pipeline
+    definitions, since none of these change which components run.
     """
     import os
 
     import mqsdk
 
-    from qpubench.schemas import MolMapResult, TNQCOptInput, TNQCOptResult
+    from qpubench.schemas import TNQCOptInput, TNQCOptResult
 
-    with open(mol_map_result.path) as f:
-        MolMapResult.model_validate_json(f.read())  # validated, not otherwise used here
+    with open(mapper_result.path) as f:
+        f.read()  # validated to exist for DAG lineage; not otherwise used here
 
     session = mqsdk.Cebule(os.environ[email_env], os.environ[password_env])
     inp = TNQCOptInput(
@@ -114,7 +210,10 @@ def tn_qc_opt_component(
         n_iterations=n_iterations,
         n_layers_network=n_layers_network,
         n_layers_circuit=n_layers_circuit,
+        three_para_tn=three_para_tn,
         opt_method=opt_method,
+        measurement_method=measurement_method,
+        optimization_mode=optimization_mode,
         backend=backend,
     )
     task = session.cebule.create_task(
@@ -128,7 +227,7 @@ def tn_qc_opt_component(
 
 @dsl.component(base_image=_QPUBENCH_IMAGE, packages_to_install=["qpubench", "mqsdk"])
 def qasm_gen_component(
-    mol_map_result: Input[Dataset],
+    mapper_result: Input[Dataset],
     tn_qc_opt_result: Input[Dataset],
     include_state_circuit: bool,
     email_env: str,
@@ -137,26 +236,41 @@ def qasm_gen_component(
 ) -> None:
     """Cebule QASM_GEN: generate hardware-verification measurement circuits
     for the operator TN_QC_OPT converged on.
+
+    Runs once per (tn_layers_network, tn_layers_circuit, three_para_tn,
+    measurement_method) combination from the enclosing dsl.ParallelFor in
+    pipelines.py, regardless of which measurement_method that combination
+    uses — execute_circuits_component decides whether to consume this
+    result's `circuit_files` (Measurement_Method=qasm_gen_grouped) or just
+    its `state_circuit` (Measurement_Method=pauli, Estimator path against
+    tn_qc_opt_result's own sparse Pauli terms directly). That split is a
+    plain Python branch inside one Execution component, not a DAG
+    conditional, since it doesn't change which components run.
     """
+    import json
     import os
 
     import mqsdk
 
-    from qpubench.schemas import MolMapResult, QASMGenInput, QASMGenResult, TNQCOptResult
+    from qpubench.schemas import QASMGenInput, QASMGenResult, TNQCOptResult
 
-    with open(mol_map_result.path) as f:
-        mol_map = MolMapResult.model_validate_json(f.read())
+    with open(mapper_result.path) as f:
+        mapper_data = json.load(f)
+    num_qubits = mapper_data.get("num_qubits")
     with open(tn_qc_opt_result.path) as f:
         tn_qc_opt = TNQCOptResult.model_validate_json(f.read())
 
-    num_qubits = mol_map.num_qubits or len(mol_map.hf_state)
+    if num_qubits is None:
+        num_qubits = len(mapper_data.get("hf_state", []))
     tn_qc_opt.to_sparse_pauli_observable(num_qubits=num_qubits)  # validated, not otherwise used here
 
     # TODO: convert the sparse Pauli-term observable above into the dense
     # Hermitian matrix QASMGenInput.operator expects. qpubench has no
     # Pauli-term -> dense-matrix utility (schemas/observable.py only
     # implements the reverse direction via from_cebule_operators) — wire in
-    # your own conversion or a future qpubench helper here.
+    # your own conversion or a future qpubench helper here. This is the
+    # one genuinely open gap in the whole `tn_qc_opt`/`tn_qc_opt+mol_map`
+    # DAG — see integrations/kubeflow/README.md "Known placeholders".
     dense_operator: list[list[float]] = []  # placeholder — see TODO above
 
     session = mqsdk.Cebule(os.environ[email_env], os.environ[password_env])
@@ -172,13 +286,33 @@ def qasm_gen_component(
 
 @dsl.component(base_image=_QPUBENCH_SIM_IMAGE, packages_to_install=["qpubench"])
 def execute_circuits_component(
-    mol_map_result: Input[Dataset],
+    mapper_result: Input[Dataset],
     qasm_gen_result: Input[Dataset],
-    shots: int,
+    tn_qc_opt_result: Input[Dataset],
+    measurement_method: str,
+    shots_values: list[int],
+    optimization_levels: list[int],
     records: Output[Dataset],
 ) -> None:
-    """Execution-kind component: runs each QASM_GEN circuit through a
-    registered qpubench BackendAdapter via BenchmarkRunner.
+    """Execution-kind component: runs the TN_QC_OPT-converged circuit(s)
+    through a registered qpubench BackendAdapter via BenchmarkRunner.
+
+    measurement_method ("pauli" | "qasm_gen_grouped") picks which of
+    qasm_gen_result's outputs to execute:
+      - "qasm_gen_grouped": qasm_gen_result.circuit_files, one CircuitSpec
+        per Pauli grouping (Sampler path — counts, no .observables).
+      - "pauli": a single CircuitSpec built from qasm_gen_result's
+        state_circuit with tn_qc_opt_result's own sparse Pauli terms
+        attached as .observables (Estimator path — every registered
+        BackendAdapter already branches on `if circuit.observables:`,
+        see e.g. backends/aer_adapter.py).
+
+    shots_values x optimization_levels (data/README.md's Shots /
+    Qiskit_Opt_Level columns) is resolved here via
+    BenchmarkRunner.sweep()'s cartesian product — one component/job, not
+    one DAG node per (shots, opt_level) pair, matching the same
+    "n_iterations stays inside one component" principle TN_QC_OPT already
+    follows.
 
     Uses StubGateAdapter as the always-available default so this pipeline
     compiles and runs without any quantum SDK installed. Swap in
@@ -188,18 +322,165 @@ def execute_circuits_component(
     pipeline whose resource profile changes per backend; nothing else in
     the DAG needs to change.
     """
-    from qpubench import BenchmarkRunner, ExecutionOptions, NDJSONStore, StubGateAdapter
-    from qpubench.schemas import MolMapResult, QASMGenResult
+    import json
 
-    with open(mol_map_result.path) as f:
-        mol_map = MolMapResult.model_validate_json(f.read())
+    from qpubench import BenchmarkRunner, ExecutionOptions, NDJSONStore, StubGateAdapter
+    from qpubench.schemas import CircuitFormat, CircuitSpec, QASMGenResult, TNQCOptResult
+
+    with open(mapper_result.path) as f:
+        mapper_data = json.load(f)
+    num_qubits = mapper_data.get("num_qubits") or len(mapper_data.get("hf_state", []))
     with open(qasm_gen_result.path) as f:
         qasm_gen = QASMGenResult.model_validate_json(f.read())
+    with open(tn_qc_opt_result.path) as f:
+        tn_qc_opt = TNQCOptResult.model_validate_json(f.read())
 
-    num_qubits = mol_map.num_qubits or len(mol_map.hf_state)
-    circuits = qasm_gen.to_circuit_specs(num_qubits=num_qubits)
+    if measurement_method == "qasm_gen_grouped":
+        circuits = qasm_gen.to_circuit_specs(num_qubits=num_qubits)
+    else:
+        observable = tn_qc_opt.to_sparse_pauli_observable(num_qubits=num_qubits)
+        circuits = [
+            CircuitSpec(
+                num_qubits=num_qubits,
+                format=CircuitFormat.QASM2,
+                serialized=qasm_gen.state_circuit,
+                observables=[observable],
+            )
+        ]
+
+    options_list = [
+        ExecutionOptions(shots=shots, optimization_level=opt_level)
+        for shots in shots_values
+        for opt_level in optimization_levels
+    ]
 
     runner = BenchmarkRunner(store=NDJSONStore(records.path))
     runner.register(StubGateAdapter(), name="stub")
-    for circuit in circuits:
-        runner.run(circuit, "stub", ExecutionOptions(shots=shots), tags=["cebule", "qasm_gen"])
+    runner.sweep(
+        circuits,
+        ["stub"],
+        options_list,
+        tags=["cebule", "tn_qc_opt", measurement_method],
+    )
+
+
+@dsl.component(base_image=_QPUBENCH_SIM_IMAGE, packages_to_install=["qpubench", "mqsdk"])
+def execute_static_hamiltonian_component(
+    mapper_result: Input[Dataset],
+    hamiltonian_kind: str,
+    measurement_method: str,
+    shots_values: list[int],
+    optimization_levels: list[int],
+    email_env: str,
+    password_env: str,
+    records: Output[Dataset],
+) -> None:
+    """Execution-kind component for the two Mapper categories that carry no
+    VQE ansatz at all — plain `JW` and `mol_map`-only (see data/README.md,
+    where `Ansatz` is blank for both). There is no optimized state to
+    measure, so the "circuit" here is a fixed Hartree-Fock reference-state
+    preparation (X gates on the occupied qubits of mapper_result's own
+    `hf_state`) — not a fabricated ansatz, the standard HF baseline.
+
+    hamiltonian_kind says which representation mapper_result carries:
+      - "dense": mol_map_component's MolMapResult.mapped_hamiltonian — a
+        real 2-D Hermitian matrix, usable directly as
+        QASMGenInput.operator.
+      - "sparse": jw_map_component's SparsePauliObservable — usable
+        directly as CircuitSpec.observables for the Estimator path.
+
+    measurement_method picks the execution path, and only one of the two
+    (hamiltonian_kind, measurement_method) combinations is real per
+    Mapper category; the other is symmetric with the existing
+    qasm_gen_component gap (qpubench ships no dense<->sparse Pauli-term
+    conversion utility in either direction — see
+    integrations/kubeflow/README.md "Known placeholders"):
+      - dense  + qasm_gen_grouped -> real (this component calls QASM_GEN
+        directly with the dense operator, no conversion needed).
+      - sparse + pauli            -> real (Estimator path, no conversion
+        needed).
+      - dense  + pauli            -> NotImplementedError (needs a
+        dense->sparse Pauli decomposition qpubench doesn't ship).
+      - sparse + qasm_gen_grouped -> NotImplementedError (needs the same
+        sparse->dense conversion qasm_gen_component's TN_QC_OPT path
+        already flags).
+
+    shots_values x optimization_levels is resolved here via
+    BenchmarkRunner.sweep(), same as execute_circuits_component.
+    """
+    import json
+
+    from qpubench import BenchmarkRunner, ExecutionOptions, NDJSONStore, StubGateAdapter
+    from qpubench.schemas import CircuitFormat, CircuitSpec, SparsePauliObservable
+
+    with open(mapper_result.path) as f:
+        mapper_data = json.load(f)
+    num_qubits = mapper_data["num_qubits"]
+    hf_state = mapper_data["hf_state"]
+
+    hf_prep_qasm = "OPENQASM 2.0;\ninclude \"qelib1.inc\";\n" + f"qreg q[{num_qubits}];\n"
+    hf_prep_qasm += "".join(f"x q[{i}];\n" for i, bit in enumerate(hf_state) if bit)
+
+    if measurement_method == "pauli":
+        if hamiltonian_kind != "sparse":
+            raise NotImplementedError(
+                "dense (mol_map) Hamiltonian + pauli measurement needs a "
+                "dense->sparse Pauli decomposition qpubench doesn't ship yet "
+                "— see integrations/kubeflow/README.md 'Known placeholders'."
+            )
+        observable = SparsePauliObservable.model_validate(mapper_data["observable"])
+        circuits = [
+            CircuitSpec(
+                num_qubits=num_qubits,
+                format=CircuitFormat.QASM2,
+                serialized=hf_prep_qasm,
+                observables=[observable],
+            )
+        ]
+    else:  # "qasm_gen_grouped"
+        if hamiltonian_kind != "dense":
+            raise NotImplementedError(
+                "sparse (JW) Hamiltonian + qasm_gen_grouped measurement needs "
+                "a sparse->dense conversion qpubench doesn't ship yet — see "
+                "integrations/kubeflow/README.md 'Known placeholders'."
+            )
+        import os
+
+        import mqsdk
+
+        from qpubench.schemas import QASMGenInput, QASMGenResult
+
+        # One-hot statevector for the fixed HF computational basis state —
+        # real and exact for this small, already-exponential (mol_map's own
+        # mapped_hamiltonian is a dense 2**n x 2**n matrix) representation,
+        # not an approximation.
+        index = int("".join(str(b) for b in hf_state), 2) if hf_state else 0
+        state_vector = [0.0] * (2 ** num_qubits)
+        state_vector[index] = 1.0
+
+        session = mqsdk.Cebule(os.environ[email_env], os.environ[password_env])
+        inp = QASMGenInput(
+            operator=mapper_data["mapped_hamiltonian"],
+            state_vector=state_vector,
+            include_state_circuit=False,
+        )
+        task = session.cebule.create_task(
+            "qpubench-qasm-gen-static", mqsdk.TaskType.QASM_GEN, inp.model_dump()
+        )
+        result = QASMGenResult.model_validate(task.result)
+        circuits = result.to_circuit_specs(num_qubits=num_qubits)
+
+    options_list = [
+        ExecutionOptions(shots=shots, optimization_level=opt_level)
+        for shots in shots_values
+        for opt_level in optimization_levels
+    ]
+
+    runner = BenchmarkRunner(store=NDJSONStore(records.path))
+    runner.register(StubGateAdapter(), name="stub")
+    runner.sweep(
+        circuits,
+        ["stub"],
+        options_list,
+        tags=["cebule", hamiltonian_kind, measurement_method],
+    )

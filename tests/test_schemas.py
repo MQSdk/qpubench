@@ -24,7 +24,15 @@ from qpubench.schemas.johnrscott_mbqc_fpga import (
 from qpubench.schemas.observable import PauliTerm, SparsePauliObservable
 from qpubench.schemas.primitives import ComplexNumber, PauliLabel
 from qpubench.schemas.record import BenchmarkRecord, VQAConfig
-from qpubench.schemas.reaction import ReactionCoordinateSpec, ReactionPathResult
+from qpubench.schemas.reactions import (
+    ArrheniusRateConstant,
+    KineticsReactionSpec,
+    KineticsSpeciesSpec,
+    ReactionCoordinateSpec,
+    ReactionMechanism,
+    ReactionPathResult,
+    ReactionType,
+)
 from qpubench.schemas.backend import BackendSpec, GateCharacteristics, QubitCharacteristics
 from qpubench.schemas.circuit import CircuitSpec, ParameterBinding
 from qpubench.schemas.execution import ExecutionOptions, TranspilerConfig, ZNEConfig
@@ -357,7 +365,7 @@ def test_vqa_config_energy_error():
 
 
 # ---------------------------------------------------------------------------
-# reaction
+# reactions
 # ---------------------------------------------------------------------------
 
 def _record_with_energy(energy: float) -> BenchmarkRecord:
@@ -435,6 +443,121 @@ def test_reaction_path_result_energies_and_barrier():
     plot = result.to_dict_for_plot()
     assert plot["bond_length_angstrom"] == [0.7, 1.2, 1.8]
     assert plot["energy"] == [-1.130, -1.100, -1.140]
+
+
+def test_arrhenius_rate_constant_formula():
+    """k(T) = A * T**b * exp(-Ea / RT) — verified against real Cantera
+    (ArrheniusRate) at A=1e13, b=0, Ea=50000 J/mol, T=1000 K in this repo's
+    own sandbox: 24452259380.205738."""
+    rate = ArrheniusRateConstant(A=1.0e13, b=0.0, Ea=50000.0)
+    assert math.isclose(rate.rate_at(1000.0), 24452259380.205738, rel_tol=1e-9)
+
+
+def test_reaction_path_result_rate_constant_bridge():
+    spec = _three_point_spec()
+    records = [
+        _record_with_energy(-1.130),   # reactant
+        _record_with_energy(-1.100),   # transition state
+        _record_with_energy(-1.140),   # product
+    ]
+    result = ReactionPathResult(spec=spec, records=records)
+
+    arrhenius = result.to_arrhenius_rate_constant(prefactor_hz=1.0e13)
+    assert arrhenius is not None
+    assert arrhenius.b == 0.0
+    # barrier_height (0.030 Ha) converted to J/mol
+    assert math.isclose(arrhenius.Ea, 0.030 * 4.359744722206e-18 * 6.02214076e23, rel_tol=1e-9)
+
+    k = result.rate_constant(temperature_k=298.15, prefactor_hz=1.0e13)
+    assert k is not None
+    assert k == arrhenius.rate_at(298.15)
+
+
+def test_reaction_path_result_rate_constant_none_without_barrier():
+    circuit = CircuitSpec(num_qubits=2, serialized="OPENQASM 2.0;")
+    spec = ReactionCoordinateSpec(
+        label="no TS marked",
+        coordinate_name="bond_length_angstrom",
+        coordinate_values=[0.7, 1.2],
+        problems=[circuit, circuit],
+    )
+    result = ReactionPathResult(
+        spec=spec, records=[_record_with_energy(-1.0), _record_with_energy(-1.1)]
+    )
+    assert result.to_arrhenius_rate_constant() is None
+    assert result.rate_constant(temperature_k=298.15) is None
+
+
+def test_kinetics_reaction_spec_falloff_requires_low_p_rate_constant():
+    with pytest.raises(pydantic.ValidationError):
+        KineticsReactionSpec(
+            equation="H + O2 (+M) <=> HO2 (+M)",
+            type=ReactionType.FALLOFF,
+            rate_constant=ArrheniusRateConstant(A=4.65e12, b=0.44, Ea=0.0),
+        )
+
+
+def test_reaction_mechanism_to_cantera_dict_declares_units():
+    mech = ReactionMechanism(
+        phase_name="gas",
+        species=[
+            KineticsSpeciesSpec(name="A", composition={"H": 2}),
+            KineticsSpeciesSpec(name="B", composition={"H": 2}),
+        ],
+        reactions=[
+            KineticsReactionSpec(
+                equation="A <=> B",
+                rate_constant=ArrheniusRateConstant(A=1.0e13, b=0.0, Ea=50000.0),
+            )
+        ],
+    )
+    d = mech.to_cantera_dict()
+    assert d["units"] == {"quantity": "mol", "activation-energy": "J/mol"}
+    assert d["phases"][0]["name"] == "gas"
+    assert d["species"][0] == {"name": "A", "composition": {"H": 2}}
+    assert d["reactions"][0]["equation"] == "A <=> B"
+    assert d["reactions"][0]["rate-constant"] == {"A": 1.0e13, "b": 0.0, "Ea": 50000.0}
+
+
+def test_reaction_mechanism_to_cantera_yaml_round_trips():
+    pytest.importorskip("yaml")
+    import yaml
+
+    mech = ReactionMechanism(
+        phase_name="gas",
+        species=[
+            KineticsSpeciesSpec(name="A", composition={"H": 2}),
+            KineticsSpeciesSpec(name="B", composition={"H": 2}),
+        ],
+        reactions=[
+            KineticsReactionSpec(
+                equation="A <=> B",
+                rate_constant=ArrheniusRateConstant(A=1.0e13, b=0.0, Ea=50000.0),
+            )
+        ],
+    )
+    text = mech.to_cantera_yaml()
+    parsed = yaml.safe_load(text)
+    assert parsed == mech.to_cantera_dict()
+
+
+def test_reaction_mechanism_loads_in_real_cantera():
+    """Verifies against the real cantera package, all three ReactionType
+    values, that to_cantera_yaml() output is genuinely loadable and its
+    rate constants match ArrheniusRateConstant.rate_at() exactly."""
+    ct = pytest.importorskip("cantera")
+
+    rate = ArrheniusRateConstant(A=1.0e13, b=0.0, Ea=50000.0)
+    mech = ReactionMechanism(
+        phase_name="gas",
+        species=[
+            KineticsSpeciesSpec(name="A", composition={"H": 2}),
+            KineticsSpeciesSpec(name="B", composition={"H": 2}),
+        ],
+        reactions=[KineticsReactionSpec(equation="A <=> B", rate_constant=rate)],
+    )
+    gas = ct.Solution(yaml=mech.to_cantera_yaml())
+    assert math.isclose(gas.reaction(0).rate(1000.0), rate.rate_at(1000.0), rel_tol=1e-9)
 
 
 def test_shot_result_probabilities():
@@ -784,6 +907,14 @@ def test_algorithm_spec_in_execution_options():
     assert opts.algorithm_spec.name == "ADAPTVQE"
     assert opts.adapt_vqe_config is not None
     assert opts.adapt_vqe_config.pool_type == "GSD"
+
+
+def test_algorithm_family_qpe_tag():
+    """QPE has no AlgorithmAdapter implementation yet (schema/metadata only,
+    see microsoft_qdk.QPEConfig) but the family tag exists so a future
+    implementation has a name to converge on."""
+    alg = AlgorithmSpec(name="QPE", family=AlgorithmFamily.QPE)
+    assert alg.family == AlgorithmFamily.QPE
 
 
 def test_algorithm_spec_json_roundtrip():
@@ -2831,7 +2962,7 @@ def test_quantum_result_slowquant_field():
 # Classiq schemas + Xenakis harmonization
 # ---------------------------------------------------------------------------
 
-from qpubench.schemas.classiq import (
+from qpubench.schemas.classiq_classiq import (
     CircuitOptimizationComparison,
     ClassiqAnsatzType,
     ClassiqChemistryModel,
@@ -2966,7 +3097,12 @@ from qpubench.schemas.mqsdk_cebule import (
     CebuleTaskEnvelope,
     CosmoInput,
     CosmoMethod,
+    CRNReaction,
+    CRNSpecies,
     ForceFieldMDInput,
+    GANTOFInput,
+    GasSpeciesEnergyInput,
+    GeneratedCatalyst,
     GeometryOptForceField,
     GeometryOptInput,
     GeometryOptMethod,
@@ -2977,29 +3113,139 @@ from qpubench.schemas.mqsdk_cebule import (
     GNNPredictInput,
     GNNTrainInput,
     GroupContributionInput,
+    MakeSurfInput,
     PeriodicGeometryOptInput,
+    RXNOptInput,
+    RXNOptResult,
     SigmaInput,
     SolubilityInput,
+    SurfaceReactionEnergiesInput,
+    WulffConstructionInput,
+    WulffFacet,
 )
 from qpubench.schemas.primitives import CebuleTaskType
 
 
 def test_cebule_task_type_confirmed_members_present():
     # Every member confirmed directly against mqsdk/core/cebule.py's
-    # TaskType enum except MOL_MAP/QASM_GEN (see CebuleTaskType docstring).
+    # TaskType enum (re-checked 2026-07-10) — see CebuleTaskType docstring.
     confirmed = {
         "cosmo", "sigma", "solubility", "car_parrinello_md",
         "born_oppenheimer_md", "force_field_md", "geometry_opt",
         "periodic_geometry_opt", "group_contribution", "atom_order",
         "activity_coefficient", "gnn:dataset:create", "gnn:dataset:delete",
         "gnn:dataset:extend", "gnn:dataset:get", "gnn:train", "gnn:predict",
-        "tn_qc_opt", "covo",
+        "tn_qc_opt", "covo", "mol_map", "qasm_gen", "map_to_qasm",
     }
     actual = {member.value for member in CebuleTaskType}
     assert confirmed <= actual
-    # MOL_MAP/QASM_GEN kept but flagged unconfirmed, not removed.
-    assert CebuleTaskType.MOL_MAP.value == "mol_map"
-    assert CebuleTaskType.QASM_GEN.value == "qasm_gen"
+
+
+def test_cebule_task_type_rxn_catalyst_members_present_but_unconfirmed():
+    # Real per docs.mqs.dk's "RN Catalyst Design" section, but absent from
+    # the public python-sdk repo (checked 2026-07-10) — see CebuleTaskType
+    # docstring. Kept, flagged unconfirmed, not removed — same treatment
+    # MOL_MAP/QASM_GEN got before the SDK confirmed them for real.
+    unconfirmed = {
+        "rxn_opt", "gas_species_energy", "surface_reaction_energies",
+        "gan_tof", "make_surf", "wulff_construction",
+    }
+    actual = {member.value for member in CebuleTaskType}
+    assert unconfirmed <= actual
+
+
+def test_rxn_opt_input_and_result():
+    rxn_input = RXNOptInput(
+        reaction_list=[
+            CRNReaction(name="r1", fixed_cost=10.0, unit_cost=2.0, low=0.0, high=100.0),
+            CRNReaction(name="r2", fixed_cost=5.0, unit_cost=1.5, low=0.0, high=50.0),
+        ],
+        species_list=[
+            CRNSpecies(name="A", stoich={"r1": -1.0}),
+            CRNSpecies(name="B", stoich={"r1": 1.0, "r2": -1.0}),
+            CRNSpecies(name="C", stoich={"r2": 1.0}),
+        ],
+        time_limit=60,
+    )
+    assert rxn_input.task_type == CebuleTaskType.RXN_OPT
+    assert len(rxn_input.reaction_list) == 2
+    assert rxn_input.species_list[1].stoich == {"r1": 1.0, "r2": -1.0}
+
+    result = RXNOptResult(
+        reaction_quantities={"r1": 10.0, "r2": 10.0},
+        total_cost=115.0,
+        solve_time=0.5,
+        optimal=True,
+    )
+    assert result.optimal is True
+    assert result.reaction_quantities["r1"] == 10.0
+
+
+def test_gas_species_energy_input():
+    gse = GasSpeciesEnergyInput(
+        energy_calculator="dft",
+        optimizer_type="bfgs",
+        unitcell_length=20.0,
+        temperature=298.15,
+        pressure=101325.0,
+        dataset_tag="test-dataset",
+    )
+    assert gse.task_type == CebuleTaskType.GAS_SPECIES_ENERGY
+
+
+def test_surface_reaction_energies_input():
+    sre = SurfaceReactionEnergiesInput(
+        reaction_type="oxidation",
+        temperature=500.0,
+        pressure=1.0,
+        dataset_tag="test-dataset",
+        uncertainty=True,
+    )
+    assert sre.task_type == CebuleTaskType.SURFACE_REACTION_ENERGIES
+    assert sre.uncertainty is True
+
+
+def test_gan_tof_input_and_generated_catalyst():
+    gan_input = GANTOFInput(
+        reaction_type="CO2_reduction",
+        dataset_tag="test-dataset",
+        epochs=100,
+        nclass=5,
+        score_max=1.0,
+        score_min=0.0,
+    )
+    assert gan_input.task_type == CebuleTaskType.GAN_TOF
+
+    catalyst = GeneratedCatalyst(chemical_formula="CuZn", atomic_numbers=[29, 30], run=1)
+    assert catalyst.atomic_numbers == [29, 30]
+
+
+def test_make_surf_input():
+    make_surf = MakeSurfInput(
+        element1="Cu",
+        element2="Zn",
+        surface_type="fcc111",
+        n_surfaces=10,
+        lattice_const=3.6,
+        vacuum=10.0,
+        supercell=(2, 2, 4),
+    )
+    assert make_surf.task_type == CebuleTaskType.MAKE_SURF
+    assert make_surf.supercell == (2, 2, 4)
+
+
+def test_wulff_construction_input_and_facet():
+    wulff_input = WulffConstructionInput(dataset_tag="test-dataset")
+    assert wulff_input.task_type == CebuleTaskType.WULFF_CONSTRUCTION
+
+    facet = WulffFacet(
+        miller_indices=(1, 1, 1),
+        surface_energy_ev_per_a2=0.05,
+        area_fraction=0.4,
+        tof=1.2,
+        activation_barrier_ev=0.8,
+    )
+    assert facet.miller_indices == (1, 1, 1)
 
 
 def test_cebule_task_envelope_defaults():
@@ -3130,7 +3376,7 @@ def test_gnn_train_and_predict_inputs():
 # (PsiEmbed/libDMET aren't on PyPI).
 # ---------------------------------------------------------------------------
 
-from qpubench.schemas.pyscf import (
+from qpubench.schemas.pyscf_pyscf import (
     DMETConfig,
     EmbeddedHamiltonianResult,
     ERIBuilderConfig,

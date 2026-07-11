@@ -18,7 +18,6 @@ Vendor-scoped modules are named `<org_or_maintainer>_<package>.py` — the filen
 | [`execution`](#execution) | Execution options and algorithm hyperparameters |
 | [`result`](#result) | Execution results (expectation values, counts, fidelity, ADAPT history) |
 | [`record`](#record) | Top-level benchmark record and VQA metadata |
-| [`reaction`](#reaction) | Reaction-coordinate / PES sweep: ties a series of point calculations together (unprefixed — framework's own type) |
 | [`advantage`](#advantage) | Quantum Advantage Tracker metadata (multi-org community registry, unprefixed) |
 | [`johnrscott_mbqc_fpga`](#johnrscott_mbqc_fpga) | MBQC-FPGA 16-bit program word, measurement patterns |
 | [`mqsdk_cebule`](#mqsdk_cebule) | Cebule SDK (MQS) task inputs / outputs |
@@ -34,13 +33,14 @@ Vendor-scoped modules are named `<org_or_maintainer>_<package>.py` — the filen
 | [`quera_bloqade`](#quera_bloqade) | Neutral atom AHS: Bloqade / Aquila atom arrangements, waveforms, drives, results |
 | [`erikkjellgren_slowquant`](#erikkjellgren_slowquant) | SlowQuant UCC/VQE: ansatz config, SCF result, optimization, RDMs, linear response, circuit spec |
 | [`evangelistalab_qforte`](#evangelistalab_qforte) | QForte: pybind11 object layer (Circuit/Gate/QubitOperator) + algorithm-run layer (config, result) for ADAPT-VQE / UCCN-VQE / UCCN-PQE / SPQE |
-| [`classiq`](#classiq) | Classiq synthesis + chemistry/QAOA (org == package name, no prefix needed) |
-| [`pyscf`](#pyscf) | PySCF molecules/cells, mean-field/DFT, PCM/COSMO solvation (real), DMET/projection-based embedding (schema-only) — org == package name, no prefix needed |
+| [`classiq_classiq`](#classiq_classiq) | Classiq synthesis + chemistry/QAOA |
+| [`pyscf_pyscf`](#pyscf_pyscf) | PySCF molecules/cells, mean-field/DFT, PCM/COSMO solvation (real), DMET/projection-based embedding (schema-only) |
 | [`polarizable_embedding`](#polarizable_embedding) | Polarizable embedding ("The Frame"): CPPE + PyFraME real potfile format, wired through `pyscf.solvent.PE` (unprefixed — no single vendor) |
 | [`optimizer_catalog`](#optimizer_catalog) | Minimizer / stopping-criterion catalogue over `AdaptVQEConfig` fields (unprefixed — framework's own type) |
 | [`hamiltonian_library`](#hamiltonian_library) | Metadata for Hamiltonians loaded from PennyLane qchem / HamLib Chemistry (unprefixed — two external sources, no single vendor) |
 | [`basis_sets`](#basis_sets) | Basis-set catalogue: Basis Set Exchange (real, verified function counts) + q-vSZP (schema-only, no PyPI package) — unprefixed, two external sources |
 | [`contraction_path`](#contraction_path) | Tensor-network contraction-path strategy/config/result, real quimb + cotengra mechanism (unprefixed — framework's own type over two libraries) |
+| [`reactions`](#reactions) | Reaction-coordinate/PES sweep + real Cantera-style kinetics mechanism + PennyLane-style rate-constant bridge (unprefixed — bridges Cantera/PennyLane/Cebule, no single vendor) |
 | `qctrl_fire_opal` | Q-CTRL Fire Opal noise-robust compilation |
 | `unitaryfund_mitiq` | Mitiq — ZNE, PEC, CDR, REM, DDD |
 | `haiqu_rivet` | Haiqu Rivet transpilation middleware |
@@ -60,7 +60,7 @@ Vendor-scoped modules are named `<org_or_maintainer>_<package>.py` — the filen
 |---|---|
 | `ComputingModel` | `GATE_BASED` · `MBQC` · `FUSION_BASED` · `ADIABATIC` · `ANNEALING` · `GBS` · `SAMPLING` |
 | `QubitModality` | `SUPERCONDUCTING` · `TRAPPED_ION` · `NEUTRAL_ATOM` · `PHOTONIC` · `SILICON_SPIN` |
-| `AlgorithmFamily` | `ADAPT_VQE` · `UCC_VQE` · `UCC_PQE` · `SPQE` · `EXCITATION_SOLVE` · `TN_QC_OPT` · `GA_CIRCUIT_SEARCH` — package-agnostic algorithm identity, orthogonal to `ComputingModel` |
+| `AlgorithmFamily` | `ADAPT_VQE` · `UCC_VQE` · `UCC_PQE` · `SPQE` · `EXCITATION_SOLVE` · `TN_QC_OPT` · `GA_CIRCUIT_SEARCH` · `QPE` — package-agnostic algorithm identity, orthogonal to `ComputingModel` |
 | `CircuitFormat` | `QASM2` · `QASM3` · `QGC` · `MEASUREMENT_PATTERN` · `JSON` · `MOLECULE_JSON` · `FOCK_STATE_CIRCUIT` · `LINEAR_OPTICS_UNITARY` |
 | `PauliLabel` | `I` · `X` · `Y` · `Z` |
 | `ErrorMitigationStrategy` | `NONE` · `DD` · `TREX` · `ZNE` · `PEC` · `QESEM` |
@@ -244,6 +244,27 @@ not duplicated in a shared grab-bag struct.
 | `name` | — | `"ADAPTVQE"` · `"UCCNVQE"` · `"TN_QC_OPT"` · … — library-specific label |
 | `family` | `None` | `AlgorithmFamily` — package-agnostic identity; set to compare runs of "the same algorithm" across different implementing adapters |
 | `extra_params` | `{}` | Escape hatch for adapter-specific kwargs not covered by a typed config |
+
+**Current cross-adapter coverage** — `family` only pays off once ≥2
+adapters accept the same shared config for it. Today:
+
+| `AlgorithmFamily` | Implementations | Shared config |
+|---|---|---|
+| `ADAPT_VQE` | 3 — `evangelistalab_qforte`, `ibm_qiskit_adapt_vqe`, `microsoft_qdk_adapt_vqe` | `AdaptVQEConfig` (below) — the only family with a real "switch the adapter, keep the config" story today |
+| `UCC_VQE` / `UCC_PQE` / `SPQE` | 1 — `evangelistalab_qforte` only | `QForteAlgorithmConfig` |
+| `EXCITATION_SOLVE` | 1 — `dlr_excitation_solve` only | `ExcitationSolveConfig` |
+| `TN_QC_OPT` | 1 — `mqsdk_cebule` only | `TNQCOptInput` |
+| `GA_CIRCUIT_SEARCH` | 1 — `mqsdk_xenakis` only | `GAConfig`/`GenomeConfig` |
+| `QPE` | 0 — schema/metadata only, no `AlgorithmAdapter` | `microsoft_qdk.QPEConfig`, a field of the QDK chemistry pipeline record, never dispatched through `BenchmarkRunner` |
+
+The single-implementation families and `QPE` still carry a `family` tag —
+not because a comparison is possible today, but so a *second*
+implementation (e.g. a native-VQE `AlgorithmAdapter`, or a hardware QPE
+run) has a name to converge on instead of inventing its own ad hoc label.
+`GA_CIRCUIT_SEARCH`'s only real head-to-head comparison today is against
+Classiq's synthesis (a different `AlgorithmFamily`-less strategy — see
+`classiq_classiq.CircuitOptimizationComparison`), not against another
+`GA_CIRCUIT_SEARCH` implementation.
 
 ### `AdaptVQEConfig`
 
@@ -454,7 +475,19 @@ Class method: `.from_vqe(*, circuit, backend, options, result, vqa, …)`
 
 ---
 
-## `reaction`
+## `reactions`
+
+Not a framework-core type — bridges three real external tools rather than
+being a shape qpubench invented outright: **Cantera** (reaction-kinetics
+data format), **PennyLane**'s chemical-reactions demo (quantum PES →
+classical rate constant), and **Cebule SDK**'s `RXN_OPT`/catalyst-design
+tasks (`mqsdk_cebule.py` — a complementary, network-level concept, not
+merged into this module). See the module docstring for the full rationale
+and the real Cantera gotchas found while verifying it (default `quantity`
+unit is `kmol` not `mol`; three-body/falloff reactions need an explicit
+third-body marker in the `equation` string itself).
+
+### `ReactionCoordinateSpec` / `ReactionPathResult`
 
 Ties a sweep of point calculations (bond dissociation, reaction path, PES)
 together as one object. `BenchmarkRunner.sweep()` alone returns a flat
@@ -464,7 +497,7 @@ No chemistry or curve-fitting — build `problems` with whatever pipeline you
 like (a raw `CircuitSpec` per geometry, a qubit Hamiltonian via
 `integrations/generic_adapt_vqe`, a QForte molecule JSON, ...).
 
-### `ReactionCoordinateSpec`
+**`ReactionCoordinateSpec`**
 
 | Field | Description |
 |---|---|
@@ -476,7 +509,7 @@ like (a raw `CircuitSpec` per geometry, a qubit Hamiltonian via
 
 Validated: `len(problems) == len(coordinate_values)`; any set index is in range.
 
-### `ReactionPathResult`
+**`ReactionPathResult`**
 
 | Field | Description |
 |---|---|
@@ -484,8 +517,39 @@ Validated: `len(problems) == len(coordinate_values)`; any set index is in range.
 | `records` | One `BenchmarkRecord` per point, same order as `spec.coordinate_values` |
 
 Properties: `.energies` (per point — `vqa.final_eigenvalue`, falling back to
-the first expectation value), `.barrier_height`, `.reaction_energy`,
+the first expectation value, Hartree), `.barrier_height`, `.reaction_energy`,
 `.to_dict_for_plot()` → `{coordinate_name: values, "energy": energies}`.
+
+Methods bridging to classical kinetics (PennyLane-demo construction):
+`.rate_constant(temperature_k, prefactor_hz=1e13)` → Arrhenius
+`k = A exp(-Ea/RT)` computed directly from `barrier_height`;
+`.to_arrhenius_rate_constant(prefactor_hz=1e13)` → the same barrier packaged
+as an `ArrheniusRateConstant` (Ea converted Hartree → J/mol) ready to drop
+into a `KineticsReactionSpec.rate_constant`.
+
+### Cantera-style kinetics: `ArrheniusRateConstant` / `KineticsSpeciesSpec` / `KineticsReactionSpec` / `ReactionMechanism`
+
+Real, Cantera-loadable shapes — `ReactionMechanism.to_cantera_yaml()`
+produces text `cantera.Solution(yaml=...)` evaluates rate constants from
+directly (verified in this repo's own sandbox against `cantera==3.2.0`,
+all three `ReactionType` values: elementary, three-body, falloff). No
+thermo (NASA7) or transport data modeled — Cantera evaluates reaction rate
+constants without them; only whole-phase thermodynamic/equilibrium
+calculations need that data, out of scope for this "schema, not solver"
+package.
+
+| Type | Key fields |
+|---|---|
+| `ArrheniusRateConstant` | `A`, `b` (default 0.0), `Ea` (J/mol) — `.rate_at(T)` computes `A·T^b·exp(-Ea/RT)`, `.to_cantera_dict()` → Cantera's `rate-constant` mapping |
+| `ReactionType` | `ELEMENTARY` (default) / `THREE_BODY` / `FALLOFF` |
+| `KineticsSpeciesSpec` | `name`, `composition` (element → count), `charge` |
+| `KineticsReactionSpec` | `equation`, `type`, `rate_constant`, `low_p_rate_constant` (FALLOFF only), `efficiencies`, `reversible` |
+| `ReactionMechanism` | `phase_name`, `thermo_model`, `kinetics_model`, `species`, `reactions` — `.to_cantera_yaml()` for a loadable mechanism file |
+
+`pip install "qpubench[cantera]"` for `pyyaml` (deferred import inside
+`to_cantera_yaml()` — this module has no hard dependency beyond pydantic,
+same as every other schema module). Installing the real `cantera` package
+is only needed to *run* the exported mechanism, not to build it.
 
 ---
 
@@ -1209,7 +1273,7 @@ Two layers, both verified against the real [evangelistalab/qforte](https://githu
 
 ---
 
-## `pyscf`
+## `pyscf_pyscf`
 
 Full documentation → [docs/integrations/pyscf.md](integrations/pyscf.md)
 
@@ -1241,7 +1305,7 @@ dependency. See `examples/guides/choose_integrals.py` and
 ## `polarizable_embedding`
 
 Added 2026-07-08 to close the "Polarizable Embedding — The Frame" gap — no
-qpubench schema existed for it at all before. Unlike `pyscf.py`'s embedding
+qpubench schema existed for it at all before. Unlike `pyscf_pyscf.py`'s embedding
 types, both real packages here (CPPE and PyFraME) are on PyPI and confirmed
 installed and working — wired through `pyscf.solvent.PE`. Field names and
 `to_potfile_string()`'s output format are verified against PySCF's own test
@@ -1282,7 +1346,7 @@ return a `SparsePauliObservable` directly usable by any existing
 `AlgorithmAdapter`/`BackendAdapter` Estimator path. This schema module
 only holds the metadata record — stays free of any
 `h5py`/`pennylane`/`requests`/`openfermion`/`pyscf` import, same boundary
-as `pyscf.py`.
+as `pyscf_pyscf.py`.
 
 All three sources verified for real in this repo's own sandbox: HamLib's
 real H2 Hamiltonian, fed into the existing `GenericAdaptVQEEngine`,
@@ -1367,7 +1431,7 @@ guide — real `quimb` + `cotengra` mechanism
 (`qpubench.tensor_network.contraction_path`), per direct instruction to
 build this specifically on quimb/cotengra rather than bare `opt_einsum`.
 This schema module stays free of the `quimb`/`cotengra` import (same
-"container, not solver" boundary as `pyscf.py`/`hamiltonian_library.py`);
+"container, not solver" boundary as `pyscf_pyscf.py`/`hamiltonian_library.py`);
 the real mechanism lives in `src/qpubench/tensor_network/
 contraction_path.py`.
 

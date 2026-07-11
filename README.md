@@ -22,6 +22,7 @@ qpubench separates **what you benchmark** (schemas) from **how execution happens
 | **[Persistence](docs/persistence.md)** | NDJSONStore · ParquetStore · S3Store (AWS S3 / HF Storage Buckets) · hooks |
 | **[Compatibility](docs/compatibility.md)** | Pauli encoding, complex precision, MBQC bit conventions |
 | **[Integration guide](INTEGRATION_GUIDE.md)** | Writing adapters, energy hooks, testing pattern |
+| **[Examples](examples/README.md)** | Guides, demos, and tutorials — what's supported, what's partial, and why |
 
 ---
 
@@ -186,7 +187,7 @@ package-agnostic engine shared by the Qiskit/QDK adapters: [integrations/generic
 
 ## Schema overview
 
-Schema version **2.3.0** — 21 of the 31 total schema modules shown below (curated selection; see [docs/schemas.md](docs/schemas.md) for the full index), zero quantum SDK dependencies. (2.0.0 broke `QPUModality` into independent `ComputingModel`/`QubitModality`; 2.1.0 split the `AlgorithmSpec` grab-bag the same way; 2.2.0 added `reaction`; 2.3.0 rewrote `mqsdk_cebule` against the real Cebule SDK source — see "Algorithm library" in Quick start, above.)
+Schema version **2.3.0** — 21 of the 31 total schema modules shown below (curated selection; see [docs/schemas.md](docs/schemas.md) for the full index), zero quantum SDK dependencies. (2.0.0 broke `QPUModality` into independent `ComputingModel`/`QubitModality`; 2.1.0 split the `AlgorithmSpec` grab-bag the same way; 2.2.0 added `reaction` (renamed `reactions` and expanded with real Cantera-style kinetics + a PennyLane-style rate-constant bridge in a later revision); 2.3.0 rewrote `mqsdk_cebule` against the real Cebule SDK source — see "Algorithm library" in Quick start, above.)
 
 Computing model (paradigm) and qubit modality are separate, independent axes — see [Computing model vs. qubit modality](#computing-model-vs-qubit-modality) below.
 
@@ -212,7 +213,7 @@ Computing model (paradigm) and qubit modality are separate, independent axes —
 | `molssi_qcschema` | all (chemistry) | all | `QCMolecule`, `QCAtomicInput`, `QCAtomicResult`, `QCOptimizationResult`, `QCWavefunctionData`, `QCEnergyComponents`, `PennyLaneMolDataset`, `QCSchemaRecord` |
 | `quera_bloqade` | ADIABATIC | NEUTRAL_ATOM | `AtomArrangement`, `AHSProgramSpec`, `AHSDrivingField`, `AHSTimeSeries`, `AHSTaskResult`, `AHSShotResult`, `AquilaDeviceSpec`, `AHSBatchSpec` |
 | `erikkjellgren_slowquant` | GATE_BASED | — | `SlowQuantRecord`, `UCCWavefunctionConfig`, `UCCOptimizationResult`, `UCCLinearResponseResult`, `UCCExcitedStateResult`, `UCCCircuitSpec`, `UCCSCFResult`, `UCCRDMData` |
-| `reaction` | all | all | `ReactionCoordinateSpec`, `ReactionPathResult` — ties a sweep of point calculations into one reaction path / PES |
+| `reactions` | all | all | `ReactionCoordinateSpec`, `ReactionPathResult` (ties a sweep of point calculations into one reaction path / PES), `ArrheniusRateConstant`, `ReactionMechanism` — real Cantera-style kinetics + PennyLane-style rate-constant bridge |
 
 ### Computing model vs. qubit modality
 
@@ -246,7 +247,7 @@ qpubench/
 │   │   ├── molssi_qcschema           ← QCSchema/QCElemental/PennyLane interoperability
 │   │   ├── quera_bloqade             ← Neutral atom AHS: Bloqade/Aquila atom arrangement, drives, results
 │   │   ├── erikkjellgren_slowquant   ← SlowQuant UCC/VQE: ansatz config, SCF, optimization, linear response
-│   │   ├── classiq                  ← Classiq synthesis + chemistry/QAOA (org == package name)
+│   │   ├── classiq_classiq           ← Classiq synthesis + chemistry/QAOA
 │   │   └── qctrl_fire_opal, unitaryfund_mitiq, haiqu_rivet, parityqc_parityqc,
 │   │       qmatter_qmatter, quantum_motion_hardware, ibm_runtime_v2  ← one module per vendor
 │   ├── backends/          ← BackendAdapter/AlgorithmAdapter protocols + stubs
@@ -273,6 +274,39 @@ qpubench/
 ```sh
 pytest tests/       # 156 tests, no quantum SDK required
 ```
+
+---
+
+## Known gaps / open TODOs
+
+Honest accounting of what isn't finished yet, kept here rather than in the
+presentation slides so it's easy to keep current without touching the deck:
+
+- **Microsoft QDK circuit optimization** — real QDK/Q# has its own
+  circuit-optimization passes; `schemas/microsoft_qdk.py` stops at SCF →
+  active space → QPE → resource estimation, with no schema representation
+  for them yet.
+- **Error mitigation adapters** — only Mitiq has a real `ErrorMitigationAdapter`
+  (`backends/unitaryfund_mitiq_adapter.py`, real ZNE). Fire Opal, Haiqu
+  Rivet, ParityQC, and QMatter have schema modules describing their
+  techniques but no adapter implementation wraps a real `BackendAdapter`
+  with them yet.
+- **QPE has no runnable adapter** — `AlgorithmFamily.QPE` exists as a
+  taxonomy entry and `microsoft_qdk.QPEConfig` models QPE run
+  configuration, but no `AlgorithmAdapter` actually executes a QPE circuit
+  through `BenchmarkRunner` yet — schema/metadata only.
+- **Kubeflow Pauli/dense-matrix conversion** — `SparsePauliObservable` has
+  no Pauli-term ↔ dense-matrix conversion in either direction, so 3 of 6
+  Hamiltonian-representation/measurement-method branch combinations in
+  `integrations/kubeflow/` raise `NotImplementedError` rather than
+  inventing the math. See `integrations/kubeflow/README.md`'s TODO
+  checklist for the two missing utilities
+  (`SparsePauliObservable.to_dense_matrix()`/`.from_dense_matrix()`).
+- **Guide/demo/tutorial parity is qualified, not absolute** — the tutorial
+  examples substitute the open `ADAPT-VQE` algorithm for proprietary
+  competitor algorithms, and 5 of them stay "Partial" rather than full
+  parity for that reason. See `examples/README.md` for the full
+  guide-by-guide breakdown and what "Partial" means in each case.
 
 ---
 
