@@ -1,0 +1,10 @@
+title: QPUBench
+description: Modality-agnostic quantum benchmark framework with a typed Pydantic schema layer
+theme: jekyll-theme-cayman
+
+# Serve the existing Markdown docs as pages and keep relative .md links working.
+plugins:
+  - jekyll-relative-links
+relative_links:
+  enabled: true
+  collections: true

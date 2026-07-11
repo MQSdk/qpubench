@@ -1,7 +1,7 @@
 # QPUBench
 
 [![Python ≥ 3.11](https://img.shields.io/badge/python-≥3.11-blue)](https://python.org)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green)](LICENSE)
+[![License: LGPL v3](https://img.shields.io/badge/License-LGPL_v3-green)](LICENSE)
 [![Schema v2.3.0](https://img.shields.io/badge/schema-v2.3.0-orange)](docs/schemas.md)
 
 Modality-agnostic quantum benchmark framework with a typed [Pydantic v2](https://docs.pydantic.dev/) schema layer.
@@ -312,4 +312,8 @@ presentation slides so it's easy to keep current without touching the deck:
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+GNU Lesser General Public License v3.0 or later (LGPL-3.0-or-later) — see
+[LICENSE](LICENSE) (LGPL v3) and [COPYING](COPYING) (GPL v3, which the LGPL
+incorporates by reference). You can use qpubench in proprietary or
+differently-licensed applications; modifications to qpubench itself must be
+released under the LGPL.

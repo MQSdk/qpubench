@@ -51,8 +51,10 @@ test:
 
 about:
   home: https://github.com/mqsdk/qpubench
-  license: MIT
-  license_file: LICENSE
+  license: LGPL-3.0-or-later
+  license_file:
+    - LICENSE
+    - COPYING
   summary: Modality-agnostic quantum benchmark framework
   description: |
     qpubench provides a unified schema and execution pipeline for
