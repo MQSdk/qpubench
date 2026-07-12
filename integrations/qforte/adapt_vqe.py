@@ -12,7 +12,6 @@ ExternalEvalAdaptVQERunner
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any
 
 from qpubench.schemas.circuit import CircuitSpec
 from qpubench.schemas.execution import AdaptVQEConfig, AlgorithmSpec, ExecutionOptions
@@ -21,7 +20,6 @@ from qpubench.schemas.record import BenchmarkRecord
 from qpubench.schemas.result import AdaptIteration
 from qpubench import BenchmarkRunner
 
-from .adapter import QForteAlgorithmAdapter
 
 
 # ---------------------------------------------------------------------------

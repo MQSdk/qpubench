@@ -33,7 +33,6 @@ import json
 import time
 from typing import Any
 
-from qpubench.backends.base import AlgorithmAdapter
 from qpubench.schemas.backend import BackendSpec
 from qpubench.schemas.circuit import CircuitSpec
 from qpubench.schemas.execution import ExecutionOptions

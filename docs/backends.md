@@ -15,7 +15,7 @@ spec: BackendSpec
 ```
 
 Use this when **you** provide the circuit and the backend executes it.  
-Examples: Qiskit Aer, Qrack, IBM Quantum Runtime, IQM, Qibo, MBQC-FPGA.
+Examples: Qiskit Aer, PennyLane Lightning, IBM Quantum Runtime, IQM, AWS Braket, MBQC-FPGA.
 
 ### `AlgorithmAdapter` — algorithm-driven
 
@@ -34,7 +34,7 @@ Examples: QForte (ADAPT-VQE, UCCNVQE), OpenFermion VQE stacks.
 transpile(circuit: CircuitSpec, options: ExecutionOptions) → tuple[CircuitSpec, TranspileLayout]
 ```
 
-Implement this on a `BackendAdapter` to expose transpilation before execution. The runner will call it automatically if present.
+Implement this on a `BackendAdapter` to expose transpilation as a separate, callable step. The runner does **not** call it automatically — adapters that need transpilation (IBM, IQM, Braket) invoke it themselves inside `run()`; call `adapter.transpile(...)` directly if you want the transpiled circuit or layout beforehand.
 
 ---
 
@@ -58,11 +58,12 @@ Shorthand: `runner.register(name="stub_gate", seed=42)` — when no adapter obje
 
 ### Real adapters (SDK required)
 
-`aer_adapter.py`, `ibm_adapter.py`, `iqm_adapter.py`, and `braket_adapter.py`
+`aer_adapter.py`, `ibm_adapter.py`, `iqm_adapter.py`, `braket_adapter.py`,
+`pennylane_lightning_adapter.py`, and `unitaryfund_mitiq_adapter.py`
 in `src/qpubench/backends/` are real, working implementations (no TODOs) —
 verified against the installed SDKs (`qiskit-aer` 0.17.x, `qiskit-ibm-runtime`
 0.47.x, `iqm-client[qiskit]` 34.x, `amazon-braket-sdk` + `qiskit-braket-provider`
-0.17.x):
+0.17.x, `pennylane-lightning`, `mitiq`):
 
 | File | Backend | Provider string | Tested how |
 |---|---|---|---|
@@ -70,9 +71,11 @@ verified against the installed SDKs (`qiskit-aer` 0.17.x, `qiskit-ibm-runtime`
 | `braket_adapter.py` | AWS Braket (via `qiskit-braket-provider`'s `BraketSampler`/`BraketEstimator`) | `"aws_braket"` | Fully executed via `BraketLocalBackend` (`device_arn="local"`) — no AWS account needed |
 | `ibm_adapter.py` | IBM Quantum Runtime V2 (Session/Batch/Single, TREX/ZNE/PEC resilience) | `"ibm"` | Transpile/run logic fully executed against `qiskit_ibm_runtime.fake_provider.FakeManilaV2`; only the credential-fetching `QiskitRuntimeService` call needs a real account |
 | `iqm_adapter.py` | IQM hardware (Sampler path only — no Estimator; see below) | `"iqm"` | Transpile/run logic fully executed against `iqm.qiskit_iqm.fake_backends.IQMFakeAdonis`; only the credential-fetching `IQMProvider` call needs a real account |
+| `pennylane_lightning_adapter.py` | PennyLane `lightning.qubit` simulator (Estimator + Sampler) | `"pennylane"` | Fully executed — no credentials needed |
+| `unitaryfund_mitiq_adapter.py` | Mitiq ZNE error-mitigation wrapper around another adapter | — | Fully executed around `AerAdapter` |
 
-`qrack_adapter.py` remains a stub (`raise NotImplementedError`, TODOs in the
-docstring) — out of scope for the pass that made the other four real.
+`qrack_adapter.py` remains a stub (`raise NotImplementedError`) — the
+implementation plan lives in `integrations/qrack/IMPLEMENTATION_NOTES.md`.
 
 IQM's Estimator path (`circuit.observables` populated) still raises
 `NotImplementedError` — this is a real, current upstream limitation
@@ -211,10 +214,10 @@ The runner dispatches to `run_algorithm()` automatically when it detects `Algori
 | Qiskit Aer (statevector + QASM) | `"aer"` | `GATE_BASED` | — (simulator) | `AerAdapter` | Real, tested — EstimatorV2/SamplerV2 |
 | IBM Quantum Runtime V2 | `"ibm"` | `GATE_BASED` | `SUPERCONDUCTING` | `IBMAdapter` | Real, tested against a fake backend — implements `TranspilableBackend`; needs real credentials for live hardware |
 | IQM hardware | `"iqm"` | `GATE_BASED` | `SUPERCONDUCTING` | `IQMAdapter` | Real, tested against a fake backend — implements `TranspilableBackend`; Sampler path only (no Estimator — real upstream limitation); `BackendSpec.iqm()` / `.iqm_resonance()` / `.iqm_local_server()` |
-| Qrack GPU/CPU simulator | `"qrack"` | `GATE_BASED` | — (simulator) | `QrackAdapter` | Stub — fill TODOs in `qrack_adapter.py` |
+| Qrack GPU/CPU simulator | `"qrack"` | `GATE_BASED` | — (simulator) | `QrackAdapter` | Stub — see `integrations/qrack/IMPLEMENTATION_NOTES.md` |
 | AWS Braket (Rigetti/IonQ/OQC/SV1/DM1/TN1) | `"aws_braket"` | `GATE_BASED` | configurable | `BraketAdapter` | Real, tested via `BraketLocalBackend` — implements `TranspilableBackend`; `BackendSpec.braket(device_arn)`; via `qiskit-braket-provider` |
-| Qibo cloud | `"qibo"` | `GATE_BASED` | — | Copy `backend_adapter_template.py` | |
-| PennyLane `lightning.qubit` | `"pennylane"` | `GATE_BASED` | — (simulator) | Copy template | `BackendSpec.lightning_qubit()` |
+| Qibo cloud (planned — no adapter, schema, or extra yet) | `"qibo"` | `GATE_BASED` | — | Copy `backend_adapter_template.py` | Planned |
+| PennyLane `lightning.qubit` | `"pennylane"` | `GATE_BASED` | — (simulator) | `PennyLaneLightningAdapter` | Real, tested — Estimator + Sampler; `BackendSpec.lightning_qubit()` |
 | CUDA-Q | `"cudaq"` | `GATE_BASED` | — (simulator) | Copy template | `BackendSpec.cudaq()` |
 | Cebule cloud | `"cebule"` | `GATE_BASED` | — (heterogeneous) | Copy template | `BackendSpec.cebule()` |
 | Quantum Motion CMOS spin-qubit | `"quantum_motion"` | `GATE_BASED` | `SILICON_SPIN` | Copy template | `BackendSpec.quantum_motion(device_name)` |

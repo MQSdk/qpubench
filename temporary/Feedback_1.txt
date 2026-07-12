@@ -1,9 +1,0 @@
-- Circuit optimization: The slides imply that one can only use Xenakis and Classiq for circuit optimization. If that is true, then this should be expanded to at least the qiskit transpiler (that has optimization level as an input). The microsoft QDK also mentions optimizing circuits.
-
-- Running on simulators: The only BackendAdapters examples shown are for real hardware. There is a mention of Aer/Braket runs, but that text is unclear. I assume that there is more simulator support than that (there is a mention of using statevector simulator, so there is at least that). I'd recommend including a Pennylane BackendAdapter for the lightning.qubit simulator, which is a lot faster than aer simulators, in my experience. 
-
-- Quantum Algorithms: I think that it would be very useful if the repo had an approachable way to compare different implementations of the same algorithms, like VQE or QPE. Maybe there is a path to that through AlgorithmSpec or AlgorithmFamily, but as those concepts aren't explained, it's hard to say.
-
-- Schema module naming convention: The slides state that the naming convention is org_package.py, but not all modules follow that rule (classiq, pyscf, polarizable_embedding). Not sure if the naming convention should be strict.
-
-Hamiltonian builders: In the final version, the build_qubit_hamiltonian() should not have JW hardcoded as a mapper. It should at least allow for a parity mapper (with qubit reduction), if not leaving it open to using external mappers.

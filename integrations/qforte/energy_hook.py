@@ -24,7 +24,6 @@ from __future__ import annotations
 import warnings
 from typing import Any
 
-from qpubench.backends.base import BackendAdapter
 from qpubench.schemas.circuit import CircuitSpec
 from qpubench.schemas.execution import ExecutionOptions
 from qpubench.schemas.observable import SparsePauliObservable

@@ -66,15 +66,7 @@ class NDJSONStore:
         Keys use double-underscore as separator to avoid clash with Python's
         reserved keyword `filter`.
         """
-        results: list[BenchmarkRecord] = []
-        for record in self._iter():
-            flat = record.model_dump()
-            if all(
-                _nested_get(flat, k.replace("__", ".")) == v
-                for k, v in filters.items()
-            ):
-                results.append(record)
-        return results
+        return [r for r in self._iter() if _matches(r, filters)]
 
     def all(self) -> list[BenchmarkRecord]:
         return list(self._iter())
@@ -101,6 +93,11 @@ class ParquetStore:
     Records are flattened one level deep (nested dicts become JSON strings)
     so they fit into a tabular schema.  Use NDJSONStore if you need to round-
     trip complete nested records.
+
+    Performance: save() rewrites the whole file per record (Parquet files are
+    immutable), so saving n records one at a time is O(n²) I/O.  Treat this
+    as an export/analysis format — collect records during a sweep with
+    NDJSONStore, then bulk-load them here via save_many().
     """
 
     def __init__(self, path: pathlib.Path | str) -> None:
@@ -108,18 +105,25 @@ class ParquetStore:
         self._path.parent.mkdir(parents=True, exist_ok=True)
 
     def save(self, record: BenchmarkRecord) -> None:
+        self.save_many([record])
+
+    def save_many(self, records: list[BenchmarkRecord]) -> None:
+        """Append records in one read-concat-write cycle (one rewrite total)."""
+        if not records:
+            return
         try:
-            import pandas as pd  # type: ignore[import-untyped]
-            import pyarrow as pa  # type: ignore[import-not-found]
-            import pyarrow.parquet as pq  # type: ignore[import-not-found]
+            import pyarrow as pa
+            import pyarrow.parquet as pq
         except ImportError as e:
             raise ImportError(
                 "ParquetStore requires pyarrow and pandas. "
                 "Install with: pip install 'qpubench[storage]'"
             ) from e
 
-        row = _flatten_record(record)
-        new_table = pa.Table.from_pydict({k: [v] for k, v in row.items()})
+        rows = [_flatten_record(r) for r in records]
+        new_table = pa.Table.from_pydict(
+            {k: [row[k] for row in rows] for k in rows[0]}
+        )
 
         if self._path.exists():
             existing = pq.read_table(self._path)
@@ -220,7 +224,7 @@ class S3Store:
         https://huggingface.co/docs/hub/en/storage-buckets-s3
         """
         try:
-            from botocore.config import Config  # type: ignore[import-not-found]
+            from botocore.config import Config
         except ImportError as e:
             raise ImportError(
                 "S3Store.huggingface() requires boto3. "
@@ -264,15 +268,7 @@ class S3Store:
 
     def query(self, **filters: Any) -> list[BenchmarkRecord]:
         """Filter records by dot-separated field path (see NDJSONStore.query)."""
-        results: list[BenchmarkRecord] = []
-        for record in self._iter():
-            flat = record.model_dump()
-            if all(
-                _nested_get(flat, k.replace("__", ".")) == v
-                for k, v in filters.items()
-            ):
-                results.append(record)
-        return results
+        return [r for r in self._iter() if _matches(r, filters)]
 
     def all(self) -> list[BenchmarkRecord]:
         return list(self._iter())
@@ -291,7 +287,7 @@ class S3Store:
 
 def _s3_client(**kwargs: Any) -> Any:
     try:
-        import boto3  # type: ignore[import-not-found]
+        import boto3
     except ImportError as e:
         raise ImportError(
             "S3Store requires boto3. Install with: pip install 'qpubench[s3]'"
@@ -307,6 +303,15 @@ def _read_body(get_object_response: dict[str, Any]) -> str:
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+def _matches(record: BenchmarkRecord, filters: dict[str, Any]) -> bool:
+    """Shared query() semantics: double-underscore keys are dot-paths."""
+    flat = record.model_dump()
+    return all(
+        _nested_get(flat, k.replace("__", ".")) == v
+        for k, v in filters.items()
+    )
+
 
 def _nested_get(d: dict[str, Any], key: str) -> Any:
     for part in key.split("."):

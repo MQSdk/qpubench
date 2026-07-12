@@ -42,7 +42,7 @@ class BackendSpec(pydantic.BaseModel):
       provider="aer"   — Qiskit Aer (statevector, QASM, noise model)
       provider="ibm"   — IBM Quantum Runtime
       provider="iqm"   — IQM hardware
-      provider="qibo"  — Qibo cloud
+      provider="qibo"  — Qibo cloud (planned; no adapter yet)
       provider="qrack" — Qrack GPU/CPU simulator (PyQrack ctypes interface)
       provider="mbqc"  — MBQC-FPGA
 

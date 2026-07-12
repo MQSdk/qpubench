@@ -84,7 +84,7 @@ class PennyLaneLightningAdapter:
             observables = [obs.to_pennylane_observable() for obs in circuit.observables]
             dev = qml.device("lightning.qubit", wires=num_qubits)
 
-            @qml.qnode(dev)
+            @qml.qnode(dev)  # type: ignore[untyped-decorator]  # qml.qnode is untyped
             def estimator_qnode() -> tuple[list[Any], list[Any]]:
                 quantum_fn(wires=range(num_qubits))
                 return (
@@ -112,7 +112,7 @@ class PennyLaneLightningAdapter:
         shots = options.shots or 1024
         dev = qml.device("lightning.qubit", wires=num_qubits)
 
-        @qml.qnode(dev)
+        @qml.qnode(dev)  # type: ignore[untyped-decorator]  # qml.qnode is untyped
         def sampler_qnode() -> Any:
             quantum_fn(wires=range(num_qubits))
             return qml.counts()

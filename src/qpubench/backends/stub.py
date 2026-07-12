@@ -5,7 +5,6 @@ Use them to verify your runner / store pipeline before wiring up a real backend.
 """
 from __future__ import annotations
 
-import math
 import random
 
 from ..schemas.backend import BackendSpec

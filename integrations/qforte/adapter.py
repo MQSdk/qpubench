@@ -23,14 +23,13 @@ import json
 from pathlib import Path
 from typing import Any
 
-from qpubench.backends.base import AlgorithmAdapter
 from qpubench.schemas.backend import BackendSpec
 from qpubench.schemas.circuit import CircuitSpec
 from qpubench.schemas.evangelistalab_qforte import QForteAlgorithmConfig
 from qpubench.schemas.execution import AdaptVQEConfig, AlgorithmSpec, ExecutionOptions
 from qpubench.schemas.primitives import AlgorithmFamily, CircuitFormat, ComputingModel
 from qpubench.schemas.record import VQAConfig
-from qpubench.schemas.result import QuantumResult, JobStatus
+from qpubench.schemas.result import QuantumResult
 
 from .converters import (
     extract_quantum_result,

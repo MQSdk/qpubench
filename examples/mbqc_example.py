@@ -16,7 +16,6 @@ import math
 import pathlib
 
 from qpubench import (
-    BackendSpec,
     BenchmarkRunner,
     CircuitSpec,
     ExecutionOptions,

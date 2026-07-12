@@ -25,11 +25,10 @@ from __future__ import annotations
 # qpubench imports — the ONLY coupling point to qpubench
 from qpubench.schemas.backend import BackendSpec
 from qpubench.schemas.circuit import CircuitSpec
-from qpubench.schemas.execution import AlgorithmSpec, ExecutionOptions
+from qpubench.schemas.execution import ExecutionOptions
 from qpubench.schemas.primitives import CircuitFormat, JobStatus, ComputingModel
 from qpubench.schemas.record import VQAConfig
 from qpubench.schemas.result import (
-    AdaptIteration,
     ExpectationResult,
     QuantumResult,
 )
@@ -111,7 +110,6 @@ class MyAlgorithmAdapter:
         # final_energy = alg.get_energy()
         # n_qubits     = alg.n_qubits
         final_energy = 0.0    # placeholder
-        n_qubits     = circuit.num_qubits
 
         result = QuantumResult(
             computing_model=ComputingModel.GATE_BASED,

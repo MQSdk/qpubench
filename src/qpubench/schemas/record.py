@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import datetime
 import uuid
+from typing import Any
 
 import pydantic
 
@@ -11,7 +12,7 @@ from .advantage import QuantumAdvantageRecord
 from .execution import ExecutionOptions
 from .result import QuantumResult
 
-SCHEMA_VERSION = "2.3.0"
+SCHEMA_VERSION = "2.7.0"
 
 def _utcnow() -> datetime.datetime:
     return datetime.datetime.now(datetime.UTC)
@@ -92,6 +93,10 @@ class VQAConfig(pydantic.BaseModel):
     adapt_maxiter_reached:    bool                  = False
     final_eigenvalue:         float | None          = None
     ground_truth:             float | None          = None
+    # Extension point for vendor/tool-specific metadata that has no shared
+    # cross-vendor meaning.  New vendor-only fields go here (keyed by vendor,
+    # e.g. vendor_data={"cebule": {...}}) instead of growing this model.
+    vendor_data:              dict[str, Any]        = {}
 
     @property
     def energy_error(self) -> float | None:
@@ -113,8 +118,6 @@ class BenchmarkRecord(pydantic.BaseModel):
     One record = one circuit/problem × one backend × one options configuration.
     Use run_id to group records belonging to the same parameter sweep.
     """
-    model_config = pydantic.ConfigDict()
-
     schema_version: str               = SCHEMA_VERSION
     experiment_id:  str               = pydantic.Field(
         default_factory=lambda: str(uuid.uuid4())

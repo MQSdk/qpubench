@@ -130,8 +130,9 @@ cp .env.example .env
 ```
 
 ```ini
-# IBM Quantum
-ibm_channel="ibm_quantum"
+# IBM Quantum — qiskit-ibm-runtime requires channel "ibm_quantum_platform"
+# (the old "ibm_quantum" value is rejected since qiskit-ibm-runtime 0.40)
+ibm_channel="ibm_quantum_platform"
 ibm_api_token="YOUR_TOKEN"
 ibm_instance="ibm-q/open/main"
 
@@ -139,16 +140,21 @@ ibm_instance="ibm-q/open/main"
 iqm_api_token="YOUR_TOKEN"
 iqm_server_url="https://cocos.resonance.meetiqm.com/your-device"
 
-# Qibo cloud
+# Qibo cloud (planned — qpubench has no Qibo adapter yet)
 qibo_api_token="YOUR_TOKEN"
 qibo_platform="YOUR_PLATFORM"
 
-# Cebule (MQS SDK)
+# Cebule (MQS SDK) — used by mqsdk.Cebule(EMAIL, PASSWORD)
 EMAIL="your@email.com"
 PASSWORD="your_password"
 
-# Qrack precision: 5 = float32, 6 = float64
+# Qrack (GPU selection; -1 = auto-detect)
+qrack_device_id="-1"
+# QRACK_FPPOW=6 for double precision; 5 for float (default)
 QRACK_FPPOW="6"
+
+# MBQC-FPGA (path to compiled bitstream or simulator binary)
+mbqc_bitstream_path="/path/to/bitstream.bit"
 ```
 
 ---

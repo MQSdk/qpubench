@@ -56,8 +56,6 @@ class CircuitSpec(pydantic.BaseModel):
     measurement_pattern: MBQCPattern | None      = None
     photonic_circuit:    PhotonicCircuitSpec | None = None  # qubit_modality=PHOTONIC / FUSION_BASED
 
-    model_config = pydantic.ConfigDict(arbitrary_types_allowed=True)
-
     @pydantic.model_validator(mode="after")
     def _check_consistency(self) -> CircuitSpec:
         if self.computing_model == ComputingModel.MBQC:
@@ -124,8 +122,12 @@ class CircuitSpec(pydantic.BaseModel):
         return self.model_copy(update={"parameter_bindings": bindings})
 
     @property
-    def circuit_depth(self) -> int | None:
-        """If gate_counts were populated (e.g. after transpilation), estimate depth."""
+    def total_gates(self) -> int | None:
+        """Total gate count summed over gate_counts, or None if not populated.
+
+        Note: this is a gate count, not a circuit depth — for wide circuits
+        with parallel gates the true depth is much smaller.
+        """
         if not self.gate_counts:
             return None
         return sum(self.gate_counts.values())

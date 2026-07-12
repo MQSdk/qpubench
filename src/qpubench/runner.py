@@ -5,7 +5,7 @@ import time
 from collections.abc import Callable
 from typing import Any
 
-from .backends.base import AlgorithmAdapter, BackendAdapter
+from .backends.base import AlgorithmAdapter
 from .schemas.circuit import CircuitSpec
 from .schemas.execution import ExecutionOptions
 from .schemas.primitives import JobStatus
@@ -114,7 +114,14 @@ class BenchmarkRunner:
             raise TypeError(
                 "pass shots= either directly or inside ExecutionOptions, not both"
             )
-        adapter = self._backends[backend_name]
+        try:
+            adapter = self._backends[backend_name]
+        except KeyError:
+            registered = ", ".join(sorted(self._backends)) or "<none>"
+            raise KeyError(
+                f"No backend registered as {backend_name!r}. "
+                f"Registered backends: {registered}"
+            ) from None
 
         # --- Algorithm-driven path (QForte, etc.) ---
         if isinstance(adapter, AlgorithmAdapter):

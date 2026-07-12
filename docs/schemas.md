@@ -1,6 +1,6 @@
 # Schema reference
 
-Schema version **2.7.0** — 36 modules, all in `src/qpubench/schemas/`.  
+Schema version **2.7.0** — 38 modules, all in `src/qpubench/schemas/`.  
 Import from the package root: `from qpubench.schemas import CircuitSpec, QuantumResult, …`
 
 Vendor-scoped modules are named `<org_or_maintainer>_<package>.py` — the filename alone tells you who maintains the upstream project and what it's called. Modules with no single vendor (interoperability standards, the framework's own core types) stay unprefixed.
@@ -63,12 +63,12 @@ Computing model (paradigm) and qubit modality are separate, independent axes on 
 | `ComputingModel` | `GATE_BASED` · `MBQC` · `FUSION_BASED` · `ADIABATIC` · `ANNEALING` · `GBS` · `SAMPLING` |
 | `QubitModality` | `SUPERCONDUCTING` · `TRAPPED_ION` · `NEUTRAL_ATOM` · `PHOTONIC` · `SILICON_SPIN` |
 | `AlgorithmFamily` | `ADAPT_VQE` · `UCC_VQE` · `UCC_PQE` · `SPQE` · `EXCITATION_SOLVE` · `TN_QC_OPT` · `GA_CIRCUIT_SEARCH` · `QPE` — package-agnostic algorithm identity, orthogonal to `ComputingModel` |
-| `CircuitFormat` | `QASM2` · `QASM3` · `QGC` · `MEASUREMENT_PATTERN` · `JSON` · `MOLECULE_JSON` · `FOCK_STATE_CIRCUIT` · `LINEAR_OPTICS_UNITARY` |
+| `CircuitFormat` | `QASM2` · `QASM3` · `QGC` · `MEASUREMENT_PATTERN` · `JSON` · `MOLECULE_JSON` · `FOCK_STATE_CIRCUIT` · `LINEAR_OPTICS_UNITARY` · `QMOD` |
 | `PauliLabel` | `I` · `X` · `Y` · `Z` |
-| `ErrorMitigationStrategy` | `NONE` · `DD` · `TREX` · `ZNE` · `PEC` · `QESEM` |
+| `ErrorMitigationStrategy` | `NONE` · `DD` · `TREX` · `ZNE` · `PEC` · `QESEM` · `FIRE_OPAL` · `MITIQ_ZNE` · `MITIQ_PEC` · `MITIQ_CDR` · `MITIQ_REM` · `MITIQ_DDD` · `HAIQU` · `PARITY_QC` · `QMATTER` |
 | `FidelityMetric` | `UNITARY` · `FUBINI_STUDY` · `TRACE` · `PROCESS` |
 | `JobStatus` | `PENDING` · `RUNNING` · `SUCCEEDED` · `FAILED` · `CANCELLED` |
-| `CebuleTaskType` | `MOL_MAP` · `QASM_GEN` · `TN_QC_OPT` · `COVO` |
+| `CebuleTaskType` | 28 values — quantum: `MOL_MAP` · `QASM_GEN` · `TN_QC_OPT` · `COVO`; chemistry/MD: `COSMO` · `SIGMA` · `SOLUBILITY` · `GEOMETRY_OPT` · MD variants · GNN tasks · surface/reaction tasks (see `mqsdk_cebule.py`) |
 
 ### Value types
 
@@ -106,6 +106,7 @@ Properties: `.value` → Python `complex`. Class method: `.from_complex(c)`.
 | `parameter_bindings` | `list[ParameterBinding]` | `[]` | Bound parameter values |
 | `gate_counts` | `dict[str, int]` | `{}` | Gate-name → count (populated after transpilation) |
 | `measurement_pattern` | `MBQCPattern \| None` | `None` | MBQC measurement pattern |
+| `photonic_circuit` | `PhotonicCircuitSpec \| None` | `None` | Photonic / fusion-based circuit (qubit_modality=PHOTONIC) |
 
 **Methods:**
 
@@ -117,7 +118,7 @@ Properties: `.value` → Python `complex`. Class method: `.from_complex(c)`.
 | `.is_parametric()` | `bool` | `True` if `parameters` is non-empty |
 | `.is_bound()` | `bool` | All parameters have bindings |
 | `.bind(values)` | `CircuitSpec` | Return copy with parameter bindings applied |
-| `.circuit_depth` | `int \| None` | Sum of `gate_counts` values (proxy for depth) |
+| `.total_gates` | `int \| None` | Sum of `gate_counts` values (total gate count, not depth) |
 
 ---
 

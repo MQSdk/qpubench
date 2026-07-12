@@ -1,6 +1,6 @@
 # AGENTS.md — QPUBench
 
-Modality-agnostic quantum benchmark framework. Pydantic v2 schema layer with zero quantum SDK dependencies in the core package. Schema v1.11.0.
+Modality-agnostic quantum benchmark framework. Pydantic v2 schema layer with zero quantum SDK dependencies in the core package. The schema version lives in `src/qpubench/schemas/record.py` (`SCHEMA_VERSION`).
 
 ## Stack
 
@@ -16,7 +16,7 @@ uv sync                         # preferred — installs package + dev group
 pip install -e "." --group dev  # fallback
 
 # Test
-pytest tests/                   # all 156 schema tests (no quantum SDK needed)
+pytest tests/                   # full schema test suite (no quantum SDK needed)
 pytest tests/test_schemas.py -k "pauli"   # single file, filtered
 
 # Lint / format / type-check

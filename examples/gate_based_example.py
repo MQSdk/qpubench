@@ -15,8 +15,6 @@ from __future__ import annotations
 import pathlib
 
 from qpubench import (
-    BackendSpec,
-    BenchmarkRecord,
     BenchmarkRunner,
     CircuitSpec,
     ComplexNumber,

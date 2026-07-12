@@ -23,7 +23,7 @@ from qpubench.schemas.johnrscott_mbqc_fpga import (
 )
 from qpubench.schemas.observable import PauliTerm, SparsePauliObservable
 from qpubench.schemas.primitives import ComplexNumber, PauliLabel
-from qpubench.schemas.record import BenchmarkRecord, VQAConfig
+from qpubench.schemas.record import SCHEMA_VERSION, BenchmarkRecord, VQAConfig
 from qpubench.schemas.reactions import (
     ArrheniusRateConstant,
     KineticsReactionSpec,
@@ -38,8 +38,6 @@ from qpubench.schemas.circuit import CircuitSpec, ParameterBinding
 from qpubench.schemas.execution import ExecutionOptions, TranspilerConfig, ZNEConfig
 from qpubench.schemas.result import (
     ExpectationResult,
-    FidelityResult,
-    FidelityMetric,
     QuantumResult,
     ShotResult,
     TranspileLayout,
@@ -223,8 +221,8 @@ def test_single_qubit_coe_line_count():
     pattern = _simple_pattern(n=1, d=6)
     coe = pattern.to_single_qubit_coe(qubit_idx=0)
     data_lines = [
-        l for l in coe.splitlines()
-        if l.strip() and not l.strip().endswith("=") and "initialization" not in l
+        line for line in coe.splitlines()
+        if line.strip() and not line.strip().endswith("=") and "initialization" not in line
     ]
     assert len(data_lines) == 6
 
@@ -246,14 +244,14 @@ def test_multi_qubit_coe_roundtrip():
     coe = pattern.to_multi_qubit_coe()
     assert "memory_initialization_radix=16" in coe
     data_lines = [
-        l.split(";")[0].strip()
-        for l in coe.splitlines()
-        if l.strip() and not l.strip().endswith("=") and "initialization" not in l
+        line.split(";")[0].strip()
+        for line in coe.splitlines()
+        if line.strip() and not line.strip().endswith("=") and "initialization" not in line
     ]
     assert len(data_lines) == 4
     hex_width = pattern.num_logical_qubits * 4
-    for l in data_lines:
-        assert len(l) == hex_width
+    for line in data_lines:
+        assert len(line) == hex_width
 
 
 # ---------------------------------------------------------------------------
@@ -347,7 +345,7 @@ def test_benchmark_record_json_roundtrip():
     record  = _minimal_record()
     json_str = record.model_dump_json()
     data     = json.loads(json_str)
-    assert data["schema_version"] == "2.3.0"
+    assert data["schema_version"] == SCHEMA_VERSION
     restored = BenchmarkRecord.model_validate_json(json_str)
     assert restored.experiment_id == record.experiment_id
     assert restored.result.expectation_values[0].value == -1.137
@@ -743,12 +741,12 @@ def test_circuit_spec_gate_counts():
         serialized=BELL_QASM,
         gate_counts={"h": 1, "cx": 1, "measure": 2},
     )
-    assert c.circuit_depth == 4   # sum of all gate counts
+    assert c.total_gates == 4   # sum of all gate counts
 
 
 def test_circuit_spec_gate_counts_empty():
     c = CircuitSpec(num_qubits=2, serialized=BELL_QASM)
-    assert c.circuit_depth is None
+    assert c.total_gates is None
 
 
 # ---------------------------------------------------------------------------
@@ -919,7 +917,7 @@ def test_runner_register_and_run_shorthand_misuse():
 
 from qpubench.schemas.execution import AdaptVQEConfig, AlgorithmSpec
 from qpubench.schemas.result import AdaptIteration
-from qpubench.schemas.primitives import AlgorithmFamily, CircuitFormat
+from qpubench.schemas.primitives import AlgorithmFamily
 
 
 def test_algorithm_spec_defaults():
@@ -1387,7 +1385,6 @@ def test_resource_estimator_config():
 def test_qchem_pipeline_spec_roundtrip():
     from qpubench.schemas.microsoft_qdk import (
         AtomSpec,
-        CoordinateUnit,
         FermionicHamiltonianSpec,
         MoleculeStructureSpec,
         QChemPipelineSpec,
@@ -1592,7 +1589,6 @@ def test_takagi_decomposition_spec():
 
 def test_gbs_clique_finding_result():
     from qpubench.schemas.dtu_gbs import GBSCliqueFindingResult, GBSGraphConfig, GraphScalingMethod
-    import json
     A = [0, 1, 1, 0,
          1, 0, 1, 1,
          1, 1, 0, 1,
@@ -1926,7 +1922,6 @@ def test_kqd_pipeline_spec_roundtrip():
 
 def test_quantum_result_kqd_field():
     import json
-    import math
     from qpubench.schemas.mqsdk_qse import KQDConfig, KQDMethod, KQDPipelineSpec
     pipeline = KQDPipelineSpec(
         num_qubits=6,
@@ -2181,8 +2176,6 @@ def test_qesem_job_record_roundtrip():
 def test_quantum_result_qesem_field():
     import json
     from qpubench.schemas.qedma_qesem import QESEMJobRecord, QESEMJobStatus, QESEMJobSpec
-    from qpubench.schemas.primitives import ErrorMitigationStrategy
-    from qpubench.schemas.execution import ExecutionOptions
     qesem_record = QESEMJobRecord(
         job_id="qesem-xyz",
         status=QESEMJobStatus.SUCCEEDED,
@@ -2372,7 +2365,7 @@ def test_qc_atomic_result_roundtrip():
 
 def test_qc_optimization_result():
     from qpubench.schemas.molssi_qcschema import (
-        QCOptimizationInput, QCOptimizationResult, QCAtomicInput,
+        QCOptimizationResult, QCAtomicInput,
         QCMolecule, QCModel, QCDriver,
     )
     mol_start = QCMolecule(symbols=["H", "H"], geometry=[0.0, 0.0, -0.8, 0.0, 0.0, 0.8])

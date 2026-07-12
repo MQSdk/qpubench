@@ -2,7 +2,7 @@
 
 [![Python ≥ 3.11](https://img.shields.io/badge/python-≥3.11-blue)](https://python.org)
 [![License: LGPL v3](https://img.shields.io/badge/License-LGPL_v3-green)](LICENSE)
-[![Schema v2.3.0](https://img.shields.io/badge/schema-v2.3.0-orange)](docs/schemas.md)
+[![Schema v2.7.0](https://img.shields.io/badge/schema-v2.7.0-orange)](docs/schemas.md)
 
 Modality-agnostic quantum benchmark framework with a typed [Pydantic v2](https://docs.pydantic.dev/) schema layer.
 
@@ -244,7 +244,7 @@ The schema layer has zero quantum SDK dependencies. Seven core modules define th
 ```
 qpubench/
 ├── src/qpubench/
-│   ├── schemas/           ← Pydantic schema layer (31 modules, schema v2.3.0)
+│   ├── schemas/           ← Pydantic schema layer (38 modules, schema v2.7.0)
 │   │   ├── primitives, circuit, observable, backend, execution, result, record, reaction, advantage
 │   │   ├── johnrscott_mbqc_fpga      ← MBQC-FPGA 16-bit program word
 │   │   ├── mqsdk_cebule              ← Cebule SDK task I/O (solvation, MD, geometry, GNN, VQE)
@@ -262,16 +262,24 @@ qpubench/
 │   │   ├── classiq_classiq           ← Classiq synthesis + chemistry/QAOA
 │   │   └── qctrl_fire_opal, unitaryfund_mitiq, haiqu_rivet, parityqc_parityqc,
 │   │       qmatter_qmatter, quantum_motion_hardware, ibm_runtime_v2  ← one module per vendor
-│   ├── backends/          ← BackendAdapter/AlgorithmAdapter protocols + stubs
+│   ├── backends/          ← Adapter protocols, stubs, and real adapters
+│   │                        (Aer, Braket, IBM Runtime, IQM, PennyLane
+│   │                        Lightning, Mitiq ZNE; Qrack is a stub)
+│   ├── hamiltonian_sources/ ← HamLib, PennyLane qchem, PySCF ab initio,
+│   │                        Basis Set Exchange, q-vSZP loaders
+│   ├── tensor_network/    ← Contraction-path finding helpers
+│   ├── observability.py   ← Logging hooks
 │   ├── runner.py          ← BenchmarkRunner (run, sweep, hooks, dual-protocol dispatch)
 │   └── store.py           ← NDJSONStore, ParquetStore, S3Store, ResultStore protocol
 │
 ├── integrations/          ← NOT installed; copy into your project
 │   ├── template/          ← BackendAdapter + AlgorithmAdapter starter templates
-│   └── qforte/            ← Complete QForte integration (ADAPT-VQE, UCCNVQE)
+│   ├── qforte/            ← Complete QForte integration (ADAPT-VQE, UCCNVQE)
+│   └── classiq, slowquant, kubeflow, generic_adapt_vqe,
+│       ibm_qiskit_adapt_vqe, microsoft_qdk_adapt_vqe, qrack
 │
-├── examples/              ← Runnable examples (gate-based, MBQC, QForte VQE)
-├── tests/                 ← 156 schema tests, no quantum SDK required
+├── examples/              ← Runnable examples: guides/, demos/, tutorials/
+├── tests/                 ← Schema test suite, no quantum SDK required
 ├── docs/                  ← Detailed documentation
 ├── conda-recipe/          ← conda-build recipe (meta.yaml)
 ├── environment.yml        ← conda development environment
@@ -284,7 +292,7 @@ qpubench/
 ## Tests
 
 ```sh
-pytest tests/       # 156 tests, no quantum SDK required
+pytest tests/       # full schema test suite, no quantum SDK required
 ```
 
 ---

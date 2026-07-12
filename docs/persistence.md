@@ -66,12 +66,15 @@ store = ParquetStore(pathlib.Path("results/sweep.parquet"))
 
 Records are flattened one level deep before writing. A `_raw_json` column stores the full JSON for lossless round-trips.
 
+`save()` rewrites the whole file per record (Parquet files are immutable), so treat this as an **export/analysis format**: collect records during a sweep with `NDJSONStore`, then bulk-load them with `store.save_many(records)` (one rewrite total).
+
 ```python
 # Flat pandas DataFrame for analysis and plotting
 df = store.to_dataframe()
 print(df[["molecule", "final_eigenvalue", "circuit_depth"]].describe())
 
-# Query (same __ syntax as NDJSONStore; column-level only)
+# Query — column-level only: filters use flat single-underscore column
+# names (not NDJSONStore's dotted __ paths); unknown columns are ignored
 records = store.query(backend_name="aer_statevector")
 records = store.query(result_status="succeeded")
 
@@ -85,7 +88,7 @@ Flat column names produced from a `BenchmarkRecord`:
 |---|---|
 | `schema_version`, `experiment_id`, `run_id`, `timestamp` | Top-level |
 | `num_qubits`, `circuit_depth`, `tags`, `notes` | Top-level |
-| `circuit_modality`, `circuit_format` | `circuit.*` |
+| `circuit_computing_model`, `circuit_qubit_modality`, `circuit_format` | `circuit.*` |
 | `backend_name`, `backend_provider` | `backend.*` |
 | `shots`, `opt_level`, `error_mitigation` | `options.*` |
 | `result_status`, `qpu_time_s`, `total_time_s` | `result.*` |

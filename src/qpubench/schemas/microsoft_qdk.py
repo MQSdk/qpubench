@@ -420,6 +420,11 @@ class ModelHamiltonianSpec(pydantic.BaseModel):
         expected = self.hamiltonian_type.value.split("_")[0]   # "ising", "heisenberg", …
         if len(present) > 1:
             raise ValueError(f"Only one parameter block should be set; got {present}")
+        if present and present[0] != expected:
+            raise ValueError(
+                f"Parameter block {present[0]!r} does not match "
+                f"hamiltonian_type={self.hamiltonian_type.value!r} (expected {expected!r})"
+            )
         return self
 
 

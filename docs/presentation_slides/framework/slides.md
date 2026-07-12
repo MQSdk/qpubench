@@ -931,7 +931,7 @@ print(f"<ZZ> = {record.result.expectation_values[0].value:.4f}")
 
 **Repository**: `github.com/mqsdk/qpubench`
 
-**Schema v2.7.0** — 36 modules · 7 computing models × 5 qubit modalities · zero quantum SDK deps in core
+**Schema v2.7.0** — 38 modules · 7 computing models × 5 qubit modalities · zero quantum SDK deps in core
 
 \vspace{0.5em}
 

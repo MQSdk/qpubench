@@ -52,7 +52,7 @@ class CircuitFormat(str, enum.Enum):
 
 
 class PauliLabel(str, enum.Enum):
-    I = "I"
+    I = "I"  # noqa: E741 -- the identity Pauli really is named I
     X = "X"
     Y = "Y"
     Z = "Z"
