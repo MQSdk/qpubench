@@ -1,10 +1,9 @@
-"""qrunch guide: "Build a VQE Calculator"
+"""Guide: build a VQE calculator.
 
-Verdict: Yes — real, runnable qpubench mechanism.
-Mechanism: integrations/generic_adapt_vqe's GenericAdaptVQEEngine end to
-end — this *is* the ADAPT-VQE substitute for qrunch's VQE calculator guide
-(FAST-VQE/BEAST-VQE are proprietary and have no equivalent; ADAPT-VQE is
-the generic adaptive-ansatz alternative available here).
+A VQE "calculator" is the assembly that turns a problem into an energy:
+integrations/generic_adapt_vqe's GenericAdaptVQEEngine wires together the
+Hamiltonian, the operator pool, the energy backend, and the optimizer
+config. ADAPT-VQE is the adaptive-ansatz VQE this framework ships.
 
 Requires: pip install 'qpubench[adapt_vqe]'
 
@@ -34,9 +33,8 @@ def main() -> None:
     hamiltonian = toy_hamiltonian()
 
     # "Assembling" the calculator: Hamiltonian + occupied/virtual split +
-    # energy oracle + hyperparameters. Compare to qrunch's VQE calculator,
-    # which wires the same four pieces (problem, ansatz/pool, backend,
-    # optimizer config) together.
+    # energy oracle + hyperparameters — the four pieces a VQE calculator
+    # always wires together (problem, ansatz/pool, backend, optimizer config).
     calculator = GenericAdaptVQEEngine(
         hamiltonian=hamiltonian,
         num_qubits=NUM_QUBITS,

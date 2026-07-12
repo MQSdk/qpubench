@@ -864,6 +864,55 @@ def test_runner_sweep_produces_correct_count():
     assert len(records) == 2   # 1 circuit × 1 backend × 2 option sets
 
 
+def test_runner_register_auto_stub_and_run_shots_shorthand():
+    from qpubench import BenchmarkRunner
+    from qpubench.backends.stub import StubGateAdapter
+    from qpubench.schemas.observable import PauliTerm, SparsePauliObservable
+
+    circuit = CircuitSpec(
+        num_qubits=2,
+        serialized=BELL_QASM,
+        observables=[
+            SparsePauliObservable(
+                num_qubits=2,
+                terms=[PauliTerm(qubit_indices=(0,), pauli_ops=(PauliLabel.Z,))],
+            )
+        ],
+    )
+    runner = BenchmarkRunner()
+    runner.register(name="stub", seed=42)          # no adapter object needed
+    assert isinstance(runner._backends["stub"], StubGateAdapter)
+
+    record = runner.run(circuit, "stub", shots=4096)   # no ExecutionOptions needed
+    assert record.result.status == JobStatus.SUCCEEDED
+    assert record.options.shots == 4096
+
+    # Shorthand reproducibility matches the explicit form
+    runner.register(StubGateAdapter(seed=42), name="explicit")
+    explicit = runner.run(circuit, "explicit", ExecutionOptions(shots=4096))
+    assert (
+        record.result.expectation_values[0].value
+        == explicit.result.expectation_values[0].value
+    )
+
+
+def test_runner_register_and_run_shorthand_misuse():
+    import pytest
+
+    from qpubench import BenchmarkRunner, StubGateAdapter
+
+    runner = BenchmarkRunner()
+    with pytest.raises(TypeError):
+        runner.register(seed=1)                    # auto-stub needs a name
+    with pytest.raises(TypeError):
+        runner.register(StubGateAdapter(), name="s", seed=1)   # seed is stub-only
+
+    runner.register(name="stub")
+    circuit = CircuitSpec(num_qubits=1, serialized="OPENQASM 2.0;")
+    with pytest.raises(TypeError):
+        runner.run(circuit, "stub", ExecutionOptions(shots=8), shots=16)
+
+
 # ---------------------------------------------------------------------------
 # AlgorithmSpec and algorithm-driven schemas
 # ---------------------------------------------------------------------------

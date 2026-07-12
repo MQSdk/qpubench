@@ -241,7 +241,8 @@ A real, chained pipeline confirmed against `mqsdk/utils/tasks.py`. `COSMO`
 computes continuum-solvation energetics for one molecule; `SIGMA` derives a
 screening-charge-density profile from a completed `COSMO` task; `SOLUBILITY`
 combines `SIGMA` profiles for a solute + solvent mixture into a solubility
-estimate. This is Cebule's answer to qrunch's "Create a Solvent Model" guide.
+estimate. This is Cebule's route to a solvent model (see
+`examples/guides/create_solvent_model.py` for the PySCF route).
 
 ```python
 from qpubench.schemas import CosmoInput, CosmoMethod, SigmaInput, SolubilityInput
@@ -297,8 +298,9 @@ than confirmed. Verify against the live SDK before relying on exact names.
 Both wrap Quantum ESPRESSO directly — the payload is a **raw QE input file**
 (`&control`/`&system`/`&electrons` or `&ions` namelists), not kwargs. The
 confirmed example notebooks use a periodic 8-water cell (`ibrav`/`celldm`
-lattice parameters), i.e. genuine periodic plane-wave DFT — Cebule's answer
-to qrunch's periodic-system needs (e.g. the COF-999 tutorial's framework).
+lattice parameters), i.e. genuine periodic plane-wave DFT — a plane-wave
+alternative for periodic-system chemistry (e.g. the carbon-capture
+tutorial's framework, `examples/tutorials/carbon_capture_periodic_dft.py`).
 
 ```python
 from qpubench.schemas import AbInitioMDInput, AbInitioMDMethod

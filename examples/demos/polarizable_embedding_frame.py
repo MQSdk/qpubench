@@ -1,11 +1,10 @@
-"""qrunch demo: "Polarizable Embedding — The Frame"
+"""Demo: polarizable embedding — the frame.
 
-Verdict: Yes — real, tested. CPPE (github.com/maxscheurer/cppe) and PyFraME
-(github.com/FraME-projects/PyFraME) are both pip-installable and confirmed
-working in this sandbox, bridged through PySCF's own ``pyscf.solvent.PE``
-(``pyscf.solvent.pol_embed``, real and free — no InQuanto/Cebule account
-needed). No qpubench schema existed for polarizable embedding at all before
-this — see ``qpubench.schemas.polarizable_embedding`` (new module).
+CPPE (github.com/maxscheurer/cppe) and PyFraME
+(github.com/FraME-projects/PyFraME) are both pip-installable and run for
+real here, bridged through PySCF's own ``pyscf.solvent.PE``
+(``pyscf.solvent.pol_embed``). See ``qpubench.schemas.polarizable_embedding``
+for the schema.
 
 Mechanism: a real PE-embedded Hartree-Fock calculation on water, with one
 explicit water molecule as the polarizable "environment" (3 sites: O, H, H),

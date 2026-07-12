@@ -1,11 +1,7 @@
-"""qrunch guide: "Choose a Contraction Path Finder"
+"""Guide: choose a tensor-network contraction path finder.
 
-Verdict: Yes — real. Checked qrunch's own guide page directly
-(qrunch.docs.kvantify.net/docs/guides/components/
-choose_contraction_path_finder.html): four strategies (Sequential, Random
-Greedy x128, Multi-Strategy, None) for picking how a tensor network
-contracts — all real via `quimb` + `cotengra` (per direct instruction to
-build this on quimb/cotengra, not bare `opt_einsum`).
+Four strategies (Sequential, Random Greedy x128, Multi-Strategy, None) for
+picking how a tensor network contracts — all real via `quimb` + `cotengra`.
 
 Mechanism: `qpubench.tensor_network.contraction_path.
 choose_contraction_path()` builds a real `quimb.tensor.Circuit` from a

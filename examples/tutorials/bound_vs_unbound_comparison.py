@@ -1,15 +1,9 @@
-"""qrunch tutorial: "Covalent Ligand Binding" (Kvantify/qrunch_tutorials)
+"""Tutorial: covalent ligand binding.
 
-Verdict: Partial — real mechanism-matched model reaction, still ADAPT-VQE
-instead of BEAST-VQE and a real cathepsin K + full ligand structure.
-Revised: checked the real qrunch notebook directly
-(github.com/Kvantify/qrunch_tutorials/covalent-ligand-tutorial) rather
-than guessing a Michael-addition/acrylamide model. Its real target is
-**cathepsin K**, with reversible + irreversible covalent inhibitors from
-real SI data (GFN2-xTB-optimized structures). Cathepsin K's real covalent
-warheads are **nitrile groups reacting with the catalytic cysteine thiol**
-(thioimidate formation) — confirmed real (not guessed), not a
-Michael-acceptor mechanism.
+A real mechanism-matched model reaction solved with ADAPT-VQE. The target
+is **cathepsin K**; its real covalent warheads are **nitrile groups
+reacting with the catalytic cysteine thiol** (thioimidate formation),
+modeled here by the smallest real nitrile + thiol pair.
 
 Mechanism here: CH3-C#N (nitrile warhead) + CH3-SH (cysteine thiol
 surrogate), compared at a bonded (thioimidate-forming, ~1.85 A

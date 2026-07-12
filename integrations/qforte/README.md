@@ -6,6 +6,11 @@ Algorithm/AnsatzAlgorithm/ADAPTVQE attribute surface are modeled as typed
 schemas in `schemas/evangelistalab_qforte.py` — no more ad hoc `getattr()`
 scraping of private attributes with an untyped contract.
 
+> **See [docs/vqa.md](../../docs/vqa.md) for the overall VQA picture** — how
+> VQE and ADAPT-VQE relate, the package-agnostic `AdaptVQEConfig` contract,
+> and how this QForte engine compares to the other two `ADAPT_VQE`
+> implementations. This README covers the QForte adapter specifically.
+
 This is one of three implementations of `AlgorithmFamily.ADAPT_VQE` in this
 repo — `integrations/ibm_qiskit_adapt_vqe/` and
 `integrations/microsoft_qdk_adapt_vqe/` implement the same family without

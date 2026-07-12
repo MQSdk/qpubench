@@ -6,6 +6,10 @@ SDK. Delegates every energy evaluation to any qpubench `BackendAdapter`, the
 same pattern `integrations/qforte/ExternalEvalAlgorithmAdapter` established
 for QForte, generalized so QForte itself isn't required.
 
+> **See [docs/vqa.md](../../docs/vqa.md) for the overall VQA picture** — how
+> VQE and ADAPT-VQE relate and the package-agnostic `AdaptVQEConfig`
+> contract this engine consumes. This README covers the engine internals.
+
 Used by `integrations/ibm_qiskit_adapt_vqe/` and
 `integrations/microsoft_qdk_adapt_vqe/`, which are thin wrappers over this
 engine differing only in `BackendSpec` naming/defaults.

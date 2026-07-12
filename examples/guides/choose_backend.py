@@ -1,7 +1,7 @@
-"""qrunch guide: "Choose a Backend"
+"""Guide: choose a backend.
 
-Verdict: Yes — broader than qrunch's own backend list. BackendSpec exposes
-one factory method per backend family; this tours a representative sample.
+BackendSpec exposes one factory method per backend family; this tours a
+representative sample.
 
 Run:
     python examples/guides/choose_backend.py

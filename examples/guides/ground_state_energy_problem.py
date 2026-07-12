@@ -1,6 +1,5 @@
-"""qrunch guide: "Construct a Ground State Energy Problem"
+"""Guide: construct a ground-state energy problem.
 
-Verdict: Yes — real, runnable qpubench mechanism.
 Mechanism: VQAConfig(problem_type="chemistry", ...) carries the problem
 metadata; integrations/generic_adapt_vqe's GenericAdaptVQEEngine (pure
 Python + scipy, no vendor SDK) actually solves for the ground state.
@@ -39,8 +38,7 @@ def main() -> None:
     hamiltonian = toy_hamiltonian()
 
     # 1. The ground-state energy *problem*: what we're solving and against
-    #    what reference — this is qrunch's "Ground State Energy Problem"
-    #    object, expressed as qpubench's package-agnostic VQAConfig.
+    #    what reference — expressed as qpubench's package-agnostic VQAConfig.
     problem = VQAConfig(
         problem_type="chemistry",
         molecule="toy-4q",
@@ -49,7 +47,7 @@ def main() -> None:
     )
     print(f"Problem: {problem.molecule}, target energy = {problem.ground_truth:.6f}")
 
-    # 2. Solve it with ADAPT-VQE (the FAST-VQE/BEAST-VQE substitute), scored
+    # 2. Solve it with ADAPT-VQE, scored
     #    by a real statevector simulator — StubGateAdapter would return
     #    random numbers and the optimizer would chase noise instead of the
     #    Hamiltonian, so it's not used here (see toy_statevector_backend.py).
@@ -62,8 +60,7 @@ def main() -> None:
     )
     result, vqa = engine.run()
 
-    # 3. Attach the ground truth after the fact and report chemical accuracy —
-    #    same VQAConfig object qrunch's guide would populate.
+    # 3. Attach the ground truth after the fact and report chemical accuracy.
     problem.final_eigenvalue = vqa.final_eigenvalue
     print(f"ADAPT-VQE energy       = {problem.final_eigenvalue:.6f}")
     print(f"|error|                 = {problem.energy_error:.6f} Hartree-equivalent")

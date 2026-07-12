@@ -1,10 +1,9 @@
-"""qrunch guide: "Create a Solvent Model"
+"""Guide: create a solvent model.
 
-Verdict: Yes — revised 2026-07-08. PySCF's PCM/COSMO continuum solvation
-(pyscf.solvent.pcm) is free, pip-installable, and confirmed real in this
-example — no InQuanto or Cebule account needed (Cebule's COSMO task type
-is a real alternative too, see docs/integrations/cebule.md, but qpubench
-has no adapter for it yet; PySCF does the same job directly).
+PySCF's PCM/COSMO continuum solvation (pyscf.solvent.pcm) is free,
+pip-installable, and runs for real in this example. (Cebule's COSMO task
+type is a real alternative too, see docs/integrations/cebule.md, but
+qpubench has no adapter for it yet; PySCF does the same job directly.)
 
 Requires: pip install 'qpubench[pyscf]'
 

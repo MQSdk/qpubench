@@ -1,14 +1,10 @@
-"""qrunch tutorial: "Dehalogenase Reaction" (Kvantify/qrunch_tutorials)
+"""Tutorial: dehalogenase reaction (SN2).
 
-Verdict: Partial — real mechanism-matched model reaction, still ADAPT-VQE
-instead of BEAST-VQE and a real haloalkane dehalogenase enzyme. Revised:
-checked the real qrunch notebook directly
-(github.com/Kvantify/qrunch_tutorials/dehalogenase-tutorial) rather than
-guessing a generic hydroxide-attack model. Its own `embedded_atoms` list
-is `[C, O, O, Cl, C]` — a **carboxylate nucleophile** (two oxygens)
-attacking a C-Cl carbon, i.e. the real Asp-mediated haloalkane
-dehalogenase mechanism (ester-intermediate SN2), confirmed real (not
-guessed) via the notebook's own embedding.
+A real mechanism-matched model reaction solved with ADAPT-VQE. The
+haloalkane dehalogenase active site is a **carboxylate nucleophile**
+(two oxygens) attacking a C-Cl carbon — the Asp-mediated haloalkane
+dehalogenase mechanism (ester-intermediate SN2), modeled here by the
+smallest real carboxylate.
 
 Mechanism here: CH3Cl + HCOO- (formate — the simplest real carboxylate),
 approaching along the real backside-attack SN2 geometry (nucleophile

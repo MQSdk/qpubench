@@ -1,9 +1,6 @@
-"""qrunch demos: "Performing a Standard FAST-VQE Convergence Study" and
-"Performing a Standard BEAST-VQE Convergence Study"
+"""Demo: an ADAPT-VQE convergence study.
 
-Verdict: Partial — same demo *shape* (energy vs. a convergence knob),
-substituting ADAPT-VQE for both FAST-VQE and BEAST-VQE (neither has an
-equivalent in qpubench; see examples/README.md).
+Energy vs. a convergence knob (the gradient threshold).
 
 Mechanism: registers IBMQiskitAdaptVQEAdapter (a thin AlgorithmAdapter
 wrapper over the real generic_adapt_vqe engine) with BenchmarkRunner and

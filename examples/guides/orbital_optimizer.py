@@ -1,10 +1,8 @@
-"""qrunch guide: "Create an Orbital Optimizer"
+"""Guide: create an orbital optimizer.
 
-Verdict: Yes — real. Checked qrunch's own guide page directly
-(qrunch.docs.kvantify.net/docs/guides/components/
-create_orbital_optimizer.html): Newton, Simple, and Basin-Hopping orbital
-optimization strategies, all covered here for free with PySCF (already a
-qpubench dependency) — no new package needed.
+Newton, Simple, and Basin-Hopping orbital optimization strategies, all
+covered here for free with PySCF (already a qpubench dependency) — no new
+package needed.
 
 Mechanism (all verified for real on H2/6-31G, CAS(2e,2o), in this sandbox):
 
@@ -18,7 +16,7 @@ Mechanism (all verified for real on H2/6-31G, CAS(2e,2o), in this sandbox):
             virtual-virtual rotations don't change the CASCI energy, so
             they're excluded here too). ``scipy.linalg.expm(kappa)``
             rotates ``mo_coeff``; ``mcscf.CASCI`` at the rotated orbitals
-            is the "estimator" qrunch's own guide framing describes;
+            is the "estimator" step;
             ``scipy.optimize.minimize(method="Powell")`` is the classical
             minimizer. Verified: converges to -1.14615111 Ha (8e-5 Ha of
             the Newton reference) — a real, different, independently-
@@ -31,8 +29,8 @@ Mechanism (all verified for real on H2/6-31G, CAS(2e,2o), in this sandbox):
 All three are genuinely slow relative to this repo's other guides (SIMPLE:
 ~25s, BASIN-HOPPING: ~50s here) — every trial orbital rotation runs a full
 CASCI diagonalization, not a cheap analytic evaluation. That's inherent to
-the mechanism, not an artifact of this implementation, and matches
-qrunch's own "works best with small systems" framing for these guides.
+the mechanism, not an artifact of this implementation — it works best on
+small systems.
 
 Requires: pip install 'qpubench[pyscf]'
 

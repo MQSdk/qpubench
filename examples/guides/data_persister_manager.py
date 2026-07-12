@@ -1,6 +1,5 @@
-"""qrunch guide: "Choose a Data Persister Manager"
+"""Guide: choose a data persister / result store.
 
-Verdict: Yes — arguably broader than qrunch's own persister options.
 Mechanism: NDJSONStore / ParquetStore / S3Store all implement the same
 ResultStore protocol (save/load/query); S3Store also works against MinIO
 and Hugging Face Storage Buckets, not just AWS S3.

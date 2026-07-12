@@ -1,21 +1,18 @@
-"""qrunch guides: "Create a FAST Gate Selector" / "Create a Brute Force
-Gate Selector"
+"""Guide: gradient-screen vs. brute-force gate selectors.
 
-Verdict: Yes — real. Checked qrunch's own guide pages directly
-(qrunch.docs.kvantify.net/docs/guides/components/
-create_{fast,brute_force}_gate_selector.html): FAST scores every pool
-operator by a cheap heuristic gradient, no re-optimization; Brute Force
-evaluates each candidate by temporarily adding it and running a *complete*
-optimization, keeping whichever gives the lowest energy — both real,
-swappable `GateSelector` strategies (integrations/generic_adapt_vqe/
-gate_selector.py) plugged into `GenericAdaptVQEEngine(gate_selector=...)`.
+Two ways for ADAPT-VQE to pick its next operator, as swappable
+`GateSelector` strategies (integrations/generic_adapt_vqe/gate_selector.py)
+plugged into `GenericAdaptVQEEngine(gate_selector=...)`. The fast selector
+scores every pool operator by a cheap heuristic gradient with no
+re-optimization; the brute-force selector evaluates each candidate by
+temporarily adding it and running a *complete* optimization, keeping
+whichever gives the lowest energy.
 
 Mechanism: `FastGateSelector` is exactly the engine's original gradient
 screen (central finite differences), extracted unchanged.
 `BruteForceGateSelector` runs one full `scipy.optimize.minimize` per
-remaining pool operator, every macro-iteration — more expensive, exact per
-iteration, matching qrunch's own "computationally intensive... provides
-exact results... works best with small systems" framing.
+remaining pool operator, every macro-iteration — more expensive and exact
+per iteration, so it works best on small systems.
 
 Runs both on a real H2 qubit Hamiltonian (STO-3G, 4 qubits) built via
 `hamiltonian_sources.ab_initio.build_qubit_hamiltonian` (real PySCF +

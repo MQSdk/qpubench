@@ -1,6 +1,6 @@
-"""qrunch guide: "Define an Active Space (Complete Active Space)"
+"""Guide: define an active space (complete active space).
 
-Verdict: Yes — revised 2026-07-08. Real AVAS (Atomic Valence Active Space)
+Real AVAS (Atomic Valence Active Space)
 selection via ``pyscf.mcscf.avas`` (pip-installable, no compiler needed,
 confirmed real by running it on H2O/STO-3G in this sandbox) closes the
 "no selection algorithm" gap: three typed containers exist across three
@@ -11,7 +11,7 @@ Mechanism: ``avas.avas(mf, ao_labels)`` on a real Hartree-Fock reference
 picks the active space automatically from AO character (here: oxygen 2p
 character in water), then the resulting (active_electrons, active_orbitals)
 and core/active MO index blocks are expressed three ways — one per
-qrunch-adjacent chemistry package qpubench interoperates with — and fed
+chemistry package qpubench interoperates with — and fed
 into ``generate_singles_doubles_pool()`` to show how an active-space
 definition turns into the (num_electrons, num_qubits) pair generic_adapt_vqe
 needs.
@@ -91,8 +91,8 @@ def main() -> None:
         return
     active_electrons, active_orbitals, occupied_indices, active_indices = avas_result
 
-    # Same real AVAS result, expressed three ways — one per qrunch-adjacent
-    # chemistry package qpubench interoperates with.
+    # Same real AVAS result, expressed three ways — one per chemistry
+    # package qpubench interoperates with.
 
     gsopt = ActiveSpaceSpec(
         active_electrons=active_electrons,

@@ -1,6 +1,5 @@
-"""qrunch guide: "Create an ADAPT Gate Selector"
+"""Guide: create an ADAPT gate selector.
 
-Verdict: Yes — real, runnable qpubench mechanism.
 Mechanism: integrations/generic_adapt_vqe/pool.py's
 generate_singles_doubles_pool() / single_excitation_observable() /
 double_excitation_observable() — a genuine fermionic-singles-and-doubles

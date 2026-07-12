@@ -52,15 +52,20 @@ This runs end-to-end with the bare install — no quantum SDK, no credentials. I
 ```python
 import pathlib
 from qpubench import (
-    BenchmarkRunner, NDJSONStore, StubGateAdapter,
-    CircuitSpec, ExecutionOptions,
+    BenchmarkRunner, NDJSONStore, CircuitSpec,
     SparsePauliObservable, PauliTerm, PauliLabel, ComplexNumber,
 )
 
-# What to benchmark: a 2-qubit circuit with one observable
+# What to benchmark: a 2-qubit Bell circuit with one observable
+bell_qasm = """OPENQASM 2.0;
+include "qelib1.inc";
+qreg q[2];
+h q[0];
+cx q[0],q[1];"""
+
 circuit = CircuitSpec(
     num_qubits=2,
-    serialized='OPENQASM 2.0;\ninclude "qelib1.inc";\nqreg q[2];\nh q[0];\ncx q[0],q[1];',
+    serialized=bell_qasm,
     observables=[
         SparsePauliObservable(num_qubits=2, terms=[
             PauliTerm(qubit_indices=(0, 1),
@@ -72,21 +77,23 @@ circuit = CircuitSpec(
 
 # How to run it, and where results go
 runner = BenchmarkRunner(store=NDJSONStore(pathlib.Path("results/bell.ndjson")))
-runner.register(StubGateAdapter(seed=42), name="stub")
+runner.register(name="stub", seed=42)
 
-record = runner.run(circuit, "stub", ExecutionOptions(shots=4096))
+record = runner.run(circuit, "stub", shots=4096)
 
 ev = record.result.expectation_values[0]
 print(f"<ZZ> = {ev.value:.4f} ± {ev.std_error:.4f}")
 ```
 
-The stub returns random values — it exists to let you build and test a full pipeline before touching real hardware. To run the same circuit on a real simulator, change **one line**:
+Registering with just a `name` and a `seed` creates a **`StubGateAdapter`** behind the scenes: a built-in placeholder backend that returns random, seed-reproducible values instead of simulating anything. It exists so you can build and test the full pipeline — circuit, runner, store — before installing a quantum SDK or touching real hardware. Likewise, `runner.run(..., shots=4096)` builds `ExecutionOptions(shots=4096)` for you; pass a full `ExecutionOptions` only when you need more detailed control (error mitigation, transpiler settings, algorithm hyperparameters).
+
+To run the same circuit on a real simulator, change **one line**:
 
 ```python
 from qpubench.backends import AerAdapter          # pip install "qpubench[qiskit]"
 
 runner.register(AerAdapter(), name="aer")
-record = runner.run(circuit, "aer", ExecutionOptions(shots=4096))   # <ZZ> ≈ 1.0
+record = runner.run(circuit, "aer", shots=4096)   # <ZZ> ≈ 1.0
 ```
 
 That substitution — same circuit, same options, same record format, different machine — is the entire point of the framework.
@@ -123,12 +130,14 @@ For variational algorithms, attach a `VQAConfig` and the record computes chemist
 ```python
 from qpubench import VQAConfig
 
-record = runner.run(bound_ansatz, "aer", ExecutionOptions(shots=4096),
+record = runner.run(bound_ansatz, "aer", shots=4096,
     vqa=VQAConfig(problem_type="chemistry", molecule="H2", basis="sto-3g",
                   final_eigenvalue=-1.1370, ground_truth=-1.1373))
 record.vqa.energy_error         # 3.0e-4 Ha
 record.vqa.chemical_accuracy    # True (< 1.6 mHa)
 ```
+
+`VQAConfig` is metadata, not configuration — it changes nothing about execution. `problem_type` (the only required field) labels the problem domain (`"chemistry"`, `"optimization"`, `"ml"`) so records can be filtered by domain in the store. `final_eigenvalue` is the energy the optimization converged to and `ground_truth` is the reference to compare against (e.g. the FCI energy); both are optional, but providing both is what lets the record derive `energy_error` and `chemical_accuracy` shown above.
 
 Hooks fire on every completed record before persistence — use them for live progress lines or structured logging (`BenchmarkLogger` ships with a JSON formatter):
 
@@ -144,9 +153,10 @@ runner.add_hook(lambda r: print(r.backend.name, r.result.status.value))
 |---|---|
 | Install with uv / Poetry / conda, set up credentials | [Installation](installation.md) |
 | See every backend and its status (real vs. stub) | [Backends & adapters](backends.md) |
+| Run variational algorithms (VQE, ADAPT-VQE) | [VQA algorithms](vqa.md) |
 | Look up any model, field, or enum | [Schema reference](schemas.md) |
 | Store, query, and analyze results (incl. S3 / Hugging Face) | [Persistence](persistence.md) |
-| Run measurement-based (MBQC) programs on FPGA | [MBQC](mbqc.md) |
+| Run simulators on CPU / GPU, or MBQC programs on FPGA | [Compute architectures](compute_architectures.md) |
 | Bridge an external framework's data (QForte, PySCF, QCSchema, GBS, …) | [Integrations](integrations.md) |
 | Avoid cross-SDK convention traps (Pauli encodings, bit orders) | [Compatibility](compatibility.md) |
 | Write your own adapter, step by step | [Integration guide](https://github.com/mqsdk/qpubench/blob/main/INTEGRATION_GUIDE.md) |

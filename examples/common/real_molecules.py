@@ -1,12 +1,10 @@
-"""Real geometries for the 4 tutorials that previously used invented toy
-Hamiltonians (`toy_hamiltonians.py`).
+"""Real molecular geometries for the tutorials, as an alternative to the
+illustrative toy Hamiltonians in `toy_hamiltonians.py`.
 
-Checked the real qrunch tutorial notebooks directly
-(github.com/Kvantify/qrunch_tutorials) rather than guessing stand-ins
-blind — see each function's docstring for what was actually confirmed.
+See each function's docstring for the chemistry each geometry models.
 All geometries are STO-3G-appropriate (rough but chemically sane — not
-DFT/MP2-optimized; this repo's own honesty convention already established
-for `create_solvent_model.py` etc: real chemistry, illustrative precision).
+DFT/MP2-optimized; the same convention used for `create_solvent_model.py`
+etc.: real chemistry, illustrative precision).
 
 Every geometry function returns the real
 ``list[(symbol, (x, y, z))]`` shape ``openfermion.chem.MolecularData``
@@ -33,17 +31,16 @@ BUTYRONITRILE_BASIS = "sto-3g"
 # already-confirmed 12-qubit/631-term LiH timeout).
 BUTYRONITRILE_ACTIVE_ELECTRONS = 2
 BUTYRONITRILE_ACTIVE_ORBITALS = 2
-# The real qrunch tutorial's own setup — used once for a capability check
+# The full active space — used once for a capability check
 # (build only, don't run ADAPT-VQE on it).
 BUTYRONITRILE_REAL_ACTIVE_ELECTRONS = 8
 BUTYRONITRILE_REAL_ACTIVE_ORBITALS = 8
 
 
 def butyronitrile_geometry(cn_distance: float = 1.16) -> Geometry:
-    """n-butyronitrile, CH3-CH2-CH2-C#N. `cn_distance` is the real
-    dissociation coordinate the qrunch tutorial scans (the nitrile C#N
-    bond length, Angstrom); 1.16 A is the real equilibrium nitrile
-    C#N bond length.
+    """n-butyronitrile, CH3-CH2-CH2-C#N. `cn_distance` is the
+    dissociation coordinate (the nitrile C#N bond length, Angstrom);
+    1.16 A is the real equilibrium nitrile C#N bond length.
     """
     return [
         ("C", (0.00, 0.00, 0.00)),
@@ -62,11 +59,10 @@ def butyronitrile_geometry(cn_distance: float = 1.16) -> Geometry:
 
 
 # ---------------------------------------------------------------------------
-# Dehalogenase Reaction (SN2) — real qrunch notebook's own `embedded_atoms`
-# list is [C, O, O, Cl, C]: a carboxylate nucleophile (two oxygens) attacking
-# a C-Cl carbon, i.e. the real Asp-mediated haloalkane dehalogenase
-# mechanism (ester-intermediate SN2) -- CH3Cl + formate (HCOO-) models that
-# carboxylate attack, not a generic hydroxide guess.
+# Dehalogenase Reaction (SN2) — the haloalkane dehalogenase active site is
+# a carboxylate nucleophile (two oxygens) attacking a C-Cl carbon, i.e. the
+# Asp-mediated haloalkane dehalogenase mechanism (ester-intermediate SN2).
+# CH3Cl + formate (HCOO-) models that carboxylate attack.
 # ---------------------------------------------------------------------------
 
 DEHALOGENASE_BASIS = "sto-3g"
@@ -101,11 +97,10 @@ def dehalogenase_sn2_geometry(progress: float) -> Geometry:
 
 
 # ---------------------------------------------------------------------------
-# Covalent Ligand Binding — real qrunch notebook targets cathepsin K, with
-# reversible + irreversible covalent inhibitors. Cathepsin K's real covalent
-# warheads are nitrile groups reacting with the catalytic cysteine thiol
-# (thioimidate formation) -- CH3CN + CH3SH models that, not a Michael
-# addition / acrylamide guess.
+# Covalent Ligand Binding — cathepsin K is targeted by reversible +
+# irreversible covalent inhibitors. Its covalent warheads are nitrile
+# groups reacting with the catalytic cysteine thiol (thioimidate
+# formation). CH3CN + CH3SH models that.
 # ---------------------------------------------------------------------------
 
 COVALENT_LIGAND_BASIS = "sto-3g"
@@ -139,11 +134,9 @@ def covalent_ligand_geometry(c_s_distance: float) -> Geometry:
 
 
 # ---------------------------------------------------------------------------
-# Carbon Capture with COF-999 — COF-999 isn't in the qrunch_tutorials repo
-# at all (only butyronitrile/covalent-ligand/dehalogenase/ionization exist
-# there); no more specific real source found, so this stays an independent,
-# not source-verified, model of the amine-CO2 binding/carbamate-formation
-# chemistry COF-999's amine-functionalized pores exploit.
+# Carbon Capture with COF-999 — a simplified, illustrative model of the
+# amine-CO2 binding/carbamate-formation chemistry that COF-999's
+# amine-functionalized pores exploit, not COF-999's own binding site.
 # ---------------------------------------------------------------------------
 
 CARBON_CAPTURE_BASIS = "sto-3g"

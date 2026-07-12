@@ -1,13 +1,10 @@
-"""qrunch tutorial: "Carbon Capture with COF-999" (Kvantify/qrunch_tutorials)
+"""Tutorial: carbon capture (periodic DFT + CO2 binding site).
 
-Verdict: Partial — real periodic DFT (the framework/reference piece), not
-the actual COF-999 covalent organic framework or its CO2-binding embedded
-treatment. Previously flagged as needing DFT/periodic embedding with no
-path in qpubench at all; checking docs.mqs.dk and PySCF directly found a
-free path exists: PySCF's ``pbc`` module gives real periodic Gamma-point/
-k-point Kohn-Sham DFT, using PySCF's bundled GTH basis sets and
-pseudopotentials (``gth-szv``/``gth-pade`` — no download needed, confirmed
-offline in this sandbox).
+Real periodic DFT (the framework/reference piece), plus the molecular half
+of the CO2-binding chemistry — a simplified stand-in for the full COF-999
+covalent organic framework. PySCF's ``pbc`` module gives real periodic
+Gamma-point/k-point Kohn-Sham DFT, using PySCF's bundled GTH basis sets and
+pseudopotentials (``gth-szv``/``gth-pade`` — no download needed).
 
 Mechanism: real periodic PBE-DFT on a diamond-carbon unit cell (a
 covalent, all-carbon periodic framework — thematically the closest simple
@@ -25,13 +22,11 @@ binding-site chemistry — CO2 + NH3, an amine attacking the electrophilic
 CO2 carbon (the first step of carbamate formation, the mechanism
 amine-functionalized CO2 sorbents like COF-999 use at their pore surface)
 — via `qpubench.hamiltonian_sources.ab_initio.build_qubit_hamiltonian` and
-ADAPT-VQE, same real-ab-initio-Hamiltonian mechanism as this session's
-other tutorial rewrites. COF-999 itself isn't in the `qrunch_tutorials`
-GitHub repo (only butyronitrile/covalent-ligand/dehalogenase/ionization
-are), so this CO2+NH3 model stays an independent, not source-verified,
-choice — unlike the other three rewritten tutorials this session.
+ADAPT-VQE, the same real-ab-initio-Hamiltonian mechanism as the other
+tutorials. This CO2+NH3 model is a simplified, illustrative stand-in for
+the real amine-CO2 binding chemistry, not COF-999's own binding site.
 
-What's still missing for the real tutorial: COF-999's actual (much larger)
+What's still missing for a full treatment: COF-999's actual (much larger)
 periodic unit cell and a real embedded/DMET treatment combining both
 halves (see ``examples/demos/dmet_embedding_demo.py`` — DMET schema
 exists, libDMET isn't on PyPI). Cebule's Quantum-ESPRESSO-backed
@@ -163,10 +158,9 @@ def main() -> None:
     print(f"{'bound':10s}  {BOUND_CN_DISTANCE:>10.2f}  {bound_energy:>16.6f}  {bound_exact:>12.6f}")
     print(f"{'unbound':10s}  {UNBOUND_CN_DISTANCE:>10.2f}  {unbound_energy:>16.6f}  {unbound_exact:>12.6f}")
     print(f"\nbinding energy (bound - unbound) = {binding_energy:.6f} Ha")
-    print("(real CO2+NH3/STO-3G, 2-orbital/2-electron active space — an "
-          "independent model choice, not verified against a qrunch source "
-          "the way the other three rewritten tutorials this session are, "
-          "since COF-999 isn't in the qrunch_tutorials repo)")
+    print("(real CO2+NH3/STO-3G, 2-orbital/2-electron active space — a "
+          "simplified, illustrative stand-in for the real amine-CO2 binding "
+          "chemistry, not COF-999's own binding site)")
 
 
 if __name__ == "__main__":

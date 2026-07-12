@@ -1,9 +1,8 @@
-"""qrunch demo: "Performing a Reaction-Path Potential Energy Surface (PES) Study"
+"""Demo: performing a reaction-path potential energy surface (PES) study.
 
-Verdict: Yes — this is the first real exercise of schemas/reactions.py
-(added alongside these examples specifically to close this gap): a sweep of
-point calculations tied together as one ReactionCoordinateSpec /
-ReactionPathResult, rather than a bare list of unrelated BenchmarkRecords.
+This exercises schemas/reactions.py: a sweep of point calculations tied
+together as one ReactionCoordinateSpec / ReactionPathResult, rather than a
+bare list of unrelated BenchmarkRecords.
 
 Mechanism: builds one CircuitSpec (MOLECULE_JSON) per bond length from
 examples/common/toy_hamiltonians.toy_bond_hamiltonian(r), runs each through

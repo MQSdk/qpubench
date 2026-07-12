@@ -36,6 +36,8 @@ Error-mitigation and hardware-vendor schemas that used to be bundled in one `err
 
 ## Switching AlgorithmAdapter implementations
 
+For the full picture of the variational-algorithm family — how VQE and ADAPT-VQE relate, the package-agnostic contract, and worked examples — see **[VQA algorithms](vqa.md)**. In brief:
+
 `AlgorithmSpec` carries identity only (`name` + `AlgorithmFamily`); hyperparameters live in a family-specific config so the same run configuration works across every adapter that implements that family. `AlgorithmFamily.ADAPT_VQE` has three interchangeable implementations, sharing the package-agnostic `AdaptVQEConfig` (`schemas/execution.py`):
 
 | Adapter | Schema module | Engine |

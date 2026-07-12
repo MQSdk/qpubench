@@ -17,8 +17,9 @@ qpubench separates **what you benchmark** (schemas) from **how execution happens
 | **[Installation](docs/installation.md)** | pip · uv · Poetry 2 · conda |
 | **[Schema reference](docs/schemas.md)** | Every Pydantic model, field, and enum |
 | **[Backends & adapters](docs/backends.md)** | BackendAdapter / AlgorithmAdapter protocols, writing a new adapter |
+| **[VQA algorithms](docs/vqa.md)** | The variational-algorithm family: VQE, ADAPT-VQE, and the three interchangeable engine implementations |
 | **[Integrations](docs/integrations.md)** | Cebule SDK · Xenakis · ExcitationSolve · GSOpt · Photonic · QDK Chemistry · GBS · QSE/KQD · QESEM · QCSchema/QCElemental/PennyLane · Bloqade/Aquila · SlowQuant |
-| **[MBQC FPGA](docs/mbqc.md)** | 16-bit program word, COE files, byproduct registers |
+| **[Compute architectures](docs/compute_architectures.md)** | CPUs, GPUs, and FPGAs across the supported simulators — incl. the MBQC-FPGA program format |
 | **[Persistence](docs/persistence.md)** | NDJSONStore · ParquetStore · S3Store (AWS S3 / HF Storage Buckets) · hooks |
 | **[Compatibility](docs/compatibility.md)** | Pauli encoding, complex precision, MBQC bit conventions |
 | **[Integration guide](INTEGRATION_GUIDE.md)** | Writing adapters, energy hooks, testing pattern |
@@ -99,14 +100,19 @@ classDiagram
 ```python
 import pathlib
 from qpubench import (
-    BenchmarkRunner, NDJSONStore, StubGateAdapter,
-    CircuitSpec, ExecutionOptions,
+    BenchmarkRunner, NDJSONStore, CircuitSpec,
     SparsePauliObservable, PauliTerm, PauliLabel, ComplexNumber,
 )
 
+bell_qasm = """OPENQASM 2.0;
+include "qelib1.inc";
+qreg q[2];
+h q[0];
+cx q[0],q[1];"""
+
 circuit = CircuitSpec(
     num_qubits=2,
-    serialized='OPENQASM 2.0;\ninclude "qelib1.inc";\nqreg q[2];\nh q[0];\ncx q[0],q[1];',
+    serialized=bell_qasm,
     observables=[
         SparsePauliObservable(num_qubits=2, terms=[
             PauliTerm(qubit_indices=(0, 1),
@@ -117,10 +123,22 @@ circuit = CircuitSpec(
 )
 
 runner = BenchmarkRunner(store=NDJSONStore(pathlib.Path("results/bell.ndjson")))
-runner.register(StubGateAdapter(seed=42), name="stub")
-record = runner.run(circuit, "stub", ExecutionOptions(shots=4096))
+runner.register(name="stub", seed=42)
+record = runner.run(circuit, "stub", shots=4096)
+
 ev = record.result.expectation_values[0]
 print(f"⟨ZZ⟩ = {ev.value:.4f} ± {ev.std_error:.4f}")
+```
+
+What this does, line by line: the circuit is plain data — an OpenQASM string plus one observable (the two-qubit `ZZ` correlation) — with no quantum SDK involved. `runner.register(name="stub", seed=42)` registers a backend without naming an adapter class, so the runner creates a **`StubGateAdapter`** for you: a built-in placeholder backend that returns random (but seed-reproducible) expectation values instead of simulating anything. It exists so you can build and test your whole benchmark pipeline — circuit, runner, result store — before installing any SDK or touching real hardware. `runner.run(circuit, "stub", shots=4096)` is shorthand for passing `ExecutionOptions(shots=4096)`; construct a full `ExecutionOptions` yourself only when you need more than a shot count (error mitigation, transpiler settings, algorithm hyperparameters, …).
+
+To get real numbers, register a real simulator under a new name — everything else stays identical:
+
+```python
+from qpubench.backends import AerAdapter        # pip install "qpubench[qiskit]"
+
+runner.register(AerAdapter(), name="aer")
+record = runner.run(circuit, "aer", shots=4096)   # ⟨ZZ⟩ ≈ 1.0 for a Bell state
 ```
 
 ### OpenQASM 3.0 circuit
@@ -128,13 +146,18 @@ print(f"⟨ZZ⟩ = {ev.value:.4f} ± {ev.std_error:.4f}")
 ```python
 from qpubench import CircuitSpec
 
-circuit = CircuitSpec.from_openqasm3(
-    'OPENQASM 3.0;\ninclude "stdgates.inc";\nqubit[2] q;\nh q[0];\ncx q[0], q[1];',
-    num_qubits=2,
-)
+bell_qasm3 = """OPENQASM 3.0;
+include "stdgates.inc";
+qubit[2] q;
+h q[0];
+cx q[0], q[1];"""
+
+circuit = CircuitSpec.from_openqasm3(bell_qasm3, num_qubits=2)
 print(circuit.openqasm3)          # → the source string
 print(circuit.format)             # → CircuitFormat.QASM3
 ```
+
+`from_openqasm3()` stores the source string verbatim and tags the circuit with `CircuitFormat.QASM3`, so any adapter (and anyone reading the stored record years later) knows exactly how to parse it. OpenQASM 3.0 is the preferred format for new circuits; OpenQASM 2.0 (as in the first example) remains fully supported.
 
 ### Parametric VQE circuit
 
@@ -144,11 +167,17 @@ from qpubench import CircuitSpec, VQAConfig
 ansatz = CircuitSpec(num_qubits=2, parameters=["theta"], serialized="OPENQASM 2.0; ...")
 bound  = ansatz.bind({"theta": 1.2566})
 
-record = runner.run(bound, "stub", ExecutionOptions(shots=4096),
+record = runner.run(bound, "stub", shots=4096,
     vqa=VQAConfig(problem_type="chemistry", molecule="H2", basis="sto-3g",
                   final_eigenvalue=-1.137, ground_truth=-1.1373))
 print(f"Chemical accuracy: {record.vqa.chemical_accuracy}")
 ```
+
+A `VQAConfig` attaches variational-algorithm metadata to the record; it configures nothing at execution time. Its fields answer three questions about the run:
+
+- **`problem_type`** (the only required field) labels the problem domain — `"chemistry"`, `"optimization"`, or `"ml"` — so a store holding thousands of mixed records can be filtered and aggregated by domain later. It does not change how the circuit executes.
+- **`final_eigenvalue`** is the energy your optimization converged to; **`ground_truth`** is the reference value you are comparing against (e.g. the FCI energy). Both are optional — but when both are present, the record derives `vqa.energy_error = |final_eigenvalue − ground_truth|` and `vqa.chemical_accuracy` (error < 1.6 mHa) for you. Leave them out and the record still saves; the derived metrics are simply `None`.
+- `molecule`, `basis`, and the other optional fields (`optimizer`, `ansatz`, convergence history, …) make the stored record self-describing, so results remain interpretable without the code that produced them.
 
 ### Algorithm library (ADAPT-VQE — switch implementations freely)
 
@@ -179,41 +208,24 @@ record = runner.run(mol, "qforte", options)
 record = runner.run(mol, "ibm_qiskit_adapt_vqe", options)
 ```
 
-→ Full examples: [examples/](examples/) · QForte adapter (native C++ engine, pybind11 schema in
-`schemas/evangelistalab_qforte.py`): [integrations/qforte/](integrations/qforte/) ·
-package-agnostic engine shared by the Qiskit/QDK adapters: [integrations/generic_adapt_vqe/](integrations/generic_adapt_vqe/)
+Here the "circuit" is really a problem description (a molecule file, `CircuitFormat.MOLECULE_JSON`) and the registered adapter is an `AlgorithmAdapter` — the library builds its own circuits internally and drives its own optimization loop, while the runner records the outcome in the same `BenchmarkRecord` format as any single-circuit run. `ExecutionOptions` is constructed explicitly here because the run needs more than a shot count: which algorithm to run (`algorithm_spec`) and its hyperparameters (`adapt_vqe_config`).
+
+→ Full VQA documentation (VQE and ADAPT-VQE, all three interchangeable engines): [docs/vqa.md](docs/vqa.md) · runnable examples: [examples/](examples/)
 
 ---
 
 ## Schema overview
 
-Schema version **2.3.0** — 21 of the 31 total schema modules shown below (curated selection; see [docs/schemas.md](docs/schemas.md) for the full index), zero quantum SDK dependencies. (2.0.0 broke `QPUModality` into independent `ComputingModel`/`QubitModality`; 2.1.0 split the `AlgorithmSpec` grab-bag the same way; 2.2.0 added `reaction` (renamed `reactions` and expanded with real Cantera-style kinetics + a PennyLane-style rate-constant bridge in a later revision); 2.3.0 rewrote `mqsdk_cebule` against the real Cebule SDK source — see "Algorithm library" in Quick start, above.)
+The schema layer has zero quantum SDK dependencies. Seven core modules define the record format every benchmark shares; the remaining modules each mirror one external project, named `<maintainer>_<package>.py` so the filename tells you the upstream source. The compact map below shows what lives where — the full per-module table (key types, computing model, qubit modality, field-level reference) is in [docs/schemas.md](docs/schemas.md).
 
-Computing model (paradigm) and qubit modality are separate, independent axes — see [Computing model vs. qubit modality](#computing-model-vs-qubit-modality) below.
-
-| Module | Computing model | Qubit modality | Key types |
-|---|---|---|---|
-| `primitives` | all | all | `ComputingModel`, `QubitModality`, `CircuitFormat`, `PauliLabel`, `CebuleTaskType`, `ComplexNumber` |
-| `circuit` | all | all | `CircuitSpec` (`from_openqasm3`, `openqasm3`, `bind`), `ParameterBinding` |
-| `observable` | all | all | `SparsePauliObservable`, `PauliTerm` |
-| `backend` | all | all | `BackendSpec` (28 factory constructors) |
-| `execution` | all | all | `ExecutionOptions`, `AlgorithmSpec`, `ZNEConfig`, `TranspilerConfig` |
-| `result` | all | all | `QuantumResult` (15 result-type fields), `ExpectationResult`, `ShotResult`, `TranspileLayout` |
-| `record` | all | all | `BenchmarkRecord`, `VQAConfig` |
-| `johnrscott_mbqc_fpga` | MBQC | — (FPGA control logic) | `MBQCPattern`, `MBQCProgramWord`, `MBQCExecutionResult` — bit-exact 16-bit FPGA word |
-| `mqsdk_cebule` | GATE_BASED (`TN_QC_OPT`/`COVO`) + classical (solvation, ab initio/classical MD, geometry, GNN) | — | `CosmoResult`, `SigmaResult`, `SolubilityResult`, `AbInitioMDResult`, `GeometryOptResult`, `TNQCOptResult`, `COVOResult` |
-| `mqsdk_xenakis` | GATE_BASED | — | `LayerGenome`, `BitstringGenome`, `QNEATGenome`, `GARunResult`, `XenakisRunConfig` |
-| `dlr_excitation_solve` | GATE_BASED | — | `ExcitationSolveResult`, `ExcitationSolveSweep`, `ExcitationAdaptResult` |
-| `bestquark_gsopt` | GATE_BASED | — | `GSOptBenchmarkResult`, `ActiveSpaceSpec`, `REFERENCE_ENERGIES`, `VQERunConfig` |
-| `dtu_photonic` | GATE_BASED (LOQC) / FUSION_BASED | PHOTONIC | `PhotonicCircuitSpec`, `SinglePhotonSourceSpec`, `FockState`, `HOMResult`, `FBQCRunConfig`, `PhotonicVQEResult`, `PhotonicAnalogSimResult` |
-| `microsoft_qdk` | GATE_BASED (QPE technique) | — | `QChemPipelineSpec`, `MoleculeStructureSpec`, `SCFResult`, `FermionicHamiltonianSpec`, `QPEResult`, `ResourceEstimationResult`, `ModelHamiltonianSpec` |
-| `dtu_gbs` | GBS | PHOTONIC | `GBSProgramSpec`, `GaussianStateSpec`, `HafnianResult`, `GBSCliqueFindingResult`, `VibronicSpectrumResult`, `TDMGBSResult` |
-| `mqsdk_qse` | GATE_BASED (KQD technique) | — | `KQDPipelineSpec`, `KQDConfig`, `KrylovSubspaceMatrices`, `KrylovEigenResult`, `SQDConvergenceResult`, `CholeskyDecompositionSpec` |
-| `qedma_qesem` | GATE_BASED + QESEM | SUPERCONDUCTING | `QESEMJobRecord`, `QESEMJobSpec`, `QESEMObservableResult`, `QESEMNoiseScalingResult`, `QESEMCircuitOptions`, `QESEMExecutionDetails`, `QESEMCharacterizationResult` |
-| `molssi_qcschema` | all (chemistry) | all | `QCMolecule`, `QCAtomicInput`, `QCAtomicResult`, `QCOptimizationResult`, `QCWavefunctionData`, `QCEnergyComponents`, `PennyLaneMolDataset`, `QCSchemaRecord` |
-| `quera_bloqade` | ADIABATIC | NEUTRAL_ATOM | `AtomArrangement`, `AHSProgramSpec`, `AHSDrivingField`, `AHSTimeSeries`, `AHSTaskResult`, `AHSShotResult`, `AquilaDeviceSpec`, `AHSBatchSpec` |
-| `erikkjellgren_slowquant` | GATE_BASED | — | `SlowQuantRecord`, `UCCWavefunctionConfig`, `UCCOptimizationResult`, `UCCLinearResponseResult`, `UCCExcitedStateResult`, `UCCCircuitSpec`, `UCCSCFResult`, `UCCRDMData` |
-| `reactions` | all | all | `ReactionCoordinateSpec`, `ReactionPathResult` (ties a sweep of point calculations into one reaction path / PES), `ArrheniusRateConstant`, `ReactionMechanism` — real Cantera-style kinetics + PennyLane-style rate-constant bridge |
+| Group | Modules |
+|---|---|
+| **Core record format** | `primitives` · `circuit` · `observable` · `backend` · `execution` · `result` · `record` |
+| **Quantum chemistry & VQA** | `microsoft_qdk` · `molssi_qcschema` · `pyscf_pyscf` · `erikkjellgren_slowquant` · `evangelistalab_qforte` · `bestquark_gsopt` · `dlr_excitation_solve` · `classiq_classiq` · `mqsdk_qse` · `mqsdk_cebule` · `reactions` · `basis_sets` · `hamiltonian_library` · `polarizable_embedding` · `optimizer_catalog` |
+| **Photonic / GBS** | `dtu_photonic` · `dtu_gbs` |
+| **Other paradigms** | `johnrscott_mbqc_fpga` (MBQC on FPGA) · `quera_bloqade` (neutral-atom AHS) |
+| **Error mitigation & vendors** | `qedma_qesem` · `qctrl_fire_opal` · `unitaryfund_mitiq` · `haiqu_rivet` · `parityqc_parityqc` · `qmatter_qmatter` · `quantum_motion_hardware` · `ibm_runtime_v2` · `ibm_cost_estimator` · `advantage` |
+| **Circuit search & tooling** | `mqsdk_xenakis` (GA circuit genomes) · `contraction_path` |
 
 ### Computing model vs. qubit modality
 
@@ -302,11 +314,12 @@ presentation slides so it's easy to keep current without touching the deck:
   inventing the math. See `integrations/kubeflow/README.md`'s TODO
   checklist for the two missing utilities
   (`SparsePauliObservable.to_dense_matrix()`/`.from_dense_matrix()`).
-- **Guide/demo/tutorial parity is qualified, not absolute** — the tutorial
-  examples substitute the open `ADAPT-VQE` algorithm for proprietary
-  competitor algorithms, and 5 of them stay "Partial" rather than full
-  parity for that reason. See `examples/README.md` for the full
-  guide-by-guide breakdown and what "Partial" means in each case.
+- **Some chemistry tutorials run on a reduced active space** — the bundled
+  dense-matrix reference engine can't handle the full-size Hamiltonian for
+  the larger molecules, so those tutorials build the full setup once as a
+  capability check and run a reduced-active-space scan (a real simulator
+  backend lifts that limit). See `examples/README.md` for the per-tutorial
+  breakdown.
 
 ---
 

@@ -1,13 +1,11 @@
-"""qrunch demo: "Your First Quantum Chemistry Calculation"
+"""Demo: your first quantum-chemistry calculation.
 
-Verdict: Yes — a real, runnable equivalent already ships in this repo:
-examples/qforte_vqe_benchmark.py runs QForte's ADAPT-VQE/UCCNVQE on a real
-molecule (He/cc-pVDZ), just needs `pip install qforte`.
-
-This version narrates the same getting-started arc without any external
+This narrates the getting-started arc without any external
 quantum-chemistry package: build a problem, build a calculator, solve it,
 check the answer — using examples/guides/ground_state_energy_problem.py and
-vqe_calculator.py's building blocks.
+vqe_calculator.py's building blocks. For a real-molecule version,
+examples/qforte_vqe_benchmark.py runs QForte's ADAPT-VQE/UCCNVQE on
+He/cc-pVDZ (needs `pip install qforte`).
 
 Requires: pip install 'qpubench[adapt_vqe]'
 
@@ -47,8 +45,7 @@ def main() -> None:
     print(f"  {NUM_QUBITS} qubits, {NUM_ELECTRONS} electrons")
     print(f"  target (exact) energy = {problem.ground_truth:.6f}")
 
-    print("\nStep 2 — choose a calculator (ADAPT-VQE, this repo's FAST-VQE/"
-          "BEAST-VQE substitute)")
+    print("\nStep 2 — choose a calculator (ADAPT-VQE)")
     print("-" * 40)
     calculator = GenericAdaptVQEEngine(
         hamiltonian=hamiltonian,

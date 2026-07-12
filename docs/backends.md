@@ -54,6 +54,8 @@ runner.register(StubGateAdapter(seed=42), name="stub_gate")
 runner.register(StubMBQCAdapter(seed=7, fidelity=0.97), name="stub_mbqc")
 ```
 
+Shorthand: `runner.register(name="stub_gate", seed=42)` — when no adapter object is passed, the runner creates a `StubGateAdapter` for you. Similarly, `runner.run(circuit, "stub_gate", shots=1024)` builds `ExecutionOptions(shots=1024)` automatically when you don't need any other execution option.
+
 ### Real adapters (SDK required)
 
 `aer_adapter.py`, `ibm_adapter.py`, `iqm_adapter.py`, and `braket_adapter.py`

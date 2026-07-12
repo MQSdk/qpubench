@@ -1,6 +1,5 @@
-"""qrunch guides: "Create an Estimator" and "Create a Sampler"
+"""Guide: create an estimator and a sampler.
 
-Verdict: Yes — real, runnable qpubench mechanism.
 Mechanism: ibm_runtime_v2.IBMEstimatorPUB / IBMSamplerPUB are pure pydantic
 containers modeling the real Qiskit Runtime V2 PUB (Primitive Unified Bloc)
 format — no SDK required to construct and inspect them. Every qpubench

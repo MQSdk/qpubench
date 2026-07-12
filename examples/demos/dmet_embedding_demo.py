@@ -1,12 +1,10 @@
-"""qrunch demo: "Projection-Based Wavefunction-in-DFT Embedding Study"
-(and its DMET cousin, same schema/demo per project README).
+"""Demo: projection-based wavefunction-in-DFT embedding study (and its DMET cousin).
 
-Verdict: Partial — real code, not executed here. PsiEmbed
+Real code, not executed here. PsiEmbed
 (github.com/danclaudino/PsiEmbed) and libDMET
 (github.com/gkclab/libdmet_preview, used by PennyLane's own DMET-embedding
 tutorial) are both real, PySCF-based packages, but neither ships on PyPI —
-only ``pip install git+https://github.com/...`` from source. Per the
-decision on this task ("write real code, don't install from source"), this
+only ``pip install git+https://github.com/...`` from source. This
 demo calls each package's actual documented API behind an
 ``ImportError``-guard (same pattern as ``create_solvent_model.py``): it
 prints a clear "not installed" message here, and runs for real once you

@@ -1,48 +1,25 @@
-"""qrunch tutorial: "Ionization Potentials" (Kvantify/qrunch_tutorials, ammonia)
+"""Tutorial: ionization potentials.
 
-Verdict: Partial — real molecule, real ionization potential, but not
-qrunch's own ammonia. Revised 2026-07-08: checked whether the new
-HamLib Chemistry / PennyLane qchem integrations
-(qpubench.hamiltonian_sources) close this gap for real.
-
-PennyLane's qchem collection *does* have real NH3 (confirmed loaded for
-real: STO-3G, bondlength 0.5-1.7, real fci_energy). But its Jordan-Wigner
-Hamiltonian is 16 qubits / 2371 terms — verified too large for this
-repo's dense-matrix reference engine
-(examples/common/toy_statevector_backend.py rebuilds a dense 2**n x 2**n
-matrix from scratch on *every* energy evaluation, uncached): a real LiH
-Hamiltonian at just 12 qubits / 631 terms already timed out at 2+ minutes
-for 2 truncated ADAPT-VQE iterations in this same sandbox. Running NH3
-through this toy engine is not tractable without a real simulator (Aer,
-Qrack) as the energy backend instead, or an active-space reduction down
-to a handful of qubits (see examples/guides/active_space_spec.py's real
-PySCF AVAS selection for that technique) — noted as a follow-up, not
-silently dropped.
-
-Revised again after checking the real qrunch notebook directly
-(github.com/Kvantify/qrunch_tutorials/ionization-tutorial): its own setup
-is cc-pVDZ, 6 active orbitals/8 active electrons = 12 qubits (neutral
-4a/4b electrons vs. cation 4a/3b) — smaller than the plain 16-qubit
-STO-3G PennyLane Hamiltonian above, but still in the same "too many terms
-for the toy engine" class as the confirmed LiH timeout (12 qubits/631
-terms). `qpubench.hamiltonian_sources.ab_initio.build_qubit_hamiltonian`
-can now construct that *exact* real tutorial setup directly from geometry
-(not just load NH3's default STO-3G Hamiltonian from a library) — built
-below as a capability check (HF energy, term count), not run, same
-"real to construct, not tractable to run here" pattern as this session's
-butyronitrile rewrite.
-
-What *is* tractable, and now real instead of illustrative: HamLib's real
-H2 Hamiltonian (4 qubits — the smallest real molecule either library
-ships) run through the exact same neutral/cation delta-particle-number
-ADAPT-VQE technique this tutorial always used, solving for H2 (2
+The runnable calculation uses HamLib's real H2 Hamiltonian (4 qubits — the
+smallest real molecule either supported library ships) run through a
+neutral/cation delta-particle-number ADAPT-VQE technique: solving for H2 (2
 electrons) and H2+ (1 electron, its real, well-known cation) on the SAME
 real qubit Hamiltonian. The resulting ionization potential
 (~16.2 eV at HamLib's STO-3G geometry) is in the right ballpark for H2's
 real literature IP (~15.4-16.0 eV, basis-set/geometry dependent) — a
-genuine chemically-meaningful number now, not an invented toy-Hamiltonian
-one. Still not qrunch's ammonia system, but a real molecule with a real,
-comparable ionization potential via the identical mechanism.
+genuine chemically-meaningful number, not an invented toy-Hamiltonian one.
+
+An NH3 setup (cc-pVDZ, 6 active orbitals/8 active electrons = 12 qubits)
+is built below purely as a capability check (HF energy, term count) via
+`qpubench.hamiltonian_sources.ab_initio.build_qubit_hamiltonian`. It isn't
+run: 12 qubits / hundreds of terms is beyond this repo's dense-matrix
+reference engine (examples/common/toy_statevector_backend.py rebuilds a
+dense 2**n x 2**n matrix on *every* energy evaluation, uncached — a real
+LiH Hamiltonian at 12 qubits / 631 terms timed out at 2+ minutes for 2
+truncated iterations). A real simulator (Aer, Qrack) as the energy
+backend, or an active-space reduction (see
+examples/guides/active_space_spec.py's real PySCF AVAS selection), lifts
+that limit.
 
 For NH3 (or any real excited-state/ionization property) computed by a
 real chemistry package directly: integrations/slowquant/adapter.py (a
@@ -108,13 +85,12 @@ def solve(hamiltonian, num_qubits: int, num_electrons: int) -> float:
 
 
 def nh3_capability_check() -> None:
-    """Build (don't run) the real qrunch tutorial's own NH3 setup
-    (cc-pVDZ, 6 active orbitals/8 active electrons = 12 qubits, neutral
-    only — the cation's open-shell active-space accounting isn't
-    supported by build_qubit_hamiltonian's current closed-shell frozen-core
-    convention). Confirms the framework can now construct the literal
-    tutorial setup directly from geometry; running ADAPT-VQE on it isn't
-    attempted here (same too-many-terms class as the confirmed LiH
+    """Build (don't run) an NH3 setup (cc-pVDZ, 6 active orbitals/8 active
+    electrons = 12 qubits, neutral only — the cation's open-shell
+    active-space accounting isn't supported by build_qubit_hamiltonian's
+    current closed-shell frozen-core convention). Confirms the framework can
+    construct the setup directly from geometry; running ADAPT-VQE on it
+    isn't attempted here (same too-many-terms class as the confirmed LiH
     timeout).
     """
     try:
@@ -134,7 +110,7 @@ def nh3_capability_check() -> None:
         geometry, basis="cc-pvdz", active_electrons=8, active_orbitals=6,
         molecule_name="NH3 (real tutorial setup)",
     )
-    print(f"Real qrunch tutorial setup: NH3/cc-pVDZ, {record.num_qubits} qubits, "
+    print(f"NH3/cc-pVDZ setup: {record.num_qubits} qubits, "
           f"{record.num_terms} terms, HF={record.hf_energy:.6f} Ha "
           f"(built for real, not run — too many terms for this repo's "
           f"toy ADAPT-VQE engine, same class as the confirmed LiH timeout)\n")
@@ -163,8 +139,7 @@ def main() -> None:
     print(f"\nionization potential (cation - neutral) = {ip_hartree:.6f} Ha "
           f"= {ip_ev:.3f} eV")
     print("(real H2/STO-3G Hamiltonian from HamLib — literature H2 IP is "
-          "~15.4-16.0 eV depending on basis/geometry; not qrunch's own "
-          "ammonia system, but a real molecule via the identical technique)")
+          "~15.4-16.0 eV depending on basis/geometry)")
 
 
 if __name__ == "__main__":

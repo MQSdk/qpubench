@@ -1,11 +1,8 @@
-"""qrunch tutorial: "Butyronitrile Dissociation" (Kvantify/qrunch_tutorials)
+"""Tutorial: butyronitrile dissociation.
 
-Verdict: Partial — real molecule and real bond, still ADAPT-VQE instead of
-BEAST-VQE. Revised: checked the real qrunch notebook directly
-(github.com/Kvantify/qrunch_tutorials/butyronitrile-tutorial) rather than
-using an invented toy Hamiltonian. Confirmed real: n-butyronitrile
-(CH3CH2CH2-C#N), STO-3G, dissociates the nitrile **C#N bond** specifically,
-real active space is 8 orbitals/8 electrons = 16 qubits, a 9-frame scan.
+A real molecule and a real bond, solved with ADAPT-VQE: n-butyronitrile
+(CH3CH2CH2-C#N), STO-3G, dissociating the nitrile **C#N bond** specifically.
+Its full active space is 8 orbitals/8 electrons = 16 qubits, a 9-frame scan.
 
 That 16-qubit/5793-term Hamiltonian builds in 0.26s via
 `qpubench.hamiltonian_sources.ab_initio.build_qubit_hamiltonian` (real,
@@ -53,9 +50,9 @@ from integrations.ibm_qiskit_adapt_vqe.adapter import IBMQiskitAdaptVQEAdapter
 
 
 def capability_check() -> None:
-    """Build (don't run) the real qrunch tutorial's own 8orb/8e=16-qubit
-    Hamiltonian — confirms the framework can now construct the literal
-    setup, even though running ADAPT-VQE on it isn't tractable here."""
+    """Build (don't run) the full 8orb/8e=16-qubit Hamiltonian — confirms
+    the framework can construct the literal setup, even though running
+    ADAPT-VQE on it isn't tractable here."""
     try:
         from qpubench.hamiltonian_sources.ab_initio import build_qubit_hamiltonian
     except ImportError:
@@ -69,7 +66,7 @@ def capability_check() -> None:
         active_orbitals=BUTYRONITRILE_REAL_ACTIVE_ORBITALS,
         molecule_name="butyronitrile (real tutorial setup)",
     )
-    print(f"Real qrunch tutorial setup: {record.num_qubits} qubits, "
+    print(f"Full active-space setup: {record.num_qubits} qubits, "
           f"{record.num_terms} terms, HF={record.hf_energy:.6f} Ha "
           f"(built for real, not run — too many terms for this repo's "
           f"toy ADAPT-VQE engine)\n")

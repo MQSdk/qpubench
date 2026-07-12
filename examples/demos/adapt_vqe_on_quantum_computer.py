@@ -1,8 +1,7 @@
-"""qrunch demo: "Running FAST-VQE on Quantum Computers"
+"""Demo: running ADAPT-VQE on quantum computers.
 
-Verdict: Partial — same demo shape (ADAPT-VQE's energy evaluations routed
-through a real quantum-hardware BackendAdapter instead of a local
-simulator), substituting ADAPT-VQE for FAST-VQE.
+ADAPT-VQE's energy evaluations routed through a real quantum-hardware
+BackendAdapter instead of a local simulator.
 
 Mechanism: IBMQiskitAdaptVQEAdapter(energy_backend=IBMAdapter(...)) is the
 exact construction integrations/ibm_qiskit_adapt_vqe/README.md documents —

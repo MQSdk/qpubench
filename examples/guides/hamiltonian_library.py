@@ -1,6 +1,6 @@
 """New capability: real Hamiltonian libraries — HamLib Chemistry + PennyLane qchem
 
-Not a qrunch guide — a framework capability added on request. Loads a
+Loads a
 real molecule's qubit Hamiltonian from each library and drops it straight
 into the *existing*, unmodified ADAPT-VQE engine
 (`integrations/generic_adapt_vqe/engine.py`) as a `SparsePauliObservable`,

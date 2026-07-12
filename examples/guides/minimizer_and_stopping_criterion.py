@@ -1,10 +1,9 @@
-"""qrunch guides: "Choose a Minimizer" and "Choose a Stopping Criterion"
+"""Guide: choose a minimizer and a stopping criterion.
 
-Verdict: Yes — revised 2026-07-08. ``qpubench.schemas.optimizer_catalog``
-(new module) adds ``MINIMIZER_CATALOG`` / ``STOPPING_CRITERION_CATALOG``: a
-real catalogue/registry object to "choose" from, closing the gap noted
-previously (AdaptVQEConfig.optimizer was free-text with no catalogue
-alongside it). The catalogue is a lookup table over the same
+``qpubench.schemas.optimizer_catalog`` provides ``MINIMIZER_CATALOG`` /
+``STOPPING_CRITERION_CATALOG``: a catalogue/registry object to "choose"
+from, so ``AdaptVQEConfig.optimizer`` isn't just free text. The catalogue
+is a lookup table over the same
 AdaptVQEConfig fields generic_adapt_vqe already consumes — not a new
 execution mechanism — so this example now iterates the catalogue entries
 instead of a hardcoded list of names.

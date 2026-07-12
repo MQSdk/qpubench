@@ -1,9 +1,9 @@
-"""qrunch guide: "Calculate Classical Reference Energies (CI, CC)"
+"""Guide: calculate classical reference energies (CI, CC).
 
-Verdict: Yes — revised 2026-07-08. molssi_qcschema.QCEnergyComponents is a
-real container for HF/MP2/CCSD/CCSD(T)/FCI numbers; qpubench itself has no
-CI/CC solver, but PySCF (free, pip-installable, no compiler required — see
-schemas/pyscf_pyscf.py) does, and this example now calls it for real rather than
+molssi_qcschema.QCEnergyComponents is a real container for
+HF/MP2/CCSD/CCSD(T)/FCI numbers; qpubench itself has no CI/CC solver, but
+PySCF (free, pip-installable, no compiler required — see
+schemas/pyscf_pyscf.py) does, and this example calls it for real rather than
 approximating FCI via toy-Hamiltonian diagonalization.
 
 Requires: pip install 'qpubench[pyscf]'

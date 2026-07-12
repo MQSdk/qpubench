@@ -1,12 +1,11 @@
-"""qrunch guide: "Using Quantum Computers"
+"""Guide: using quantum computers.
 
-Verdict: Yes for the construction/registration pattern; execution needs
-real hardware credentials. Revised 2026-07-08: IBMAdapter and IQMAdapter
-are now real implementations (EstimatorV2/SamplerV2 PUBs, resilience
-levels, sessions/batches — see docs/backends.md; both verified end-to-end
-against bundled fake backends in tests/test_backend_adapters.py). They no
-longer raise NotImplementedError — the only remaining gap for this guide is
-a live IBM Quantum / IQM Resonance account, which this demo doesn't have.
+The construction/registration pattern runs as-is; execution needs real
+hardware credentials. IBMAdapter and IQMAdapter are real implementations
+(EstimatorV2/SamplerV2 PUBs, resilience levels, sessions/batches — see
+docs/backends.md; both verified end-to-end against bundled fake backends in
+tests/test_backend_adapters.py). The only gap for this guide is a live
+IBM Quantum / IQM Resonance account, which this demo doesn't have.
 
 Mechanism: BackendSpec.ibm(...) / BackendSpec.iqm(...) construction +
 registration with BenchmarkRunner; IBMAdapter.run() is invoked for real and

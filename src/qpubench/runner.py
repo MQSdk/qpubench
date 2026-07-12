@@ -31,8 +31,11 @@ class BenchmarkRunner:
 
     Usage pattern:
         runner = BenchmarkRunner(store=NDJSONStore(Path("results.ndjson")))
-        runner.register(StubGateAdapter(), name="stub")
-        record = runner.run(circuit, "stub", options)
+        runner.register(name="stub", seed=42)      # auto-creates a StubGateAdapter
+        record = runner.run(circuit, "stub", shots=4096)
+        # Real adapters are registered explicitly:
+        runner.register(AerAdapter(), name="aer")
+        record = runner.run(circuit, "aer", ExecutionOptions(shots=4096, memory=True))
         # Algorithm adapters (QForte etc.) are registered the same way;
         # the runner dispatches to run_algorithm() automatically.
 
@@ -46,10 +49,32 @@ class BenchmarkRunner:
 
     def register(
         self,
-        adapter: Any,
+        adapter: Any | None = None,
         *,
         name: str | None = None,
+        seed: int | None = None,
     ) -> None:
+        """Register an adapter under ``name``.
+
+        Called without an adapter, a ``StubGateAdapter`` (random results, no
+        quantum SDK needed) is created automatically — ``runner.register(
+        name="stub", seed=42)`` is shorthand for ``runner.register(
+        StubGateAdapter(seed=42), name="stub")``.
+        """
+        if adapter is None:
+            if name is None:
+                raise TypeError(
+                    "register() without an adapter needs a name, e.g. "
+                    'runner.register(name="stub", seed=42)'
+                )
+            from .backends.stub import StubGateAdapter
+
+            adapter = StubGateAdapter(seed=seed)
+        elif seed is not None:
+            raise TypeError(
+                "seed= only applies to the auto-created stub; construct your "
+                "adapter with its own seed instead, e.g. StubGateAdapter(seed=...)"
+            )
         key = name or adapter.spec.name
         self._backends[key] = adapter
         logger.debug("Registered adapter %r", key)
@@ -68,13 +93,27 @@ class BenchmarkRunner:
         self,
         circuit: CircuitSpec,
         backend_name: str,
-        options: ExecutionOptions,
+        options: ExecutionOptions | None = None,
         *,
+        shots: int | None       = None,
         vqa: VQAConfig | None   = None,
         tags: list[str] | None  = None,
         run_id: str | None      = None,
         notes: str              = "",
     ) -> BenchmarkRecord:
+        """Execute ``circuit`` on the backend registered as ``backend_name``.
+
+        For the common case only a shot count is needed — ``runner.run(
+        circuit, "stub", shots=4096)`` builds ``ExecutionOptions(shots=4096)``
+        for you. Pass a full ``ExecutionOptions`` instead when you need more
+        (error mitigation, transpiler settings, algorithm configs, ...).
+        """
+        if options is None:
+            options = ExecutionOptions(shots=shots)
+        elif shots is not None:
+            raise TypeError(
+                "pass shots= either directly or inside ExecutionOptions, not both"
+            )
         adapter = self._backends[backend_name]
 
         # --- Algorithm-driven path (QForte, etc.) ---

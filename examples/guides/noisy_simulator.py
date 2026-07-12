@@ -1,8 +1,8 @@
-"""qrunch guide: "Using a Noisy Simulator"
+"""Guide: using a noisy simulator.
 
-Verdict: Yes — revised 2026-07-08. AerAdapter is now a real implementation
-(EstimatorV2/SamplerV2, see docs/backends.md) — this guide runs a genuinely
-noisy simulation end to end, no fallback needed.
+AerAdapter is a real implementation (EstimatorV2/SamplerV2, see
+docs/backends.md) — this guide runs a genuinely noisy simulation end to
+end, no fallback needed.
 
 Mechanism: builds a real Qiskit Aer NoiseModel (falls back to a
 hand-written equivalent JSON if qiskit-aer isn't installed, since the
@@ -58,8 +58,8 @@ def _noise_model_json() -> str:
 def main() -> None:
     noise_model_json = _noise_model_json()
 
-    # This is what qrunch's guide would call "using a noisy simulator" —
-    # constructing the backend with an explicit noise channel attached.
+    # "Using a noisy simulator" means constructing the backend with an
+    # explicit noise channel attached.
     noisy_backend = AerAdapter(noise_model_json=noise_model_json)
     print(f"Constructed {noisy_backend.spec.name!r} with a noise model "
           f"({len(noise_model_json)} bytes of NoiseModel JSON)")

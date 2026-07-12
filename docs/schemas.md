@@ -9,46 +9,48 @@ Vendor-scoped modules are named `<org_or_maintainer>_<package>.py` — the filen
 
 ## Module index
 
-| Module | Purpose |
-|---|---|
-| [`primitives`](#primitives) | Enums and value types used across all other modules |
-| [`circuit`](#circuit) | Circuit or problem specification |
-| [`observable`](#observable) | Sparse Pauli observables |
-| [`backend`](#backend) | Hardware / simulator description |
-| [`execution`](#execution) | Execution options and algorithm hyperparameters |
-| [`result`](#result) | Execution results (expectation values, counts, fidelity, ADAPT history) |
-| [`record`](#record) | Top-level benchmark record and VQA metadata |
-| [`advantage`](#advantage) | Quantum Advantage Tracker metadata (multi-org community registry, unprefixed) |
-| [`johnrscott_mbqc_fpga`](#johnrscott_mbqc_fpga) | MBQC-FPGA 16-bit program word, measurement patterns |
-| [`mqsdk_cebule`](#mqsdk_cebule) | Cebule SDK (MQS) task inputs / outputs |
-| [`mqsdk_xenakis`](#mqsdk_xenakis) | Xenakis GA circuit genomes and run results |
-| [`dlr_excitation_solve`](#dlr_excitation_solve) | ExcitationSolve Fourier-series VQE optimizer |
-| [`bestquark_gsopt`](#bestquark_gsopt) | GSOpt fixed-budget benchmark results |
-| [`dtu_photonic`](#dtu_photonic) | Linear-optics chips, FBQC, HOM, photonic VQE, analog simulation |
-| [`microsoft_qdk`](#microsoft_qdk) | QDK chemistry pipeline: SCF → active space → QPE → resource estimation |
-| [`dtu_gbs`](#dtu_gbs) | Gaussian Boson Sampling: hafnian, vibronic spectra, graph clique finding, TDM/Borealis |
-| [`mqsdk_qse`](#mqsdk_qse) | Krylov Quantum Diagonalization (KQD / QSE / SQD) |
-| [`qedma_qesem`](#qedma_qesem) | QESEM (Qedma) error suppression and mitigation |
-| [`molssi_qcschema`](#molssi_qcschema) | QCSchema / QCElemental / PennyLane quantum chemistry interoperability |
-| [`quera_bloqade`](#quera_bloqade) | Neutral atom AHS: Bloqade / Aquila atom arrangements, waveforms, drives, results |
-| [`erikkjellgren_slowquant`](#erikkjellgren_slowquant) | SlowQuant UCC/VQE: ansatz config, SCF result, optimization, RDMs, linear response, circuit spec |
-| [`evangelistalab_qforte`](#evangelistalab_qforte) | QForte: pybind11 object layer (Circuit/Gate/QubitOperator) + algorithm-run layer (config, result) for ADAPT-VQE / UCCN-VQE / UCCN-PQE / SPQE |
-| [`classiq_classiq`](#classiq_classiq) | Classiq synthesis + chemistry/QAOA |
-| [`pyscf_pyscf`](#pyscf_pyscf) | PySCF molecules/cells, mean-field/DFT, PCM/COSMO solvation (real), DMET/projection-based embedding (schema-only) |
-| [`polarizable_embedding`](#polarizable_embedding) | Polarizable embedding ("The Frame"): CPPE + PyFraME real potfile format, wired through `pyscf.solvent.PE` (unprefixed — no single vendor) |
-| [`optimizer_catalog`](#optimizer_catalog) | Minimizer / stopping-criterion catalogue over `AdaptVQEConfig` fields (unprefixed — framework's own type) |
-| [`hamiltonian_library`](#hamiltonian_library) | Metadata for Hamiltonians loaded from PennyLane qchem / HamLib Chemistry (unprefixed — two external sources, no single vendor) |
-| [`basis_sets`](#basis_sets) | Basis-set catalogue: Basis Set Exchange (real, verified function counts) + q-vSZP (schema-only, no PyPI package) — unprefixed, two external sources |
-| [`contraction_path`](#contraction_path) | Tensor-network contraction-path strategy/config/result, real quimb + cotengra mechanism (unprefixed — framework's own type over two libraries) |
-| [`reactions`](#reactions) | Reaction-coordinate/PES sweep + real Cantera-style kinetics mechanism + PennyLane-style rate-constant bridge (unprefixed — bridges Cantera/PennyLane/Cebule, no single vendor) |
-| `qctrl_fire_opal` | Q-CTRL Fire Opal noise-robust compilation |
-| `unitaryfund_mitiq` | Mitiq — ZNE, PEC, CDR, REM, DDD |
-| `haiqu_rivet` | Haiqu Rivet transpilation middleware |
-| `parityqc_parityqc` | ParityQC parity encoding for combinatorial optimisation |
-| `qmatter_qmatter` | QMatter quantum problem compression |
-| `quantum_motion_hardware` | Quantum Motion silicon CMOS spin-qubit hardware |
-| `ibm_runtime_v2` | Qiskit Runtime V2 EstimatorV2/SamplerV2 PUB format, BitArray, ExecutionSpans |
-| [`ibm_cost_estimator`](#ibm_cost_estimator) | Real resource estimation (ALAP-scheduled transpile + IBM's own usage formula) + dollar cost breakdown across IBM's 4 access plans |
+Computing model (paradigm) and qubit modality are separate, independent axes on every circuit, backend, and result — "all" means the module is paradigm-/modality-agnostic; "—" means the axis doesn't apply (e.g. classical-chemistry or vendor-tooling modules).
+
+| Module | Purpose | Computing model · qubit modality | Key types |
+|---|---|---|---|
+| [`primitives`](#primitives) | Enums and value types used across all other modules | all · all | `ComputingModel`, `QubitModality`, `CircuitFormat`, `PauliLabel`, `CebuleTaskType`, `ComplexNumber` |
+| [`circuit`](#circuit) | Circuit or problem specification | all · all | `CircuitSpec` (`from_openqasm3`, `openqasm3`, `bind`), `ParameterBinding` |
+| [`observable`](#observable) | Sparse Pauli observables | all · all | `SparsePauliObservable`, `PauliTerm` |
+| [`backend`](#backend) | Hardware / simulator description | all · all | `BackendSpec` (28 factory constructors) |
+| [`execution`](#execution) | Execution options and algorithm hyperparameters | all · all | `ExecutionOptions`, `AlgorithmSpec`, `AdaptVQEConfig`, `ZNEConfig`, `TranspilerConfig` |
+| [`result`](#result) | Execution results (expectation values, counts, fidelity, ADAPT history) | all · all | `QuantumResult` (15 result-type fields), `ExpectationResult`, `ShotResult`, `TranspileLayout` |
+| [`record`](#record) | Top-level benchmark record and VQA metadata | all · all | `BenchmarkRecord`, `VQAConfig` |
+| [`advantage`](#advantage) | Quantum Advantage Tracker metadata (multi-org community registry, unprefixed) | all · all | `QuantumAdvantageRecord`, `AdvantageExperimentType`, `ClassicalComparisonMethod` |
+| [`johnrscott_mbqc_fpga`](#johnrscott_mbqc_fpga) | MBQC-FPGA 16-bit program word, measurement patterns | `MBQC` · — (FPGA control logic) | `MBQCPattern`, `MBQCProgramWord`, `MBQCExecutionResult` — bit-exact 16-bit FPGA word |
+| [`mqsdk_cebule`](#mqsdk_cebule) | Cebule SDK (MQS) task inputs / outputs | `GATE_BASED` (`TN_QC_OPT`/`COVO`) + classical · — | `CosmoResult`, `SigmaResult`, `SolubilityResult`, `AbInitioMDResult`, `GeometryOptResult`, `TNQCOptResult`, `COVOResult` |
+| [`mqsdk_xenakis`](#mqsdk_xenakis) | Xenakis GA circuit genomes and run results | `GATE_BASED` · — | `LayerGenome`, `BitstringGenome`, `QNEATGenome`, `GARunResult`, `XenakisRunConfig` |
+| [`dlr_excitation_solve`](#dlr_excitation_solve) | ExcitationSolve Fourier-series VQE optimizer | `GATE_BASED` · — | `ExcitationSolveResult`, `ExcitationSolveSweep`, `ExcitationAdaptResult` |
+| [`bestquark_gsopt`](#bestquark_gsopt) | GSOpt fixed-budget benchmark results | `GATE_BASED` · — | `GSOptBenchmarkResult`, `ActiveSpaceSpec`, `REFERENCE_ENERGIES`, `VQERunConfig` |
+| [`dtu_photonic`](#dtu_photonic) | Linear-optics chips, FBQC, HOM, photonic VQE, analog simulation | `GATE_BASED` (LOQC) / `FUSION_BASED` · `PHOTONIC` | `PhotonicCircuitSpec`, `SinglePhotonSourceSpec`, `FockState`, `HOMResult`, `FBQCRunConfig`, `PhotonicVQEResult`, `PhotonicAnalogSimResult` |
+| [`microsoft_qdk`](#microsoft_qdk) | QDK chemistry pipeline: SCF → active space → QPE → resource estimation | `GATE_BASED` (QPE technique) · — | `QChemPipelineSpec`, `MoleculeStructureSpec`, `SCFResult`, `FermionicHamiltonianSpec`, `QPEResult`, `ResourceEstimationResult`, `ModelHamiltonianSpec` |
+| [`dtu_gbs`](#dtu_gbs) | Gaussian Boson Sampling: hafnian, vibronic spectra, graph clique finding, TDM/Borealis | `GBS` · `PHOTONIC` | `GBSProgramSpec`, `GaussianStateSpec`, `HafnianResult`, `GBSCliqueFindingResult`, `VibronicSpectrumResult`, `TDMGBSResult` |
+| [`mqsdk_qse`](#mqsdk_qse) | Krylov Quantum Diagonalization (KQD / QSE / SQD) | `GATE_BASED` (KQD technique) · — | `KQDPipelineSpec`, `KQDConfig`, `KrylovSubspaceMatrices`, `KrylovEigenResult`, `SQDConvergenceResult`, `CholeskyDecompositionSpec` |
+| [`qedma_qesem`](#qedma_qesem) | QESEM (Qedma) error suppression and mitigation | `GATE_BASED` + `QESEM` · `SUPERCONDUCTING` | `QESEMJobRecord`, `QESEMJobSpec`, `QESEMObservableResult`, `QESEMNoiseScalingResult`, `QESEMCircuitOptions`, `QESEMExecutionDetails`, `QESEMCharacterizationResult` |
+| [`molssi_qcschema`](#molssi_qcschema) | QCSchema / QCElemental / PennyLane quantum chemistry interoperability | all (chemistry) · all | `QCMolecule`, `QCAtomicInput`, `QCAtomicResult`, `QCOptimizationResult`, `QCWavefunctionData`, `QCEnergyComponents`, `PennyLaneMolDataset`, `QCSchemaRecord` |
+| [`quera_bloqade`](#quera_bloqade) | Neutral atom AHS: Bloqade / Aquila atom arrangements, waveforms, drives, results | `ADIABATIC` · `NEUTRAL_ATOM` | `AtomArrangement`, `AHSProgramSpec`, `AHSDrivingField`, `AHSTimeSeries`, `AHSTaskResult`, `AHSShotResult`, `AquilaDeviceSpec`, `AHSBatchSpec` |
+| [`erikkjellgren_slowquant`](#erikkjellgren_slowquant) | SlowQuant UCC/VQE: ansatz config, SCF result, optimization, RDMs, linear response, circuit spec | `GATE_BASED` · — | `SlowQuantRecord`, `UCCWavefunctionConfig`, `UCCOptimizationResult`, `UCCLinearResponseResult`, `UCCExcitedStateResult`, `UCCCircuitSpec`, `UCCSCFResult`, `UCCRDMData` |
+| [`evangelistalab_qforte`](#evangelistalab_qforte) | QForte: pybind11 object layer (Circuit/Gate/QubitOperator) + algorithm-run layer (config, result) for ADAPT-VQE / UCCN-VQE / UCCN-PQE / SPQE | `GATE_BASED` · — | `QForteCircuitSpec`, `QForteQubitOperatorSpec`, `QForteSqOpPoolSpec`, `QForteAlgorithmConfig`, `QForteRunResult` |
+| [`classiq_classiq`](#classiq_classiq) | Classiq synthesis + chemistry/QAOA | `GATE_BASED` · — | `ClassiqSynthesisResult`, `ClassiqChemistryModel`, `ClassiqVQEResult`, `ClassiqCombinatorialOptimizationSpec`, `ClassiqConstraints` |
+| [`pyscf_pyscf`](#pyscf_pyscf) | PySCF molecules/cells, mean-field/DFT, PCM/COSMO solvation (real), DMET/projection-based embedding (schema-only) | classical (chemistry) · — | `PySCFMoleculeSpec`, `PySCFCellSpec`, `PySCFMeanFieldConfig`, `PySCFSolvationConfig`, `DMETConfig`, `ERIBuilderConfig`, `OrbitalOptimizerConfig` |
+| [`polarizable_embedding`](#polarizable_embedding) | Polarizable embedding ("The Frame"): CPPE + PyFraME real potfile format, wired through `pyscf.solvent.PE` (unprefixed — no single vendor) | classical (chemistry) · — | `PolarizableEmbeddingSite`, `PolarizableEmbeddingConfig`, `PolarizableEmbeddingResult` |
+| [`optimizer_catalog`](#optimizer_catalog) | Minimizer / stopping-criterion catalogue over `AdaptVQEConfig` fields (unprefixed — framework's own type) | all · all | `MINIMIZER_CATALOG`, `STOPPING_CRITERION_CATALOG`, `MinimizerCatalogEntry`, `StoppingCriterionCatalogEntry` |
+| [`hamiltonian_library`](#hamiltonian_library) | Metadata for Hamiltonians loaded from PennyLane qchem / HamLib Chemistry / ab initio construction (unprefixed — multiple external sources) | all · all | `HamiltonianSource`, `HamiltonianLibraryRecord` |
+| [`basis_sets`](#basis_sets) | Basis-set catalogue: Basis Set Exchange (real, verified function counts) + q-vSZP (schema-only, no PyPI package) — unprefixed, two external sources | classical (chemistry) · — | `BasisSetCatalogEntry`, `BASIS_SET_CATALOG`, `QvSZPRunConfig`, `QvSZPBasisResult` |
+| [`contraction_path`](#contraction_path) | Tensor-network contraction-path strategy/config/result, real quimb + cotengra mechanism (unprefixed — framework's own type over two libraries) | `GATE_BASED` (TN simulation) · — | `ContractionPathStrategy`, `ContractionPathConfig`, `ContractionPathResult` |
+| [`reactions`](#reactions) | Reaction-coordinate/PES sweep + real Cantera-style kinetics mechanism + PennyLane-style rate-constant bridge (unprefixed — bridges Cantera/PennyLane/Cebule, no single vendor) | all · all | `ReactionCoordinateSpec`, `ReactionPathResult`, `ArrheniusRateConstant`, `ReactionMechanism` |
+| `qctrl_fire_opal` | Q-CTRL Fire Opal noise-robust compilation | `GATE_BASED` · — | `FireOpalConfig`, `FireOpalResult` |
+| `unitaryfund_mitiq` | Mitiq — ZNE, PEC, CDR, REM, DDD | `GATE_BASED` · — | `MitiqTechnique`, `MitiqZNEConfig`, `MitiqPECConfig`, `MitiqCDRConfig`, `MitiqREMConfig` |
+| `haiqu_rivet` | Haiqu Rivet transpilation middleware | `GATE_BASED` · — | `HaiquRivetConfig`, `HaiquTranspilationResult` |
+| `parityqc_parityqc` | ParityQC parity encoding for combinatorial optimisation | `GATE_BASED` · — | `ParityQCProblemEncoding`, `ParityQCConfig`, `ParityQCResult` |
+| `qmatter_qmatter` | QMatter quantum problem compression | `GATE_BASED` · — | `QMatterConfig`, `QMatterCompressionResult` |
+| `quantum_motion_hardware` | Quantum Motion silicon CMOS spin-qubit hardware | `GATE_BASED` · `SILICON_SPIN` | `QuantumMotionDeviceSpec` |
+| `ibm_runtime_v2` | Qiskit Runtime V2 EstimatorV2/SamplerV2 PUB format, BitArray, ExecutionSpans | `GATE_BASED` · `SUPERCONDUCTING` | `IBMEstimatorPUB`, `IBMSamplerPUB`, `IBMExecutionSpan`, `IBMRuntimeRecord` |
+| [`ibm_cost_estimator`](#ibm_cost_estimator) | Real resource estimation (ALAP-scheduled transpile + IBM's own usage formula) + dollar cost breakdown across IBM's 4 access plans | `GATE_BASED` · `SUPERCONDUCTING` | `IBMAccessPlan`, `CircuitResourceEstimate`, `PlanCostBreakdown`, `BenchmarkCostEstimate` |
 
 ---
 
@@ -555,7 +557,7 @@ is only needed to *run* the exported mechanism, not to build it.
 
 ## `johnrscott_mbqc_fpga`
 
-Full documentation → [docs/mbqc.md](mbqc.md)
+Full documentation → [Compute architectures — FPGAs for MBQC](compute_architectures.md#fpgas--real-time-control-for-mbqc)
 
 Key types: `MBQCPattern`, `MBQCRound`, `MBQCProgramWord`, `ByproductUpdateSpec`, `AdaptiveSpec`, `CommutationSpec`, `MBQCExecutionResult`, `MBQCQubitState`.
 
@@ -1297,8 +1299,8 @@ schema-only, same boundary as `erikkjellgren_slowquant`/`microsoft_qdk`
 | `OrbitalOptimizerConfig`/`Result`, `OrbitalOptimizerBasinHoppingConfig` | Yes — Newton (`mcscf.CASSCF`), Simple (kappa-rotation + `mcscf.CASCI`), and Basin-Hopping all verified to agree on H2/6-31G CAS(2e,2o) (Newton vs Basin-Hopping: 3e-9 Ha; Newton vs Simple: 6e-5 Ha) | Newton / Simple (kappa-rotation) / Basin-Hopping orbital optimization |
 
 Added 2026-07-09: `ERIBuilderConfig`/`Result` and the orbital-optimizer
-types close qrunch's "Choose Electron-Repulsion Integral Builder" and
-"Create an Orbital Optimizer" guides — both real PySCF mechanisms, no new
+types back the "choose an electron-repulsion integral builder" and
+"create an orbital optimizer" guides — both real PySCF mechanisms, no new
 dependency. See `examples/guides/choose_integrals.py` and
 `examples/guides/orbital_optimizer.py`.
 
@@ -1353,8 +1355,8 @@ real H2 Hamiltonian, fed into the existing `GenericAdaptVQEEngine`,
 converged to `-1.131459761897349 Ha`, matching real dense diagonalization
 to `7e-15`; the ab initio pipeline independently reproduces the exact same
 H2 result from raw geometry via real PySCF HF + Jordan-Wigner, and was
-used to compute real qubit Hamiltonians for 3 of the 5 qrunch tutorials
-that previously used invented toy Hamiltonians (butyronitrile's actual
+used to compute real qubit Hamiltonians for 3 of the 5 chemistry tutorials
+that would otherwise use illustrative toy Hamiltonians (butyronitrile's actual
 C#N dissociation, a real carboxylate-mediated SN2 model matching the real
 dehalogenase notebook's own mechanism, and a real nitrile-cysteine
 covalent model matching cathepsin K's real inhibition chemistry — see
@@ -1426,7 +1428,7 @@ independently-generated CP2K-format file too).
 
 ## `contraction_path`
 
-Added 2026-07-09 to close qrunch's "Choose a Contraction Path Finder"
+Added 2026-07-09 to back the "choose a contraction path finder"
 guide — real `quimb` + `cotengra` mechanism
 (`qpubench.tensor_network.contraction_path`), per direct instruction to
 build this specifically on quimb/cotengra rather than bare `opt_einsum`.
@@ -1438,7 +1440,7 @@ contraction_path.py`.
 `build_quimb_circuit()` builds a real `quimb.tensor.Circuit` from a
 `CircuitSpec` (QASM2 direct via `Circuit.from_openqasm2_str()`; QASM3
 bridged through `qiskit.qasm2.dumps(load_qiskit_circuit(circuit))`, since
-quimb has no QASM3 loader). `choose_contraction_path()` maps qrunch's four
+quimb has no QASM3 loader). `choose_contraction_path()` maps the four
 strategies onto real `optimize=` values and returns real
 `opt_einsum.contract.PathInfo` cost stats — verified on a Bell circuit:
 `SEQUENTIAL`/`RANDOM_GREEDY_128`/`MULTI_STRATEGY` all give `opt_cost=56.0`;
@@ -1450,7 +1452,7 @@ strategies onto real `optimize=` values and returns real
 
 | Type | Purpose |
 |---|---|
-| `ContractionPathStrategy` | `SEQUENTIAL` \| `RANDOM_GREEDY_128` \| `MULTI_STRATEGY` \| `NONE` — qrunch's own four strategies |
+| `ContractionPathStrategy` | `SEQUENTIAL` \| `RANDOM_GREEDY_128` \| `MULTI_STRATEGY` \| `NONE` — the four contraction-path strategies |
 | `ContractionPathConfig` | strategy + `num_repeats` (cotengra `HyperOptimizer.max_repeats`) + `max_memory_fraction`/`memory_budget_elements` (mapped to a real cotengra slicing `target_size` for `MULTI_STRATEGY`) |
 | `ContractionPathResult` | `strategy_used` + real `opt_cost`/`largest_intermediate` from `opt_einsum.contract.PathInfo` |
 

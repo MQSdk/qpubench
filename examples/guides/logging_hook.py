@@ -1,8 +1,7 @@
-"""qrunch guide: "Using the Logger"
+"""Guide: using the logger.
 
-Verdict: Yes — revised 2026-07-08. ``qpubench.observability.BenchmarkLogger``
-(new module) is the structured logging subsystem qrunch's guide describes:
-real ``logging`` levels (status-based: SUCCEEDED -> INFO, FAILED -> ERROR),
+``qpubench.observability.BenchmarkLogger`` is the structured logging
+subsystem: real ``logging`` levels (status-based: SUCCEEDED -> INFO, FAILED -> ERROR),
 a configurable ``logging.Handler`` (``StreamHandler`` here; swap for
 ``FileHandler``/``RotatingFileHandler`` for real log rotation), and
 ``JSONFormatter`` for structured export. Built directly on top of
