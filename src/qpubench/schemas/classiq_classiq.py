@@ -60,7 +60,7 @@ import pydantic
 
 from .circuit import CircuitSpec
 from .primitives import CircuitFormat
-from .record import VQAConfig
+from .record import VQAConfig, VQAResult
 from .mqsdk_xenakis import GARunResult, XenakisMolecule
 
 
@@ -324,27 +324,33 @@ class ClassiqVQEResult(pydantic.BaseModel):
         molecule: str,
         model: ClassiqChemistryModel,
     ) -> VQAConfig:
-        """Populate qpubench's shared VQAConfig from a Classiq chemistry run.
+        """Populate qpubench's shared VQAConfig (inputs) from a Classiq run.
 
-        Reuses VQAConfig's existing generic fields (mapper, ansatz, n_cnot,
-        num_parameters) rather than introducing Classiq-specific duplicates —
-        the same fields QForte and Cebule already populate.
+        Reuses VQAConfig's existing generic fields (mapper, ansatz) rather
+        than introducing Classiq-specific duplicates — the same fields QForte
+        and Cebule already populate.  Computed outputs go through
+        to_vqa_result().
         """
         synthesis_id = self.synthesis.program_id if self.synthesis else None
-        n_cnot = self.synthesis.cx_count if self.synthesis else None
         return VQAConfig(
             problem_type="chemistry",
             molecule=molecule,
             basis=model.basis,
-            hf_energy=self.hf_energy,
             algorithm="classiq_vqe",
             mapper=model.mapping.value,
             ansatz=model.ansatz.value,
+            classiq_synthesis_id=synthesis_id,
+        )
+
+    def to_vqa_result(self) -> VQAResult:
+        """Populate qpubench's shared VQAResult (computed outputs) from a Classiq run."""
+        n_cnot = self.synthesis.cx_count if self.synthesis else None
+        return VQAResult(
+            hf_energy=self.hf_energy,
             num_parameters=len(self.optimized_parameters),
             n_cnot=n_cnot,
             convergence_values=self.convergence_values,
             final_eigenvalue=self.final_energy,
-            classiq_synthesis_id=synthesis_id,
         )
 
 

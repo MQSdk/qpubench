@@ -35,7 +35,7 @@ from qpubench.schemas.circuit import CircuitSpec
 from qpubench.schemas.execution import AdaptVQEConfig, ExecutionOptions
 from qpubench.schemas.observable import SparsePauliObservable
 from qpubench.schemas.primitives import CircuitFormat
-from qpubench.schemas.record import VQAConfig
+from qpubench.schemas.record import VQAConfig, VQAResult
 from qpubench.schemas.result import AdaptIteration, ExpectationResult, JobStatus, QuantumResult
 
 from .circuit_synthesis import operator_trotter_step_qasm3
@@ -148,7 +148,7 @@ class GenericAdaptVQEEngine:
     # Main loop
     # ------------------------------------------------------------------
 
-    def run(self) -> tuple[QuantumResult, VQAConfig]:
+    def run(self) -> tuple[QuantumResult, VQAConfig, VQAResult]:
         selected: list[int]   = []
         amplitudes: list[float] = []
         adapt_history: list[AdaptIteration] = []
@@ -197,10 +197,12 @@ class GenericAdaptVQEEngine:
             algorithm="ADAPTVQE",
             pool_type=self.config.pool_type,
             optimizer=self.config.optimizer,
+        )
+        vqa_result = VQAResult(
             num_parameters=len(amplitudes),
             n_cnot=n_cnot,
             convergence_values=[it.energy for it in adapt_history],
             adapt_maxiter_reached=not converged,
             final_eigenvalue=final_energy,
         )
-        return result, vqa
+        return result, vqa, vqa_result

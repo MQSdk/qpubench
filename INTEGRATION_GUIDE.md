@@ -38,7 +38,7 @@ MBQC-FPGA, any custom statevector simulator.
 **AlgorithmAdapter** — the algorithm-driven path:
 ```
 qpubench provides problem spec → adapter runs algorithm (generates
-circuit internally, executes it) → returns (QuantumResult, VQAConfig)
+circuit internally, executes it) → returns (QuantumResult, VQAConfig, VQAResult)
 ```
 
 Examples: QForte (UCCNVQE, ADAPT-VQE), OpenFermion VQE,
@@ -205,7 +205,7 @@ from qpubench.schemas.backend import BackendSpec
 from qpubench.schemas.circuit import CircuitSpec
 from qpubench.schemas.execution import AdaptVQEConfig, ExecutionOptions
 from qpubench.schemas.primitives import CircuitFormat, ComputingModel, JobStatus
-from qpubench.schemas.record import VQAConfig
+from qpubench.schemas.record import VQAConfig, VQAResult
 from qpubench.schemas.result import ExpectationResult, QuantumResult
 
 class QForteAdapter:
@@ -220,7 +220,7 @@ class QForteAdapter:
 
     def run_algorithm(
         self, circuit: CircuitSpec, options: ExecutionOptions
-    ) -> tuple[QuantumResult, VQAConfig]:
+    ) -> tuple[QuantumResult, VQAConfig, VQAResult]:
         # 1. Build system
         mol = qf.system_factory(
             system_type="molecule",
@@ -248,10 +248,12 @@ class QForteAdapter:
         vqa = VQAConfig(
             problem_type="chemistry",
             algorithm=alg_spec.name,
+        )
+        vqa_result = VQAResult(
             final_eigenvalue=energy,
             ground_truth=float(getattr(mol, "fci_energy", 0.0)) or None,
         )
-        return result, vqa
+        return result, vqa, vqa_result
 ```
 
 ### Step 4 — Register and run
@@ -359,7 +361,8 @@ from qpubench import (
     SparsePauliObservable,
     TranspileLayout,      # virtual → physical qubit mapping
     TranspilerConfig,     # layout_method, routing_method, approx_degree
-    VQAConfig,            # VQE metadata: molecule, energy, convergence
+    VQAConfig,            # VQE inputs: molecule, ansatz, optimizer
+    VQAResult,            # VQE computed outputs: energy, convergence
     ZNEConfig,            # zero-noise extrapolation parameters
     AdaptIteration,       # per-ADAPT-iteration metrics
 )
@@ -401,7 +404,7 @@ def test_my_adapter_succeeds():
 
     # Assert
     assert record.result.status == JobStatus.SUCCEEDED
-    assert record.vqa.final_eigenvalue == -2.9003
+    assert record.vqa_result.final_eigenvalue == -2.9003
 ```
 
 Use `pytest` with no extra dependencies — the test suite in `tests/test_schemas.py`

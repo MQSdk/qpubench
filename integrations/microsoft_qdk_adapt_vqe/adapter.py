@@ -37,7 +37,7 @@ from qpubench.schemas.circuit import CircuitSpec
 from qpubench.schemas.execution import AdaptVQEConfig, ExecutionOptions
 from qpubench.schemas.observable import SparsePauliObservable
 from qpubench.schemas.primitives import CircuitFormat, ComputingModel
-from qpubench.schemas.record import VQAConfig
+from qpubench.schemas.record import VQAConfig, VQAResult
 from qpubench.schemas.result import QuantumResult
 
 from ..generic_adapt_vqe.engine import GenericAdaptVQEEngine
@@ -102,7 +102,7 @@ class MicrosoftQDKAdaptVQEAdapter:
         self,
         circuit: CircuitSpec,
         options: ExecutionOptions,
-    ) -> tuple[QuantumResult, VQAConfig]:
+    ) -> tuple[QuantumResult, VQAConfig, VQAResult]:
         spec        = json.loads(circuit.serialized or "{}")
         hamiltonian = SparsePauliObservable.model_validate(spec["hamiltonian"])
         config      = options.adapt_vqe_config or AdaptVQEConfig()

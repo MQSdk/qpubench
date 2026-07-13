@@ -125,19 +125,19 @@ records = runner.sweep(
 )
 ```
 
-For variational algorithms, attach a `VQAConfig` and the record computes chemistry-grade metrics for you:
+For variational algorithms, attach a `VQAConfig` describing what you ran; the computed outputs arrive in `record.vqa_result`:
 
 ```python
 from qpubench import VQAConfig
 
 record = runner.run(bound_ansatz, "aer", shots=4096,
-    vqa=VQAConfig(problem_type="chemistry", molecule="H2", basis="sto-3g",
-                  final_eigenvalue=-1.1370, ground_truth=-1.1373))
-record.vqa.energy_error         # 3.0e-4 Ha
-record.vqa.chemical_accuracy    # True (< 1.6 mHa)
+    vqa=VQAConfig(problem_type="chemistry", molecule="H2", basis="sto-3g"))
+record.vqa_result.final_eigenvalue   # derived from the measured expectation values
+record.vqa_result.energy_error       # |final − reference|, when a reference is present
+record.vqa_result.chemical_accuracy  # True (< 1.6 mHa)
 ```
 
-`VQAConfig` is metadata, not configuration — it changes nothing about execution. `problem_type` (the only required field) labels the problem domain (`"chemistry"`, `"optimization"`, `"ml"`) so records can be filtered by domain in the store. `final_eigenvalue` is the energy the optimization converged to and `ground_truth` is the reference to compare against (e.g. the FCI energy); both are optional, but providing both is what lets the record derive `energy_error` and `chemical_accuracy` shown above.
+`VQAConfig` is input metadata, not configuration — it changes nothing about execution and never carries computed values. `problem_type` (the only required field) labels the problem domain (`"chemistry"`, `"optimization"`, `"ml"`) so records can be filtered by domain in the store. The computed side (`VQAResult`) is produced by the run itself: algorithm adapters return the converged energy, convergence history, and computed references (FCI / exact diagonalisation); for estimator-path circuit runs the runner derives `final_eigenvalue` from the result's expectation values. `energy_error` and `chemical_accuracy` are derived whenever a computed reference is present.
 
 Hooks fire on every completed record before persistence — use them for live progress lines or structured logging (`BenchmarkLogger` ships with a JSON formatter):
 

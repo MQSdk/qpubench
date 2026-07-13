@@ -21,7 +21,8 @@ Reference energies
 Interop with qpubench
 ---------------------
 GSOptBenchmarkResult.to_quantum_result()  → QuantumResult
-GSOptBenchmarkResult.to_vqa_config()      → dict for VQAConfig(**...)
+GSOptBenchmarkResult.to_vqa_config()      → dict for VQAConfig(**...) (inputs)
+GSOptBenchmarkResult.to_vqa_result()      → dict for VQAResult(**...) (computed outputs)
 GSOptBenchmarkResult.energy_error         → float (vs REFERENCE_ENERGIES)
 GSOptBenchmarkResult.chemical_accuracy_achieved → bool (<1 mHartree)
 """
@@ -257,11 +258,12 @@ class GSOptBenchmarkResult(pydantic.BaseModel):
         )
 
     def to_vqa_config(self) -> dict[str, Any]:
-        """Return keyword arguments for constructing a VQAConfig.
+        """Return keyword arguments for constructing a VQAConfig (inputs only).
 
         Usage::
-            from qpubench.schemas import VQAConfig
-            vqa = VQAConfig(**gsopt_result.to_vqa_config())
+            from qpubench.schemas import VQAConfig, VQAResult
+            vqa        = VQAConfig(**gsopt_result.to_vqa_config())
+            vqa_result = VQAResult(**gsopt_result.to_vqa_result())
         """
         return dict(
             problem_type="chemistry",
@@ -270,11 +272,16 @@ class GSOptBenchmarkResult(pydantic.BaseModel):
             num_electrons=None,
             active_electrons=self.cas.active_electrons,
             active_orbitals=self.cas.active_orbitals,
-            hf_energy=self.hf_energy,
             algorithm=self.config.ansatz,
             optimizer=self.config.optimizer,
-            num_parameters=len(self.best_parameters),
             n_layers_circuit=self.config.layers,
+        )
+
+    def to_vqa_result(self) -> dict[str, Any]:
+        """Return keyword arguments for constructing a VQAResult (computed outputs)."""
+        return dict(
+            hf_energy=self.hf_energy,
+            num_parameters=len(self.best_parameters),
             final_eigenvalue=self.final_energy,
             ground_truth=self.target_energy,
             nfev=self.nfev,

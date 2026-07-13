@@ -397,3 +397,29 @@ class QESEMJobRecord(pydantic.BaseModel):
     characterization:               QESEMCharacterizationResult | None = None
     warnings:                       list[str]                     = []
     errors:                         list[str]                     = []
+
+
+# ---------------------------------------------------------------------------
+# Bridge to the core ExecutionOptions.mitigation_options dict
+# ---------------------------------------------------------------------------
+
+def qesem_mitigation_options(
+    circuit_options: QESEMCircuitOptions | None = None,
+    job_options: QESEMJobOptions | None = None,
+) -> dict[str, dict[str, object]]:
+    """Build the ExecutionOptions.mitigation_options entries for QESEM.
+
+    The core schema stores vendor mitigation options as a plain dict so it
+    stays free of vendor imports.  Rehydrate on the consuming side with:
+
+        co = QESEMCircuitOptions.model_validate(
+            options.mitigation_options["qesem_circuit_options"])
+        jo = QESEMJobOptions.model_validate(
+            options.mitigation_options["qesem_job_options"])
+    """
+    out: dict[str, dict[str, object]] = {}
+    if circuit_options is not None:
+        out["qesem_circuit_options"] = circuit_options.model_dump()
+    if job_options is not None:
+        out["qesem_job_options"] = job_options.model_dump()
+    return out

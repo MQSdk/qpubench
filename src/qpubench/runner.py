@@ -9,7 +9,7 @@ from .backends.base import AlgorithmAdapter
 from .schemas.circuit import CircuitSpec
 from .schemas.execution import ExecutionOptions
 from .schemas.primitives import JobStatus
-from .schemas.record import BenchmarkRecord, VQAConfig
+from .schemas.record import BenchmarkRecord, VQAConfig, VQAResult
 from .schemas.result import QuantumResult
 
 logger = logging.getLogger(__name__)
@@ -107,6 +107,12 @@ class BenchmarkRunner:
         circuit, "stub", shots=4096)`` builds ``ExecutionOptions(shots=4096)``
         for you. Pass a full ``ExecutionOptions`` instead when you need more
         (error mitigation, transpiler settings, algorithm configs, ...).
+
+        ``vqa`` carries only the experiment *inputs* (molecule, ansatz,
+        optimizer, ...).  Computed outputs are never passed in: algorithm
+        adapters return a ``VQAResult``, and for circuit-driven VQA runs the
+        runner derives ``VQAResult.final_eigenvalue`` from the result's
+        expectation values automatically.
         """
         if options is None:
             options = ExecutionOptions(shots=shots)
@@ -131,7 +137,9 @@ class BenchmarkRunner:
 
             t0 = time.perf_counter()
             try:
-                result, extracted_vqa = adapter.run_algorithm(circuit, options)
+                result, extracted_vqa, vqa_result = adapter.run_algorithm(
+                    circuit, options
+                )
             except Exception as exc:
                 logger.exception("AlgorithmAdapter %r raised", backend_name)
                 result = QuantumResult(
@@ -141,6 +149,7 @@ class BenchmarkRunner:
                     error_message=str(exc),
                 )
                 extracted_vqa = vqa or VQAConfig(problem_type="unknown")
+                vqa_result = None
             elapsed = time.perf_counter() - t0
 
             # Caller-supplied vqa overrides extracted metadata if provided
@@ -165,6 +174,14 @@ class BenchmarkRunner:
                 )
             elapsed = time.perf_counter() - t0
             merged_vqa = vqa
+            vqa_result = None
+
+        # For VQA runs, the final eigenvalue is a computed output — derive it
+        # from the quantum result rather than expecting the caller to pass it.
+        if merged_vqa is not None and vqa_result is None and result.expectation_values:
+            vqa_result = VQAResult(
+                final_eigenvalue=result.expectation_values[0].value
+            )
 
         if result.total_time_s is None:
             result = result.model_copy(update={"total_time_s": round(elapsed, 6)})
@@ -175,6 +192,7 @@ class BenchmarkRunner:
             options=options,
             result=result,
             vqa=merged_vqa,
+            vqa_result=vqa_result,
             num_qubits=circuit.num_qubits,
             run_id=run_id,
             tags=tags or [],

@@ -8,7 +8,7 @@ qpubench models neutral-atom Analog Hamiltonian Simulation (AHS) in `src/qpubenc
 | **Hardware** | Aquila 256-qubit Rydberg QPU via AWS Braket |
 | **Computing model** | `ComputingModel.ADIABATIC` |
 | **Qubit modality** | `QubitModality.NEUTRAL_ATOM` |
-| **Result field** | `QuantumResult.ahs_result` |
+| **Result field** | `QuantumResult.vendor_results["ahs_result"]` |
 | **Backend factories** | `BackendSpec.aquila()`, `BackendSpec.bloqade_emulator()` |
 
 In AHS, neutral Rubidium-87 atoms are trapped at programmable 2-D positions by optical tweezers. A global laser applies a time-dependent Rabi drive (Ω, φ) and detuning (Δ), evolving the system through the Rydberg blockade Hamiltonian:
@@ -297,7 +297,7 @@ print(task.rydberg_densities)    # [0.48, 0.51, 0.47, 0.52, 0.49] — P(Rydberg)
 result = QuantumResult(
     computing_model=ComputingModel.ADIABATIC,
     qubit_modality=QubitModality.NEUTRAL_ATOM,
-    ahs_result=task,
+    vendor_results={"ahs_result": task},
 )
 ```
 

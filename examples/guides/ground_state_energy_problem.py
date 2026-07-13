@@ -43,9 +43,9 @@ def main() -> None:
         problem_type="chemistry",
         molecule="toy-4q",
         num_electrons=NUM_ELECTRONS,
-        ground_truth=exact_ground_state_energy(hamiltonian),
     )
-    print(f"Problem: {problem.molecule}, target energy = {problem.ground_truth:.6f}")
+    reference_energy = exact_ground_state_energy(hamiltonian)
+    print(f"Problem: {problem.molecule}, target energy = {reference_energy:.6f}")
 
     # 2. Solve it with ADAPT-VQE, scored
     #    by a real statevector simulator — StubGateAdapter would return
@@ -58,13 +58,14 @@ def main() -> None:
         energy_backend=ToyStatevectorAdapter(),
         config=AdaptVQEConfig(max_macro_iterations=15, gradient_threshold=1e-5, max_micro_iterations=200),
     )
-    result, vqa = engine.run()
+    result, vqa, vqa_result = engine.run()
 
-    # 3. Attach the ground truth after the fact and report chemical accuracy.
-    problem.final_eigenvalue = vqa.final_eigenvalue
-    print(f"ADAPT-VQE energy       = {problem.final_eigenvalue:.6f}")
-    print(f"|error|                 = {problem.energy_error:.6f} Hartree-equivalent")
-    print(f"Chemical accuracy       = {problem.chemical_accuracy}")
+    # 3. Attach the computed reference to the run's VQAResult and report
+    #    chemical accuracy — outputs stay out of the problem definition.
+    vqa_result.ground_truth = reference_energy
+    print(f"ADAPT-VQE energy       = {vqa_result.final_eigenvalue:.6f}")
+    print(f"|error|                 = {vqa_result.energy_error:.6f} Hartree-equivalent")
+    print(f"Chemical accuracy       = {vqa_result.chemical_accuracy}")
 
 
 if __name__ == "__main__":

@@ -28,12 +28,13 @@ from qpubench.schemas.circuit import CircuitSpec
 from qpubench.schemas.evangelistalab_qforte import QForteAlgorithmConfig
 from qpubench.schemas.execution import AdaptVQEConfig, AlgorithmSpec, ExecutionOptions
 from qpubench.schemas.primitives import AlgorithmFamily, CircuitFormat, ComputingModel
-from qpubench.schemas.record import VQAConfig
+from qpubench.schemas.record import VQAConfig, VQAResult
 from qpubench.schemas.result import QuantumResult
 
 from .converters import (
     extract_quantum_result,
     extract_vqa_config,
+    extract_vqa_result,
     qforte_op_to_sparse_pauli,
 )
 
@@ -201,7 +202,7 @@ class QForteAlgorithmAdapter:
         self,
         circuit: CircuitSpec,
         options: ExecutionOptions,
-    ) -> tuple[QuantumResult, VQAConfig]:
+    ) -> tuple[QuantumResult, VQAConfig, VQAResult]:
         qf            = _require_qforte()
         alg_spec      = options.algorithm_spec or AlgorithmSpec(
             name=self._default, family=AlgorithmFamily.ADAPT_VQE
@@ -211,8 +212,9 @@ class QForteAlgorithmAdapter:
         alg           = _make_algorithm(qf, mol, alg_spec.name, qforte_config)
         _execute_algorithm(alg, alg_spec.name, qforte_config)
         result        = extract_quantum_result(alg, alg_spec)
-        vqa           = extract_vqa_config(alg, mol, alg_spec, qforte_config)
-        return result, vqa
+        vqa           = extract_vqa_config(alg_spec, qforte_config)
+        vqa_result    = extract_vqa_result(alg, mol, alg_spec)
+        return result, vqa, vqa_result
 
 
 # ---------------------------------------------------------------------------
@@ -276,7 +278,7 @@ class ExternalEvalAlgorithmAdapter:
         self,
         circuit: CircuitSpec,
         options: ExecutionOptions,
-    ) -> tuple[QuantumResult, VQAConfig]:
+    ) -> tuple[QuantumResult, VQAConfig, VQAResult]:
         from .energy_hook import EnergyEvaluatorHook, make_hooked_class
 
         qf            = _require_qforte()
@@ -308,8 +310,9 @@ class ExternalEvalAlgorithmAdapter:
         alg       = _make_algorithm(qf, mol, alg_spec.name, qforte_config, cls_override=HookedCls)
         _execute_algorithm(alg, alg_spec.name, qforte_config)
 
-        result = extract_quantum_result(alg, alg_spec)
-        vqa    = extract_vqa_config(alg, mol, alg_spec, qforte_config)
+        result     = extract_quantum_result(alg, alg_spec)
+        vqa        = extract_vqa_config(alg_spec, qforte_config)
+        vqa_result = extract_vqa_result(alg, mol, alg_spec)
 
         # Annotate result with hook telemetry
         result = result.model_copy(update={
@@ -319,4 +322,4 @@ class ExternalEvalAlgorithmAdapter:
                 "hook_call_count": hook.call_count,
             }
         })
-        return result, vqa
+        return result, vqa, vqa_result

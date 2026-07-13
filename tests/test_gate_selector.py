@@ -42,7 +42,7 @@ def test_fast_gate_selector_converges_to_exact_ground_state(h2_hamiltonian):
         hamiltonian=h2_hamiltonian, num_qubits=num_qubits, num_electrons=num_electrons,
         energy_backend=ToyStatevectorAdapter(), gate_selector=FastGateSelector(),
     )
-    result, _vqa = engine.run()
+    result, _vqa, _vqa_result = engine.run()
     assert math.isclose(result.expectation_values[0].value, exact, abs_tol=1.0e-6)
 
 
@@ -54,7 +54,7 @@ def test_brute_force_gate_selector_converges_to_exact_ground_state(h2_hamiltonia
         hamiltonian=h2_hamiltonian, num_qubits=num_qubits, num_electrons=num_electrons,
         energy_backend=ToyStatevectorAdapter(), gate_selector=BruteForceGateSelector(),
     )
-    result, _vqa = engine.run()
+    result, _vqa, _vqa_result = engine.run()
     assert math.isclose(result.expectation_values[0].value, exact, abs_tol=1.0e-6)
 
 

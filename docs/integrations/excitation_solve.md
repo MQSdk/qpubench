@@ -54,7 +54,7 @@ spec = AlgorithmSpec(
 ```python
 from qpubench.schemas import (
     ExcitationSolveSweep, ExcitationSolveIteration,
-    ExcitationSolveResult, ParameterSample, VQAConfig,
+    ExcitationSolveResult, ParameterSample, VQAConfig, VQAResult,
 )
 import numpy as np
 
@@ -105,6 +105,8 @@ vqa = VQAConfig(
     molecule="H2",
     algorithm="ExcitationSolve",
     optimizer="excitation_solve",
+)
+vqa_result = VQAResult(
     num_parameters=3,
     nfev=result.n_function_evaluations,
     hf_energy=result.hf_energy,

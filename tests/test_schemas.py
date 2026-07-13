@@ -23,7 +23,7 @@ from qpubench.schemas.johnrscott_mbqc_fpga import (
 )
 from qpubench.schemas.observable import PauliTerm, SparsePauliObservable
 from qpubench.schemas.primitives import ComplexNumber, PauliLabel
-from qpubench.schemas.record import SCHEMA_VERSION, BenchmarkRecord, VQAConfig
+from qpubench.schemas.record import SCHEMA_VERSION, BenchmarkRecord, VQAConfig, VQAResult
 from qpubench.schemas.reactions import (
     ArrheniusRateConstant,
     KineticsReactionSpec,
@@ -106,6 +106,104 @@ def test_sparse_pauli_from_legacy_dict():
     coeffs = {t.coefficient.re for t in spo.terms}
     assert 0.5 in coeffs
     assert -1.0 in coeffs
+
+
+def test_to_dense_matrix_single_qubit_paulis():
+    for label, expected in [
+        (PauliLabel.X, [[0.0, 1.0], [1.0, 0.0]]),
+        (PauliLabel.Z, [[1.0, 0.0], [0.0, -1.0]]),
+    ]:
+        spo = SparsePauliObservable(
+            num_qubits=1,
+            terms=[PauliTerm(qubit_indices=(0,), pauli_ops=(label,))],
+        )
+        assert spo.to_dense_matrix() == expected
+
+
+def test_to_dense_matrix_pauli_y_is_complex():
+    spo = SparsePauliObservable(
+        num_qubits=1,
+        terms=[PauliTerm(qubit_indices=(0,), pauli_ops=(PauliLabel.Y,))],
+    )
+    # Y = [[0, -i], [i, 0]] — real=True (default) must refuse it
+    with pytest.raises(ValueError):
+        spo.to_dense_matrix()
+    m = spo.to_dense_matrix(real=False)
+    assert m == [[0j, -1j], [1j, 0j]]
+
+
+def test_to_dense_matrix_two_qubit_zz():
+    spo = SparsePauliObservable(
+        num_qubits=2,
+        terms=[PauliTerm(qubit_indices=(0, 1), pauli_ops=(PauliLabel.Z, PauliLabel.Z),
+                         coefficient=ComplexNumber(re=0.5))],
+    )
+    m = spo.to_dense_matrix()
+    # ZZ diag = (+1, -1, -1, +1) over |q1 q0> = |00>,|01>,|10>,|11>
+    assert [m[i][i] for i in range(4)] == [0.5, -0.5, -0.5, 0.5]
+    assert all(m[r][c] == 0.0 for r in range(4) for c in range(4) if r != c)
+
+
+def test_from_dense_matrix_decomposes_known_hamiltonian():
+    # H = 0.5*X + 0.25*Z - 1.0*I on one qubit
+    matrix = [[0.25 - 1.0, 0.5], [0.5, -0.25 - 1.0]]
+    spo = SparsePauliObservable.from_dense_matrix(matrix)
+    assert spo.num_qubits == 1
+    by_ops = {t.pauli_ops: t.coefficient.re for t in spo.terms}
+    assert by_ops[()] == pytest.approx(-1.0)
+    assert by_ops[(PauliLabel.X,)] == pytest.approx(0.5)
+    assert by_ops[(PauliLabel.Z,)] == pytest.approx(0.25)
+
+
+def test_dense_matrix_roundtrip_multi_qubit():
+    spo = SparsePauliObservable(
+        num_qubits=3,
+        terms=[
+            PauliTerm(qubit_indices=(0,), pauli_ops=(PauliLabel.Z,),
+                      coefficient=ComplexNumber(re=-1.1)),
+            PauliTerm(qubit_indices=(0, 2), pauli_ops=(PauliLabel.X, PauliLabel.Y),
+                      coefficient=ComplexNumber(re=0.3)),
+            PauliTerm(qubit_indices=(1, 2), pauli_ops=(PauliLabel.Y, PauliLabel.Y),
+                      coefficient=ComplexNumber(re=0.7)),
+        ],
+    )
+    dense = spo.to_dense_matrix(real=False)
+    back = SparsePauliObservable.from_dense_matrix(dense, 3)
+    again = back.to_dense_matrix(real=False)
+    for row_a, row_b in zip(again, dense):
+        for a, b in zip(row_a, row_b):
+            assert a == pytest.approx(b, abs=1e-12)
+
+
+def test_dense_matrix_size_guards():
+    spo = SparsePauliObservable(
+        num_qubits=11,
+        terms=[PauliTerm(qubit_indices=(0,), pauli_ops=(PauliLabel.Z,))],
+    )
+    with pytest.raises(ValueError):
+        spo.to_dense_matrix()
+    with pytest.raises(ValueError):
+        SparsePauliObservable.from_dense_matrix([[1.0, 0.0], [0.0, 1.0], [0.0, 0.0]])
+
+
+def test_dense_matrix_matches_qiskit_reference():
+    pytest.importorskip("qiskit")
+    import numpy as np
+    from qiskit.quantum_info import SparsePauliOp
+
+    spo = SparsePauliObservable(
+        num_qubits=2,
+        terms=[
+            PauliTerm(qubit_indices=(0,), pauli_ops=(PauliLabel.X,),
+                      coefficient=ComplexNumber(re=0.4)),
+            PauliTerm(qubit_indices=(0, 1), pauli_ops=(PauliLabel.Y, PauliLabel.Z),
+                      coefficient=ComplexNumber(re=-0.9)),
+        ],
+    )
+    ref = SparsePauliOp.from_list(spo.to_qiskit_pauli_list(2)).to_matrix()
+    assert np.allclose(np.array(spo.to_dense_matrix(real=False)), ref)
+    back = SparsePauliObservable.from_dense_matrix([list(row) for row in ref], 2)
+    assert np.allclose(np.array(back.to_dense_matrix(real=False)), ref)
 
 
 def test_sparse_pauli_flat_qrack_arrays():
@@ -351,15 +449,28 @@ def test_benchmark_record_json_roundtrip():
     assert restored.result.expectation_values[0].value == -1.137
 
 
-def test_vqa_config_energy_error():
-    vqa = VQAConfig(
-        problem_type="chemistry",
+def test_vqa_result_energy_error():
+    res = VQAResult(
         final_eigenvalue=-1.137,
         ground_truth=-1.138,
     )
-    assert vqa.energy_error is not None
-    assert math.isclose(vqa.energy_error, 0.001, rel_tol=1e-6)
-    assert vqa.chemical_accuracy is True
+    assert res.energy_error is not None
+    assert math.isclose(res.energy_error, 0.001, rel_tol=1e-6)
+    assert res.chemical_accuracy is True
+
+
+def test_vqa_config_rejects_computed_fields():
+    """Computed outputs belong in VQAResult — passing them here must fail loudly."""
+    with pytest.raises(pydantic.ValidationError):
+        VQAConfig(problem_type="chemistry", final_eigenvalue=-1.137)
+    with pytest.raises(pydantic.ValidationError):
+        VQAConfig(problem_type="chemistry", ground_truth=-1.1373)
+
+
+def test_vqa_result_fci_fallback_reference():
+    res = VQAResult(final_eigenvalue=-1.137, fci_energy=-1.138)
+    assert res.reference_energy == -1.138
+    assert res.chemical_accuracy is True
 
 
 # ---------------------------------------------------------------------------
@@ -378,7 +489,8 @@ def _record_with_energy(energy: float) -> BenchmarkRecord:
                 ExpectationResult(observable_index=0, value=energy, std_error=0.0)
             ],
         ),
-        vqa=VQAConfig(problem_type="chemistry", final_eigenvalue=energy),
+        vqa=VQAConfig(problem_type="chemistry"),
+        vqa_result=VQAResult(final_eigenvalue=energy),
         num_qubits=2,
     )
 
@@ -1026,9 +1138,11 @@ def test_vqa_config_chemistry_fields():
         num_electrons=2,
         num_alpha=1,
         num_beta=1,
-        hf_energy=-2.8551,
         algorithm="UCCNVQE",
         pool_type="SD",
+    )
+    res = VQAResult(
+        hf_energy=-2.8551,
         n_cnot=4,
         n_pauli_trm_measures=240,
         final_eigenvalue=-2.9003,
@@ -1037,20 +1151,18 @@ def test_vqa_config_chemistry_fields():
     assert vqa.num_electrons == 2
     assert vqa.algorithm == "UCCNVQE"
     assert vqa.pool_type == "SD"
-    assert vqa.n_cnot == 4
-    assert vqa.chemical_accuracy is True
+    assert res.n_cnot == 4
+    assert res.chemical_accuracy is True
 
 
-def test_vqa_config_adapt_maxiter_flag():
-    vqa = VQAConfig(
-        problem_type="chemistry",
-        algorithm="ADAPTVQE",
+def test_vqa_result_adapt_maxiter_flag():
+    res = VQAResult(
         adapt_maxiter_reached=True,
         final_eigenvalue=-2.10,
         ground_truth=-2.16,
     )
-    assert vqa.adapt_maxiter_reached is True
-    assert vqa.chemical_accuracy is False   # error > 1 mHartree
+    assert res.adapt_maxiter_reached is True
+    assert res.chemical_accuracy is False   # error > 1 mHartree
 
 
 # ---------------------------------------------------------------------------
@@ -1073,7 +1185,7 @@ class _MockQForteAdapter:
         self,
         circuit: CircuitSpec,
         options: ExecutionOptions,
-    ) -> tuple[QuantumResult, VQAConfig]:
+    ) -> tuple[QuantumResult, VQAConfig, VQAResult]:
         alg_name = (options.algorithm_spec.name
                     if options.algorithm_spec else "UCCNVQE")
         result = QuantumResult(
@@ -1097,10 +1209,12 @@ class _MockQForteAdapter:
             molecule="He",
             basis="cc-pvdz",
             algorithm=alg_name,
+        )
+        vqa_result = VQAResult(
             final_eigenvalue=-2.9003,
             ground_truth=-2.9003,
         )
-        return result, vqa
+        return result, vqa, vqa_result
 
 
 def test_algorithm_adapter_via_runner():
@@ -1123,7 +1237,8 @@ def test_algorithm_adapter_via_runner():
     assert record.result.status == JobStatus.SUCCEEDED
     assert record.vqa is not None
     assert record.vqa.algorithm == "UCCNVQE"
-    assert record.vqa.chemical_accuracy is True
+    assert record.vqa_result is not None
+    assert record.vqa_result.chemical_accuracy is True
     assert record.result.expectation_values[0].value == pytest.approx(-2.9003)
 
 
@@ -1930,14 +2045,14 @@ def test_quantum_result_kqd_field():
     )
     result = QuantumResult(
         computing_model=ComputingModel.GATE_BASED,
-        kqd_pipeline=pipeline,
+        vendor_results={"kqd_pipeline": pipeline},
     )
     json_str = result.model_dump_json()
     data = json.loads(json_str)
     assert data["computing_model"] == "gate_based"
-    assert data["kqd_pipeline"]["hamiltonian_label"] == "ising_chain_6"
+    assert data["vendor_results"]["kqd_pipeline"]["hamiltonian_label"] == "ising_chain_6"
     restored = QuantumResult.model_validate_json(json_str)
-    assert restored.kqd_pipeline.num_qubits == 6
+    assert restored.vendor_results["kqd_pipeline"]["num_qubits"] == 6
 
 
 def test_backend_spec_qiskit_aer():
@@ -2183,10 +2298,10 @@ def test_quantum_result_qesem_field():
     )
     result = QuantumResult(
         computing_model=ComputingModel.GATE_BASED,
-        qesem_result=qesem_record,
+        vendor_results={"qesem_result": qesem_record},
     )
     data = json.loads(result.model_dump_json())
-    assert data["qesem_result"]["job_id"] == "qesem-xyz"
+    assert data["vendor_results"]["qesem_result"]["job_id"] == "qesem-xyz"
 
 
 def test_backend_spec_qesem():
@@ -2198,18 +2313,34 @@ def test_backend_spec_qesem():
     assert b.auth["api_token_ref"] == "QEDMA_TOKEN"
 
 
-def test_execution_options_qesem_fields():
-    from qpubench.schemas.qedma_qesem import QESEMCircuitOptions, QESEMJobOptions, QESEMExecutionMode
+def test_execution_options_qesem_mitigation_options():
+    from qpubench.schemas.qedma_qesem import (
+        QESEMCircuitOptions,
+        QESEMExecutionMode,
+        QESEMJobOptions,
+        qesem_mitigation_options,
+    )
     from qpubench.schemas.execution import ExecutionOptions
     from qpubench.schemas.primitives import ErrorMitigationStrategy
     opts = ExecutionOptions(
         shots=10_000,
         error_mitigation=ErrorMitigationStrategy.QESEM,
-        qesem_circuit_options=QESEMCircuitOptions(parallel_execution=True),
-        qesem_job_options=QESEMJobOptions(execution_mode=QESEMExecutionMode.SESSION),
+        mitigation_options=qesem_mitigation_options(
+            circuit_options=QESEMCircuitOptions(parallel_execution=True),
+            job_options=QESEMJobOptions(execution_mode=QESEMExecutionMode.SESSION),
+        ),
     )
-    assert opts.qesem_circuit_options.parallel_execution is True
-    assert opts.qesem_job_options.execution_mode == QESEMExecutionMode.SESSION
+    # Core stores vendor-neutral dicts; rehydrate the typed vendor schemas.
+    co = QESEMCircuitOptions.model_validate(opts.mitigation_options["qesem_circuit_options"])
+    jo = QESEMJobOptions.model_validate(opts.mitigation_options["qesem_job_options"])
+    assert co.parallel_execution is True
+    assert jo.execution_mode == QESEMExecutionMode.SESSION
+
+    # Vendor models passed directly as values are dumped automatically.
+    opts2 = ExecutionOptions(
+        mitigation_options={"qesem_circuit_options": QESEMCircuitOptions()},
+    )
+    assert isinstance(opts2.mitigation_options["qesem_circuit_options"], dict)
 
 
 # ---------------------------------------------------------------------------
@@ -2456,10 +2587,10 @@ def test_quantum_result_qcschema_field():
     )
     result = QuantumResult(
         computing_model=ComputingModel.GATE_BASED,
-        qcschema_record=QCSchemaRecord(atomic_result=atomic),
+        vendor_results={"qcschema_record": QCSchemaRecord(atomic_result=atomic)},
     )
     data = json.loads(result.model_dump_json())
-    assert data["qcschema_record"]["atomic_result"]["return_result"] == pytest.approx(-1.1644)
+    assert data["vendor_results"]["qcschema_record"]["atomic_result"]["return_result"] == pytest.approx(-1.1644)
 
 
 # ---------------------------------------------------------------------------
@@ -2706,12 +2837,12 @@ def test_quantum_result_ahs_field():
     result = QuantumResult(
         computing_model=ComputingModel.ADIABATIC,
         qubit_modality=QubitModality.NEUTRAL_ATOM,
-        ahs_result=task,
+        vendor_results={"ahs_result": task},
     )
     data = json.loads(result.model_dump_json())
     assert data["computing_model"] == "adiabatic"
     assert data["qubit_modality"] == "neutral_atom"
-    assert data["ahs_result"]["num_shots_requested"] == 2
+    assert data["vendor_results"]["ahs_result"]["num_shots_requested"] == 2
 
 
 def test_backend_spec_aquila():
@@ -2993,11 +3124,11 @@ def test_quantum_result_slowquant_field():
     )
     result = QuantumResult(
         computing_model=ComputingModel.GATE_BASED,
-        slowquant_record=rec,
+        vendor_results={"slowquant_record": rec},
     )
     data = json.loads(result.model_dump_json())
-    assert data["slowquant_record"]["ucc_energy"] == pytest.approx(-1.1373)
-    assert data["slowquant_record"]["molecule_name"] == "H2"
+    assert data["vendor_results"]["slowquant_record"]["ucc_energy"] == pytest.approx(-1.1373)
+    assert data["vendor_results"]["slowquant_record"]["molecule_name"] == "H2"
 
 
 # ---------------------------------------------------------------------------
@@ -3086,9 +3217,12 @@ def test_classiq_vqe_result_to_vqa_config():
     vqa = vqe.to_vqa_config(molecule="H2", model=model)
     assert vqa.mapper == "JordanWigner"
     assert vqa.ansatz == "ucc"
-    assert vqa.n_cnot == 8
     assert vqa.classiq_synthesis_id == "prog-2"
-    assert vqa.final_eigenvalue == pytest.approx(-1.137)
+
+    res = vqe.to_vqa_result()
+    assert res.n_cnot == 8
+    assert res.num_parameters == 2
+    assert res.final_eigenvalue == pytest.approx(-1.137)
 
 
 def test_classiq_combinatorial_optimization_matches_xenakis_objective():

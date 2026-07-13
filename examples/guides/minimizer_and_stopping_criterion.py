@@ -47,8 +47,8 @@ def run_with(optimizer: str, gradient_threshold: float) -> tuple[float, int]:
             max_micro_iterations=200,
         ),
     )
-    _, vqa = engine.run()
-    return vqa.final_eigenvalue, len(vqa.convergence_values)
+    _, _vqa, vqa_result = engine.run()
+    return vqa_result.final_eigenvalue, len(vqa_result.convergence_values)
 
 
 def main() -> None:

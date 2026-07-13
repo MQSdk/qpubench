@@ -282,7 +282,7 @@ record = QESEMJobRecord(
 result = QuantumResult(
     computing_model=ComputingModel.GATE_BASED,
     qubit_modality=QubitModality.SUPERCONDUCTING,
-    qesem_result=record,
+    vendor_results={"qesem_result": record},
 )
 ```
 

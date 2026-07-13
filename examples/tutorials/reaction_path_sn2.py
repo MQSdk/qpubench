@@ -93,7 +93,7 @@ def main() -> None:
     # Locate the transition state from the computed profile itself (the
     # highest-energy interior point) rather than assuming it sits at
     # xi=0.5 ahead of time.
-    raw_energies = [r.vqa.final_eigenvalue for r in records]
+    raw_energies = [r.vqa_result.final_eigenvalue for r in records]
     interior = range(1, len(progress) - 1)
     ts_index = max(interior, key=lambda i: raw_energies[i])
 

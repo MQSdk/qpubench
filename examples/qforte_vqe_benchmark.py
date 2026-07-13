@@ -112,10 +112,11 @@ ALGORITHMS: list[tuple[AlgorithmSpec, AdaptVQEConfig]] = [
 def print_record(record: BenchmarkRecord) -> None:
     alg_name = record.vqa.algorithm if record.vqa else "?"
     energy   = record.result.expectation_values[0].value if record.result.expectation_values else float("nan")
-    err      = record.vqa.energy_error if record.vqa else None
-    ca       = record.vqa.chemical_accuracy if record.vqa else None
-    n_cnot   = record.vqa.n_cnot or record.result.metadata.get("n_cnot", "?")
-    n_params = record.vqa.num_parameters or "?"
+    err      = record.vqa_result.energy_error if record.vqa_result else None
+    ca       = record.vqa_result.chemical_accuracy if record.vqa_result else None
+    n_cnot   = ((record.vqa_result.n_cnot if record.vqa_result else None)
+                or record.result.metadata.get("n_cnot", "?"))
+    n_params = (record.vqa_result.num_parameters if record.vqa_result else None) or "?"
     t        = record.result.total_time_s
 
     print(f"  {alg_name:<20}  E={energy:+.8f} Ha  "
@@ -183,7 +184,7 @@ def main() -> None:
     # Filter to chemically accurate runs
     chem_accurate = [
         r for r in records
-        if r.vqa and r.vqa.chemical_accuracy
+        if r.vqa_result and r.vqa_result.chemical_accuracy
     ]
     print(f"Chemically accurate runs: {len(chem_accurate)} / {len(records)}")
 

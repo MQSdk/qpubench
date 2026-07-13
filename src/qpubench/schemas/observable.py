@@ -116,6 +116,131 @@ class SparsePauliObservable(pydantic.BaseModel):
             )
         return cls(num_qubits=num_qubits, terms=terms)
 
+    def to_dense_matrix(
+        self,
+        *,
+        real: bool = True,
+        atol: float = 1e-10,
+        max_qubits: int = 10,
+    ) -> list[list[float]] | list[list[complex]]:
+        """Expand the sparse Pauli sum into a dense 2**n x 2**n matrix.
+
+        Standard Pauli tensor-product expansion: sum_i coeff_i * P_i, where
+        each Pauli string is applied via its one-nonzero-per-column action
+        (O(len(terms) * 2**n), no 4**n kron chain).
+
+        real=True (default) validates that every imaginary part is below
+        ``atol`` and returns plain floats — the shape Cebule's
+        ``QASMGenInput.operator`` expects. A Hermitian sum can still have
+        complex entries (odd Y counts); pass real=False to get them.
+
+        Both conversions here are exponential by nature — ``max_qubits``
+        (default 10) guards against accidental use on large observables.
+        """
+        if self.num_qubits > max_qubits:
+            raise ValueError(
+                f"to_dense_matrix on {self.num_qubits} qubits produces a "
+                f"{2**self.num_qubits}x{2**self.num_qubits} matrix; raise "
+                f"max_qubits= explicitly if you really want this"
+            )
+        dim = 2 ** self.num_qubits
+        matrix: list[list[complex]] = [[0j] * dim for _ in range(dim)]
+        for term in self.terms:
+            coeff = term.coefficient.value
+            for col in range(dim):
+                row, phase = col, 1 + 0j
+                for q, op in zip(term.qubit_indices, term.pauli_ops):
+                    bit = (col >> q) & 1
+                    if op == PauliLabel.X:
+                        row ^= 1 << q
+                    elif op == PauliLabel.Y:
+                        row ^= 1 << q
+                        phase *= 1j if bit == 0 else -1j
+                    elif op == PauliLabel.Z:
+                        phase *= 1 - 2 * bit
+                matrix[row][col] += coeff * phase
+        if not real:
+            return matrix
+        for r in matrix:
+            for entry in r:
+                if abs(entry.imag) > atol:
+                    raise ValueError(
+                        f"Matrix entry {entry!r} has imaginary part > atol="
+                        f"{atol}; pass real=False for the complex matrix"
+                    )
+        return [[entry.real for entry in r] for r in matrix]
+
+    @classmethod
+    def from_dense_matrix(
+        cls,
+        matrix: list[list[float]] | list[list[complex]],
+        num_qubits: int | None = None,
+        *,
+        atol: float = 1e-10,
+        max_qubits: int = 8,
+    ) -> SparsePauliObservable:
+        """Decompose a dense 2**n x 2**n matrix into a sparse Pauli sum.
+
+        Standard Pauli decomposition: coeff_P = Tr(P @ H) / 2**n for each
+        of the 4**n Pauli strings, keeping only |coeff_P| > atol. Each
+        trace uses the string's one-nonzero-per-column structure, so the
+        total cost is O(8**n) — ``max_qubits`` (default 8) guards against
+        accidental use on large matrices.
+
+        The input need not be Hermitian, but non-Hermitian parts produce
+        complex coefficients; round-trips with to_dense_matrix() exactly.
+        """
+        dim = len(matrix)
+        if num_qubits is None:
+            num_qubits = dim.bit_length() - 1
+        if dim != 2 ** num_qubits or any(len(r) != dim for r in matrix):
+            raise ValueError(
+                f"matrix must be square with 2**num_qubits rows; got "
+                f"{dim} rows for num_qubits={num_qubits}"
+            )
+        if num_qubits > max_qubits:
+            raise ValueError(
+                f"from_dense_matrix on {num_qubits} qubits scans "
+                f"{4**num_qubits} Pauli strings; raise max_qubits= "
+                f"explicitly if you really want this"
+            )
+        pauli_order = (PauliLabel.I, PauliLabel.X, PauliLabel.Y, PauliLabel.Z)
+        terms: list[PauliTerm] = []
+        for string_index in range(4 ** num_qubits):
+            ops_all: list[PauliLabel] = []
+            rest = string_index
+            for _ in range(num_qubits):
+                ops_all.append(pauli_order[rest % 4])
+                rest //= 4
+            # Tr(P @ H) via P's one-nonzero-per-column action: P|col> =
+            # phase * |col ^ xmask>, so Tr(P H) = sum_col phase * H[col][col ^ xmask]
+            trace = 0j
+            for col in range(dim):
+                row, phase = col, 1 + 0j
+                for q, op in enumerate(ops_all):
+                    bit = (col >> q) & 1
+                    if op == PauliLabel.X:
+                        row ^= 1 << q
+                    elif op == PauliLabel.Y:
+                        row ^= 1 << q
+                        phase *= 1j if bit == 0 else -1j
+                    elif op == PauliLabel.Z:
+                        phase *= 1 - 2 * bit
+                trace += phase * complex(matrix[col][row])
+            coeff = trace / dim
+            if abs(coeff) <= atol:
+                continue
+            indices = tuple(q for q, op in enumerate(ops_all) if op != PauliLabel.I)
+            ops = tuple(op for op in ops_all if op != PauliLabel.I)
+            terms.append(
+                PauliTerm(
+                    qubit_indices=indices,
+                    pauli_ops=ops,
+                    coefficient=ComplexNumber(re=coeff.real, im=coeff.imag),
+                )
+            )
+        return cls(num_qubits=num_qubits, terms=terms)
+
     def to_qiskit_pauli_list(self, num_qubits: int) -> list[tuple[str, complex]]:
         """(pauli_label, coefficient) pairs for ``SparsePauliOp.from_list()``.
 

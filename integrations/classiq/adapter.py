@@ -38,7 +38,7 @@ from qpubench.schemas.circuit import CircuitSpec
 from qpubench.schemas.execution import ExecutionOptions
 from qpubench.schemas.classiq_classiq import ClassiqConstraints, ClassiqPreferences
 from qpubench.schemas.primitives import CircuitFormat, ComputingModel, JobStatus
-from qpubench.schemas.record import VQAConfig
+from qpubench.schemas.record import VQAConfig, VQAResult
 from qpubench.schemas.result import QuantumResult
 
 from .converters import execution_result_from_job, synthesis_result_from_quantum_program
@@ -64,7 +64,7 @@ class ClassiqAlgorithmAdapter:
     converters.problem_spec_from_qmod() / problem_spec_from_chemistry_model()
     / problem_spec_from_combinatorial_spec(), synthesizes a circuit under the
     embedded ClassiqConstraints/ClassiqPreferences, executes it through
-    Classiq's own execute(), and returns (QuantumResult, VQAConfig).
+    Classiq's own execute(), and returns (QuantumResult, VQAConfig, VQAResult).
 
     Usage
     -----
@@ -113,7 +113,7 @@ class ClassiqAlgorithmAdapter:
         self,
         circuit: CircuitSpec,
         options: ExecutionOptions,
-    ) -> tuple[QuantumResult, VQAConfig]:
+    ) -> tuple[QuantumResult, VQAConfig, VQAResult]:
         cq = _require_classiq()
         payload = json.loads(circuit.serialized or "{}")
 
@@ -159,6 +159,6 @@ class ClassiqAlgorithmAdapter:
             problem_type="chemistry" if kind == "chemistry" else "optimization",
             algorithm=f"classiq_{kind}",
             classiq_synthesis_id=synthesis.program_id,
-            n_cnot=synthesis.cx_count,
         )
-        return result, vqa
+        vqa_result = VQAResult(n_cnot=synthesis.cx_count)
+        return result, vqa, vqa_result

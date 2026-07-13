@@ -144,60 +144,32 @@ compile-checked. Only the actual Cebule `create_task` calls
 untested here, same as before this change — they need real Cebule
 credentials this environment doesn't have.
 
-## Known placeholders (read before running against real Cebule credentials)
+## Dense <-> sparse Hamiltonian conversion (formerly "Known placeholders")
 
-qpubench ships no Pauli-term <-> dense-Hermitian-matrix conversion utility
-in *either* direction (`schemas/observable.py` only implements
-`from_cebule_operators`, sparse-terms-in). That gates exactly the
-combinations where the Hamiltonian representation you have doesn't match
-what the next call needs — each one raises `NotImplementedError` with a
-pointer back here, rather than fabricating the conversion:
+The three `NotImplementedError` gaps documented here previously are closed:
+`SparsePauliObservable.to_dense_matrix()` (sparse -> dense Pauli tensor
+expansion) and `SparsePauliObservable.from_dense_matrix()` (dense -> sparse
+Pauli decomposition, `coeff_P = Tr(P @ H) / 2**n`) now ship in
+`schemas/observable.py`, verified against Qiskit's `SparsePauliOp` for both
+directions plus round-trips. All four pipelines' Execution components use
+them, so every (hamiltonian_kind, measurement_method) combination runs:
 
-| Component | Gap |
+| Component | Conversion used |
 |---|---|
-| `qasm_gen_component` (`tn_qc_opt`/`tn_qc_opt+mol_map` pipelines) | needs TN_QC_OPT's sparse `qubit_operators`/`h_tn_opt_qubit` converted to `QASMGenInput.operator`'s dense matrix — marked `TODO` in `components.py` |
-| `execute_static_hamiltonian_component(hamiltonian_kind="dense", measurement_method="pauli")` (`mol_map_measurement_pipeline`) | needs `mol_map`'s dense `mapped_hamiltonian` converted to a `SparsePauliObservable` for the Estimator path |
-| `execute_static_hamiltonian_component(hamiltonian_kind="sparse", measurement_method="qasm_gen_grouped")` (`jw_baseline_pipeline`) | needs the JW mapping's sparse Pauli terms converted to a dense matrix — the same gap as `qasm_gen_component`'s |
+| `qasm_gen_component` (`tn_qc_opt`/`tn_qc_opt+mol_map` pipelines) | TN_QC_OPT sparse terms -> `to_dense_matrix()` -> `QASMGenInput.operator` |
+| `execute_static_hamiltonian_component(hamiltonian_kind="dense", measurement_method="pauli")` | `mol_map` dense matrix -> `from_dense_matrix()` -> Estimator observable |
+| `execute_static_hamiltonian_component(hamiltonian_kind="sparse", measurement_method="qasm_gen_grouped")` | JW sparse terms -> `to_dense_matrix()` -> `QASMGenInput.operator` |
 
-The three combinations *not* in that table (`tn_qc_opt`'s `pauli` branch;
-`mol_map`'s `qasm_gen_grouped` branch; `JW`'s `pauli` branch) are real,
-tested code paths, not placeholders.
+Both conversions are exponential by nature (the dense side is already a
+`2**n x 2**n` matrix), matched to this benchmark's small `mol_map`/JW qubit
+counts and guarded by an explicit `max_qubits=` parameter — do not reuse
+them for large observables without raising the guard deliberately.
 
-### TODO — closing the three `NotImplementedError` gaps
-
-- [ ] **`SparsePauliObservable.to_dense_matrix(num_qubits) -> list[list[float]]`**
-  (new method, `schemas/observable.py`) — sparse → dense, standard Pauli
-  tensor-product expansion (`sum_i coeff_i * kron(*pauli_ops_i)` over each
-  term's `2x2` Pauli matrices, embedded with identities on the untouched
-  qubits). Symmetric counterpart to the existing `from_cebule_operators`
-  (which only goes dense/string → sparse).
-  Unblocks: `qasm_gen_component`'s `TODO` (both `tn_qc_opt` pipelines) and
-  `execute_static_hamiltonian_component(hamiltonian_kind="sparse",
-  measurement_method="qasm_gen_grouped")` (`jw_baseline_pipeline`).
-- [ ] **`SparsePauliObservable.from_dense_matrix(matrix, num_qubits, *,
-  atol=1e-10) -> SparsePauliObservable`** (new classmethod, same module) —
-  dense → sparse, standard Pauli decomposition
-  (`coeff_P = Tr(P @ H) / 2**num_qubits` for each of the `4**num_qubits`
-  Pauli strings, keeping only `|coeff_P| > atol`).
-  Unblocks: `execute_static_hamiltonian_component(hamiltonian_kind="dense",
-  measurement_method="pauli")` (`mol_map_measurement_pipeline`).
-- [ ] Both conversions are `O(4**num_qubits)` — fine for this benchmark's
-  actual `mol_map`/small-`JW` qubit counts (the dense matrix side is
-  already `2**n x 2**n`, so nothing here is more exponential than what's
-  already being carried around), but **do not** reuse either as a
-  general-purpose utility for large qubit counts without an explicit size
-  guard.
-- [ ] Once both land: delete the three `NotImplementedError` branches
-  above, delete this TODO section and the table above it, and re-verify
-  all four pipelines' Execution components against real Cebule
-  credentials (everything in this repo so far has only been verified
-  against the stub backend + compile-checked DAG structure — see
-  "Compile and run" above for exactly what has and hasn't been run for
-  real).
-- [ ] Separately, unrelated to the conversion gap: confirm
-  `mqsdk.TaskType`'s exact import path against your installed `mqsdk`
-  version (flagged below too — `docs/integrations/cebule.md`'s
-  session-pattern example doesn't pin it down).
+Still open, unchanged by this: the actual Cebule `create_task` calls have
+only been verified against the stub backend + compile-checked DAG structure
+— re-verify all four pipelines' Execution components against real Cebule
+credentials before relying on them (see "Compile and run" above for exactly
+what has and hasn't been run).
 
 Other things to know before a real run:
 

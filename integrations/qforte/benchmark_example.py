@@ -162,7 +162,7 @@ def main() -> None:
     # ---- Store summary ----------------------------------------------------
     all_records = records_opt + records_pool + records_alg
     print(f"\n{len(all_records)} records → {store._path}")
-    ca_count = sum(1 for r in all_records if r.vqa and r.vqa.chemical_accuracy)
+    ca_count = sum(1 for r in all_records if r.vqa_result and r.vqa_result.chemical_accuracy)
     print(f"Chemically accurate: {ca_count} / {len(all_records)}")
 
     # ---- Convergence data for plotting ------------------------------------

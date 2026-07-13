@@ -32,7 +32,7 @@ from typing import Protocol, runtime_checkable
 from ..schemas.backend import BackendSpec
 from ..schemas.circuit import CircuitSpec
 from ..schemas.execution import ExecutionOptions
-from ..schemas.record import VQAConfig
+from ..schemas.record import VQAConfig, VQAResult
 from ..schemas.result import QuantumResult, TranspileLayout
 
 
@@ -98,8 +98,10 @@ class AlgorithmAdapter(Protocol):
     with serialized holding either a JSON molecule dict or a file path.
     The algorithm to run is specified in options.algorithm_spec.
 
-    Returns both a QuantumResult (for the result store) and a VQAConfig
-    (chemistry metadata), since algorithm libraries produce both.
+    Returns a QuantumResult (for the result store), a VQAConfig (the
+    experiment inputs) and a VQAResult (the computed outputs — final
+    energies, convergence history), since algorithm libraries produce all
+    three.
     """
 
     @property
@@ -113,10 +115,12 @@ class AlgorithmAdapter(Protocol):
         self,
         circuit: CircuitSpec,
         options: ExecutionOptions,
-    ) -> tuple[QuantumResult, VQAConfig]:
-        """Run the algorithm and return (result, vqa_metadata).
+    ) -> tuple[QuantumResult, VQAConfig, VQAResult]:
+        """Run the algorithm and return (result, vqa_config, vqa_result).
 
         The algorithm is determined by options.algorithm_spec.name.
+        vqa_config carries the experiment inputs; vqa_result the computed
+        outputs (final_eigenvalue, convergence history, ...).
         """
         ...
 

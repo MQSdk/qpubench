@@ -1,3 +1,9 @@
+#+OPTIONS: H:2 toc:nil num:nil
+#+BEAMER_THEME: metropolis
+#+BEAMER_HEADER: \metroset{block=fill}
+#+BEAMER_HEADER: \setbeamertemplate{navigation symbols}{}
+#+LATEX_HEADER: \usepackage{booktabs}
+
 #+title: QPUBench
 
 #+author: contact@mqs.dk
@@ -27,13 +33,13 @@ record*
 \footnotesize
 | Layer     | Answers                      | Lives in                                                  |
 |-----------+------------------------------+-----------------------------------------------------------|
-| *Schema*  | /What/ are you benchmarking? | =schemas/= --- 36 Pydantic v2 modules (= "Schema v2.7.0") |
+| *Schema*  | /What/ are you benchmarking? | =schemas/= --- 38 Pydantic v2 modules (= "Schema v3.0.0") |
 | *Adapter* | /How/ does it run?           | =backends/= + =integrations/= (next slide)                |
 | *Store*   | /How/ is it persisted?       | =store.py= --- =NDJSONStore=, =ParquetStore=, =S3Store=   |
 
 \normalsize
-\begin{block}{Core invariant}
-\texttt{qpubench} itself never imports from any quantum library. Only adapters do.
+\begin{block}{Core invariants}
+\texttt{qpubench} itself never imports from any quantum library — only adapters do. And since schema v3.0.0 the core schema modules import \emph{zero vendor schema modules}: vendor data flows through vendor-neutral dict extension points (next section).
 \end{block}
 ** Architecture
 :PROPERTIES:
@@ -74,13 +80,15 @@ Swapping one for the other needs zero code changes elsewhere.
 :CUSTOM_ID: key-design-principles
 :END:
 \footnotesize
-| Principle                 | Implementation                                                                                       |
-|---------------------------+------------------------------------------------------------------------------------------------------|
-| *Schema-first*            | Pydantic v2 models are the stable contract --- every record round-trips through =.model_dump_json()= |
-| *No SDK lock-in*          | Core never imports any quantum library                                                               |
-| *Three adapter protocols* | =BackendAdapter= · =AlgorithmAdapter= · =ErrorMitigationAdapter=                                     |
-| *Append-only stores*      | =NDJSONStore=/=ParquetStore= for reproducible sweeps; =S3Store= for concurrent writers               |
-| *Language-agnostic*       | Every record is plain JSON --- any language can parse it, whichever store wrote it                   |
+| Principle                 | Implementation                                                                                                                            |
+|---------------------------+-------------------------------------------------------------------------------------------------------------------------------------------|
+| *Schema-first*            | Pydantic v2 models are the stable contract --- every record round-trips through =.model_dump_json()=                                      |
+| *No SDK lock-in*          | Core never imports any quantum library                                                                                                    |
+| *Three adapter protocols* | =BackendAdapter= · =AlgorithmAdapter= · =ErrorMitigationAdapter=                                                                          |
+| *Append-only stores*      | =NDJSONStore=/=ParquetStore= for reproducible sweeps; =S3Store= for concurrent writers                                                    |
+| *Language-agnostic*       | Every record is plain JSON --- any language can parse it, whichever store wrote it                                                        |
+| *Inputs vs. outputs*      | =VQAConfig= = what you chose to run; =VQAResult= = what the run produced --- computed values are never user-supplied                      |
+| *Vendor-neutral core*     | Vendor payloads live in keyed dicts (=vendor_results=, =mitigation_options=, =vendor_data=) --- adding a vendor never touches a core file |
 
 \normalsize
 ** NDJSON vs. JSON, Precisely
@@ -133,7 +141,7 @@ exist so you know a module is there when you need it, not to be read
 top-to-bottom. The take-home message fits in one line: \normalsize
 
 \begin{block}{Take-home message}
-Every schema module is a set of typed Pydantic models for one vendor/technique's inputs and outputs. 9 "core" modules are framework-owned (no vendor); the rest are one module per integration, named so the filename alone tells you who maintains it.
+Every schema module is a set of typed Pydantic models for one vendor/technique's inputs and outputs. 11 "core" modules are framework-owned (no vendor); the rest are one module per integration, named so the filename alone tells you who maintains it.
 \end{block}
 \vspace{0.3em}
 \footnotesize
@@ -162,12 +170,12 @@ the framework's own foundational types, not vendor-specific.
 :PROPERTIES:
 :CUSTOM_ID: core-schema-modules-23
 :END:
-| Module      | Key types                                                   |
-|-------------+-------------------------------------------------------------|
-| =execution= | =ExecutionOptions=, =AlgorithmSpec=, =ZNEConfig=            |
-| =advantage= | =QuantumAdvantageRecord= --- multi-org registry, unprefixed |
-| =result=    | =QuantumResult=, =ExpectationResult=, =ShotResult=          |
-| =record=    | =BenchmarkRecord=, =VQAConfig=                              |
+| Module      | Key types                                                                    |
+|-------------+------------------------------------------------------------------------------|
+| =execution= | =ExecutionOptions=, =AlgorithmSpec=, =ZNEConfig=                             |
+| =advantage= | =QuantumAdvantageRecord= --- multi-org registry, unprefixed                  |
+| =result=    | =QuantumResult= (+ =vendor_results= dict), =ExpectationResult=, =ShotResult= |
+| =record=    | =BenchmarkRecord=, =VQAConfig= (inputs), =VQAResult= (computed outputs)      |
 
 ** Core Schema Modules (3/3)
 :PROPERTIES:
@@ -268,6 +276,34 @@ ansatz = CircuitSpec(num_qubits=2, parameters=["theta"], ...)
 bound  = ansatz.bind({"theta": 1.2566})
 #+end_src
 
+** Schema v3.0.0 --- Inputs vs Outputs, Vendor-Neutral Core
+:PROPERTIES:
+:CUSTOM_ID: schema-v3.0.0-inputs-vs-outputs-vendor-neutral-core
+:END:
+\scriptsize
+Two breaking changes define v3.0.0. *First*: VQA metadata is split ---
+configs never carry computed values (passing one raises a
+=ValidationError=):
+
+#+begin_src python
+vqa = VQAConfig(problem_type="chemistry", molecule="H2", basis="sto-3g")  # inputs
+record = runner.run(bound_ansatz, "aer", shots=4096, vqa=vqa)
+record.vqa_result.final_eigenvalue    # derived from expectation values by the runner
+record.vqa_result.chemical_accuracy   # True (< 1.6 mHa) once a reference is present
+#+end_src
+
+*Second*: core schemas import zero vendor modules --- vendor payloads
+travel as keyed dicts (pass a Pydantic model, it's auto-dumped;
+rehydrate with the vendor schema):
+
+| Extension point                                         | Replaces                      | Example key                             |
+|---------------------------------------------------------+-------------------------------+-----------------------------------------|
+| =QuantumResult.vendor_results=                          | 24 vendor-typed result fields | ="qforte_result"=, ="slowquant_record"= |
+| =CircuitSpec.measurement_pattern= / =.photonic_circuit= | typed MBQC/photonic fields    | =MBQCPattern.model_validate(...)=       |
+| =ExecutionOptions.mitigation_options=                   | QESEM-typed fields            | =qesem_mitigation_options(...)=         |
+| =VQAConfig.vendor_data=                                 | ad-hoc vendor fields          | ={"cebule": {...}}=                     |
+
+\normalsize
 ** Real Hamiltonian Sources
 :PROPERTIES:
 :CUSTOM_ID: real-hamiltonian-sources
@@ -358,7 +394,7 @@ one shape with real code. \normalsize
 └───────────────┘
 #+end_example
 
-Aer · Qrack · IBM IQM · MBQC-FPGA
+Aer · PennyLane · IBM · IQM · Braket · MBQC
 
 *=AlgorithmAdapter=* /Problem spec in/
 
@@ -369,13 +405,14 @@ Aer · Qrack · IBM IQM · MBQC-FPGA
 └──────┬──────┘
        │ run_algorithm()
        ▼
-┌────────────┐
-│  (Result,  │
-│ VQAConfig) │
-└────────────┘
+┌─────────────┐
+│  (Result,   │
+│ VQAConfig,  │
+│ VQAResult)  │
+└─────────────┘
 #+end_example
 
-QForte · OpenFermion
+QForte · SlowQuant · generic ADAPT-VQE
 
 *=ErrorMitigationAdapter=* /Wraps a BackendAdapter/
 
@@ -471,9 +508,12 @@ def run_algorithm(self, circuit, options):
     alg.run(pool_type=cfg.pool_type,
             optimizer=cfg.optimizer)
     result = QuantumResult(
-        qforte_result=QForteRunResult(...),
+        vendor_results={"qforte_result":
+            QForteRunResult(...)},
         expectation_values=[...])
-    return result, VQAConfig(...)
+    return (result, VQAConfig(...),
+        VQAResult(final_eigenvalue=
+            alg.get_gs_energy(), ...))
 #+end_src
 
 \normalsize
@@ -678,7 +718,7 @@ records = runner.sweep(
     options_list=[ExecutionOptions(shots=1024), ExecutionOptions(shots=8192)],
     run_id="vqe-sweep-001",
 )
-runner.add_hook(lambda rec: log_energy(rec.vqa.final_eigenvalue))   # post-run hook
+runner.add_hook(lambda rec: log_energy(rec.vqa_result.final_eigenvalue))   # post-run hook
 #+end_src
 
 \normalsize
@@ -906,9 +946,9 @@ real PySCF/OpenFermion =jw_map= call. Credentials injected via
 =kfp-kubernetes='s =use_secret_as_env=, never as plain pipeline
 parameters. \normalsize
 
-** Kubeflow --- Sweep Design & Open TODOs
+** Kubeflow --- Sweep Design
 :PROPERTIES:
-:CUSTOM_ID: kubeflow-sweep-design-open-todos
+:CUSTOM_ID: kubeflow-sweep-design
 :END:
 \footnotesize
 *Rule*: =Mapper= change → new pipeline (different components). Every
@@ -920,8 +960,8 @@ pipeline run --- never one DAG per CSV row:
 | =TN_Layers_Network/Circuit=, =Rotation_Type=, =Measurement_Method= | nested =dsl.ParallelFor= --- one dashboard graph, fanned out                                                    |
 | =Shots=, =Qiskit_Opt_Level=                                        | =BenchmarkRunner.sweep()= /inside/ the Execution component --- same "stays one job" treatment as =n_iterations= |
 
-\begin{block}{Open TODO — two conversion utilities, not fabricated}
-qpubench has no Pauli-term $\leftrightarrow$ dense-matrix conversion. 3 of 6 branch combinations raise \texttt{NotImplementedError} pointing at the TODO checklist instead of inventing the math: \texttt{SparsePauliObservable.to\_dense\_matrix()}/\texttt{.from\_dense\_matrix()}.
+\begin{block}{Conversion utilities — closed TODO}
+\texttt{SparsePauliObservable.to\_dense\_matrix()} / \texttt{.from\_dense\_matrix()} now ship in core (verified against Qiskit's \texttt{SparsePauliOp}, size-guarded via \texttt{max\_qubits}) — all 6 (hamiltonian\_kind, measurement\_method) branch combinations run; only the live Cebule \texttt{create\_task} calls still await real credentials.
 \end{block}
 \normalsize
 ** Cross-Framework Compatibility
@@ -957,14 +997,15 @@ without Python eval
 :CUSTOM_ID: guides-demos-tutorials-supported
 :END:
 \footnotesize
-=examples/= --- 25+ runnable examples built only on qpubench's own
+=examples/= --- 30+ runnable examples built only on qpubench's own
 schemas and adapters:
 
 | Category  | Count | Notes                                              |
 |-----------+-------+----------------------------------------------------|
-| Guides    | 22    | Each maps to a real qpubench mechanism             |
+| Guides    | 20    | Each maps to a real qpubench mechanism             |
 | Demos     | 6     | End-to-end scripts combining several mechanisms    |
 | Tutorials | 5     | Real molecules, via the open =ADAPT-VQE= algorithm |
+| Top-level | 3     | Gate-based, MBQC, and QForte VQE quick starts      |
 
 Full breakdown --- what's fully supported vs. partial, and why --- in
 =examples/README.md=. \normalsize
@@ -985,7 +1026,7 @@ calculator = GenericAdaptVQEEngine(                           # Adapter layer
     hamiltonian=hamiltonian, num_qubits=4, num_electrons=2,
     energy_backend=ToyStatevectorAdapter(), config=config,
 )
-result, vqa = calculator.run()
+result, vqa, vqa_result = calculator.run()
 
 # Store layer (elsewhere, same as every example): NDJSONStore(...).save(...)
 #+end_src
@@ -1046,13 +1087,32 @@ print(f"<ZZ> = {record.result.expectation_values[0].value:.4f}")
 #+end_src
 
 \normalsize
+** Engineering Quality Gates
+:PROPERTIES:
+:CUSTOM_ID: engineering-quality-gates
+:END:
+\footnotesize
+Every push to =main= and every PR runs the full gate set in CI
+(=.github/workflows/ci.yml=, Python 3.11 + 3.12):
+
+| Gate                         | State                                                                                                        |
+|------------------------------+--------------------------------------------------------------------------------------------------------------|
+| =pytest tests/=              | 340+ tests, no quantum SDK required                                                                          |
+| =ruff check=                 | 0 errors (deliberate lazy imports allowlisted per-file)                                                      |
+| =mypy --strict src/qpubench= | 0 errors (untyped optional SDKs silenced per-module)                                                         |
+| Doc/code consistency         | =tests/test_docs_consistency.py= fails CI if the schema version or module count drifts between code and docs |
+
+\begin{block}{Tracking document}
+\texttt{CODE\_QUALITY\_REVIEW.md} — living record of resolved findings, open ToDos, and conventions (single-source schema version, vendor extension points, no computed values in configs).
+\end{block}
+\normalsize
 ** Roadmap & Links
 :PROPERTIES:
 :CUSTOM_ID: roadmap-links
 :END:
 *Repository*: =github.com/mqsdk/qpubench=
 
-*Schema v2.7.0* --- 38 modules · 7 computing models × 5 qubit modalities
+*Schema v3.0.0* --- 38 modules · 7 computing models × 5 qubit modalities
 · zero quantum SDK deps in core
 
 \vspace{0.5em}

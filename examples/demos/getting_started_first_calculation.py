@@ -40,10 +40,11 @@ def main() -> None:
         problem_type="chemistry",
         molecule="toy-4q",
         num_electrons=NUM_ELECTRONS,
-        ground_truth=exact_ground_state_energy(hamiltonian),
     )
+    reference_energy = exact_ground_state_energy(hamiltonian)
+    print(f"  problem: {problem.molecule} ({problem.problem_type})")
     print(f"  {NUM_QUBITS} qubits, {NUM_ELECTRONS} electrons")
-    print(f"  target (exact) energy = {problem.ground_truth:.6f}")
+    print(f"  target (exact) energy = {reference_energy:.6f}")
 
     print("\nStep 2 — choose a calculator (ADAPT-VQE)")
     print("-" * 40)
@@ -59,16 +60,18 @@ def main() -> None:
 
     print("\nStep 3 — run it")
     print("-" * 40)
-    result, vqa = calculator.run()
-    problem.final_eigenvalue = vqa.final_eigenvalue
+    result, vqa, vqa_result = calculator.run()
     for it in result.adapt_history or []:
         print(f"  iter {it.iteration}: E = {it.energy:.6f}")
 
     print("\nStep 4 — check the answer")
     print("-" * 40)
-    print(f"  ADAPT-VQE energy = {problem.final_eigenvalue:.6f}")
-    print(f"  exact energy     = {problem.ground_truth:.6f}")
-    print(f"  chemical accuracy achieved: {problem.chemical_accuracy}")
+    # Computed values live in VQAResult, never in the config: the run
+    # produced final_eigenvalue, and the exact reference is computed too.
+    vqa_result.ground_truth = reference_energy
+    print(f"  ADAPT-VQE energy = {vqa_result.final_eigenvalue:.6f}")
+    print(f"  exact energy     = {vqa_result.ground_truth:.6f}")
+    print(f"  chemical accuracy achieved: {vqa_result.chemical_accuracy}")
 
     print("\nFor a real molecule instead of this illustrative Hamiltonian, "
           "see examples/qforte_vqe_benchmark.py (needs `pip install qforte`).")

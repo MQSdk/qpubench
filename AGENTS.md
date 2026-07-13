@@ -42,7 +42,7 @@ tests/             ← Schema-only unit tests
 ```
 
 `BackendAdapter` — caller provides a `CircuitSpec`, adapter executes it, returns `QuantumResult`.
-`AlgorithmAdapter` — adapter generates its own circuit from a problem spec, returns `(QuantumResult, VQAConfig)`. Detected by the runner via `isinstance()`.
+`AlgorithmAdapter` — adapter generates its own circuit from a problem spec, returns `(QuantumResult, VQAConfig, VQAResult)` — inputs in `VQAConfig`, computed outputs in `VQAResult`. Detected by the runner via `isinstance()`.
 
 ## Critical constraints — never violate these
 

@@ -262,16 +262,12 @@ def qasm_gen_component(
 
     if num_qubits is None:
         num_qubits = len(mapper_data.get("hf_state", []))
-    tn_qc_opt.to_sparse_pauli_observable(num_qubits=num_qubits)  # validated, not otherwise used here
+    observable = tn_qc_opt.to_sparse_pauli_observable(num_qubits=num_qubits)
 
-    # TODO: convert the sparse Pauli-term observable above into the dense
-    # Hermitian matrix QASMGenInput.operator expects. qpubench has no
-    # Pauli-term -> dense-matrix utility (schemas/observable.py only
-    # implements the reverse direction via from_cebule_operators) — wire in
-    # your own conversion or a future qpubench helper here. This is the
-    # one genuinely open gap in the whole `tn_qc_opt`/`tn_qc_opt+mol_map`
-    # DAG — see integrations/kubeflow/README.md "Known placeholders".
-    dense_operator: list[list[float]] = []  # placeholder — see TODO above
+    # Sparse Pauli terms -> the dense Hermitian matrix QASMGenInput.operator
+    # expects. Exponential by construction (the operator matrix is
+    # 2**n x 2**n), guarded inside to_dense_matrix() via max_qubits.
+    dense_operator: list[list[float]] = observable.to_dense_matrix()
 
     session = mqsdk.Cebule(os.environ[email_env], os.environ[password_env])
     inp = QASMGenInput(operator=dense_operator, include_state_circuit=include_state_circuit)
@@ -389,21 +385,18 @@ def execute_static_hamiltonian_component(
       - "sparse": jw_map_component's SparsePauliObservable — usable
         directly as CircuitSpec.observables for the Estimator path.
 
-    measurement_method picks the execution path, and only one of the two
-    (hamiltonian_kind, measurement_method) combinations is real per
-    Mapper category; the other is symmetric with the existing
-    qasm_gen_component gap (qpubench ships no dense<->sparse Pauli-term
-    conversion utility in either direction — see
-    integrations/kubeflow/README.md "Known placeholders"):
-      - dense  + qasm_gen_grouped -> real (this component calls QASM_GEN
-        directly with the dense operator, no conversion needed).
-      - sparse + pauli            -> real (Estimator path, no conversion
-        needed).
-      - dense  + pauli            -> NotImplementedError (needs a
-        dense->sparse Pauli decomposition qpubench doesn't ship).
-      - sparse + qasm_gen_grouped -> NotImplementedError (needs the same
-        sparse->dense conversion qasm_gen_component's TN_QC_OPT path
-        already flags).
+    measurement_method picks the execution path; all four
+    (hamiltonian_kind, measurement_method) combinations run:
+      - dense  + qasm_gen_grouped -> QASM_GEN called directly with the
+        dense operator, no conversion needed.
+      - sparse + pauli            -> Estimator path, no conversion needed.
+      - dense  + pauli            -> SparsePauliObservable.from_dense_matrix()
+        (Pauli decomposition, coeff_P = Tr(P@H)/2**n) feeds the Estimator.
+      - sparse + qasm_gen_grouped -> SparsePauliObservable.to_dense_matrix()
+        (Pauli tensor expansion) feeds QASM_GEN's dense operator.
+    Both conversions are exponential by nature — matched to this
+    benchmark's small mol_map/JW qubit counts and size-guarded inside the
+    schema methods via max_qubits.
 
     shots_values x optimization_levels is resolved here via
     BenchmarkRunner.sweep(), same as execute_circuits_component.
@@ -422,13 +415,12 @@ def execute_static_hamiltonian_component(
     hf_prep_qasm += "".join(f"x q[{i}];\n" for i, bit in enumerate(hf_state) if bit)
 
     if measurement_method == "pauli":
-        if hamiltonian_kind != "sparse":
-            raise NotImplementedError(
-                "dense (mol_map) Hamiltonian + pauli measurement needs a "
-                "dense->sparse Pauli decomposition qpubench doesn't ship yet "
-                "— see integrations/kubeflow/README.md 'Known placeholders'."
+        if hamiltonian_kind == "sparse":
+            observable = SparsePauliObservable.model_validate(mapper_data["observable"])
+        else:  # "dense" — mol_map's mapped_hamiltonian, Pauli-decomposed
+            observable = SparsePauliObservable.from_dense_matrix(
+                mapper_data["mapped_hamiltonian"], num_qubits
             )
-        observable = SparsePauliObservable.model_validate(mapper_data["observable"])
         circuits = [
             CircuitSpec(
                 num_qubits=num_qubits,
@@ -438,12 +430,12 @@ def execute_static_hamiltonian_component(
             )
         ]
     else:  # "qasm_gen_grouped"
-        if hamiltonian_kind != "dense":
-            raise NotImplementedError(
-                "sparse (JW) Hamiltonian + qasm_gen_grouped measurement needs "
-                "a sparse->dense conversion qpubench doesn't ship yet — see "
-                "integrations/kubeflow/README.md 'Known placeholders'."
-            )
+        if hamiltonian_kind == "dense":
+            dense_operator = mapper_data["mapped_hamiltonian"]
+        else:  # "sparse" — JW's Pauli terms, tensor-expanded
+            dense_operator = SparsePauliObservable.model_validate(
+                mapper_data["observable"]
+            ).to_dense_matrix()
         import os
 
         import mqsdk
@@ -460,7 +452,7 @@ def execute_static_hamiltonian_component(
 
         session = mqsdk.Cebule(os.environ[email_env], os.environ[password_env])
         inp = QASMGenInput(
-            operator=mapper_data["mapped_hamiltonian"],
+            operator=dense_operator,
             state_vector=state_vector,
             include_state_circuit=False,
         )

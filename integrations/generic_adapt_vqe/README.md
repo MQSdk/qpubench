@@ -62,5 +62,5 @@ engine = GenericAdaptVQEEngine(
     energy_backend=StubGateAdapter(seed=0),   # or a real backend
     config=AdaptVQEConfig(pool_type="SD", optimizer="BFGS"),
 )
-result, vqa = engine.run()
+result, vqa, vqa_result = engine.run()
 ```

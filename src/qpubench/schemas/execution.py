@@ -5,7 +5,6 @@ from typing import Any
 import pydantic
 
 from .primitives import AlgorithmFamily, ErrorMitigationStrategy
-from .qedma_qesem import QESEMCircuitOptions, QESEMJobOptions
 
 
 class ZNEConfig(pydantic.BaseModel):
@@ -116,6 +115,21 @@ class ExecutionOptions(pydantic.BaseModel):
     -----------
     cluster_depth         number of measurement rounds (D)
     adaptive_corrections  whether byproduct corrections are applied
+
+    Vendor mitigation options
+    -------------------------
+    mitigation_options    vendor-neutral dict for strategy-specific options,
+                          keyed by vendor/strategy.  Pydantic models passed
+                          as values are dumped automatically.  Example
+                          (QESEM — see qedma_qesem.qesem_mitigation_options):
+
+                              options = ExecutionOptions(
+                                  error_mitigation=ErrorMitigationStrategy.QESEM,
+                                  mitigation_options=qesem_mitigation_options(
+                                      circuit_options=QESEMCircuitOptions(...),
+                                      job_options=QESEMJobOptions(...),
+                                  ),
+                              )
     """
     shots:                int | None              = None
     optimization_level:   int                     = 1
@@ -133,9 +147,19 @@ class ExecutionOptions(pydantic.BaseModel):
     adapt_vqe_config:     AdaptVQEConfig | None   = None
     cluster_depth:        int | None              = None
     adaptive_corrections: bool                    = True
-    # QESEM (Qedma) fields
-    qesem_circuit_options: QESEMCircuitOptions | None = None
-    qesem_job_options:     QESEMJobOptions | None     = None
+    mitigation_options:   dict[str, Any]          = {}
+
+    @pydantic.field_validator("mitigation_options", mode="before")
+    @classmethod
+    def _dump_vendor_models(cls, v: Any) -> Any:
+        # Accept vendor Pydantic models as values; store dict dumps so the
+        # core schema stays vendor-neutral and JSON-serialisable.
+        if isinstance(v, dict):
+            return {
+                k: val.model_dump() if isinstance(val, pydantic.BaseModel) else val
+                for k, val in v.items()
+            }
+        return v
 
     @pydantic.model_validator(mode="after")
     def _zne_default_config(self) -> ExecutionOptions:

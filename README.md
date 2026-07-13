@@ -2,7 +2,7 @@
 
 [![Python ≥ 3.11](https://img.shields.io/badge/python-≥3.11-blue)](https://python.org)
 [![License: LGPL v3](https://img.shields.io/badge/License-LGPL_v3-green)](LICENSE)
-[![Schema v2.7.0](https://img.shields.io/badge/schema-v2.7.0-orange)](docs/schemas.md)
+[![Schema v3.0.0](https://img.shields.io/badge/schema-v3.0.0-orange)](docs/schemas.md)
 
 Modality-agnostic quantum benchmark framework with a typed [Pydantic v2](https://docs.pydantic.dev/) schema layer.
 
@@ -64,7 +64,7 @@ classDiagram
         <<Protocol — algorithm-driven>>
         +spec() BackendSpec
         +validate_problem(circuit) list[str]
-        +run_algorithm(circuit, options) tuple[QuantumResult, VQAConfig]
+        +run_algorithm(circuit, options) tuple[QuantumResult, VQAConfig, VQAResult]
     }
     class BenchmarkRecord {
         +schema_version str
@@ -73,6 +73,7 @@ classDiagram
         +options ExecutionOptions
         +result QuantumResult
         +vqa VQAConfig
+        +vqa_result VQAResult
     }
     class ResultStore {
         <<Protocol>>
@@ -168,16 +169,15 @@ ansatz = CircuitSpec(num_qubits=2, parameters=["theta"], serialized="OPENQASM 2.
 bound  = ansatz.bind({"theta": 1.2566})
 
 record = runner.run(bound, "stub", shots=4096,
-    vqa=VQAConfig(problem_type="chemistry", molecule="H2", basis="sto-3g",
-                  final_eigenvalue=-1.137, ground_truth=-1.1373))
-print(f"Chemical accuracy: {record.vqa.chemical_accuracy}")
+    vqa=VQAConfig(problem_type="chemistry", molecule="H2", basis="sto-3g"))
 ```
 
-A `VQAConfig` attaches variational-algorithm metadata to the record; it configures nothing at execution time. Its fields answer three questions about the run:
+A `VQAConfig` describes the experiment *inputs* — what you chose to run; it configures nothing at execution time and never carries computed values:
 
 - **`problem_type`** (the only required field) labels the problem domain — `"chemistry"`, `"optimization"`, or `"ml"` — so a store holding thousands of mixed records can be filtered and aggregated by domain later. It does not change how the circuit executes.
-- **`final_eigenvalue`** is the energy your optimization converged to; **`ground_truth`** is the reference value you are comparing against (e.g. the FCI energy). Both are optional — but when both are present, the record derives `vqa.energy_error = |final_eigenvalue − ground_truth|` and `vqa.chemical_accuracy` (error < 1.6 mHa) for you. Leave them out and the record still saves; the derived metrics are simply `None`.
-- `molecule`, `basis`, and the other optional fields (`optimizer`, `ansatz`, convergence history, …) make the stored record self-describing, so results remain interpretable without the code that produced them.
+- `molecule`, `basis`, and the other optional fields (`optimizer`, `ansatz`, mapper, active space, …) make the stored record self-describing, so results remain interpretable without the code that produced them.
+
+Computed *outputs* live in `record.vqa_result` (a `VQAResult`) and are produced, never user-supplied: algorithm adapters (ADAPT-VQE etc.) return the converged energy, convergence history, and computed references directly, and for estimator-path circuit runs (observables attached) the runner derives `final_eigenvalue` from the result's expectation values automatically. When a computed reference (`ground_truth` or `fci_energy`) is present, `vqa_result.energy_error` and `vqa_result.chemical_accuracy` (error < 1.6 mHa) are derived for you.
 
 ### Algorithm library (ADAPT-VQE — switch implementations freely)
 
@@ -244,7 +244,7 @@ The schema layer has zero quantum SDK dependencies. Seven core modules define th
 ```
 qpubench/
 ├── src/qpubench/
-│   ├── schemas/           ← Pydantic schema layer (38 modules, schema v2.7.0)
+│   ├── schemas/           ← Pydantic schema layer (38 modules, schema v3.0.0)
 │   │   ├── primitives, circuit, observable, backend, execution, result, record, reaction, advantage
 │   │   ├── johnrscott_mbqc_fpga      ← MBQC-FPGA 16-bit program word
 │   │   ├── mqsdk_cebule              ← Cebule SDK task I/O (solvation, MD, geometry, GNN, VQE)

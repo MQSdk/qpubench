@@ -241,7 +241,7 @@ pipeline = KQDPipelineSpec(
 
 result = QuantumResult(
     computing_model=ComputingModel.GATE_BASED,
-    kqd_pipeline=pipeline,
+    vendor_results={"kqd_pipeline": pipeline},
 )
 ```
 

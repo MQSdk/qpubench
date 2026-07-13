@@ -4,34 +4,7 @@ from typing import Any
 
 import pydantic
 
-from .dtu_photonic import (
-    HOMResult,
-    IndistinguishabilityPurificationResult,
-    PhotonicAnalogSimResult,
-    PhotonicSimulationResult,
-    PhotonicSensitivityAnalysis,
-    PhotonicVQEResult,
-)
-from .dtu_gbs import (
-    GBSCliqueFindingResult,
-    GBSSamplingResult,
-    VibronicSpectrumResult,
-    TDMGBSResult,
-)
 from .primitives import CircuitFormat, ComputingModel, FidelityMetric, JobStatus, QubitModality
-from .microsoft_qdk import QPEResult, QChemPipelineSpec
-from .mqsdk_qse import KQDPipelineSpec
-from .qedma_qesem import QESEMJobRecord
-from .molssi_qcschema import QCSchemaRecord
-from .quera_bloqade import AHSTaskResult
-from .erikkjellgren_slowquant import SlowQuantRecord
-from .qctrl_fire_opal import FireOpalResult
-from .haiqu_rivet import HaiquTranspilationResult
-from .ibm_runtime_v2 import IBMRuntimeRecord
-from .unitaryfund_mitiq import MitiqResult
-from .parityqc_parityqc import ParityQCResult
-from .qmatter_qmatter import QMatterCompressionResult
-from .evangelistalab_qforte import QForteRunResult
 
 
 class TranspileLayout(pydantic.BaseModel):
@@ -195,40 +168,40 @@ class QuantumResult(pydantic.BaseModel):
     wall_seconds:          float | None                  = None   # actual wall time
     wall_budget_seconds:   float | None                  = None   # allowed budget (GSOpt)
     metadata:              dict[str, Any]                = {}
-    # Photonic result fields (qubit_modality=PHOTONIC / computing_model=FUSION_BASED)
-    photonic_simulation:        PhotonicSimulationResult | None                 = None
-    photonic_vqe:               PhotonicVQEResult | None                        = None
-    photonic_sensitivity:       PhotonicSensitivityAnalysis | None              = None
-    hom_result:                 HOMResult | None                                = None
-    indist_purification:        IndistinguishabilityPurificationResult | None   = None
-    photonic_analog_sim:        PhotonicAnalogSimResult | None                  = None
-    # QPE result fields (Microsoft QDK chemistry pipeline; technique on top of GATE_BASED)
-    qpe_result:                 QPEResult | None                                = None
-    qchem_pipeline:             QChemPipelineSpec | None                        = None
-    # GBS result fields (computing_model=GBS)
-    gbs_sampling:               GBSSamplingResult | None                        = None
-    gbs_clique_finding:         GBSCliqueFindingResult | None                   = None
-    vibronic_spectrum:          VibronicSpectrumResult | None                   = None
-    tdm_gbs:                    TDMGBSResult | None                             = None
-    # KQD result fields (MQS QSE; technique on top of GATE_BASED)
-    kqd_pipeline:               KQDPipelineSpec | None                          = None
-    # QESEM (Qedma) error suppression/mitigation result fields
-    qesem_result:               QESEMJobRecord | None                           = None
-    # QCSchema / QCElemental / PennyLane quantum chemistry reference record
-    qcschema_record:            QCSchemaRecord | None                           = None
-    # Neutral-atom (Rydberg / AHS) result fields (computing_model=ADIABATIC, qubit_modality=NEUTRAL_ATOM)
-    ahs_result:                 AHSTaskResult | None                            = None
-    # SlowQuant UCC / VQE calculation record
-    slowquant_record:           SlowQuantRecord | None                          = None
-    # QForte (evangelistalab/qforte) algorithm-run result
-    qforte_result:              QForteRunResult | None                          = None
-    # Error mitigation provider result fields
-    fire_opal_result:           FireOpalResult | None                           = None
-    mitiq_result:               MitiqResult | None                              = None
-    haiqu_result:               HaiquTranspilationResult | None                 = None
-    parity_qc_result:           ParityQCResult | None                           = None
-    qmatter_result:             QMatterCompressionResult | None                 = None
-    ibm_runtime_record:         IBMRuntimeRecord | None                         = None
+    # Vendor-specific result records, keyed by a stable name — keeps the core
+    # schema free of vendor imports.  Pydantic models passed as values are
+    # dumped to dicts automatically; rehydrate with the vendor schema:
+    #
+    #     result = QuantumResult(...,
+    #         vendor_results={"qforte_result": qforte_run_result})
+    #     rr = QForteRunResult.model_validate(
+    #         result.vendor_results["qforte_result"])
+    #
+    # Established keys (matching the vendor schema they carry):
+    #   photonic_simulation / photonic_vqe / photonic_sensitivity / hom_result
+    #     / indist_purification / photonic_analog_sim   (dtu_photonic)
+    #   qpe_result / qchem_pipeline                     (microsoft_qdk)
+    #   gbs_sampling / gbs_clique_finding / vibronic_spectrum / tdm_gbs (dtu_gbs)
+    #   kqd_pipeline                                    (mqsdk_qse)
+    #   qesem_result                                    (qedma_qesem)
+    #   qcschema_record                                 (molssi_qcschema)
+    #   ahs_result                                      (quera_bloqade)
+    #   slowquant_record                                (erikkjellgren_slowquant)
+    #   qforte_result                                   (evangelistalab_qforte)
+    #   fire_opal_result / mitiq_result / haiqu_result / parity_qc_result
+    #     / qmatter_result                              (error-mitigation vendors)
+    #   ibm_runtime_record                              (ibm_runtime_v2)
+    vendor_results:        dict[str, Any]                = {}
+
+    @pydantic.field_validator("vendor_results", mode="before")
+    @classmethod
+    def _dump_vendor_models(cls, v: Any) -> Any:
+        if isinstance(v, dict):
+            return {
+                k: val.model_dump() if isinstance(val, pydantic.BaseModel) else val
+                for k, val in v.items()
+            }
+        return v
 
     @property
     def openqasm3_transpiled(self) -> str | None:

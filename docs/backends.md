@@ -21,7 +21,7 @@ Examples: Qiskit Aer, PennyLane Lightning, IBM Quantum Runtime, IQM, AWS Braket,
 
 ```
 validate_problem(circuit: CircuitSpec) → list[str]
-run_algorithm(circuit: CircuitSpec, options: ExecutionOptions) → tuple[QuantumResult, VQAConfig]
+run_algorithm(circuit: CircuitSpec, options: ExecutionOptions) → tuple[QuantumResult, VQAConfig, VQAResult]
 spec: BackendSpec
 ```
 
@@ -180,7 +180,7 @@ Copy `integrations/template/algorithm_adapter_template.py`:
 ```python
 from qpubench.schemas.circuit import CircuitSpec
 from qpubench.schemas.execution import ExecutionOptions
-from qpubench.schemas.record import VQAConfig
+from qpubench.schemas.record import VQAConfig, VQAResult
 from qpubench.schemas.result import QuantumResult
 
 class MyAlgorithmAdapter:
@@ -195,9 +195,9 @@ class MyAlgorithmAdapter:
 
     def run_algorithm(
         self, circuit: CircuitSpec, options: ExecutionOptions,
-    ) -> tuple[QuantumResult, VQAConfig]:
+    ) -> tuple[QuantumResult, VQAConfig, VQAResult]:
         alg = options.algorithm_spec
-        # Parse problem, run algorithm, return (result, vqa_metadata)
+        # Parse problem, run algorithm, return (result, inputs, computed outputs)
         ...
 ```
 

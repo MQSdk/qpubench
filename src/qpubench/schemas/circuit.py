@@ -4,9 +4,7 @@ from typing import Any
 
 import pydantic
 
-from .johnrscott_mbqc_fpga import MBQCPattern
 from .observable import SparsePauliObservable
-from .dtu_photonic import PhotonicCircuitSpec
 from .primitives import CircuitFormat, ComputingModel, QubitModality
 
 
@@ -41,6 +39,19 @@ class CircuitSpec(pydantic.BaseModel):
     MBQC
     ----
     Populate measurement_pattern. serialized is optional (JSON archive copy).
+
+    Vendor-neutral extension fields
+    -------------------------------
+    measurement_pattern and photonic_circuit are stored as plain dicts so the
+    core stays free of vendor schema imports.  Pass any Pydantic model (it is
+    dumped automatically) and rehydrate with the vendor schema of your choice:
+
+        from qpubench.schemas.johnrscott_mbqc_fpga import MBQCPattern
+        spec = CircuitSpec(..., measurement_pattern=pattern)      # model or dict
+        pattern = MBQCPattern.model_validate(spec.measurement_pattern)
+
+        from qpubench.schemas.dtu_photonic import PhotonicCircuitSpec
+        photonic = PhotonicCircuitSpec.model_validate(spec.photonic_circuit)
     """
     computing_model:     ComputingModel          = ComputingModel.GATE_BASED
     qubit_modality:      QubitModality | None    = None
@@ -53,8 +64,15 @@ class CircuitSpec(pydantic.BaseModel):
     parameters:          list[str]               = []
     parameter_bindings:  list[ParameterBinding]  = []
     gate_counts:         dict[str, int]          = {}
-    measurement_pattern: MBQCPattern | None      = None
-    photonic_circuit:    PhotonicCircuitSpec | None = None  # qubit_modality=PHOTONIC / FUSION_BASED
+    measurement_pattern: dict[str, Any] | None   = None  # e.g. johnrscott_mbqc_fpga.MBQCPattern dump
+    photonic_circuit:    dict[str, Any] | None   = None  # e.g. dtu_photonic.PhotonicCircuitSpec dump
+
+    @pydantic.field_validator("measurement_pattern", "photonic_circuit", mode="before")
+    @classmethod
+    def _dump_vendor_models(cls, v: Any) -> Any:
+        # Accept any vendor Pydantic model directly; store its dict dump so
+        # the core schema stays vendor-neutral and JSON-serialisable.
+        return v.model_dump() if isinstance(v, pydantic.BaseModel) else v
 
     @pydantic.model_validator(mode="after")
     def _check_consistency(self) -> CircuitSpec:

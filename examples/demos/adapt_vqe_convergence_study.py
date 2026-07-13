@@ -76,10 +76,10 @@ def main() -> None:
     print(f"Exact energy: {exact:.6f}\n")
     print(f"{'gradient_threshold':>20s}  {'energy':>10s}  {'error':>10s}  {'macro_iters':>12s}")
     for threshold, record in zip(thresholds, records):
-        vqa = record.vqa
+        vqa_result = record.vqa_result
         n_iters = len(record.result.adapt_history or [])
-        print(f"{threshold:>20g}  {vqa.final_eigenvalue:>10.6f}  "
-              f"{abs(vqa.final_eigenvalue - exact):>10.2e}  {n_iters:>12d}")
+        print(f"{threshold:>20g}  {vqa_result.final_eigenvalue:>10.6f}  "
+              f"{abs(vqa_result.final_eigenvalue - exact):>10.2e}  {n_iters:>12d}")
 
 
 if __name__ == "__main__":

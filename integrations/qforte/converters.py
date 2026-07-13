@@ -21,7 +21,7 @@ from qpubench.schemas.evangelistalab_qforte import (
 from qpubench.schemas.execution import AlgorithmSpec
 from qpubench.schemas.observable import SparsePauliObservable
 from qpubench.schemas.primitives import CircuitFormat, ComplexNumber
-from qpubench.schemas.record import VQAConfig
+from qpubench.schemas.record import VQAConfig, VQAResult
 from qpubench.schemas.result import AdaptIteration, ExpectationResult, QuantumResult
 from qpubench.schemas.primitives import ComputingModel, JobStatus
 
@@ -194,29 +194,38 @@ def extract_quantum_result(alg: Any, alg_spec: AlgorithmSpec) -> QuantumResult:
         adapt_history=adapt_history,
         transpiled_circuit=qforte_result.max_circuit_depth_repr,
         status=JobStatus.SUCCEEDED,
-        qforte_result=qforte_result,
+        vendor_results={"qforte_result": qforte_result},
     )
 
 
 def extract_vqa_config(
-    alg: Any,
-    mol: Any,
     alg_spec: AlgorithmSpec,
     qforte_config: QForteAlgorithmConfig,
 ) -> VQAConfig:
-    """Build a VQAConfig from a completed QForte algorithm + molecule."""
+    """Build a VQAConfig (experiment inputs) from the QForte run configuration."""
+    return VQAConfig(
+        problem_type="chemistry",
+        algorithm=alg_spec.name,
+        pool_type=qforte_config.base.pool_type,
+        optimizer=qforte_config.base.optimizer,
+    )
+
+
+def extract_vqa_result(
+    alg: Any,
+    mol: Any,
+    alg_spec: AlgorithmSpec,
+) -> VQAResult:
+    """Build a VQAResult (computed outputs) from a completed QForte algorithm."""
     qforte_result = extract_qforte_run_result(alg)
     hf_energy  = qforte_result.hf_energy if qforte_result.hf_energy is not None else float(
         getattr(mol, "hf_energy", 0.0)
     )
     fci_energy = float(getattr(mol, "fci_energy", 0.0))
     adapts_reached = alg_spec.name.upper() == "ADAPTVQE" and not qforte_result.converged
-    return VQAConfig(
-        problem_type="chemistry",
+    return VQAResult(
         hf_energy=hf_energy,
-        algorithm=alg_spec.name,
-        pool_type=qforte_config.base.pool_type,
-        optimizer=qforte_config.base.optimizer,
+        fci_energy=fci_energy if fci_energy != 0.0 else None,
         num_parameters=qforte_result.n_classical_params,
         n_cnot=qforte_result.n_cnot,
         n_pauli_trm_measures=qforte_result.n_pauli_trm_measures,

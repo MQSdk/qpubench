@@ -147,8 +147,8 @@ def main() -> None:
             config=AdaptVQEConfig(max_macro_iterations=15, gradient_threshold=1e-5,
                                    max_micro_iterations=200),
         )
-        _, vqa = engine.run()
-        return vqa.final_eigenvalue, exact_ground_state_energy(hamiltonian)
+        _, _vqa, vqa_result = engine.run()
+        return vqa_result.final_eigenvalue, exact_ground_state_energy(hamiltonian)
 
     bound_energy, bound_exact = solve(BOUND_CN_DISTANCE)
     unbound_energy, unbound_exact = solve(UNBOUND_CN_DISTANCE)

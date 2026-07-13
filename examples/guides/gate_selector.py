@@ -73,10 +73,10 @@ def main() -> None:
             config=config,
             gate_selector=selector,
         )
-        result, vqa = engine.run()
+        result, vqa, vqa_result = engine.run()
         energy = result.expectation_values[0].value
         print(f"{name:24s} energy={energy:.8f} Ha  "
-              f"n_operators={vqa.num_parameters}  n_cnot={vqa.n_cnot}  "
+              f"n_operators={vqa_result.num_parameters}  n_cnot={vqa_result.n_cnot}  "
               f"converged={result.metadata['converged']}")
 
 

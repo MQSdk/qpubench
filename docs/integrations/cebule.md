@@ -219,14 +219,13 @@ print(f"Correlation energy: {result.correlation_energy:.4f} Ha")
 print(f"VQE error vs FCI:   {result.vqe_error:.4f} Ha")
 ```
 
-Record `fci_energy` in `VQAConfig`:
+Record `fci_energy` in `VQAResult` (computed outputs):
 
 ```python
-from qpubench.schemas import VQAConfig
+from qpubench.schemas import VQAConfig, VQAResult
 
-vqa = VQAConfig(
-    problem_type="chemistry",
-    molecule="BH",
+vqa = VQAConfig(problem_type="chemistry", molecule="BH")
+vqa_result = VQAResult(
     hf_energy=-24.6,
     fci_energy=-24.7757,      # from COVOResult
     final_eigenvalue=-24.75,

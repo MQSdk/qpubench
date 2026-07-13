@@ -187,7 +187,7 @@ Lives in
 \midrule\noalign{}
 \endhead
 \textbf{Schema} & \emph{What} are you benchmarking? & \texttt{schemas/}
---- 36 Pydantic v2 modules (= ``Schema v2.7.0'') \\
+--- 38 Pydantic v2 modules (= ``Schema v3.0.0'') \\
 \textbf{Adapter} & \emph{How} does it run? & \texttt{backends/} +
 \texttt{integrations/} (next slide) \\
 \textbf{Store} & \emph{How} is it persisted? & \texttt{store.py} ---
@@ -197,8 +197,8 @@ Lives in
 
 \normalsize
 
-\begin{block}{Core invariant}
-\texttt{qpubench} itself never imports from any quantum library. Only adapters do.
+\begin{block}{Core invariants}
+\texttt{qpubench} itself never imports from any quantum library — only adapters do. And since schema v3.0.0 the core schema modules import \emph{zero vendor schema modules}: vendor data flows through vendor-neutral dict extension points (next section).
 \end{block}
 \end{frame}
 
@@ -279,6 +279,12 @@ every record round-trips through \texttt{.model\_dump\_json()} \\
 for reproducible sweeps; \texttt{S3Store} for concurrent writers \\
 \textbf{Language-agnostic} & Every record is plain JSON --- any language
 can parse it, whichever store wrote it \\
+\textbf{Inputs vs.~outputs} & \texttt{VQAConfig} = what you chose to
+run; \texttt{VQAResult} = what the run produced --- computed values are
+never user-supplied \\
+\textbf{Vendor-neutral core} & Vendor payloads live in keyed dicts
+(\texttt{vendor\_results}, \texttt{mitigation\_options},
+\texttt{vendor\_data}) --- adding a vendor never touches a core file \\
 \bottomrule\noalign{}
 \end{longtable}
 
@@ -349,7 +355,7 @@ they exist so you know a module is there when you need it, not to be
 read top-to-bottom. The take-home message fits in one line: \normalsize
 
 \begin{block}{Take-home message}
-Every schema module is a set of typed Pydantic models for one vendor/technique's inputs and outputs. 9 "core" modules are framework-owned (no vendor); the rest are one module per integration, named so the filename alone tells you who maintains it.
+Every schema module is a set of typed Pydantic models for one vendor/technique's inputs and outputs. 11 "core" modules are framework-owned (no vendor); the rest are one module per integration, named so the filename alone tells you who maintains it.
 \end{block}
 
 \vspace{0.3em}
@@ -407,9 +413,10 @@ Key types
 \texttt{ZNEConfig} \\
 \texttt{advantage} & \texttt{QuantumAdvantageRecord} --- multi-org
 registry, unprefixed \\
-\texttt{result} & \texttt{QuantumResult}, \texttt{ExpectationResult},
-\texttt{ShotResult} \\
-\texttt{record} & \texttt{BenchmarkRecord}, \texttt{VQAConfig} \\
+\texttt{result} & \texttt{QuantumResult} (+ \texttt{vendor\_results}
+dict), \texttt{ExpectationResult}, \texttt{ShotResult} \\
+\texttt{record} & \texttt{BenchmarkRecord}, \texttt{VQAConfig} (inputs),
+\texttt{VQAResult} (computed outputs) \\
 \bottomrule\noalign{}
 \end{longtable}
 \end{frame}
@@ -593,6 +600,57 @@ separate paradigms. \normalsize
 \end{Shaded}
 \end{frame}
 
+\begin{frame}[fragile]{Schema v3.0.0 --- Inputs vs Outputs,
+Vendor-Neutral Core}
+\phantomsection\label{schema-v3.0.0-inputs-vs-outputs-vendor-neutral-core}
+\scriptsize
+
+Two breaking changes define v3.0.0. \textbf{First}: VQA metadata is
+split --- configs never carry computed values (passing one raises a
+\texttt{ValidationError}):
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{vqa }\OperatorTok{=}\NormalTok{ VQAConfig(problem\_type}\OperatorTok{=}\StringTok{"chemistry"}\NormalTok{, molecule}\OperatorTok{=}\StringTok{"H2"}\NormalTok{, basis}\OperatorTok{=}\StringTok{"sto{-}3g"}\NormalTok{)  }\CommentTok{\# inputs}
+\NormalTok{record }\OperatorTok{=}\NormalTok{ runner.run(bound\_ansatz, }\StringTok{"aer"}\NormalTok{, shots}\OperatorTok{=}\DecValTok{4096}\NormalTok{, vqa}\OperatorTok{=}\NormalTok{vqa)}
+\NormalTok{record.vqa\_result.final\_eigenvalue    }\CommentTok{\# derived from expectation values by the runner}
+\NormalTok{record.vqa\_result.chemical\_accuracy   }\CommentTok{\# True (\textless{} 1.6 mHa) once a reference is present}
+\end{Highlighting}
+\end{Shaded}
+
+\textbf{Second}: core schemas import zero vendor modules --- vendor
+payloads travel as keyed dicts (pass a Pydantic model, it's auto-dumped;
+rehydrate with the vendor schema):
+
+\begin{longtable}[]{@{}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 4\tabcolsep) * \real{0.3333}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 4\tabcolsep) * \real{0.3333}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 4\tabcolsep) * \real{0.3333}}@{}}
+\toprule\noalign{}
+\begin{minipage}[b]{\linewidth}\raggedright
+Extension point
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+Replaces
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+Example key
+\end{minipage} \\
+\midrule\noalign{}
+\endhead
+\texttt{QuantumResult.vendor\_results} & 24 vendor-typed result fields &
+\texttt{"qforte\_result"}, \texttt{"slowquant\_record"} \\
+\texttt{CircuitSpec.measurement\_pattern} / \texttt{.photonic\_circuit}
+& typed MBQC/photonic fields &
+\texttt{MBQCPattern.model\_validate(...)} \\
+\texttt{ExecutionOptions.mitigation\_options} & QESEM-typed fields &
+\texttt{qesem\_mitigation\_options(...)} \\
+\texttt{VQAConfig.vendor\_data} & ad-hoc vendor fields &
+\texttt{\{"cebule":\ \{...\}\}} \\
+\bottomrule\noalign{}
+\end{longtable}
+
+\normalsize
+\end{frame}
+
 \begin{frame}[fragile]{Real Hamiltonian Sources}
 \phantomsection\label{real-hamiltonian-sources}
 \scriptsize
@@ -741,7 +799,7 @@ vendor satisfying one shape with real code. \normalsize
 └───────────────┘
 \end{verbatim}
 
-Aer · Qrack · IBM IQM · MBQC-FPGA
+Aer · PennyLane · IBM · IQM · Braket · MBQC
 \end{column}
 
 \begin{column}{0.33\textwidth}
@@ -754,13 +812,14 @@ Aer · Qrack · IBM IQM · MBQC-FPGA
 └──────┬──────┘
        │ run_algorithm()
        ▼
-┌────────────┐
-│  (Result,  │
-│ VQAConfig) │
-└────────────┘
+┌─────────────┐
+│  (Result,   │
+│ VQAConfig,  │
+│ VQAResult)  │
+└─────────────┘
 \end{verbatim}
 
-QForte · OpenFermion
+QForte · SlowQuant · generic ADAPT-VQE
 \end{column}
 
 \begin{column}{0.33\textwidth}
@@ -884,9 +943,12 @@ at module level.
 \NormalTok{    alg.run(pool\_type}\OperatorTok{=}\NormalTok{cfg.pool\_type,}
 \NormalTok{            optimizer}\OperatorTok{=}\NormalTok{cfg.optimizer)}
 \NormalTok{    result }\OperatorTok{=}\NormalTok{ QuantumResult(}
-\NormalTok{        qforte\_result}\OperatorTok{=}\NormalTok{QForteRunResult(...),}
+\NormalTok{        vendor\_results}\OperatorTok{=}\NormalTok{\{}\StringTok{"qforte\_result"}\NormalTok{:}
+\NormalTok{            QForteRunResult(...)\},}
 \NormalTok{        expectation\_values}\OperatorTok{=}\NormalTok{[...])}
-    \ControlFlowTok{return}\NormalTok{ result, VQAConfig(...)}
+    \ControlFlowTok{return}\NormalTok{ (result, VQAConfig(...),}
+\NormalTok{        VQAResult(final\_eigenvalue}\OperatorTok{=}
+\NormalTok{            alg.get\_gs\_energy(), ...))}
 \end{Highlighting}
 \end{Shaded}
 \end{column}
@@ -1170,7 +1232,7 @@ verifiable. \normalsize
 \NormalTok{    options\_list}\OperatorTok{=}\NormalTok{[ExecutionOptions(shots}\OperatorTok{=}\DecValTok{1024}\NormalTok{), ExecutionOptions(shots}\OperatorTok{=}\DecValTok{8192}\NormalTok{)],}
 \NormalTok{    run\_id}\OperatorTok{=}\StringTok{"vqe{-}sweep{-}001"}\NormalTok{,}
 \NormalTok{)}
-\NormalTok{runner.add\_hook(}\KeywordTok{lambda}\NormalTok{ rec: log\_energy(rec.vqa.final\_eigenvalue))   }\CommentTok{\# post{-}run hook}
+\NormalTok{runner.add\_hook(}\KeywordTok{lambda}\NormalTok{ rec: log\_energy(rec.vqa\_result.final\_eigenvalue))   }\CommentTok{\# post{-}run hook}
 \end{Highlighting}
 \end{Shaded}
 
@@ -1497,8 +1559,8 @@ injected via \texttt{kfp-kubernetes}'s \texttt{use\_secret\_as\_env},
 never as plain pipeline parameters. \normalsize
 \end{frame}
 
-\begin{frame}[fragile]{Kubeflow --- Sweep Design \& Open TODOs}
-\phantomsection\label{kubeflow-sweep-design-open-todos}
+\begin{frame}[fragile]{Kubeflow --- Sweep Design}
+\phantomsection\label{kubeflow-sweep-design}
 \footnotesize
 
 \textbf{Rule}: \texttt{Mapper} change → new pipeline (different
@@ -1525,8 +1587,8 @@ dashboard graph, fanned out \\
 \bottomrule\noalign{}
 \end{longtable}
 
-\begin{block}{Open TODO — two conversion utilities, not fabricated}
-qpubench has no Pauli-term $\leftrightarrow$ dense-matrix conversion. 3 of 6 branch combinations raise \texttt{NotImplementedError} pointing at the TODO checklist instead of inventing the math: \texttt{SparsePauliObservable.to\_dense\_matrix()}/\texttt{.from\_dense\_matrix()}.
+\begin{block}{Conversion utilities — closed TODO}
+\texttt{SparsePauliObservable.to\_dense\_matrix()} / \texttt{.from\_dense\_matrix()} now ship in core (verified against Qiskit's \texttt{SparsePauliOp}, size-guarded via \texttt{max\_qubits}) — all 6 (hamiltonian\_kind, measurement\_method) branch combinations run; only the live Cebule \texttt{create\_task} calls still await real credentials.
 \end{block}
 \normalsize
 \end{frame}
@@ -1564,7 +1626,7 @@ convention bugs:
 \phantomsection\label{guides-demos-tutorials-supported}
 \footnotesize
 
-\texttt{examples/} --- 25+ runnable examples built only on qpubench's
+\texttt{examples/} --- 30+ runnable examples built only on qpubench's
 own schemas and adapters:
 
 \begin{longtable}[]{@{}lll@{}}
@@ -1572,10 +1634,11 @@ own schemas and adapters:
 Category & Count & Notes \\
 \midrule\noalign{}
 \endhead
-Guides & 22 & Each maps to a real qpubench mechanism \\
+Guides & 20 & Each maps to a real qpubench mechanism \\
 Demos & 6 & End-to-end scripts combining several mechanisms \\
 Tutorials & 5 & Real molecules, via the open \texttt{ADAPT-VQE}
 algorithm \\
+Top-level & 3 & Gate-based, MBQC, and QForte VQE quick starts \\
 \bottomrule\noalign{}
 \end{longtable}
 
@@ -1599,7 +1662,7 @@ runnable file:
 \NormalTok{    hamiltonian}\OperatorTok{=}\NormalTok{hamiltonian, num\_qubits}\OperatorTok{=}\DecValTok{4}\NormalTok{, num\_electrons}\OperatorTok{=}\DecValTok{2}\NormalTok{,}
 \NormalTok{    energy\_backend}\OperatorTok{=}\NormalTok{ToyStatevectorAdapter(), config}\OperatorTok{=}\NormalTok{config,}
 \NormalTok{)}
-\NormalTok{result, vqa }\OperatorTok{=}\NormalTok{ calculator.run()}
+\NormalTok{result, vqa, vqa\_result }\OperatorTok{=}\NormalTok{ calculator.run()}
 
 \CommentTok{\# Store layer (elsewhere, same as every example): NDJSONStore(...).save(...)}
 \end{Highlighting}
@@ -1667,11 +1730,45 @@ PsiEmbed, libDMET, and SlowQuant aren't on PyPI. Their adapters call each packag
 \normalsize
 \end{frame}
 
+\begin{frame}[fragile]{Engineering Quality Gates}
+\phantomsection\label{engineering-quality-gates}
+\footnotesize
+
+Every push to \texttt{main} and every PR runs the full gate set in CI
+(\texttt{.github/workflows/ci.yml}, Python 3.11 + 3.12):
+
+\begin{longtable}[]{@{}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 2\tabcolsep) * \real{0.5000}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 2\tabcolsep) * \real{0.5000}}@{}}
+\toprule\noalign{}
+\begin{minipage}[b]{\linewidth}\raggedright
+Gate
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+State
+\end{minipage} \\
+\midrule\noalign{}
+\endhead
+\texttt{pytest\ tests/} & 340+ tests, no quantum SDK required \\
+\texttt{ruff\ check} & 0 errors (deliberate lazy imports allowlisted
+per-file) \\
+\texttt{mypy\ -\/-strict\ src/qpubench} & 0 errors (untyped optional
+SDKs silenced per-module) \\
+Doc/code consistency & \texttt{tests/test\_docs\_consistency.py} fails
+CI if the schema version or module count drifts between code and docs \\
+\bottomrule\noalign{}
+\end{longtable}
+
+\begin{block}{Tracking document}
+\texttt{CODE\_QUALITY\_REVIEW.md} — living record of resolved findings, open ToDos, and conventions (single-source schema version, vendor extension points, no computed values in configs).
+\end{block}
+\normalsize
+\end{frame}
+
 \begin{frame}[fragile]{Roadmap \& Links}
 \phantomsection\label{roadmap-links}
 \textbf{Repository}: \texttt{github.com/mqsdk/qpubench}
 
-\textbf{Schema v2.7.0} --- 38 modules · 7 computing models × 5 qubit
+\textbf{Schema v3.0.0} --- 38 modules · 7 computing models × 5 qubit
 modalities · zero quantum SDK deps in core
 
 \vspace{0.5em}

@@ -80,8 +80,8 @@ def solve(hamiltonian, num_qubits: int, num_electrons: int) -> float:
         config=AdaptVQEConfig(max_macro_iterations=15, gradient_threshold=1e-5,
                                max_micro_iterations=200),
     )
-    _, vqa = engine.run()
-    return vqa.final_eigenvalue
+    _, _vqa, vqa_result = engine.run()
+    return vqa_result.final_eigenvalue
 
 
 def nh3_capability_check() -> None:

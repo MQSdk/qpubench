@@ -31,13 +31,13 @@ header-includes:
 
 | Layer | Answers | Lives in |
 |---|---|---|
-| **Schema** | *What* are you benchmarking? | `schemas/` — 36 Pydantic v2 modules (= "Schema v2.7.0") |
+| **Schema** | *What* are you benchmarking? | `schemas/` — 38 Pydantic v2 modules (= "Schema v3.0.0") |
 | **Adapter** | *How* does it run? | `backends/` + `integrations/` (next slide) |
 | **Store** | *How* is it persisted? | `store.py` — `NDJSONStore`, `ParquetStore`, `S3Store` |
 \normalsize
 
-\begin{block}{Core invariant}
-\texttt{qpubench} itself never imports from any quantum library. Only adapters do.
+\begin{block}{Core invariants}
+\texttt{qpubench} itself never imports from any quantum library — only adapters do. And since schema v3.0.0 the core schema modules import \emph{zero vendor schema modules}: vendor data flows through vendor-neutral dict extension points (next section).
 \end{block}
 
 ## Architecture
@@ -82,6 +82,8 @@ header-includes:
 | **Three adapter protocols** | `BackendAdapter` · `AlgorithmAdapter` · `ErrorMitigationAdapter` |
 | **Append-only stores** | `NDJSONStore`/`ParquetStore` for reproducible sweeps; `S3Store` for concurrent writers |
 | **Language-agnostic** | Every record is plain JSON — any language can parse it, whichever store wrote it |
+| **Inputs vs. outputs** | `VQAConfig` = what you chose to run; `VQAResult` = what the run produced — computed values are never user-supplied |
+| **Vendor-neutral core** | Vendor payloads live in keyed dicts (`vendor_results`, `mitigation_options`, `vendor_data`) — adding a vendor never touches a core file |
 \normalsize
 
 ## NDJSON vs. JSON, Precisely
@@ -124,7 +126,7 @@ The next 9 slides are a **reference listing**, not a narrative — they exist so
 \normalsize
 
 \begin{block}{Take-home message}
-Every schema module is a set of typed Pydantic models for one vendor/technique's inputs and outputs. 9 "core" modules are framework-owned (no vendor); the rest are one module per integration, named so the filename alone tells you who maintains it.
+Every schema module is a set of typed Pydantic models for one vendor/technique's inputs and outputs. 11 "core" modules are framework-owned (no vendor); the rest are one module per integration, named so the filename alone tells you who maintains it.
 \end{block}
 
 \vspace{0.3em}
@@ -149,8 +151,8 @@ All rows are computing-model/qubit-modality **all / all** — these are the fram
 |--------|-----------|
 | `execution` | `ExecutionOptions`, `AlgorithmSpec`, `ZNEConfig` |
 | `advantage` | `QuantumAdvantageRecord` — multi-org registry, unprefixed |
-| `result` | `QuantumResult`, `ExpectationResult`, `ShotResult` |
-| `record` | `BenchmarkRecord`, `VQAConfig` |
+| `result` | `QuantumResult` (+ `vendor_results` dict), `ExpectationResult`, `ShotResult` |
+| `record` | `BenchmarkRecord`, `VQAConfig` (inputs), `VQAResult` (computed outputs) |
 
 ## Core Schema Modules (3/3)
 
@@ -240,6 +242,28 @@ ansatz = CircuitSpec(num_qubits=2, parameters=["theta"], ...)
 bound  = ansatz.bind({"theta": 1.2566})
 ```
 
+## Schema v3.0.0 — Inputs vs Outputs, Vendor-Neutral Core
+
+\scriptsize
+Two breaking changes define v3.0.0. **First**: VQA metadata is split — configs never carry computed values (passing one raises a `ValidationError`):
+
+```python
+vqa = VQAConfig(problem_type="chemistry", molecule="H2", basis="sto-3g")  # inputs
+record = runner.run(bound_ansatz, "aer", shots=4096, vqa=vqa)
+record.vqa_result.final_eigenvalue    # derived from expectation values by the runner
+record.vqa_result.chemical_accuracy   # True (< 1.6 mHa) once a reference is present
+```
+
+**Second**: core schemas import zero vendor modules — vendor payloads travel as keyed dicts (pass a Pydantic model, it's auto-dumped; rehydrate with the vendor schema):
+
+| Extension point | Replaces | Example key |
+|---|---|---|
+| `QuantumResult.vendor_results` | 24 vendor-typed result fields | `"qforte_result"`, `"slowquant_record"` |
+| `CircuitSpec.measurement_pattern` / `.photonic_circuit` | typed MBQC/photonic fields | `MBQCPattern.model_validate(...)` |
+| `ExecutionOptions.mitigation_options` | QESEM-typed fields | `qesem_mitigation_options(...)` |
+| `VQAConfig.vendor_data` | ad-hoc vendor fields | `{"cebule": {...}}` |
+\normalsize
+
 ## Real Hamiltonian Sources
 
 \scriptsize
@@ -314,8 +338,7 @@ Verified against real `cantera==3.2.0`, all 3 reaction types. Real gotcha found:
 └───────────────┘
 ```
 
-Aer · Qrack · IBM
-IQM · MBQC-FPGA
+Aer · PennyLane · IBM · IQM · Braket · MBQC
 :::
 ::: {.column width="33%"}
 **`AlgorithmAdapter`**
@@ -328,13 +351,14 @@ IQM · MBQC-FPGA
 └──────┬──────┘
        │ run_algorithm()
        ▼
-┌────────────┐
-│  (Result,  │
-│ VQAConfig) │
-└────────────┘
+┌─────────────┐
+│  (Result,   │
+│ VQAConfig,  │
+│ VQAResult)  │
+└─────────────┘
 ```
 
-QForte · OpenFermion
+QForte · SlowQuant · generic ADAPT-VQE
 :::
 ::: {.column width="33%"}
 **`ErrorMitigationAdapter`**
@@ -439,9 +463,12 @@ def run_algorithm(self, circuit, options):
     alg.run(pool_type=cfg.pool_type,
             optimizer=cfg.optimizer)
     result = QuantumResult(
-        qforte_result=QForteRunResult(...),
+        vendor_results={"qforte_result":
+            QForteRunResult(...)},
         expectation_values=[...])
-    return result, VQAConfig(...)
+    return (result, VQAConfig(...),
+        VQAResult(final_eigenvalue=
+            alg.get_gs_energy(), ...))
 ```
 :::
 ::::::
@@ -616,7 +643,7 @@ records = runner.sweep(
     options_list=[ExecutionOptions(shots=1024), ExecutionOptions(shots=8192)],
     run_id="vqe-sweep-001",
 )
-runner.add_hook(lambda rec: log_energy(rec.vqa.final_eigenvalue))   # post-run hook
+runner.add_hook(lambda rec: log_energy(rec.vqa_result.final_eigenvalue))   # post-run hook
 ```
 \normalsize
 
@@ -805,7 +832,7 @@ JW:                 jw_map  ─────────────────�
 Verified by actually compiling all four against `kfp==2.16.1`: surfaced a real gotcha — `from __future__ import annotations` breaks kfp's component introspection (needs live type objects, not PEP 563 strings). Every component body was also run directly (`.python_func`), including a real PySCF/OpenFermion `jw_map` call. Credentials injected via `kfp-kubernetes`'s `use_secret_as_env`, never as plain pipeline parameters.
 \normalsize
 
-## Kubeflow — Sweep Design & Open TODOs
+## Kubeflow — Sweep Design
 
 \footnotesize
 
@@ -816,8 +843,8 @@ Verified by actually compiling all four against `kfp==2.16.1`: surfaced a real g
 | `TN_Layers_Network/Circuit`, `Rotation_Type`, `Measurement_Method` | nested `dsl.ParallelFor` — one dashboard graph, fanned out |
 | `Shots`, `Qiskit_Opt_Level` | `BenchmarkRunner.sweep()` *inside* the Execution component — same "stays one job" treatment as `n_iterations` |
 
-\begin{block}{Open TODO — two conversion utilities, not fabricated}
-qpubench has no Pauli-term $\leftrightarrow$ dense-matrix conversion. 3 of 6 branch combinations raise \texttt{NotImplementedError} pointing at the TODO checklist instead of inventing the math: \texttt{SparsePauliObservable.to\_dense\_matrix()}/\texttt{.from\_dense\_matrix()}.
+\begin{block}{Conversion utilities — closed TODO}
+\texttt{SparsePauliObservable.to\_dense\_matrix()} / \texttt{.from\_dense\_matrix()} now ship in core (verified against Qiskit's \texttt{SparsePauliOp}, size-guarded via \texttt{max\_qubits}) — all 6 (hamiltonian\_kind, measurement\_method) branch combinations run; only the live Cebule \texttt{create\_task} calls still await real credentials.
 \end{block}
 \normalsize
 
@@ -848,13 +875,14 @@ PauliLabel.X.to_qiskit_c_bit_term()   # → 0b0010
 ## Guides, Demos & Tutorials Supported
 
 \footnotesize
-`examples/` — 25+ runnable examples built only on qpubench's own schemas and adapters:
+`examples/` — 30+ runnable examples built only on qpubench's own schemas and adapters:
 
 | Category | Count | Notes |
 |---|---|---|
-| Guides | 22 | Each maps to a real qpubench mechanism |
+| Guides | 20 | Each maps to a real qpubench mechanism |
 | Demos | 6 | End-to-end scripts combining several mechanisms |
 | Tutorials | 5 | Real molecules, via the open `ADAPT-VQE` algorithm |
+| Top-level | 3 | Gate-based, MBQC, and QForte VQE quick starts |
 
 Full breakdown — what's fully supported vs. partial, and why — in `examples/README.md`.
 \normalsize
@@ -872,7 +900,7 @@ calculator = GenericAdaptVQEEngine(                           # Adapter layer
     hamiltonian=hamiltonian, num_qubits=4, num_electrons=2,
     energy_backend=ToyStatevectorAdapter(), config=config,
 )
-result, vqa = calculator.run()
+result, vqa, vqa_result = calculator.run()
 
 # Store layer (elsewhere, same as every example): NDJSONStore(...).save(...)
 ```
@@ -927,11 +955,28 @@ print(f"<ZZ> = {record.result.expectation_values[0].value:.4f}")
 ```
 \normalsize
 
+## Engineering Quality Gates
+
+\footnotesize
+Every push to `main` and every PR runs the full gate set in CI (`.github/workflows/ci.yml`, Python 3.11 + 3.12):
+
+| Gate | State |
+|---|---|
+| `pytest tests/` | 340+ tests, no quantum SDK required |
+| `ruff check` | 0 errors (deliberate lazy imports allowlisted per-file) |
+| `mypy --strict src/qpubench` | 0 errors (untyped optional SDKs silenced per-module) |
+| Doc/code consistency | `tests/test_docs_consistency.py` fails CI if the schema version or module count drifts between code and docs |
+
+\begin{block}{Tracking document}
+\texttt{CODE\_QUALITY\_REVIEW.md} — living record of resolved findings, open ToDos, and conventions (single-source schema version, vendor extension points, no computed values in configs).
+\end{block}
+\normalsize
+
 ## Roadmap & Links
 
 **Repository**: `github.com/mqsdk/qpubench`
 
-**Schema v2.7.0** — 38 modules · 7 computing models × 5 qubit modalities · zero quantum SDK deps in core
+**Schema v3.0.0** — 38 modules · 7 computing models × 5 qubit modalities · zero quantum SDK deps in core
 
 \vspace{0.5em}
 

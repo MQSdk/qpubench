@@ -30,6 +30,7 @@ from .schemas import (
     ShotResult,
     SparsePauliObservable,
     VQAConfig,
+    VQAResult,
     ZNEConfig,
 )
 from .store import NDJSONStore, ParquetStore, S3Store
@@ -75,5 +76,6 @@ __all__ = [
     "StubGateAdapter",
     "StubMBQCAdapter",
     "VQAConfig",
+    "VQAResult",
     "ZNEConfig",
 ]

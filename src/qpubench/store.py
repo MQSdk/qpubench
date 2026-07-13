@@ -349,12 +349,13 @@ def _flatten_record(record: BenchmarkRecord) -> dict[str, Any]:
         "result_status":     record.result.status.value,
         "qpu_time_s":        record.result.qpu_time_s,
         "total_time_s":      record.result.total_time_s,
-        # VQA (optional)
+        # VQA inputs (optional)
         "molecule":          record.vqa.molecule        if record.vqa else None,
         "basis":             record.vqa.basis           if record.vqa else None,
         "ansatz":            record.vqa.ansatz          if record.vqa else None,
-        "final_eigenvalue":  record.vqa.final_eigenvalue if record.vqa else None,
-        "ground_truth":      record.vqa.ground_truth    if record.vqa else None,
+        # VQA computed outputs (optional)
+        "final_eigenvalue":  record.vqa_result.final_eigenvalue if record.vqa_result else None,
+        "ground_truth":      record.vqa_result.ground_truth     if record.vqa_result else None,
         # full record for lossless round-trip
         "_raw_json":         record.model_dump_json(),
     }

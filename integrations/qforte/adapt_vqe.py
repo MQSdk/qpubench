@@ -233,7 +233,7 @@ class AdaptVQERunner:
                         "n_params":      it.n_classical_params,
                     })
             else:
-                for i, e in enumerate(rec.vqa.convergence_values if rec.vqa else []):
+                for i, e in enumerate(rec.vqa_result.convergence_values if rec.vqa_result else []):
                     rows.append({
                         "experiment_id": rec.experiment_id,
                         "run_id":        rec.run_id,
@@ -244,8 +244,8 @@ class AdaptVQERunner:
                         "energy":        e,
                         "grad_norm":     None,
                         "n_operators":   None,
-                        "n_cnot":        rec.vqa.n_cnot if rec.vqa else None,
-                        "n_params":      rec.vqa.num_parameters if rec.vqa else None,
+                        "n_cnot":        rec.vqa_result.n_cnot if rec.vqa_result else None,
+                        "n_params":      rec.vqa_result.num_parameters if rec.vqa_result else None,
                     })
         return rows
 
@@ -263,11 +263,11 @@ class AdaptVQERunner:
                 "pool_type":      (rec.options.adapt_vqe_config.pool_type
                                    if rec.options.adapt_vqe_config else "?"),
                 "final_energy":   ev[0].value if ev else None,
-                "energy_error":   rec.vqa.energy_error if rec.vqa else None,
-                "chem_accuracy":  rec.vqa.chemical_accuracy if rec.vqa else None,
-                "n_cnot":         rec.vqa.n_cnot if rec.vqa else None,
-                "n_params":       rec.vqa.num_parameters if rec.vqa else None,
-                "n_pauli_meas":   rec.vqa.n_pauli_trm_measures if rec.vqa else None,
+                "energy_error":   rec.vqa_result.energy_error if rec.vqa_result else None,
+                "chem_accuracy":  rec.vqa_result.chemical_accuracy if rec.vqa_result else None,
+                "n_cnot":         rec.vqa_result.n_cnot if rec.vqa_result else None,
+                "n_params":       rec.vqa_result.num_parameters if rec.vqa_result else None,
+                "n_pauli_meas":   rec.vqa_result.n_pauli_trm_measures if rec.vqa_result else None,
                 "adapt_iters":    len(rec.result.adapt_history) if rec.result.adapt_history else None,
                 "total_time_s":   rec.result.total_time_s,
                 "status":         rec.result.status.value,

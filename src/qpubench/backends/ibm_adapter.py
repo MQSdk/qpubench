@@ -315,7 +315,7 @@ class IBMAdapter:
                     expectation_values=evs,
                     status=JobStatus.SUCCEEDED,
                     job_id=job.job_id(),
-                    ibm_runtime_record=ibm_record,
+                    vendor_results={"ibm_runtime_record": ibm_record},
                 )
 
             # ---- SamplerV2 path ----
@@ -362,5 +362,5 @@ class IBMAdapter:
                 ),
                 status=JobStatus.SUCCEEDED,
                 job_id=job.job_id(),
-                ibm_runtime_record=ibm_record,
+                vendor_results={"ibm_runtime_record": ibm_record},
             )

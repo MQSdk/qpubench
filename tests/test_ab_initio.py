@@ -131,5 +131,5 @@ class TestBuildQubitHamiltonian:
             energy_backend=ToyStatevectorAdapter(),
             config=AdaptVQEConfig(max_macro_iterations=15, gradient_threshold=1e-5, max_micro_iterations=200),
         )
-        _, vqa = engine.run()
-        assert vqa.final_eigenvalue == pytest.approx(exact, abs=1e-6)
+        _, _vqa, vqa_result = engine.run()
+        assert vqa_result.final_eigenvalue == pytest.approx(exact, abs=1e-6)

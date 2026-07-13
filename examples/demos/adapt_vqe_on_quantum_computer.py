@@ -71,7 +71,7 @@ def main() -> None:
         record = runner.run(problem, "adapt_vqe+toy", options)
 
     print(f"status = {record.result.status}")
-    print(f"final energy = {record.vqa.final_eigenvalue:.6f}")
+    print(f"final energy = {record.vqa_result.final_eigenvalue:.6f}")
     print(f"hook backend = {record.backend.name}")
 
 

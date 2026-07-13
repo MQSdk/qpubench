@@ -179,15 +179,15 @@ result = GARunResult(
 spec = result.best_circuit_spec()
 
 # Link to a BenchmarkRecord
-from qpubench.schemas import BenchmarkRecord, VQAConfig
+from qpubench.schemas import BenchmarkRecord, VQAConfig, VQAResult
 
 vqa = VQAConfig(
     problem_type="chemistry",
     molecule="H2",
     basis="sto-3g",
     ga_run_id=result.run_id,
-    final_eigenvalue=result.best_energy,
 )
+vqa_result = VQAResult(final_eigenvalue=result.best_energy)
 ```
 
 ---
@@ -216,6 +216,8 @@ vqa = VQAConfig(
     optimizer="tournament_selection",
     ga_run_id="run_20260129_230314",
     genome_hash=stable_hash(genome.to_struct()),
+)
+vqa_result = VQAResult(
     best_complexity=0.01 * genome.depth + 0.03 * genome.count_2q(),
     final_eigenvalue=-1.1067,
 )

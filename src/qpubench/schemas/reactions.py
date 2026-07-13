@@ -333,9 +333,9 @@ class ReactionPathResult(pydantic.BaseModel):
 
     @staticmethod
     def _record_energy(record: BenchmarkRecord) -> float | None:
-        """VQAConfig.final_eigenvalue if present, else the first expectation value."""
-        if record.vqa is not None and record.vqa.final_eigenvalue is not None:
-            return record.vqa.final_eigenvalue
+        """VQAResult.final_eigenvalue if present, else the first expectation value."""
+        if record.vqa_result is not None and record.vqa_result.final_eigenvalue is not None:
+            return record.vqa_result.final_eigenvalue
         if record.result.expectation_values:
             return record.result.expectation_values[0].value
         return None

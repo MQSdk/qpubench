@@ -92,7 +92,8 @@ Flat column names produced from a `BenchmarkRecord`:
 | `backend_name`, `backend_provider` | `backend.*` |
 | `shots`, `opt_level`, `error_mitigation` | `options.*` |
 | `result_status`, `qpu_time_s`, `total_time_s` | `result.*` |
-| `molecule`, `basis`, `ansatz`, `final_eigenvalue`, `ground_truth` | `vqa.*` |
+| `molecule`, `basis`, `ansatz` | `vqa.*` (inputs) |
+| `final_eigenvalue`, `ground_truth` | `vqa_result.*` (computed outputs) |
 | `_raw_json` | Full JSON (for `load()` round-trip) |
 
 ---

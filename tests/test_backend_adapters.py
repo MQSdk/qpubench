@@ -244,7 +244,7 @@ class TestIBMAdapter:
         with patch.object(IBMAdapter, "_get_backend", return_value=self._fake_backend()):
             result = adapter.run(_bell_circuit(), ExecutionOptions(shots=1000))
         assert result.status == JobStatus.SUCCEEDED
-        assert result.ibm_runtime_record is not None
+        assert result.vendor_results.get("ibm_runtime_record") is not None
         _assert_bell_counts(result.shots.counts)
 
     def test_estimator(self) -> None:

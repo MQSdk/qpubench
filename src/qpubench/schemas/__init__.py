@@ -471,7 +471,7 @@ from .primitives import (
     PauliLabel,
     QubitModality,
 )
-from .record import BenchmarkRecord, VQAConfig
+from .record import BenchmarkRecord, VQAConfig, VQAResult
 from .reactions import (
     ArrheniusRateConstant,
     KineticsReactionSpec,
@@ -613,6 +613,7 @@ __all__ = [
     # record
     "BenchmarkRecord",
     "VQAConfig",
+    "VQAResult",
     # reactions
     "ArrheniusRateConstant",
     "KineticsReactionSpec",

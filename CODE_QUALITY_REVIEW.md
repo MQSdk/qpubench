@@ -14,7 +14,7 @@ commit `05847d6`.*
 
 | Gate | Status | Enforced by |
 |---|---|---|
-| `pytest tests/` | ✅ 339 passed, 8 skipped (no quantum SDK needed) | CI |
+| `pytest tests/` | ✅ 341 passed, 8 skipped (no quantum SDK needed) | CI |
 | `ruff check` | ✅ 0 errors (was 63) | CI |
 | `mypy --strict src/qpubench` | ✅ 0 errors (was 40) | CI |
 | Doc/code numeric consistency | ✅ guarded by `tests/test_docs_consistency.py` | CI |
@@ -34,36 +34,7 @@ is a good provenance convention.
 
 ## Major issues — breaking refactors (deferred, tracked)
 
-These are known architectural debts. Each would break the public API or
-stored data, so they belong in a dedicated breaking-change release, not a
-cleanup pass.
-
-### 1. Core schemas import vendor schemas
-
-`circuit.py` pulls in `johnrscott_mbqc_fpga` and `dtu_photonic`;
-`execution.py` pulls in `qedma_qesem`; `record.py` pulls in `advantage`.
-The "stable core" therefore transitively loads vendor modules on every
-import, and adding a vendor field means touching core files.
-
-*Why deferred:* the vendor fields (`CircuitSpec.measurement_pattern`,
-`CircuitSpec.photonic_circuit`, `BenchmarkRecord.advantage`, …) are public
-API and appear in persisted records; decoupling requires either a plugin/
-registration mechanism or dropping the fields — both breaking.
-
-### 2. Split VQAConfig's existing vendor fields out
-
-`VQAConfig` accumulated Cebule/Xenakis/Classiq-specific fields
-(`n_layers_network`, `ga_run_id`, `classiq_synthesis_id`, …) even though the
-v2.1.0 changelog says the `AlgorithmSpec` grab-bag was split for exactly this
-reason.
-
-*Mitigated (2026-07-12):* a `vendor_data: dict[str, Any]` extension point was
-added — **new** vendor-only metadata goes there (keyed by vendor, e.g.
-`vendor_data={"cebule": {...}}`) instead of growing the model.
-*Still open:* migrating the **existing** vendor fields into `vendor_data`
-breaks stored records and callers; do it together with refactor 1.
-
-### 3. Alignment-based formatting (optional)
+### 1. Alignment-based formatting (optional)
 
 Column-aligned field declarations (`shots:                int | None
 = None`) read nicely but every field addition re-indents whole blocks and
@@ -87,6 +58,15 @@ don't drift into it.
       updates.
 - [ ] **Extend `test_docs_consistency.py`** as new hand-stated facts appear
       in docs (it currently guards schema version and module count).
+- [x] ~~**Kubeflow dense ↔ sparse conversion utilities**~~ — closed
+      2026-07-12: `SparsePauliObservable.to_dense_matrix()` /
+      `.from_dense_matrix()` implemented in `schemas/observable.py`
+      (verified against Qiskit `SparsePauliOp`, `max_qubits` size guards);
+      all three `NotImplementedError` branches in
+      `integrations/kubeflow/components.py` replaced with real conversions,
+      all four pipelines re-compiled, the new dense+pauli branch executed
+      end-to-end against the stub backend. Still pending there: verifying
+      the live Cebule `create_task` calls with real credentials.
 
 ---
 
@@ -97,8 +77,10 @@ don't drift into it.
   test fails if the README badge or `docs/schemas.md` header drifts.
 - **No exact test/module counts in prose docs** — they drift. Say "full
   schema test suite" and let badges/tests carry the numbers.
-- **New vendor VQA metadata → `VQAConfig.vendor_data`**, never new top-level
-  fields (see refactor 2 above).
+- **New vendor VQA metadata → `VQAConfig.vendor_data`**; new vendor result
+  records → `QuantumResult.vendor_results[<key>]`; new vendor mitigation
+  options → `ExecutionOptions.mitigation_options`. Never new top-level
+  vendor fields in core models, and never vendor imports in core modules.
 - **No `arbitrary_types_allowed`** in schema models (AGENTS.md rule; the one
   violation was removed).
 - **Lazy SDK imports** stay inside methods; the deliberate `E402` cases are
@@ -106,6 +88,51 @@ don't drift into it.
   surface.
 - **`results/` and `temporary/` are gitignored** — never commit benchmark
   outputs or scratch notes.
+
+---
+
+## Resolved breaking refactors (schema v3.0.0, 2026-07-12)
+
+Both deferred refactors from the original review were applied in a dedicated
+breaking pass; `SCHEMA_VERSION` bumped **2.7.0 → 3.0.0**.
+
+### Core schemas no longer import vendor schemas
+
+The schema core (`circuit`, `execution`, `result`, `record`, `backend`,
+`observable`, `primitives`) now imports **zero** vendor modules (verified;
+`record.py` keeps framework-owned `advantage`). Vendor data flows through
+vendor-neutral dicts with an auto-dump validator — pass any Pydantic model,
+it is stored as its dict dump; rehydrate with the vendor schema:
+
+- `CircuitSpec.measurement_pattern` / `.photonic_circuit` → `dict | None`
+  (was `MBQCPattern` / `PhotonicCircuitSpec`); e.g.
+  `MBQCPattern.model_validate(spec.measurement_pattern)`.
+- `ExecutionOptions.mitigation_options` → `dict` replaces the QESEM-typed
+  fields; build entries with `qedma_qesem.qesem_mitigation_options()`.
+- `QuantumResult.vendor_results` → single vendor-keyed dict replaces all 24
+  vendor-typed result fields (`qforte_result`, `slowquant_record`,
+  `qesem_result`, photonic/GBS blocks, …). Established keys documented on
+  the field and in `docs/schemas.md`. Adding a vendor no longer touches core.
+
+### VQAConfig split into inputs (`VQAConfig`) + outputs (`VQAResult`)
+
+Computed values are **produced, never user-supplied** — `final_eigenvalue`,
+`ground_truth`, `hf_energy`, `fci_energy`, convergence history, `nfev`,
+`num_parameters`, `n_cnot`, `n_pauli_trm_measures`, `best_complexity` moved
+to the new `VQAResult` (with `energy_error` / `chemical_accuracy` /
+`reference_energy` properties). `VQAConfig` keeps only what the user chose
+to run and now **forbids** unknown fields, so pre-3.0 callers fail loudly
+instead of silently dropping data.
+
+- `BenchmarkRecord` gained `vqa_result: VQAResult | None`.
+- `AlgorithmAdapter.run_algorithm` returns
+  `(QuantumResult, VQAConfig, VQAResult)`.
+- The circuit-driven runner derives `VQAResult.final_eigenvalue` from
+  `QuantumResult.expectation_values` automatically when a `vqa` config is
+  attached — users never pass computed values.
+- Vendor bridges split accordingly: `to_vqa_config()` (inputs) +
+  `to_vqa_result()` (outputs) on Classiq and GSOpt;
+  `extract_vqa_config`/`extract_vqa_result` in the QForte integration.
 
 ---
 

@@ -27,7 +27,7 @@ from qpubench.schemas.backend import BackendSpec
 from qpubench.schemas.circuit import CircuitSpec
 from qpubench.schemas.execution import ExecutionOptions
 from qpubench.schemas.primitives import CircuitFormat, JobStatus, ComputingModel
-from qpubench.schemas.record import VQAConfig
+from qpubench.schemas.record import VQAConfig, VQAResult
 from qpubench.schemas.result import (
     ExpectationResult,
     QuantumResult,
@@ -81,7 +81,7 @@ class MyAlgorithmAdapter:
         self,
         circuit: CircuitSpec,
         options: ExecutionOptions,
-    ) -> tuple[QuantumResult, VQAConfig]:
+    ) -> tuple[QuantumResult, VQAConfig, VQAResult]:
         """Run the algorithm and return (quantum result, VQA metadata).
 
         Steps:
@@ -89,7 +89,8 @@ class MyAlgorithmAdapter:
           2. Read options.algorithm_spec for algorithm name + hyperparameters.
           3. Run the algorithm (this may take seconds to minutes).
           4. Extract results from the algorithm object.
-          5. Return a QuantumResult and a VQAConfig.
+          5. Return a QuantumResult, a VQAConfig (inputs) and a
+             VQAResult (computed outputs).
         """
         # TODO: step 1 — parse problem spec
         # problem = load_problem(circuit.serialized)
@@ -140,8 +141,10 @@ class MyAlgorithmAdapter:
             # molecule=...,               # TODO: molecule name if applicable
             algorithm=alg_spec.name if alg_spec else None,
             optimizer=options.adapt_vqe_config.optimizer if options.adapt_vqe_config else None,
+        )
+        vqa_result = VQAResult(
             final_eigenvalue=final_energy,
-            ground_truth=None,             # TODO: FCI reference if available
+            ground_truth=None,             # TODO: computed FCI reference if available
         )
 
-        return result, vqa
+        return result, vqa, vqa_result

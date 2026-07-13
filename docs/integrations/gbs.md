@@ -54,7 +54,7 @@ print(sample.num_clicks)      # 3
 backend = BackendSpec.strawberry_fields_gaussian(num_modes=4)
 ```
 
-Store results in `QuantumResult.gbs_sampling`.
+Store results in `QuantumResult.vendor_results["gbs_sampling"]`.
 
 ---
 

@@ -193,7 +193,7 @@ comparison a first-class, serializable object rather than an ad-hoc script.
 Mirrors `VQAConfig.ga_run_id` (Xenakis) with `VQAConfig.classiq_synthesis_id`:
 
 ```python
-from qpubench.schemas import BenchmarkRecord, VQAConfig
+from qpubench.schemas import BenchmarkRecord, VQAConfig, VQAResult
 
 vqa = VQAConfig(
     problem_type="chemistry",
@@ -202,8 +202,8 @@ vqa = VQAConfig(
     mapper="JordanWigner",
     ansatz="ucc",
     classiq_synthesis_id=result.program_id,
-    final_eigenvalue=-1.1373,
 )
+vqa_result = VQAResult(final_eigenvalue=-1.1373)
 ```
 
 ---

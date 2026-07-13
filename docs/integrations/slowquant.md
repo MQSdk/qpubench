@@ -6,7 +6,7 @@ qpubench models the full [SlowQuant](https://github.com/erikkjellgren/SlowQuant)
 |---|---|
 | **Library** | [SlowQuant](https://github.com/erikkjellgren/SlowQuant) ([docs](https://slowquant.readthedocs.io/en/latest/)) |
 | **Computing model** | `ComputingModel.GATE_BASED` |
-| **Result field** | `QuantumResult.slowquant_record` |
+| **Result field** | `QuantumResult.vendor_results["slowquant_record"]` |
 | **Quantum backend** | Qiskit circuit compilation (any gate-based provider) |
 
 SlowQuant specializes in **unitary parameterized wave functions** — UCC, factorized UCC, and truncated UPS — where the same parameter vector describes both the classical statevector and the compiled Qiskit quantum circuit. This makes it directly suitable for hybrid QPU workflows where the optimizer runs classically and only the energy evaluation is sent to hardware.
@@ -68,7 +68,7 @@ print(record.num_qubits)           # 4
 
 result = QuantumResult(
     computing_model=ComputingModel.GATE_BASED,
-    slowquant_record=record,
+    vendor_results={"slowquant_record": record},
 )
 ```
 

@@ -52,7 +52,7 @@ def main() -> None:
     for op in calculator.pool:
         print(f"  {op}")
 
-    result, vqa = calculator.run()
+    result, vqa, vqa_result = calculator.run()
 
     print()
     print("Ansatz growth:")
@@ -61,10 +61,10 @@ def main() -> None:
               f"|grad|={it.grad_norm:.2e}  n_operators={it.n_operators}  n_cnot={it.n_cnot}")
 
     print()
-    print(f"Final energy    = {vqa.final_eigenvalue:.6f}")
+    print(f"Final energy    = {vqa_result.final_eigenvalue:.6f}")
     print(f"Exact energy    = {exact_ground_state_energy(hamiltonian):.6f}")
-    print(f"Parameters used = {vqa.num_parameters}")
-    print(f"CNOTs in ansatz = {vqa.n_cnot}")
+    print(f"Parameters used = {vqa_result.num_parameters}")
+    print(f"CNOTs in ansatz = {vqa_result.n_cnot}")
 
 
 if __name__ == "__main__":

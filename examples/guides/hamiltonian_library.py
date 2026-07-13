@@ -70,10 +70,10 @@ def hamlib_section() -> None:
         energy_backend=ToyStatevectorAdapter(),
         config=AdaptVQEConfig(max_macro_iterations=15, gradient_threshold=1e-5, max_micro_iterations=200),
     )
-    _, vqa = engine.run()
+    _, _vqa, vqa_result = engine.run()
     print(f"  exact (dense diagonalization): {exact:.9f} Ha")
-    print(f"  ADAPT-VQE (real Hamiltonian):  {vqa.final_eigenvalue:.9f} Ha")
-    print(f"  error: {abs(exact - vqa.final_eigenvalue):.2e}\n")
+    print(f"  ADAPT-VQE (real Hamiltonian):  {vqa_result.final_eigenvalue:.9f} Ha")
+    print(f"  error: {abs(exact - vqa_result.final_eigenvalue):.2e}\n")
 
 
 def pennylane_section() -> None:

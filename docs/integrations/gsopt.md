@@ -71,13 +71,14 @@ print(f"Wall time:      {result.wall_seconds:.1f}s / {result.wall_budget_seconds
 
 ```python
 from qpubench.schemas import (
-    BenchmarkRecord, VQAConfig, BackendSpec, CircuitSpec, ExecutionOptions,
+    BenchmarkRecord, VQAConfig, VQAResult, BackendSpec, CircuitSpec, ExecutionOptions,
 )
 from qpubench.schemas.primitives import CircuitFormat
 
 # Convert GSOpt result → qpubench record
 quantum_result = result.to_quantum_result()
-vqa            = VQAConfig(**result.to_vqa_config())
+vqa            = VQAConfig(**result.to_vqa_config())     # inputs
+vqa_result     = VQAResult(**result.to_vqa_result())     # computed outputs
 
 backend = BackendSpec.cudaq(target="nvidia", num_qubits=result.cas.active_orbitals * 2)
 circuit = CircuitSpec(
@@ -93,6 +94,7 @@ record = BenchmarkRecord(
     options=options,
     result=quantum_result,
     vqa=vqa,
+    vqa_result=vqa_result,
     num_qubits=circuit.num_qubits,
     circuit_depth=result.circuit_depth,
     tags=["gsopt", result.task, result.molecule.lower()],
@@ -149,8 +151,8 @@ vqa = VQAConfig(
     molecule="BH",
     active_electrons=cas.active_electrons,
     active_orbitals=cas.active_orbitals,
-    nfev=result.nfev,
 )
+vqa_result = VQAResult(nfev=result.nfev)
 ```
 
 ---

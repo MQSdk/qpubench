@@ -101,7 +101,7 @@ def toy_bond_hamiltonian(r: float) -> SparsePauliObservable:
 # Same dense Jordan-Wigner matrix construction used to independently verify
 # pool.py in tests/test_generic_adapt_vqe.py (`_observable_matrix`). Reused
 # here to compute real "FCI-in-this-truncated-space" ground-state energies
-# for VQAConfig.ground_truth / chemical_accuracy — not textbook numbers —
+# for VQAResult.ground_truth / chemical_accuracy — not textbook numbers —
 # and by toy_statevector_backend.py to score circuits against the same
 # observable during an actual ADAPT-VQE run.
 

@@ -89,13 +89,17 @@ class StubMBQCAdapter:
         circuit: CircuitSpec,
         options: ExecutionOptions,
     ) -> QuantumResult:
-        pattern = circuit.measurement_pattern
-        if pattern is None:
+        if circuit.measurement_pattern is None:
             return QuantumResult(
                 computing_model=ComputingModel.MBQC,
                 status=JobStatus.FAILED,
                 error_message="No measurement_pattern in CircuitSpec",
             )
+        # Core stores the pattern as a vendor-neutral dict; rehydrate the
+        # typed schema here in the adapter layer.
+        from ..schemas.johnrscott_mbqc_fpga import MBQCPattern
+
+        pattern = MBQCPattern.model_validate(circuit.measurement_pattern)
 
         N = pattern.num_logical_qubits
         D = pattern.num_rounds

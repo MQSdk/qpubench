@@ -239,11 +239,11 @@ def test_engine_runs_to_completion():
         config=AdaptVQEConfig(max_macro_iterations=2, max_micro_iterations=10),
     )
     assert len(engine.pool) == 5  # 2x2 singles + 1x1 doubles
-    result, vqa = engine.run()
+    result, vqa, vqa_result = engine.run()
     assert result.status.value == "succeeded"
     assert result.expectation_values
     assert vqa.algorithm == "ADAPTVQE"
-    assert vqa.num_parameters == len(result.adapt_history or [])
+    assert vqa_result.num_parameters == len(result.adapt_history or [])
 
 
 def test_engine_circuit_starts_with_hf_reference():

@@ -51,9 +51,10 @@ fci_result = QCAtomicResult(
 # Attach to a QuantumResult as the reference
 result = QuantumResult(
     computing_model=ComputingModel.GATE_BASED,
-    qcschema_record=QCSchemaRecord(atomic_result=fci_result),
+    vendor_results={"qcschema_record": QCSchemaRecord(atomic_result=fci_result)},
 )
-print(result.qcschema_record.reference_energy)   # -1.1516
+print(QCSchemaRecord.model_validate(
+    result.vendor_results["qcschema_record"]).reference_energy)   # -1.1516
 ```
 
 ---
@@ -276,7 +277,7 @@ lih = PennyLaneMolDataset(
 
 ## QCSchemaRecord — reference energy bridge
 
-`QCSchemaRecord` is the top-level container that attaches to `QuantumResult.qcschema_record`. Its `reference_energy` property returns the best available classical reference regardless of which sub-record is populated.
+`QCSchemaRecord` is the top-level container that attaches to `QuantumResult.vendor_results["qcschema_record"]`. Its `reference_energy` property returns the best available classical reference regardless of which sub-record is populated.
 
 ```python
 from qpubench.schemas.molssi_qcschema import QCSchemaRecord
@@ -296,7 +297,7 @@ print(rec3.reference_energy)   # from pennylane_dataset.fci_energy
 # Attach to QuantumResult
 result = QuantumResult(
     computing_model=ComputingModel.GATE_BASED,
-    qcschema_record=rec1,
+    vendor_results={"qcschema_record": rec1},
 )
 ```
 

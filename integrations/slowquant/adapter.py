@@ -48,7 +48,7 @@ from qpubench.schemas.erikkjellgren_slowquant import (
 )
 from qpubench.schemas.execution import ExecutionOptions
 from qpubench.schemas.primitives import ComputingModel, JobStatus
-from qpubench.schemas.record import VQAConfig
+from qpubench.schemas.record import VQAConfig, VQAResult
 from qpubench.schemas.result import ExpectationResult, QuantumResult
 
 
@@ -122,7 +122,7 @@ class SlowQuantAlgorithmAdapter:
         self,
         circuit: CircuitSpec,
         options: ExecutionOptions,
-    ) -> tuple[QuantumResult, VQAConfig]:
+    ) -> tuple[QuantumResult, VQAConfig, VQAResult]:
         SlowQuant = _require_slowquant()
         from slowquant.unitary_coupled_cluster.ucc_wavefunction import WaveFunctionUCC
 
@@ -199,17 +199,19 @@ class SlowQuantAlgorithmAdapter:
                 ExpectationResult(observable_index=0, value=ucc_energy, std_error=0.0)
             ],
             status=JobStatus.SUCCEEDED,
-            slowquant_record=slowquant_record,
+            vendor_results={"slowquant_record": slowquant_record},
         )
         vqa = VQAConfig(
             problem_type="chemistry",
             algorithm="UCCNVQE",
             molecule=problem.get("molecule_file"),
             basis=problem.get("basis"),
-            hf_energy=scf_result.hf_energy,
             optimizer=optimizer_name,
             active_electrons=active_space.num_active_electrons,
             active_orbitals=active_space.num_active_orbitals,
+        )
+        vqa_result = VQAResult(
+            hf_energy=scf_result.hf_energy,
             final_eigenvalue=ucc_energy,
         )
-        return result, vqa
+        return result, vqa, vqa_result

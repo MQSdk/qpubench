@@ -1,6 +1,6 @@
 # Schema reference
 
-Schema version **2.7.0** — 38 modules, all in `src/qpubench/schemas/`.  
+Schema version **3.0.0** — 38 modules, all in `src/qpubench/schemas/`.  
 Import from the package root: `from qpubench.schemas import CircuitSpec, QuantumResult, …`
 
 Vendor-scoped modules are named `<org_or_maintainer>_<package>.py` — the filename alone tells you who maintains the upstream project and what it's called. Modules with no single vendor (interoperability standards, the framework's own core types) stay unprefixed.
@@ -19,7 +19,7 @@ Computing model (paradigm) and qubit modality are separate, independent axes on 
 | [`backend`](#backend) | Hardware / simulator description | all · all | `BackendSpec` (28 factory constructors) |
 | [`execution`](#execution) | Execution options and algorithm hyperparameters | all · all | `ExecutionOptions`, `AlgorithmSpec`, `AdaptVQEConfig`, `ZNEConfig`, `TranspilerConfig` |
 | [`result`](#result) | Execution results (expectation values, counts, fidelity, ADAPT history) | all · all | `QuantumResult` (15 result-type fields), `ExpectationResult`, `ShotResult`, `TranspileLayout` |
-| [`record`](#record) | Top-level benchmark record and VQA metadata | all · all | `BenchmarkRecord`, `VQAConfig` |
+| [`record`](#record) | Top-level benchmark record and VQA metadata | all · all | `BenchmarkRecord`, `VQAConfig`, `VQAResult` |
 | [`advantage`](#advantage) | Quantum Advantage Tracker metadata (multi-org community registry, unprefixed) | all · all | `QuantumAdvantageRecord`, `AdvantageExperimentType`, `ClassicalComparisonMethod` |
 | [`johnrscott_mbqc_fpga`](#johnrscott_mbqc_fpga) | MBQC-FPGA 16-bit program word, measurement patterns | `MBQC` · — (FPGA control logic) | `MBQCPattern`, `MBQCProgramWord`, `MBQCExecutionResult` — bit-exact 16-bit FPGA word |
 | [`mqsdk_cebule`](#mqsdk_cebule) | Cebule SDK (MQS) task inputs / outputs | `GATE_BASED` (`TN_QC_OPT`/`COVO`) + classical · — | `CosmoResult`, `SigmaResult`, `SolubilityResult`, `AbInitioMDResult`, `GeometryOptResult`, `TNQCOptResult`, `COVOResult` |
@@ -105,8 +105,8 @@ Properties: `.value` → Python `complex`. Class method: `.from_complex(c)`.
 | `parameters` | `list[str]` | `[]` | Named variational parameters |
 | `parameter_bindings` | `list[ParameterBinding]` | `[]` | Bound parameter values |
 | `gate_counts` | `dict[str, int]` | `{}` | Gate-name → count (populated after transpilation) |
-| `measurement_pattern` | `MBQCPattern \| None` | `None` | MBQC measurement pattern |
-| `photonic_circuit` | `PhotonicCircuitSpec \| None` | `None` | Photonic / fusion-based circuit (qubit_modality=PHOTONIC) |
+| `measurement_pattern` | `dict \| None` | `None` | MBQC measurement pattern — vendor-neutral dict; pass e.g. a `johnrscott_mbqc_fpga.MBQCPattern` (auto-dumped), rehydrate with `MBQCPattern.model_validate(...)` |
+| `photonic_circuit` | `dict \| None` | `None` | Photonic / fusion-based circuit — vendor-neutral dict; pass e.g. a `dtu_photonic.PhotonicCircuitSpec` (auto-dumped) |
 
 **Methods:**
 
@@ -144,6 +144,12 @@ Methods: `.to_qrack_arrays()`, `.to_qiskit_c_arrays()`
 Class methods:
 - `.from_legacy_dict(obs, num_qubits)` — parse VQEBench `{"X1,Z3": 0.5}` format
 - `.from_cebule_operators(operators, coefficients, num_qubits)` — parse Cebule `"X0 Y1 Z3"` token format
+- `.from_dense_matrix(matrix, num_qubits=None, *, atol=1e-10, max_qubits=8)` — dense → sparse Pauli decomposition (`coeff_P = Tr(P @ H) / 2**n`, keeps `|coeff| > atol`); verified against Qiskit `SparsePauliOp`
+
+Methods:
+- `.to_dense_matrix(*, real=True, atol=1e-10, max_qubits=10)` — sparse → dense `2**n × 2**n` Pauli tensor expansion; `real=True` (default) returns `list[list[float]]` for e.g. Cebule `QASMGenInput.operator` and raises if entries are complex; `real=False` returns complex entries
+
+Both conversions are exponential by nature and guarded by `max_qubits` — raise it explicitly for larger observables only if you mean it.
 
 ---
 
@@ -290,7 +296,7 @@ shared by every ADAPT-VQE-family adapter (`evangelistalab_qforte`,
 
 | Field | Default | Description |
 |---|---|---|
-| `qesem_circuit_options` | `None` | Per-circuit QESEM options (`QESEMCircuitOptions`) |
+| `mitigation_options` | `{}` | Vendor-neutral dict for strategy-specific options (e.g. QESEM — build with `qedma_qesem.qesem_mitigation_options()`) |
 | `qesem_job_options` | `None` | Job-level QESEM options (`QESEMJobOptions`) |
 
 ### `ExecutionOptions`
@@ -395,22 +401,29 @@ Top-level result container. Populate only the fields relevant to the run.
 | `wall_budget_seconds` | `float \| None` | Allowed budget (GSOpt) |
 | `error_message` | `str \| None` | Error detail on failure |
 | `metadata` | `dict` | Adapter-specific extras |
-| `photonic_simulation` | `PhotonicSimulationResult \| None` | Photonic chip simulation |
-| `photonic_vqe` | `PhotonicVQEResult \| None` | Photonic VQE optimization |
-| `photonic_sensitivity` | `PhotonicSensitivityAnalysis \| None` | Sobol / sensitivity analysis |
-| `hom_result` | `HOMResult \| None` | Hong-Ou-Mandel interference |
-| `indist_purification` | `IndistinguishabilityPurificationResult \| None` | Photon indistinguishability |
-| `photonic_analog_sim` | `PhotonicAnalogSimResult \| None` | Analog Hamiltonian simulation |
-| `qpe_result` | `QPEResult \| None` | QPE / IQPE phase estimation output |
-| `qchem_pipeline` | `QChemPipelineSpec \| None` | Full QDK chemistry pipeline record |
-| `gbs_sampling` | `GBSSamplingResult \| None` | GBS photon-number sampling |
-| `gbs_clique_finding` | `GBSCliqueFindingResult \| None` | Graph-based GBS clique finding |
-| `vibronic_spectrum` | `VibronicSpectrumResult \| None` | Vibronic spectrum (Duschinsky GBS) |
-| `tdm_gbs` | `TDMGBSResult \| None` | Borealis TDM GBS |
-| `kqd_pipeline` | `KQDPipelineSpec \| None` | Krylov Quantum Diagonalization pipeline |
-| `qesem_result` | `QESEMJobRecord \| None` | QESEM job record (noise scaling results, execution details, characterization) |
+| `vendor_results` | `dict[str, Any]` | Vendor result records, keyed by stable name — keeps the core vendor-free |
 
 Property: `.openqasm3_transpiled` — returns `transpiled_circuit` if format is QASM3.
+
+**`vendor_results`** carries vendor-specific result records as plain dicts;
+Pydantic models passed as values are dumped automatically, and readers
+rehydrate with the vendor schema:
+
+```python
+result = QuantumResult(..., vendor_results={"qforte_result": run_result})
+rr = QForteRunResult.model_validate(result.vendor_results["qforte_result"])
+```
+
+Established keys (each carries the vendor schema of the same name):
+`photonic_simulation`, `photonic_vqe`, `photonic_sensitivity`, `hom_result`,
+`indist_purification`, `photonic_analog_sim` (dtu_photonic) · `qpe_result`,
+`qchem_pipeline` (microsoft_qdk) · `gbs_sampling`, `gbs_clique_finding`,
+`vibronic_spectrum`, `tdm_gbs` (dtu_gbs) · `kqd_pipeline` (mqsdk_qse) ·
+`qesem_result` (qedma_qesem) · `qcschema_record` (molssi_qcschema) ·
+`ahs_result` (quera_bloqade) · `slowquant_record` (erikkjellgren_slowquant) ·
+`qforte_result` (evangelistalab_qforte) · `fire_opal_result`, `mitiq_result`,
+`haiqu_result`, `parity_qc_result`, `qmatter_result` (error-mitigation
+vendors) · `ibm_runtime_record` (ibm_runtime_v2)
 
 ---
 
@@ -418,7 +431,9 @@ Property: `.openqasm3_transpiled` — returns `transpiled_circuit` if format is 
 
 ### `VQAConfig`
 
-Chemistry and algorithm metadata for VQE / VQA runs.
+VQE / VQA experiment **inputs** — what the user chose to run. Computed
+outputs live in `VQAResult`; they are produced by the run, never supplied
+by the user.
 
 | Field | Description |
 |---|---|
@@ -429,29 +444,41 @@ Chemistry and algorithm metadata for VQE / VQA runs.
 | `num_alpha` / `num_beta` | Spin-up / spin-down electrons |
 | `active_electrons` | Electrons in active space |
 | `active_orbitals` | Orbitals in active space |
-| `hf_energy` | Hartree-Fock reference energy |
-| `fci_energy` | Full CI energy (COVO output) |
 | `algorithm` | Algorithm name |
 | `pool_type` | Operator pool for UCC variants |
 | `mapper` | Fermion → qubit mapping: `"Parity"` · `"JordanWigner"` · `"BravyiKitaev"` · `"MQS"` |
 | `ansatz` | Ansatz name |
 | `optimizer` | Classical optimizer name |
+| `n_layers_network` | Cebule TN depth |
+| `n_layers_circuit` | Cebule / GSOpt circuit layer count |
+| `ga_run_id` | Links to `GARunResult.run_id` (Xenakis) |
+| `genome_hash` | Stable hash of evolved genome |
+| `classiq_synthesis_id` | Links to `ClassiqSynthesisResult.program_id` |
+| `vendor_data` | Vendor-keyed extension dict for vendor-only metadata |
+
+### `VQAResult`
+
+Computed **outputs** of a VQE / VQA run. Algorithm adapters return one from
+`run_algorithm()`; for estimator-path circuit runs the runner derives
+`final_eigenvalue` from `QuantumResult.expectation_values` automatically.
+
+| Field | Description |
+|---|---|
+| `final_eigenvalue` | Converged variational energy |
+| `ground_truth` | Computed exact reference (FCI / exact diagonalisation) |
+| `hf_energy` | Hartree-Fock reference energy |
+| `fci_energy` | Full CI energy (ground-truth fallback) |
 | `num_parameters` | Variational parameters in final ansatz |
 | `n_cnot` | CNOT count in final circuit |
 | `n_pauli_trm_measures` | Total Pauli measurements |
-| `n_layers_network` | Cebule TN depth |
-| `n_layers_circuit` | Cebule / GSOpt circuit layer count |
 | `nfev` | Total function evaluations |
-| `ga_run_id` | Links to `GARunResult.run_id` (Xenakis) |
-| `genome_hash` | Stable hash of evolved genome |
-| `best_complexity` | Xenakis ad-hoc complexity score |
 | `convergence_values` | Energy per optimizer iteration |
 | `convergence_parameters` | Parameter vector per iteration |
 | `adapt_maxiter_reached` | ADAPT hit `adapt_maxiter` without converging |
-| `final_eigenvalue` | Final VQE energy |
-| `ground_truth` | Reference energy for error computation |
+| `best_complexity` | Xenakis ad-hoc complexity score |
 
-Properties: `.energy_error`, `.chemical_accuracy` (True if error < 1 mHartree)
+Properties: `.reference_energy` (ground_truth, falling back to fci_energy),
+`.energy_error`, `.chemical_accuracy` (True if error < 1.6 mHartree)
 
 ### `BenchmarkRecord`
 
@@ -467,14 +494,15 @@ One complete benchmark execution.
 | `backend` | `BackendSpec` |
 | `options` | `ExecutionOptions` |
 | `result` | `QuantumResult` |
-| `vqa` | `VQAConfig \| None` |
+| `vqa` | `VQAConfig \| None` — experiment inputs |
+| `vqa_result` | `VQAResult \| None` — computed outputs |
 | `num_qubits` | Circuit width |
 | `circuit_depth` | Transpiled depth |
 | `ga_run_id` | Links to a `GARunResult` (Xenakis) |
 | `tags` | `list[str]` |
 | `notes` | Free text |
 
-Class method: `.from_vqe(*, circuit, backend, options, result, vqa, …)`
+Class method: `.from_vqe(*, circuit, backend, options, result, vqa, vqa_result, …)`
 
 ---
 
@@ -519,7 +547,7 @@ Validated: `len(problems) == len(coordinate_values)`; any set index is in range.
 | `spec` | The `ReactionCoordinateSpec` that was run |
 | `records` | One `BenchmarkRecord` per point, same order as `spec.coordinate_values` |
 
-Properties: `.energies` (per point — `vqa.final_eigenvalue`, falling back to
+Properties: `.energies` (per point — `vqa_result.final_eigenvalue`, falling back to
 the first expectation value, Hartree), `.barrier_height`, `.reaction_energy`,
 `.to_dict_for_plot()` → `{coordinate_name: values, "energy": energies}`.
 
@@ -721,7 +749,7 @@ Computing model: `ComputingModel.GATE_BASED` (MZI chips, permanent-based LOQC) a
 | `PhotonicAnalogSimConfig` | `hamiltonian`, `evolution_time`, `num_modes`, `initial_fock_state` |
 | `PhotonicAnalogSimResult` | `time_evolved_state`, `site_populations`, `energy_expectation` |
 
-Result fields in `QuantumResult`: `photonic_simulation`, `photonic_vqe`, `photonic_sensitivity`, `hom_result`, `indist_purification`, `photonic_analog_sim`
+Result entries in `QuantumResult.vendor_results`: `photonic_simulation`, `photonic_vqe`, `photonic_sensitivity`, `hom_result`, `indist_purification`, `photonic_analog_sim`
 
 ---
 
@@ -793,7 +821,7 @@ All stages captured in `QChemPipelineSpec`.
 | `LatticeGraphSpec` | `topology`, `num_sites`, `dimensions` |
 | `ModelHamiltonianSpec` | Union wrapper — exactly one params block + `LatticeGraphSpec` |
 
-`QChemPipelineSpec` is stored in `QuantumResult.qchem_pipeline`.
+`QChemPipelineSpec` is stored in `QuantumResult.vendor_results["qchem_pipeline"]`.
 
 ---
 
@@ -962,7 +990,7 @@ Three algorithm families from MQSdk/qse:
 | `KQDConfig` | `method`, `krylov_dim`, `num_references`, `dt`, `num_trotter_steps`, `shots_per_circuit`, `regularization` |
 | `KQDPipelineSpec` | Full pipeline: `num_qubits`, `hamiltonian_label`, `kqd_config`, `time_evolution`, `reference_states`, `circuit_family`, `krylov_matrices`, `hadamard_results`, `eigen_result`, `cumulative_counts`, `sqd_result`, `exact_energy`, `hf_energy`, `cholesky_spec` |
 
-`KQDPipelineSpec` is stored in `QuantumResult.kqd_pipeline`.
+`KQDPipelineSpec` is stored in `QuantumResult.vendor_results["kqd_pipeline"]`.
 
 ---
 
@@ -1036,8 +1064,8 @@ QESEM (Qedma) wraps IBM gate-based hardware with noise-aware transpilation, devi
 |---|---|
 | `QESEMJobRecord` | Top-level container: `job_id`, `status`, `qpu_name`, `spec`, `precision_mode`, `execution_mode`, `analytical_qpu_time_s`, `empirical_qpu_time_s`, `total_execution_time_s`, `circuit_results`, `execution_details`, `characterization` |
 
-`QESEMJobRecord` is stored in `QuantumResult.qesem_result`.  
-QESEM circuit options are set in `ExecutionOptions.qesem_circuit_options` and `ExecutionOptions.qesem_job_options`.
+`QESEMJobRecord` is stored in `QuantumResult.vendor_results["qesem_result"]`.  
+QESEM options are carried in the vendor-neutral `ExecutionOptions.mitigation_options` dict — build the entries with `qesem_mitigation_options(circuit_options=..., job_options=...)` and rehydrate with `QESEMCircuitOptions.model_validate(...)` / `QESEMJobOptions.model_validate(...)`.
 
 ---
 
@@ -1101,7 +1129,7 @@ Harmonizes qpubench with the [MolSSI QCSchema v2](https://github.com/MolSSI/QCSc
 |---|---|
 | `QCSchemaRecord` | `atomic_result`, `optimization_result`, `pennylane_dataset`; property `reference_energy` (best available classical reference energy) |
 
-`QCSchemaRecord` is stored in `QuantumResult.qcschema_record`.
+`QCSchemaRecord` is stored in `QuantumResult.vendor_results["qcschema_record"]`.
 
 ---
 
@@ -1160,7 +1188,7 @@ Models the Analog Hamiltonian Simulation (AHS) paradigm for neutral Rydberg atom
 | `AHSShotResult` | `status`, `pre_sequence: list[int]` (1=atom present), `post_sequence: list[int]` (1=ground, 0=Rydberg); property `is_perfect_fill` |
 | `AHSTaskResult` | `metadata`, `num_shots_requested`, `shot_results`; properties: `successful_shots`, `perfect_fill_shots`, `bitstrings`, `counts`, `rydberg_densities` |
 
-`AHSTaskResult` is stored in `QuantumResult.ahs_result`.  
+`AHSTaskResult` is stored in `QuantumResult.vendor_results["ahs_result"]`.  
 Backend factories: `BackendSpec.aquila()` (QuEra Aquila via AWS Braket) and `BackendSpec.bloqade_emulator()` (local CPU simulation).
 
 ---
@@ -1239,7 +1267,7 @@ Models the complete SlowQuant quantum chemistry workflow: Hartree-Fock SCF → u
 |---|---|
 | `SlowQuantRecord` | `molecule_name`, `basis_set`, `integral_data`, `scf_result`, `wavefunction_config`, `optimization_result`, `rdm_data`, `linear_response`, `circuit_spec`, `measurement_config`, `hf_energy`, `ucc_energy`, `extras`; properties: `correlation_energy` (ucc − hf), `num_qubits` |
 
-`SlowQuantRecord` is stored in `QuantumResult.slowquant_record`.  
+`SlowQuantRecord` is stored in `QuantumResult.vendor_results["slowquant_record"]`.  
 Backend factories: `BackendSpec.gate_based(...)` with any Qiskit-compatible provider.
 
 ---
@@ -1270,7 +1298,7 @@ Two layers, both verified against the real [evangelistalab/qforte](https://githu
 | `QForteAlgorithmConfig` | `base: AdaptVQEConfig` (package-agnostic contract) + QForte-only extras: `use_cumulative_thresh`, `add_equiv_ops`, `qubit_excitations`, `compact_excitations`, `diis_max_dim`, `opt_ftol`, `noise_factor`; `.to_run_kwargs(algorithm_name)` translates to QForte's `run()` kwargs |
 | `QForteRunResult` | `final_energy`, `hf_energy`, `n_qubits`, `converged`, `final_gradient_norm`, `selected_operators`, `amplitudes`, `n_cnot`, `n_classical_params`, `n_pauli_trm_measures`, `n_ham_measurements`, `n_commut_measurements`, `energies_history`, `grad_norms_history`, `n_cnot_history`, `n_classical_params_history`, `n_pauli_trm_measures_history`, `max_circuit_depth_repr` — field-to-real-attribute mapping documented on the class itself |
 
-`QForteRunResult` is stored in `QuantumResult.qforte_result`. Previously these fields were read via bare `getattr()` in `integrations/qforte/converters.py` with no typed contract — several real attributes (`_tops`, `_tamps`, `_commutator_pool`, `_n_ham_measurements`, `_n_commut_measurements`, `_curr_grad_norm`) were silently dropped; all are now captured.
+`QForteRunResult` is stored in `QuantumResult.vendor_results["qforte_result"]`. Previously these fields were read via bare `getattr()` in `integrations/qforte/converters.py` with no typed contract — several real attributes (`_tops`, `_tamps`, `_commutator_pool`, `_n_ham_measurements`, `_n_commut_measurements`, `_curr_grad_norm`) were silently dropped; all are now captured.
 
 `AlgorithmFamily.ADAPT_VQE` has two more implementations that don't require QForte at all — see [Switching AlgorithmAdapter implementations](integrations.md#switching-algorithmadapter-implementations).
 
