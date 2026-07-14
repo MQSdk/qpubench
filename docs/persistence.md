@@ -1,6 +1,6 @@
-# Persistence
+# Stores & persistence
 
-qpubench ships three stores. All implement the `ResultStore` protocol:
+A **store** is where the `BenchmarkRunner` persists every `BenchmarkRecord` after execution — the third of qpubench's three layers (schemas describe, adapters execute, stores persist). qpubench ships three stores. All implement the `ResultStore` protocol:
 
 ```python
 class ResultStore(Protocol):

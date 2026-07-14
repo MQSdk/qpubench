@@ -1,18 +1,61 @@
 # Variational quantum algorithms (VQE, ADAPT-VQE)
 
-Variational quantum algorithms (VQAs) find the lowest eigenvalue of a Hamiltonian by preparing a parametrized quantum state (an *ansatz*), measuring its energy, and letting a classical optimizer adjust the parameters to drive that energy down. VQE and ADAPT-VQE are two members of this family, and qpubench models both under one package-agnostic contract so you can swap the underlying engine — QForte, a from-scratch Qiskit-convention engine, or a QDK/Azure-flavored one — without changing your run configuration.
+Variational quantum algorithms (VQAs) find the lowest eigenvalue of a Hamiltonian by preparing a parametrized quantum state (an *ansatz*), measuring its energy, and letting a classical optimizer adjust the parameters to drive that energy down. This page covers the two ways VQAs run in qpubench: plain VQE as a loop over ordinary circuit runs (any registered backend, your optimizer), and self-driving implementations like ADAPT-VQE behind a package-agnostic contract, so you can swap the underlying engine — QForte, a from-scratch Qiskit-convention engine, or a QDK/Azure-flavored one — without changing your run configuration.
 
 ## The family
 
 | Algorithm | `AlgorithmFamily` | Ansatz | What varies |
 |---|---|---|---|
-| **VQE** (incl. UCC-VQE) | `UCC_VQE` | Fixed, chosen up front (e.g. UCCSD) | Only the parameters are optimized |
+| **VQE** | none needed (UCC-type ansätze: `UCC_VQE`) | Fixed, chosen up front (e.g. UCCSD) | Only the parameters are optimized |
 | **ADAPT-VQE** | `ADAPT_VQE` | Grown one operator at a time | The ansatz *structure* adapts to the problem, then parameters are optimized |
 | UCC-PQE / SPQE | `UCC_PQE` / `SPQE` | Fixed / adaptive | Projective (residual) equations instead of energy minimization |
 
-The distinction that matters for benchmarking: in plain VQE the circuit is fixed before the run, whereas ADAPT-VQE **builds its own circuit** as it goes, adding whichever pool operator has the largest energy gradient each macro-iteration until that gradient falls below a threshold. That is why VQE fits qpubench's `BackendAdapter` protocol (you hand it a circuit) while ADAPT-VQE fits the `AlgorithmAdapter` protocol (the library generates circuits from a problem spec and drives its own loop). See [Backends & adapters](backends.md) for the two protocols.
+The distinction that matters for benchmarking: in plain VQE the ansatz circuit is fixed before the run, whereas ADAPT-VQE **builds its own circuit** as it goes, adding whichever pool operator has the largest energy gradient each macro-iteration until that gradient falls below a threshold. The two therefore take different execution paths through qpubench:
 
-## The package-agnostic contract
+- **Plain VQE is not an adapter of any kind.** It is a classical optimization loop that *uses* a `BackendAdapter`: each energy evaluation binds the current parameters into the ansatz and runs it as an ordinary circuit. The backend — simulator or hardware — is whatever adapter you registered; the optimizer and the loop live in your code (see the next section).
+- **ADAPT-VQE implementations are `AlgorithmAdapter`s**: the library receives a problem specification (a molecule), generates circuits internally, and drives its own loop; qpubench records the outcome.
+
+See [Backends & adapters](backends.md) for the two protocols. `AlgorithmFamily` tags exist for the library-driven algorithms so that runs of "the same algorithm" from different libraries can be compared; a plain VQE run needs no family tag, since it is fully described by its circuit, observable, and `VQAConfig` metadata.
+
+## Running plain VQE
+
+A VQE run needs four ingredients, and qpubench keeps them separate:
+
+1. **A parametrized ansatz** — a `CircuitSpec` with named `parameters` and the Hamiltonian attached as `observables`. Keep this *unbound*: it is the reusable master copy.
+2. **A backend** — any registered `BackendAdapter` (Aer, PennyLane Lightning, IBM hardware, …). This is where "which machine runs it" is decided.
+3. **An initial guess** — a plain vector of starting parameter values, separate from the circuit.
+4. **A classical optimizer** — e.g. `scipy.optimize.minimize`. qpubench deliberately does not bundle one; the loop is a few lines and any optimizer works.
+
+Each energy evaluation binds the current parameters into a *copy* of the ansatz (`.bind()` never mutates the master) and runs it; every evaluation is persisted as a full `BenchmarkRecord`, so the stored history *is* the convergence trace:
+
+```python
+import numpy as np
+from scipy.optimize import minimize
+from qpubench import BenchmarkRunner, VQAConfig
+from qpubench.backends import AerAdapter        # pip install "qpubench[qiskit]"
+
+runner = BenchmarkRunner()
+runner.register(AerAdapter(), name="aer")       # 2. the backend: swap for hardware here
+
+# 1. ansatz: unbound CircuitSpec with parameters=["theta_0", ...] and the
+#    Hamiltonian attached as ansatz.observables
+
+def energy(theta: np.ndarray) -> float:
+    bound = ansatz.bind({name: float(v) for name, v in zip(ansatz.parameters, theta)})
+    record = runner.run(bound, "aer",
+        vqa=VQAConfig(problem_type="chemistry", molecule="H2", basis="sto-3g",
+                      ansatz="my_ansatz", optimizer="BFGS"))
+    return record.result.expectation_values[0].value
+
+x0 = np.zeros(len(ansatz.parameters))           # 3. initial guess — data, not circuit
+res = minimize(energy, x0, method="BFGS")       # 4. the optimizer
+```
+
+Two conventions to note. First, the input to a VQE workflow is the *parametrized* circuit plus a separate initial guess — you never store parameter values in your master ansatz; binding happens per evaluation, and the bound copy inside each `BenchmarkRecord` is what makes that record exactly reproducible later. Second, changing where the energies are evaluated — statevector simulator, shot-based sampling, real hardware — means re-registering a different adapter and changing the backend name in `runner.run()`; nothing about the ansatz, guess, or optimizer changes.
+
+For building the Hamiltonian to attach as `ansatz.observables`, see [Examples — Real Hamiltonian sources](../examples/README.md#real-hamiltonian-sources). For UCC-specific VQE where a library drives the loop for you (a full chemistry stack behind it), see the SlowQuant integration (`integrations/slowquant/`, an `AlgorithmAdapter` for `AlgorithmFamily.UCC_VQE`-family runs).
+
+## The package-agnostic contract (library-driven algorithms)
 
 An ADAPT-VQE run is described by two objects, neither tied to any vendor SDK:
 
@@ -56,7 +99,7 @@ record = runner.run(mol, "qforte", options)
 record = runner.run(mol, "ibm_qiskit_adapt_vqe", options)
 ```
 
-Here `ExecutionOptions` is built explicitly because the run needs more than a shot count — which algorithm to run and its hyperparameters. The result comes back in the same `BenchmarkRecord` format as any single-circuit run, and its `record.vqa` (a `VQAConfig`) carries the derived chemistry metrics (`energy_error`, `chemical_accuracy`) when you supply `final_eigenvalue` and `ground_truth`.
+Here `ExecutionOptions` is built explicitly because the run needs more than a shot count — which algorithm to run and its hyperparameters. The result comes back in the same `BenchmarkRecord` format as any single-circuit run: `record.vqa` (a `VQAConfig`) holds the experiment inputs, and `record.vqa_result` (a `VQAResult`) holds the computed outputs, including the derived chemistry metrics (`energy_error`, `chemical_accuracy`) when `final_eigenvalue` and a reference such as `ground_truth` are present.
 
 ## The three interchangeable ADAPT-VQE engines
 

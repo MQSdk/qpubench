@@ -2,7 +2,7 @@
 
 Every simulator benchmark in qpubench ultimately runs on classical hardware, and *which* classical hardware is a benchmark variable in its own right: the same circuit on the same simulator can differ by orders of magnitude in wall-clock time between a laptop CPU, a data-center GPU, and dedicated FPGA control logic. This page explains how each architecture is used by the simulators qpubench supports, and how to record which one you ran on.
 
-A statevector simulation stores `2^n` complex amplitudes (16 bytes each in double precision): ~16 MB at 20 qubits, ~16 GB at 30, ~16 TB at 40. CPUs handle small-to-medium circuits comfortably; GPUs push the practical statevector ceiling several qubits higher and dominate on deep circuits with many shots; FPGAs are not used for amplitude simulation at all, but for the *real-time control logic* that measurement-based (MBQC) computing needs between measurement rounds.
+A statevector simulation of `n` qubits stores `2^n` complex amplitudes (16 bytes each in double precision): ~16 MB at 20 qubits, ~16 GB at 30, ~16 TB at 40. CPUs handle small-to-medium circuits comfortably; GPUs push the practical statevector ceiling several qubits higher and dominate on deep circuits with many shots; FPGAs are not used for amplitude simulation at all, but for the *real-time control logic* that measurement-based (MBQC) computing needs between measurement rounds.
 
 ## At a glance
 

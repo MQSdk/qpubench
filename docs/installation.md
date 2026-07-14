@@ -6,6 +6,8 @@ qpubench's only mandatory runtime dependency is `pydantic>=2.0`. All quantum bac
 
 ## pip
 
+The examples in the README use a plain `pip install .` — that copies the package into your environment, which is what you want when you just *use* qpubench. The `-e` (editable) flag below instead links the environment to this source checkout, so code changes take effect without reinstalling — use it when you *develop* qpubench or your own adapters against it. The extras (`[qiskit]`, `[storage]`, …) mean the same thing in both forms.
+
 ```sh
 # Editable local install (development)
 pip install -e .

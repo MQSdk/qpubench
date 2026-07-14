@@ -1,6 +1,15 @@
 # Backends & adapters
 
-qpubench uses two adapter protocols that the `BenchmarkRunner` dispatches automatically based on `isinstance()` checks.
+An **adapter** is the piece of code that connects qpubench to something that can execute quantum programs — a simulator, real hardware behind a cloud API, or an algorithm library. Adapters translate between qpubench's SDK-neutral schemas (`CircuitSpec` in, `QuantumResult` out) and whatever the underlying SDK speaks natively. You register adapters with a `BenchmarkRunner` under a name of your choice, and every run through the runner produces the same `BenchmarkRecord` regardless of which adapter executed it.
+
+There are two adapter protocols, because there are two fundamentally different kinds of execution engine:
+
+- A **backend** (simulator or QPU) executes a circuit *you* wrote — you hand it a finished `CircuitSpec` and get results back. This is the `BackendAdapter` protocol.
+- An **algorithm library** (QForte, an ADAPT-VQE engine, …) does not accept a pre-written circuit at all. It takes a *problem specification* (a molecule, a Hamiltonian), generates circuits internally, and drives its own optimization loop. This is the `AlgorithmAdapter` protocol.
+
+Both register with the same `BenchmarkRunner` and both produce `BenchmarkRecord`s — that is why they live side by side: the runner is the single entry point for "run this and store a comparable record", whether "this" is one circuit or a whole algorithm run. The runner dispatches automatically based on which protocol the registered adapter satisfies (an `isinstance()` check against the runtime-checkable protocols); you never tell it which path to take.
+
+Note the distinction between a **backend** and an **algorithm**: VQE, QPE, and KQD are algorithms, not backends. A variational algorithm like plain VQE runs *through* a `BackendAdapter` (each energy evaluation is one circuit run — see [VQA algorithms](vqa.md)); a self-driving implementation like QForte's ADAPT-VQE is wrapped as an `AlgorithmAdapter`; and QPE/KQD are currently schema-only (they describe runs, but no adapter executes them — see the [known gaps](../README.md#known-gaps--open-todos)).
 
 ---
 
@@ -17,6 +26,12 @@ spec: BackendSpec
 Use this when **you** provide the circuit and the backend executes it.  
 Examples: Qiskit Aer, PennyLane Lightning, IBM Quantum Runtime, IQM, AWS Braket, MBQC-FPGA.
 
+The three members:
+
+- **`spec`** — a static `BackendSpec` describing the machine (name, provider, simulator or hardware, computing model, qubit modality). It is copied into every `BenchmarkRecord`, so stored records identify the machine without the adapter present.
+- **`validate(circuit)`** — a pre-flight check the runner calls before `run()`. It returns a list of human-readable *warnings* (empty list = nothing to flag) for recoverable concerns — unsupported gate names, qubit count near the limit, unbound parameters — and raises `ValueError` only for hard errors that make execution meaningless (wrong computing model, malformed circuit). Warnings don't abort the run; they are surfaced so a benchmark sweep can proceed while telling you which runs are questionable.
+- **`run(circuit, options)`** — transpiles (if the backend needs it), executes, and returns a `QuantumResult`. Recoverable failures (a cloud job that errored) come back as `status=FAILED` with an `error_message` rather than an exception, so one failed point doesn't kill a sweep.
+
 ### `AlgorithmAdapter` — algorithm-driven
 
 ```
@@ -27,6 +42,11 @@ spec: BackendSpec
 
 Use this when the **library generates its own circuit** from a problem specification and drives its own execution loop.  
 Examples: QForte (ADAPT-VQE, UCCNVQE), OpenFermion VQE stacks.
+
+The `CircuitSpec` argument here carries a *problem*, not gates: `format=CircuitFormat.MOLECULE_JSON` with `serialized` holding a molecule JSON dict or file path. Which algorithm to run is specified in `options.algorithm_spec`, and its hyperparameters in the family-specific config (e.g. `options.adapt_vqe_config`). The two protocol methods mirror `BackendAdapter`'s:
+
+- **`validate_problem(circuit)`** — same contract as `validate()`, but checks the problem specification (does the file exist, is the molecule dict well-formed) instead of a gate list.
+- **`run_algorithm(circuit, options)`** — runs the full algorithm and returns three objects instead of one: the `QuantumResult` (execution outcome), a `VQAConfig` (the experiment inputs as the library understood them), and a `VQAResult` (computed outputs — final energy, convergence history). An algorithm run produces all three, whereas a single circuit run only produces a result.
 
 ### `TranspilableBackend` — optional extension
 
@@ -207,11 +227,19 @@ The runner dispatches to `run_algorithm()` automatically when it detects `Algori
 
 ## Backend support matrix
 
+The tables below are organized along the same independent axes the schema layer uses:
+
+- **Computing model** (`ComputingModel`) — the paradigm the program is expressed in. Each subsection covers one computing model (gate-based, MBQC, photonic linear optics, GBS, neutral-atom AHS).
+- **Qubit modality** (`QubitModality`) — the hardware technology realizing it; "—" for simulators, where no physical modality applies.
+- **Algorithms are not backends** and do not get rows here: QPE, KQD/QSE, and VQE run *on* the gate-based backends below and are identified by `AlgorithmFamily` (see [VQA algorithms](vqa.md)). The one exception is the final table — self-driving **algorithm libraries**, which register as `AlgorithmAdapter`s.
+
+Where a **Factory** is listed, it names a `BackendSpec` classmethod that pre-fills the descriptive spec for that device (provider string, modality, device defaults) so you don't have to construct it field by field. A factory builds only the *description* — executing still requires an adapter, and the Adapter/Status columns say whether one exists (real implementation, stub, or copy-the-template).
+
 ### Gate-based
 
 | Backend | Provider | Computing model | Qubit modality | Adapter | Status |
 |---|---|---|---|---|---|
-| Qiskit Aer (statevector + QASM) | `"aer"` | `GATE_BASED` | — (simulator) | `AerAdapter` | Real, tested — EstimatorV2/SamplerV2 |
+| Qiskit Aer (statevector + QASM) | `"aer"` | `GATE_BASED` | — (simulator) | `AerAdapter` | Real, tested — EstimatorV2/SamplerV2; `BackendSpec.qiskit_aer(method, num_qubits)` factory (statevector / MPS / stabilizer) |
 | IBM Quantum Runtime V2 | `"ibm"` | `GATE_BASED` | `SUPERCONDUCTING` | `IBMAdapter` | Real, tested against a fake backend — implements `TranspilableBackend`; needs real credentials for live hardware |
 | IQM hardware | `"iqm"` | `GATE_BASED` | `SUPERCONDUCTING` | `IQMAdapter` | Real, tested against a fake backend — implements `TranspilableBackend`; Sampler path only (no Estimator — real upstream limitation); `BackendSpec.iqm()` / `.iqm_resonance()` / `.iqm_local_server()` |
 | Qrack GPU/CPU simulator | `"qrack"` | `GATE_BASED` | — (simulator) | `QrackAdapter` | Stub — see `integrations/qrack/IMPLEMENTATION_NOTES.md` |
@@ -221,7 +249,16 @@ The runner dispatches to `run_algorithm()` automatically when it detects `Algori
 | CUDA-Q | `"cudaq"` | `GATE_BASED` | — (simulator) | Copy template | `BackendSpec.cudaq()` |
 | Cebule cloud | `"cebule"` | `GATE_BASED` | — (heterogeneous) | Copy template | `BackendSpec.cebule()` |
 | Quantum Motion CMOS spin-qubit | `"quantum_motion"` | `GATE_BASED` | `SILICON_SPIN` | Copy template | `BackendSpec.quantum_motion(device_name)` |
+| QDK statevector simulator | `"qdk_chemistry"` | `GATE_BASED` | — (simulator) | Copy template | `BackendSpec.qdk_chemistry_simulator(executor, num_qubits)` — sparse / full statevector; commonly paired with the QDK chemistry pipeline schemas (`schemas/microsoft_qdk.py`) |
+| Azure Quantum | `"azure_quantum"` | `GATE_BASED` | `TRAPPED_ION` (Quantinuum/IonQ hardware) or — (simulator/estimator) | Copy template | `BackendSpec.azure_quantum(target, *, resource_id_ref, location_ref, qubit_modality)` — hardware + resource estimator; QPU modality inferred from `target` or passed explicitly |
 | Stub gate simulator | — | `GATE_BASED` | — (simulator) | `StubGateAdapter` | Fully functional, no SDK |
+
+Note on algorithms vs. backends: the QDK simulator and Azure Quantum rows are ordinary gate-based backends. QPE is one algorithm frequently run on them (via the QDK chemistry pipeline, `schemas/microsoft_qdk.py`) — but the QDK is a general package, and these backends run any gate-based circuit. Likewise KQD/QSE (`schemas/mqsdk_qse.py`) runs on plain Aer, and VQE drives any backend in this table as its energy oracle.
+
+### MBQC (measurement-based)
+
+| Backend | Provider | Computing model | Qubit modality | Adapter | Status |
+|---|---|---|---|---|---|
 | Stub MBQC simulator | — | `MBQC` | — | `StubMBQCAdapter` | Fully functional, no SDK |
 | MBQC-FPGA | `"mbqc"` | `MBQC` | — (FPGA control logic) | Copy `backend_adapter_template.py` | Schemas complete; COE + CSV round-trip |
 
@@ -244,24 +281,7 @@ The runner dispatches to `run_algorithm()` automatically when it detects `Algori
 | Xanadu Borealis | `"xanadu"` / `"aws_braket"` | `GBS` | `PHOTONIC` | `BackendSpec.xanadu_borealis(via_braket=False)` | 216-mode TDM; `via_braket=True` for AWS |
 | Strawberry Fields Gaussian | `"strawberry_fields"` | `GBS` | `PHOTONIC` | `BackendSpec.strawberry_fields_gaussian(num_modes)` | Covariance-matrix + thewalrus hafnian |
 
-### QPE / QDK chemistry
-
-QPE/IQPE is an algorithmic technique on top of gate-based circuits (see `QPEMethod` in `microsoft_qdk`), not a separate paradigm.
-
-| Backend | Provider | Computing model | Qubit modality | Factory | Notes |
-|---|---|---|---|---|---|
-| QDK simulator | `"qdk_chemistry"` | `GATE_BASED` | — (simulator) | `BackendSpec.qdk_chemistry_simulator(executor, num_qubits)` | Sparse / full state vector |
-| Azure Quantum | `"azure_quantum"` | `GATE_BASED` | `TRAPPED_ION` (Quantinuum/IonQ hardware) or — (simulator/estimator) | `BackendSpec.azure_quantum(target, *, resource_id_ref, location_ref, qubit_modality)` | Hardware + resource estimator; QPU modality inferred from `target` or pass explicitly |
-
-### KQD / QSE
-
-KQD is an algorithmic technique on top of gate-based circuits (see `KQDMethod` in `mqsdk_qse`), not a separate paradigm.
-
-| Backend | Provider | Computing model | Qubit modality | Factory | Notes |
-|---|---|---|---|---|---|
-| Qiskit Aer (KQD) | `"aer"` | `GATE_BASED` | — (simulator) | `BackendSpec.qiskit_aer(method="statevector", num_qubits)` | statevector / MPS / stabilizer |
-
-### QESEM (Qedma)
+### QESEM (Qedma) — error-mitigation service over gate-based backends
 
 | Backend | Provider | Computing model | Qubit modality | Factory | Notes |
 |---|---|---|---|---|---|
@@ -275,13 +295,19 @@ KQD is an algorithmic technique on top of gate-based circuits (see `KQDMethod` i
 | QuEra Aquila 256-qubit QPU | `"quera"` | `ADIABATIC` | `NEUTRAL_ATOM` | `BackendSpec.aquila(aws_region="us-east-1")` | Analog Hamiltonian Simulation; submitted via AWS Braket |
 | Bloqade Python emulator | `"bloqade"` | `ADIABATIC` | `NEUTRAL_ATOM` | `BackendSpec.bloqade_emulator(num_qubits)` | Local exact state-vector; no credentials; practical up to ~20 atoms |
 
-### Algorithm libraries
+### Algorithm libraries (`AlgorithmAdapter`)
 
-| Library | Adapter | Algorithms | Location |
+These register with the same runner as the backends above, but take a problem specification instead of a circuit and drive their own execution loop. The `AlgorithmFamily` column is the package-agnostic identity that lets you compare runs of the same algorithm across different implementations — `ADAPT_VQE` currently has three interchangeable implementations sharing one `AdaptVQEConfig` (see [VQA algorithms](vqa.md)).
+
+| Library | Adapter | Algorithms (`AlgorithmFamily`) | Location |
 |---|---|---|---|
-| QForte (internal eval) | `QForteAlgorithmAdapter` | UCCNVQE, ADAPTVQE, UCCNPQE, SPQE | `integrations/qforte/adapter.py` |
-| QForte (external backend) | `ExternalEvalAlgorithmAdapter` | Same + any BackendAdapter as oracle | `integrations/qforte/adapter.py` |
+| QForte (internal eval) | `QForteAlgorithmAdapter` | `ADAPT_VQE`, `UCC_VQE` (UCCNVQE), `UCC_PQE`, `SPQE` | `integrations/qforte/adapter.py` |
+| QForte (external backend) | `ExternalEvalAlgorithmAdapter` | Same, with any `BackendAdapter` as the energy oracle | `integrations/qforte/adapter.py` |
+| Generic engine, Qiskit-flavored | `IBMQiskitAdaptVQEAdapter` | `ADAPT_VQE` | `integrations/ibm_qiskit_adapt_vqe/` |
+| Generic engine, QDK/Azure-flavored | `MicrosoftQDKAdaptVQEAdapter` | `ADAPT_VQE` | `integrations/microsoft_qdk_adapt_vqe/` |
 | Any library | Copy template | Your algorithms | `integrations/template/` |
+
+Plain VQE (fixed ansatz) is deliberately **not** in this table: it needs no `AlgorithmAdapter`, because a VQE run is a sequence of ordinary circuit runs — a classical optimizer binding parameters and calling a `BackendAdapter` for each energy evaluation. See [VQA algorithms — running plain VQE](vqa.md#running-plain-vqe) for the worked loop. QPE and KQD/QSE currently have schema modules but no runnable adapter (see the [known gaps](../README.md#known-gaps--open-todos)).
 
 ---
 

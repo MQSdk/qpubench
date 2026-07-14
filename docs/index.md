@@ -152,10 +152,10 @@ runner.add_hook(lambda r: print(r.backend.name, r.result.status.value))
 | If you want to… | Read |
 |---|---|
 | Install with uv / Poetry / conda, set up credentials | [Installation](installation.md) |
-| See every backend and its status (real vs. stub) | [Backends & adapters](backends.md) |
-| Run variational algorithms (VQE, ADAPT-VQE) | [VQA algorithms](vqa.md) |
 | Look up any model, field, or enum | [Schema reference](schemas.md) |
-| Store, query, and analyze results (incl. S3 / Hugging Face) | [Persistence](persistence.md) |
+| See every backend and its status (real vs. stub) | [Backends & adapters](backends.md) |
+| Store, query, and analyze results (incl. S3 / Hugging Face) | [Stores & persistence](persistence.md) |
+| Run variational algorithms (VQE, ADAPT-VQE) | [VQA algorithms](vqa.md) |
 | Run simulators on CPU / GPU, or MBQC programs on FPGA | [Compute architectures](compute_architectures.md) |
 | Bridge an external framework's data (QForte, PySCF, QCSchema, GBS, …) | [Integrations](integrations.md) |
 | Avoid cross-SDK convention traps (Pauli encodings, bit orders) | [Compatibility](compatibility.md) |
@@ -204,7 +204,7 @@ Two rules keep the ecosystem healthy: SDK imports live **inside** methods (so im
 
 The same record format covers paradigms that most benchmark tools can't express side by side. `ComputingModel` (how a program is expressed: `GATE_BASED`, `MBQC`, `FUSION_BASED`, `ADIABATIC`, `ANNEALING`, `GBS`, `SAMPLING`) and `QubitModality` (what hardware realizes it: superconducting, trapped-ion, neutral-atom, photonic, silicon-spin) are independent axes on every circuit, backend, and result — so a gate-based run on photonic hardware and a Gaussian boson sampling run land in the same store and can be queried together.
 
-Vendor- and framework-specific schemas (38 modules, from QForte and PySCF to QuEra's analog Hamiltonian simulation and Qedma's QESEM error mitigation) live in [`qpubench.schemas`](schemas.md), named `<maintainer>_<package>.py` so the filename tells you exactly what upstream project each one mirrors.
+Vendor- and framework-specific schemas (38 modules, from QForte and PySCF to QuEra's analog Hamiltonian simulation and Qedma's QESEM error mitigation) live in [`qpubench.schemas`](schemas.md). Modules that mirror a single external project are named `<maintainer>_<package>.py` so the filename tells you the upstream source; core record types and multi-source catalogues (basis sets, Hamiltonian metadata, the advantage tracker) stay unprefixed.
 
 ---
 

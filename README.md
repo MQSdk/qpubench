@@ -6,22 +6,24 @@
 
 Modality-agnostic quantum benchmark framework with a typed [Pydantic v2](https://docs.pydantic.dev/) schema layer.
 
-qpubench separates **what you benchmark** (schemas) from **how execution happens** (adapters) and **how results are stored** (stores). The schema layer is the stable core — gate-based circuits, MBQC on FPGA, molecular VQE problems, and evolutionary circuit search all share the same `BenchmarkRecord` format, independent of any quantum SDK.
+qpubench separates **what you benchmark** (schemas) from **how execution happens** (adapters) and **how results are stored** (stores). The schema layer is the stable core: every run, whatever the paradigm or vendor SDK, produces the same `BenchmarkRecord`. That one record format covers benchmarks as different as gate-based circuits, MBQC on FPGA, molecular VQE problems, and evolutionary circuit search — with no quantum SDK dependency in the schemas themselves.
 
 ---
 
 ## Documentation
+
+The first three pages after installation cover the three layers in order — schemas, adapters, stores; the pages after that cover what you can benchmark with them.
 
 | | |
 |---|---|
 | **[Installation](docs/installation.md)** | pip · uv · Poetry 2 · conda |
 | **[Schema reference](docs/schemas.md)** | Every Pydantic model, field, and enum |
 | **[Backends & adapters](docs/backends.md)** | BackendAdapter / AlgorithmAdapter protocols, writing a new adapter |
-| **[VQA algorithms](docs/vqa.md)** | The variational-algorithm family: VQE, ADAPT-VQE, and the three interchangeable engine implementations |
+| **[Stores & persistence](docs/persistence.md)** | Where results go: NDJSONStore · ParquetStore · S3Store (AWS S3 / HF Storage Buckets) · hooks |
+| **[VQA algorithms](docs/vqa.md)** | Benchmarking variational algorithms: plain VQE, ADAPT-VQE, and the three interchangeable ADAPT-VQE engines |
 | **[Integrations](docs/integrations.md)** | Cebule SDK · Xenakis · ExcitationSolve · GSOpt · Photonic · QDK Chemistry · GBS · QSE/KQD · QESEM · QCSchema/QCElemental/PennyLane · Bloqade/Aquila · SlowQuant |
 | **[Compute architectures](docs/compute_architectures.md)** | CPUs, GPUs, and FPGAs across the supported simulators — incl. the MBQC-FPGA program format |
-| **[Persistence](docs/persistence.md)** | NDJSONStore · ParquetStore · S3Store (AWS S3 / HF Storage Buckets) · hooks |
-| **[Compatibility](docs/compatibility.md)** | Pauli encoding, complex precision, MBQC bit conventions |
+| **[Compatibility](docs/compatibility.md)** | Cross-SDK convention traps: qubit ordering, Pauli encoding, complex precision, MBQC bit conventions |
 | **[Integration guide](INTEGRATION_GUIDE.md)** | Writing adapters, energy hooks, testing pattern |
 | **[Examples](examples/README.md)** | Guides, demos, and tutorials — what's supported, what's partial, and why |
 
@@ -40,11 +42,19 @@ pip install ".[s3]"          # S3 store (boto3) — AWS S3 / MinIO / HF Storage 
 pip install ".[all]"         # everything on PyPI
 ```
 
+For development, install in editable mode instead (`pip install -e .`) so source changes take effect without reinstalling — the extras work the same way in both forms.
+
 Full instructions for **uv**, **Poetry 2**, and **conda** → [docs/installation.md](docs/installation.md)
 
 ---
 
 ## Architecture
+
+Three layers, three responsibilities:
+
+- **Schemas** describe — circuits, backends, options, results, and the `BenchmarkRecord` bundling them are plain Pydantic models with no quantum SDK imports.
+- **Adapters** execute — a `BackendAdapter` runs a circuit *you* provide (simulators, QPUs); an `AlgorithmAdapter` wraps a library that generates its own circuits from a problem specification (a molecule) and drives its own loop. Both protocols exist side by side because both register with the same `BenchmarkRunner`, which dispatches automatically and records either kind of run in the same format.
+- **Stores** persist — every record lands in an `NDJSONStore`, `ParquetStore`, or `S3Store` through one `save`/`load`/`query` interface.
 
 ```mermaid
 classDiagram
@@ -98,6 +108,8 @@ classDiagram
 
 ### Gate-based (Bell state + ZZ expectation)
 
+The benchmark here is the smallest meaningful one: prepare a two-qubit Bell state and measure the ⟨ZZ⟩ correlation (which should be exactly 1 for a perfect Bell state — so any deviation measures the backend, not the circuit). It runs end-to-end with the bare install, using a built-in stub backend, and appends the result to an NDJSON file:
+
 ```python
 import pathlib
 from qpubench import (
@@ -131,7 +143,11 @@ ev = record.result.expectation_values[0]
 print(f"⟨ZZ⟩ = {ev.value:.4f} ± {ev.std_error:.4f}")
 ```
 
-What this does, line by line: the circuit is plain data — an OpenQASM string plus one observable (the two-qubit `ZZ` correlation) — with no quantum SDK involved. `runner.register(name="stub", seed=42)` registers a backend without naming an adapter class, so the runner creates a **`StubGateAdapter`** for you: a built-in placeholder backend that returns random (but seed-reproducible) expectation values instead of simulating anything. It exists so you can build and test your whole benchmark pipeline — circuit, runner, result store — before installing any SDK or touching real hardware. `runner.run(circuit, "stub", shots=4096)` is shorthand for passing `ExecutionOptions(shots=4096)`; construct a full `ExecutionOptions` yourself only when you need more than a shot count (error mitigation, transpiler settings, algorithm hyperparameters, …).
+What this does, step by step:
+
+- **The circuit is plain data** — an OpenQASM string plus one observable (the two-qubit `ZZ` correlation). No quantum SDK is involved in describing it.
+- **`runner.register(name="stub", seed=42)`** registers a backend without naming an adapter class, so the runner creates a **`StubGateAdapter`** for you: a built-in placeholder backend that returns random (but seed-reproducible) expectation values instead of simulating anything. It exists so you can build and test your whole benchmark pipeline — circuit, runner, result store — before installing any SDK or touching real hardware.
+- **`runner.run(circuit, "stub", shots=4096)`** is shorthand for passing `ExecutionOptions(shots=4096)`. Construct a full `ExecutionOptions` yourself only when you need more than a shot count (error mitigation, transpiler settings, algorithm hyperparameters, …).
 
 To get real numbers, register a real simulator under a new name — everything else stays identical:
 
@@ -160,13 +176,27 @@ print(circuit.format)             # → CircuitFormat.QASM3
 
 `from_openqasm3()` stores the source string verbatim and tags the circuit with `CircuitFormat.QASM3`, so any adapter (and anyone reading the stored record years later) knows exactly how to parse it. OpenQASM 3.0 is the preferred format for new circuits; OpenQASM 2.0 (as in the first example) remains fully supported.
 
-### Parametric VQE circuit
+### Parameterized circuits
+
+A `CircuitSpec` can declare named parameters. The unbound circuit is a reusable template; `.bind()` returns a copy with concrete values filled in, and backends execute only bound circuits:
 
 ```python
-from qpubench import CircuitSpec, VQAConfig
+from qpubench import CircuitSpec
 
 ansatz = CircuitSpec(num_qubits=2, parameters=["theta"], serialized="OPENQASM 2.0; ...")
-bound  = ansatz.bind({"theta": 1.2566})
+bound  = ansatz.bind({"theta": 1.2566})     # a copy — the template stays unbound
+
+record = runner.run(bound, "stub", shots=4096)
+```
+
+Because each `BenchmarkRecord` stores the *bound* copy, every stored run is exactly reproducible — the parameter values travel with the circuit. This bind-per-evaluation pattern is what a variational algorithm loops over: keep the parametrized template and a separate vector of parameter values, bind fresh for each energy evaluation, and let a classical optimizer update the values. The full worked VQE loop is in [docs/vqa.md](docs/vqa.md).
+
+### VQA metadata (`VQAConfig` / `VQAResult`)
+
+For variational runs, attach a `VQAConfig` so the stored record says what problem it belongs to:
+
+```python
+from qpubench import VQAConfig
 
 record = runner.run(bound, "stub", shots=4096,
     vqa=VQAConfig(problem_type="chemistry", molecule="H2", basis="sto-3g"))
@@ -179,13 +209,14 @@ A `VQAConfig` describes the experiment *inputs* — what you chose to run; it co
 
 Computed *outputs* live in `record.vqa_result` (a `VQAResult`) and are produced, never user-supplied: algorithm adapters (ADAPT-VQE etc.) return the converged energy, convergence history, and computed references directly, and for estimator-path circuit runs (observables attached) the runner derives `final_eigenvalue` from the result's expectation values automatically. When a computed reference (`ground_truth` or `fci_energy`) is present, `vqa_result.energy_error` and `vqa_result.chemical_accuracy` (error < 1.6 mHa) are derived for you.
 
-### Algorithm library (ADAPT-VQE — switch implementations freely)
+### Algorithm libraries (`AlgorithmAdapter`, `AlgorithmSpec`, `AlgorithmFamily`)
 
-`AlgorithmSpec` carries identity (`name` + `AlgorithmFamily`); hyperparameters
-for `AlgorithmFamily.ADAPT_VQE` live in the package-agnostic `AdaptVQEConfig`,
-so the same config runs against QForte's native engine, a from-scratch
-Qiskit-circuit engine, or a QDK/Azure Quantum-flavored one — just register a
-different adapter under a different name:
+Everything above ran a circuit *you* wrote through a `BackendAdapter`. Some libraries invert that: they take a **problem** (a molecule), generate circuits internally, and drive their own optimization loop. Those register under the second protocol, `AlgorithmAdapter` (see [Architecture](#architecture)), and two small schema types identify what they ran:
+
+- **`AlgorithmSpec`** carries identity — the library-specific `name` plus an `AlgorithmFamily`, the package-agnostic label saying what the algorithm *is*, independent of who implements it.
+- The **family-specific config** carries the hyperparameters every implementation of that family accepts — for `AlgorithmFamily.ADAPT_VQE` that is `AdaptVQEConfig`.
+
+The payoff of this split: the same config runs against QForte's native C++ engine, a from-scratch Qiskit-circuit engine, or a QDK/Azure Quantum-flavored one — register a different adapter under a different name, keep everything else, and the resulting `BenchmarkRecord`s are directly comparable runs of "the same algorithm":
 
 ```python
 from qpubench import (
@@ -216,20 +247,21 @@ Here the "circuit" is really a problem description (a molecule file, `CircuitFor
 
 ## Schema overview
 
-The schema layer has zero quantum SDK dependencies. Seven core modules define the record format every benchmark shares; the remaining modules each mirror one external project, named `<maintainer>_<package>.py` so the filename tells you the upstream source. The compact map below shows what lives where — the full per-module table (key types, computing model, qubit modality, field-level reference) is in [docs/schemas.md](docs/schemas.md).
+The schema layer has zero quantum SDK dependencies. Its modules fall into three groups: seven **core modules** define the record format every benchmark shares; a handful of unprefixed **cross-cutting modules** aggregate multiple external sources or framework-own catalogues (basis sets, Hamiltonian metadata, the community advantage tracker, …); and the remaining **project mirrors** each model one external project, named `<maintainer>_<package>.py` so the filename tells you the upstream source. The compact map below shows what lives where — the full per-module table (key types, computing model, qubit modality, field-level reference) is in [docs/schemas.md](docs/schemas.md).
 
 | Group | Modules |
 |---|---|
 | **Core record format** | `primitives` · `circuit` · `observable` · `backend` · `execution` · `result` · `record` |
-| **Quantum chemistry & VQA** | `microsoft_qdk` · `molssi_qcschema` · `pyscf_pyscf` · `erikkjellgren_slowquant` · `evangelistalab_qforte` · `bestquark_gsopt` · `dlr_excitation_solve` · `classiq_classiq` · `mqsdk_qse` · `mqsdk_cebule` · `reactions` · `basis_sets` · `hamiltonian_library` · `polarizable_embedding` · `optimizer_catalog` |
-| **Photonic / GBS** | `dtu_photonic` · `dtu_gbs` |
-| **Other paradigms** | `johnrscott_mbqc_fpga` (MBQC on FPGA) · `quera_bloqade` (neutral-atom AHS) |
-| **Error mitigation & vendors** | `qedma_qesem` · `qctrl_fire_opal` · `unitaryfund_mitiq` · `haiqu_rivet` · `parityqc_parityqc` · `qmatter_qmatter` · `quantum_motion_hardware` · `ibm_runtime_v2` · `ibm_cost_estimator` · `advantage` |
-| **Circuit search & tooling** | `mqsdk_xenakis` (GA circuit genomes) · `contraction_path` |
+| **Cross-cutting catalogues & registries** (unprefixed — multi-source) | `advantage` · `basis_sets` · `hamiltonian_library` · `optimizer_catalog` · `polarizable_embedding` · `reactions` · `contraction_path` |
+| **Project mirrors: quantum chemistry & VQA** | `microsoft_qdk` · `molssi_qcschema` · `pyscf_pyscf` · `erikkjellgren_slowquant` · `evangelistalab_qforte` · `bestquark_gsopt` · `dlr_excitation_solve` · `classiq_classiq` · `mqsdk_qse` · `mqsdk_cebule` |
+| **Project mirrors: photonic / GBS** | `dtu_photonic` · `dtu_gbs` |
+| **Project mirrors: other paradigms** | `johnrscott_mbqc_fpga` (MBQC on FPGA) · `quera_bloqade` (neutral-atom AHS) |
+| **Project mirrors: error mitigation & vendors** | `qedma_qesem` · `qctrl_fire_opal` · `unitaryfund_mitiq` · `haiqu_rivet` · `parityqc_parityqc` · `qmatter_qmatter` · `quantum_motion_hardware` · `ibm_runtime_v2` · `ibm_cost_estimator` |
+| **Project mirrors: circuit search** | `mqsdk_xenakis` (GA circuit genomes) |
 
 ### Computing model vs. qubit modality
 
-`ComputingModel` (paradigm — how the program is expressed) and `QubitModality` (QPU modality — what hardware realizes it) are independent fields on `CircuitSpec`, `BackendSpec`, and `QuantumResult`. It's many-to-many, not one-to-one: a paradigm is not intrinsically tied to one QPU modality, but not every pairing is realized. `GATE_BASED` circuits run on `SUPERCONDUCTING` (IBM, IQM), `TRAPPED_ION` (Quantinuum, IonQ), `SILICON_SPIN` (Quantum Motion), and `PHOTONIC` (Perceval, photochipsim) hardware alike, while `GBS` and `FUSION_BASED` are photonic-only today. `QPE` and `KQD` are algorithmic techniques layered on `GATE_BASED` (see `microsoft_qdk.QPEMethod` / `mqsdk_qse.KQDMethod`), not separate paradigms.
+Two of the fields you will meet on every circuit, backend, and result deserve a word of explanation, because most frameworks conflate them. `ComputingModel` says how the program is *expressed* (the paradigm — gate-based, measurement-based, boson sampling, …); `QubitModality` says what *hardware technology* realizes it (superconducting, trapped-ion, photonic, …). qpubench keeps them as independent fields on `CircuitSpec`, `BackendSpec`, and `QuantumResult` because the relationship is many-to-many: `GATE_BASED` circuits run on `SUPERCONDUCTING` (IBM, IQM), `TRAPPED_ION` (Quantinuum, IonQ), `SILICON_SPIN` (Quantum Motion), and `PHOTONIC` (Perceval, photochipsim) hardware alike, while some paradigms are realized by only one modality today (`GBS` and `FUSION_BASED` are photonic-only). Specific quantum algorithms (QPE, KQD, VQE, …) are neither of these: they are layered on top of a computing model and identified separately, by `AlgorithmFamily`.
 
 `ComputingModel` values: `GATE_BASED` · `MBQC` · `FUSION_BASED` · `ADIABATIC` · `ANNEALING` · `GBS` · `SAMPLING`
 

@@ -4,6 +4,23 @@ These encoding differences cause silent errors when porting circuits or results 
 
 ---
 
+## Qubit ordering / endianness (Qiskit vs PennyLane)
+
+Qiskit and PennyLane label qubits in **opposite order** when interpreting basis states:
+
+- **Qiskit is little-endian**: qubit 0 is the *least* significant bit. The basis state is written `|q_{n-1} … q_1 q_0⟩`, so an X gate on qubit 0 of a 2-qubit register produces the statevector for `|01⟩` (decimal 1), and counts bitstrings put qubit 0 **rightmost**.
+- **PennyLane is big-endian**: the first wire is the *most* significant bit. The basis state is `|q_0 q_1 … q_{n-1}⟩`, so the same X gate on wire 0 produces `|10⟩` (decimal 2), and samples put wire 0 **leftmost**.
+
+The consequences when comparing runs across the two frameworks:
+
+- Statevector amplitudes come back in a **permuted order** (bit-reversal of the index), even for the identical circuit.
+- Counts histograms for the same circuit have their bitstring keys reversed.
+- Multi-qubit observables must be mapped consistently: `Z ⊗ I` acts on *different* physical qubits under the two conventions.
+
+qpubench's own containers fix one convention: `SparsePauliObservable` addresses qubits by explicit `qubit_indices` (no positional string ordering, so the estimator path is unaffected), and `ShotResult.counts` uses **MSB-first bitstrings with qubit 0 rightmost** (the Qiskit convention). Converting at the boundary is the adapter's job. When you post-process counts yourself — or compare stored records produced through different SDKs — check the bit order first; otherwise two physically identical runs will look like they disagree.
+
+---
+
 ## Pauli integer encoding (Qrack vs Qiskit)
 
 | Pauli | Qrack (Q# convention) | Qiskit C `QkBitTerm` |
