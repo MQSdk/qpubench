@@ -31,7 +31,7 @@ header-includes:
 
 | Layer | Answers | Lives in |
 |---|---|---|
-| **Schema** | *What* are you benchmarking? | `schemas/` — 38 Pydantic v2 modules (= "Schema v3.0.0") |
+| **Schema** | *What* are you benchmarking? | `schemas/` — 37 Pydantic v2 modules (= "Schema v3.1.0") |
 | **Adapter** | *How* does it run? | `backends/` + `integrations/` (next slide) |
 | **Store** | *How* is it persisted? | `store.py` — `NDJSONStore`, `ParquetStore`, `S3Store` |
 \normalsize
@@ -143,7 +143,7 @@ All rows are computing-model/qubit-modality **all / all** — these are the fram
 | `primitives` | `ComputingModel`, `QubitModality`, `CircuitFormat`, `PauliLabel`, `ComplexNumber` |
 | `circuit` | `CircuitSpec` — `from_openqasm3()`, `bind()`, `is_parametric()` |
 | `observable` | `SparsePauliObservable`, `PauliTerm` |
-| `backend` | `BackendSpec` — 28 factory constructors |
+| `backend` | `BackendSpec` — 31 factory constructors |
 
 ## Core Schema Modules (2/3)
 
@@ -174,8 +174,7 @@ Named `<org>_<package>.py` — who maintains the upstream project + what it's ca
 | Module | Computing model (qubit modality) |
 |--------|---------------------|
 | `johnrscott_mbqc_fpga` | MBQC-FPGA — bit-exact 16-bit program word |
-| `dtu_photonic` | LOQC / FBQC (photonic) — Fock states, HOM, photonic VQE/analog |
-| `dtu_gbs` | GBS (photonic) — hafnian, vibronic, TDM/Borealis |
+| `mqsdk_photoq` | Photonic LOQC/FBQC + GBS — Fock states, HOM, photonic VQE/analog, hafnian, vibronic, TDM/Borealis, pseudo-PNRD methods, ORCA/QCloud/Aurora backends, BBS |
 | `microsoft_qdk` | Gate-based (QPE technique) — SCF → active space → resource estimation |
 | `mqsdk_qse` | Gate-based (KQD technique) — Krylov Quantum Diagonalization / SQD |
 
@@ -217,7 +216,7 @@ Two **independent, orthogonal** axes — not one flat enum (a fixed set of named
 - `SUPERCONDUCTING` — IBM, IQM
 - `TRAPPED_ION` — Quantinuum, IonQ
 - `NEUTRAL_ATOM` — QuEra
-- `PHOTONIC` — Quandela, Xanadu
+- `PHOTONIC` — Quandela, Xanadu, ORCA, DTU
 - `SILICON_SPIN` — Quantum Motion
 :::
 ::::::
@@ -733,8 +732,7 @@ Schema modules are named `<org>_<package>.py` — one glance tells you who maint
 | Integration | Schema module |
 |-------------|--------------|
 | Cebule SDK | `mqsdk_cebule` |
-| Photochipsim / FBQC | `dtu_photonic` |
-| DTU-GBS / photonic\_QC | `dtu_gbs` |
+| photoq (photochipsim, DTU-GBS, photonic\_QC, pseudo-PNRD, ORCA/Xanadu/DTU backends) | `mqsdk_photoq` |
 | QESEM (Qedma) | `qedma_qesem` |
 | Bloqade / Aquila | `quera_bloqade` |
 | IQM Resonance (garnet · deneb · sirius) | — |
@@ -976,7 +974,7 @@ Every push to `main` and every PR runs the full gate set in CI (`.github/workflo
 
 **Repository**: `github.com/mqsdk/qpubench`
 
-**Schema v3.0.0** — 38 modules · 7 computing models × 5 qubit modalities · zero quantum SDK deps in core
+**Schema v3.1.0** — 37 modules · 7 computing models × 5 qubit modalities · zero quantum SDK deps in core
 
 \vspace{0.5em}
 

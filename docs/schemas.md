@@ -1,9 +1,9 @@
 # Schema reference
 
-Schema version **3.0.0** — 38 modules, all in `src/qpubench/schemas/`.  
+Schema version **3.1.0** — 37 modules, all in `src/qpubench/schemas/`.  
 Import from the package root: `from qpubench.schemas import CircuitSpec, QuantumResult, …`
 
-The 38 modules fall into three groups:
+The 37 modules fall into three groups:
 
 1. **Core record format** — the seven unprefixed modules that define the types every benchmark shares (`primitives` through `record`).
 2. **Cross-cutting catalogues & registries** — unprefixed modules that aggregate *multiple* external sources or define framework-own catalogues (basis sets, Hamiltonian metadata, the community advantage tracker, …). They are neither core record types nor mirrors of a single upstream project.
@@ -22,7 +22,7 @@ Computing model (paradigm) and qubit modality are separate, independent axes on 
 | [`primitives`](#primitives) | Enums and value types used across all other modules | all · all | `ComputingModel`, `QubitModality`, `CircuitFormat`, `PauliLabel`, `CebuleTaskType`, `ComplexNumber` |
 | [`circuit`](#circuit) | Circuit or problem specification | all · all | `CircuitSpec` (`from_openqasm3`, `openqasm3`, `bind`), `ParameterBinding` |
 | [`observable`](#observable) | Sparse Pauli observables | all · all | `SparsePauliObservable`, `PauliTerm` |
-| [`backend`](#backend) | Hardware / simulator description | all · all | `BackendSpec` (28 factory constructors) |
+| [`backend`](#backend) | Hardware / simulator description | all · all | `BackendSpec` (31 factory constructors) |
 | [`execution`](#execution) | Execution options and algorithm hyperparameters | all · all | `ExecutionOptions`, `AlgorithmSpec`, `AdaptVQEConfig`, `ZNEConfig`, `TranspilerConfig` |
 | [`result`](#result) | Execution results (expectation values, counts, fidelity, ADAPT history) | all · all | `QuantumResult` (15 result-type fields), `ExpectationResult`, `ShotResult`, `TranspileLayout` |
 | [`record`](#record) | Top-level benchmark record and VQA metadata | all · all | `BenchmarkRecord`, `VQAConfig`, `VQAResult` |
@@ -55,8 +55,7 @@ The **Group** column matches the thematic groups used in the README's schema ove
 | [`classiq_classiq`](#classiq_classiq) | Quantum chemistry & VQA | Classiq synthesis + chemistry/QAOA | `GATE_BASED` · — | `ClassiqSynthesisResult`, `ClassiqChemistryModel`, `ClassiqVQEResult`, `ClassiqCombinatorialOptimizationSpec`, `ClassiqConstraints` |
 | [`mqsdk_qse`](#mqsdk_qse) | Quantum chemistry & VQA | Krylov Quantum Diagonalization (KQD / QSE / SQD) | `GATE_BASED` · — | `KQDPipelineSpec`, `KQDConfig`, `KrylovSubspaceMatrices`, `KrylovEigenResult`, `SQDConvergenceResult`, `CholeskyDecompositionSpec` |
 | [`mqsdk_cebule`](#mqsdk_cebule) | Quantum chemistry & VQA | Cebule SDK (MQS) task inputs / outputs | `GATE_BASED` (`TN_QC_OPT`/`COVO`) + classical · — | `CosmoResult`, `SigmaResult`, `SolubilityResult`, `AbInitioMDResult`, `GeometryOptResult`, `TNQCOptResult`, `COVOResult` |
-| [`dtu_photonic`](#dtu_photonic) | Photonic / GBS | Linear-optics chips, FBQC, HOM, photonic VQE, analog simulation | `GATE_BASED` (LOQC) / `FUSION_BASED` · `PHOTONIC` | `PhotonicCircuitSpec`, `SinglePhotonSourceSpec`, `FockState`, `HOMResult`, `FBQCRunConfig`, `PhotonicVQEResult`, `PhotonicAnalogSimResult` |
-| [`dtu_gbs`](#dtu_gbs) | Photonic / GBS | Gaussian Boson Sampling: hafnian, vibronic spectra, graph clique finding, TDM/Borealis | `GBS` · `PHOTONIC` | `GBSProgramSpec`, `GaussianStateSpec`, `HafnianResult`, `GBSCliqueFindingResult`, `VibronicSpectrumResult`, `TDMGBSResult` |
+| [`mqsdk_photoq`](#mqsdk_photoq) | Photonic / GBS | Linear-optics chips + FBQC, Gaussian Boson Sampling, pseudo-PNRD click-counting methods, ORCA PT Series / DTU QCloud / Xanadu Aurora backends, dominating-set/BBS benchmark | `GATE_BASED` (LOQC) / `FUSION_BASED` / `GBS` · `PHOTONIC` | `PhotonicCircuitSpec`, `GBSProgramSpec`, `HafnianResult`, `PseudoPNRDSpec`, `ClickPatternProbabilityResult`, `MethodComparison`, `TimeBinInterferometerSpec`, `QCloudJobSpec`, `BBSResult` |
 | [`johnrscott_mbqc_fpga`](#johnrscott_mbqc_fpga) | Other paradigms | MBQC-FPGA 16-bit program word, measurement patterns | `MBQC` · — (FPGA control logic) | `MBQCPattern`, `MBQCProgramWord`, `MBQCExecutionResult` — bit-exact 16-bit FPGA word |
 | [`quera_bloqade`](#quera_bloqade) | Other paradigms | Neutral atom AHS: Bloqade / Aquila atom arrangements, waveforms, drives, results | `ADIABATIC` · `NEUTRAL_ATOM` | `AtomArrangement`, `AHSProgramSpec`, `AHSDrivingField`, `AHSTimeSeries`, `AHSTaskResult`, `AHSShotResult`, `AquilaDeviceSpec`, `AHSBatchSpec` |
 | [`qedma_qesem`](#qedma_qesem) | Error mitigation & vendors | QESEM (Qedma) error suppression and mitigation | `GATE_BASED` + `QESEM` · `SUPERCONDUCTING` | `QESEMJobRecord`, `QESEMJobSpec`, `QESEMObservableResult`, `QESEMNoiseScalingResult`, `QESEMCircuitOptions`, `QESEMExecutionDetails`, `QESEMCharacterizationResult` |
@@ -124,7 +123,7 @@ Properties: `.value` → Python `complex`. Class method: `.from_complex(c)`.
 | `parameter_bindings` | `list[ParameterBinding]` | `[]` | Bound parameter values |
 | `gate_counts` | `dict[str, int]` | `{}` | Gate-name → count (populated after transpilation) |
 | `measurement_pattern` | `dict \| None` | `None` | MBQC measurement pattern — vendor-neutral dict; pass e.g. a `johnrscott_mbqc_fpga.MBQCPattern` (auto-dumped), rehydrate with `MBQCPattern.model_validate(...)` |
-| `photonic_circuit` | `dict \| None` | `None` | Photonic / fusion-based circuit — vendor-neutral dict; pass e.g. a `dtu_photonic.PhotonicCircuitSpec` (auto-dumped) |
+| `photonic_circuit` | `dict \| None` | `None` | Photonic / fusion-based circuit — vendor-neutral dict; pass e.g. a `mqsdk_photoq.PhotonicCircuitSpec` (auto-dumped) |
 
 **Methods:**
 
@@ -434,9 +433,11 @@ rr = QForteRunResult.model_validate(result.vendor_results["qforte_result"])
 
 Established keys (each carries the vendor schema of the same name):
 `photonic_simulation`, `photonic_vqe`, `photonic_sensitivity`, `hom_result`,
-`indist_purification`, `photonic_analog_sim` (dtu_photonic) · `qpe_result`,
-`qchem_pipeline` (microsoft_qdk) · `gbs_sampling`, `gbs_clique_finding`,
-`vibronic_spectrum`, `tdm_gbs` (dtu_gbs) · `kqd_pipeline` (mqsdk_qse) ·
+`indist_purification`, `photonic_analog_sim`, `gbs_sampling`,
+`gbs_clique_finding`, `vibronic_spectrum`, `tdm_gbs`,
+`click_pattern_probability`, `method_comparison`, `pt_series_sampling`,
+`qcloud_job`, `bbs_result`, `dominating_set_benchmark` (mqsdk_photoq) ·
+`qpe_result`, `qchem_pipeline` (microsoft_qdk) · `kqd_pipeline` (mqsdk_qse) ·
 `qesem_result` (qedma_qesem) · `qcschema_record` (molssi_qcschema) ·
 `ahs_result` (quera_bloqade) · `slowquant_record` (erikkjellgren_slowquant) ·
 `qforte_result` (evangelistalab_qforte) · `fire_opal_result`, `mitiq_result`,
@@ -693,11 +694,19 @@ Full documentation → [docs/integrations/gsopt.md](integrations/gsopt.md)
 
 ---
 
-## `dtu_photonic`
+## `mqsdk_photoq`
 
-Full documentation → [docs/integrations/photonic.md](integrations/photonic.md)
+Full documentation → [docs/integrations/photonic.md](integrations/photonic.md) · [docs/integrations/gbs.md](integrations/gbs.md)
 
-Computing model: `ComputingModel.GATE_BASED` (MZI chips, permanent-based LOQC) and `ComputingModel.FUSION_BASED` (FBQC). Qubit modality: `QubitModality.PHOTONIC` in both cases.
+Consolidates the former `dtu_photonic` and `dtu_gbs` modules together with the newer developments in the MQSdk **photoq** repository. Covers three photonic paradigms and their new backends and applications:
+
+- **Linear-optics chips + FBQC** — `ComputingModel.GATE_BASED` (permanent-based LOQC) / `ComputingModel.FUSION_BASED`.
+- **Gaussian Boson Sampling** — `ComputingModel.GBS` (hafnian-based, covariance-matrix formalism).
+- **Pseudo-PNRD (click-counting) methods** — the four simulation methods of the photoq paper for GBS read out by multiplexed on/off detectors.
+
+Qubit modality: `QubitModality.PHOTONIC` throughout.
+
+### A. Linear-optics photonic chips + FBQC
 
 ### Enums
 
@@ -845,20 +854,18 @@ All stages captured in `QChemPipelineSpec`.
 
 ---
 
-## `dtu_gbs`
+## `mqsdk_photoq` — B. Gaussian Boson Sampling, pseudo-PNRD methods & backends
 
-Full documentation → [docs/integrations/gbs.md](integrations/gbs.md)
+Continuation of the [`mqsdk_photoq`](#mqsdk_photoq) module (the LOQC/FBQC types are documented above). `ComputingModel.GBS`, `QubitModality.PHOTONIC`.
 
-Computing model: `ComputingModel.GBS`. Qubit modality: `QubitModality.PHOTONIC`
+**Key distinction from the LOQC section:** LOQC = permanent-based / MZI chips / Fock states; GBS = hafnian-based / Gaussian states (covariance-matrix formalism).
 
-**Key distinction from `photonic`:** `photonic` = permanent-based / MZI chips / Fock states. `gbs` = hafnian-based / Gaussian states (covariance matrix formalism).
-
-### Enums
+### GBS enums
 
 | Enum | Values |
 |---|---|
-| `GBSBackendType` | `gaussian_simulator`, `fock_simulator`, `xanadu_x8`, `xanadu_borealis`, `aws_braket_borealis` |
-| `GBSMeasurementType` | `fock` (PNR), `threshold` (click), `homodyne`, `heterodyne` |
+| `GBSBackendType` | `gaussian_simulator`, `fock_simulator`, `xanadu_x8`, `xanadu_borealis`, `aws_braket_borealis`, `orca_pt_series`, `dtu_qcloud` |
+| `GBSMeasurementType` | `fock` (PNR), `threshold` (click), `pseudo_pnr` (click-counting), `homodyne`, `heterodyne` |
 | `QuadratureOrdering` | `xp_blocks` (SF default), `interleaved` (DTU-GBS convention) |
 | `GaussianStateType` | `vacuum`, `coherent`, `squeezed`, `two_mode_squeezed`, `thermal`, `cluster_1d`, `cluster_2d` |
 | `TDMSqueezingLevel` | `low`, `medium`, `high` (Borealis presets) |
@@ -928,6 +935,47 @@ Computing model: `ComputingModel.GBS`. Qubit modality: `QubitModality.PHOTONIC`
 | Type | Description |
 |---|---|
 | `ClusterStateSpec` | `state_type`, `num_nodes`, `squeezing_r`, `measurement_angles`, `boundary_condition` |
+
+### C. Pseudo-PNRD (click-counting) detectors & the four simulation methods
+
+For GBS devices read out by *pseudo photon-number-resolving detectors* — a mode demultiplexed across `N` on/off (click) detectors that report the number `k` of branches that clicked. From the photoq paper *"Classical simulation of Gaussian boson sampling with click-counting detectors"*.
+
+| Enum | Values |
+|---|---|
+| `SimulationMethod` | `kensingtonian_formula` (i), `hafnian_modified` (ii), `tensor_network_mps` (iii), `brute_force_povm` (iv), `thermal_povm` |
+| `DistributionDistanceMetric` | `total_variation`, `kl_divergence`, `bhattacharyya`, `fidelity` |
+
+| Type | Description |
+|---|---|
+| `PseudoPNRDSpec` | `num_branches` (N), `multiplexing`, `detector_efficiency`; `collision_error(n)` helper |
+| `ClickPatternProbabilityResult` | `method`, `click_patterns`, `probabilities`, `total_probability`, `fock_cutoff` |
+| `KensingtonianResult` | `click_pattern`, `value: ComplexNumber`, `probability` (method i matrix function) |
+| `MPSSimulationConfig` | `physical_dimension` (d), `bond_dimension` (χ), `truncation_fidelity` (f_t), `dd` |
+| `MethodComparison` | per-method `computation_time_s`, `total_variation_distance`, `kl_divergence`, `fidelity` (Figs. 5–11) |
+
+### D. New backends
+
+| Type | Description |
+|---|---|
+| `TimeBinInterferometerSpec` | ORCA PT Series TBI: `num_modes`, `num_loops`, `beamsplitter_angles`, `squeezing`, `input_type` |
+| `PTSeriesSamplingConfig` / `PTSeriesSamplingResult` | PT-1/PT-2 sampling (simulated or hardware); GBS / Fock / distinguishable inputs |
+| `QCloudJobType` | `tn-covariance`, `tn-sampling`, `redpitaya` (DTU QCloud REST API v1) |
+| `TNCovarianceParams` / `TNSamplingParams` | Typed payloads for the two QCloud GBS job shapes |
+| `QCloudJobSpec` / `QCloudJobResult` | Submitted job + status/result (covariance matrix or samples) |
+| `AuroraExperiment` / `AuroraDatasetSpec` | Xanadu Aurora dataset slice (`cluster_state` / `decoder_demo`), S3 key pinning |
+
+Backend factory methods: `BackendSpec.orca_pt_series(...)`, `BackendSpec.dtu_qcloud(...)`, `BackendSpec.xanadu_aurora(...)` (plus the existing `xanadu_x8`, `xanadu_borealis`, `strawberry_fields_gaussian`).
+
+### E. Applications
+
+| Type | Description |
+|---|---|
+| `DominatingSetProblemSpec` | Minimum-dominating-set instance: `num_nodes`, `edges`, `seed` |
+| `BBSConfig` / `BBSResult` | Binary Bosonic Solver (arXiv:2605.30935): `num_iterations`, `num_samples`, timing breakdown, `convergence_iteration` |
+| `DominatingSetBenchmarkResult` | BBS vs classical baselines across the graph family (`mean_set_size`, `runtime_s` per method/size) |
+| `LatentPriorConfig` / `LatentPriorResult` | GBS latent-prior generation for Pep-Q-GAN peptide design |
+
+Result entries in `QuantumResult.vendor_results`: `photonic_simulation`, `photonic_vqe`, `photonic_sensitivity`, `hom_result`, `indist_purification`, `photonic_analog_sim`, `gbs_sampling`, `gbs_clique_finding`, `vibronic_spectrum`, `tdm_gbs`, `click_pattern_probability`, `method_comparison`, `pt_series_sampling`, `qcloud_job`, `bbs_result`, `dominating_set_benchmark`.
 
 ---
 

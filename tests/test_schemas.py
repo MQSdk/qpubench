@@ -1574,7 +1574,7 @@ def test_backend_spec_azure_quantum():
 # ---------------------------------------------------------------------------
 
 def test_gbs_program_spec_fock_path():
-    from qpubench.schemas.dtu_gbs import (
+    from qpubench.schemas.mqsdk_photoq import (
         GBSMeasurementType,
         GBSProgramSpec,
         InterferometerSpec,
@@ -1603,7 +1603,7 @@ def test_gbs_program_spec_fock_path():
 
 
 def test_gbs_program_spec_s2gate_path():
-    from qpubench.schemas.dtu_gbs import GBSMeasurementType, GBSProgramSpec, S2GateSpec
+    from qpubench.schemas.mqsdk_photoq import GBSMeasurementType, GBSProgramSpec, S2GateSpec
     prog = GBSProgramSpec(
         num_modes=4,
         s2_gates=[S2GateSpec(mode_a=i, mode_b=i + 4, r=1.0) for i in range(4)],
@@ -1614,7 +1614,7 @@ def test_gbs_program_spec_s2gate_path():
 
 
 def test_gbs_sample_properties():
-    from qpubench.schemas.dtu_gbs import GBSSample
+    from qpubench.schemas.mqsdk_photoq import GBSSample
     s = GBSSample(photon_numbers=[0, 1, 2, 0, 1])
     assert s.total_photons == 4
     assert s.num_clicks == 0   # no click_pattern set
@@ -1625,7 +1625,7 @@ def test_gbs_sample_properties():
 
 def test_gbs_sampling_result_roundtrip():
     import json
-    from qpubench.schemas.dtu_gbs import (
+    from qpubench.schemas.mqsdk_photoq import (
         GBSBackendType,
         GBSMeasurementType,
         GBSProgramSpec,
@@ -1660,7 +1660,7 @@ def test_gbs_sampling_result_roundtrip():
 
 
 def test_gaussian_state_spec():
-    from qpubench.schemas.dtu_gbs import GaussianStateSpec, GaussianStateType, QuadratureOrdering
+    from qpubench.schemas.mqsdk_photoq import GaussianStateSpec, GaussianStateType, QuadratureOrdering
     # 2-mode squeezed vacuum: 4×4 covariance matrix (trivial identity for vacuum)
     V = [1.0] * 16   # placeholder 4×4 flattened
     state = GaussianStateSpec(
@@ -1674,7 +1674,7 @@ def test_gaussian_state_spec():
 
 
 def test_hafnian_matrix_spec():
-    from qpubench.schemas.dtu_gbs import HafnianMatrixSpec, QuadratureOrdering
+    from qpubench.schemas.mqsdk_photoq import HafnianMatrixSpec, QuadratureOrdering
     # 4×4 A matrix for 2 modes
     spec = HafnianMatrixSpec(
         num_modes=2,
@@ -1687,7 +1687,7 @@ def test_hafnian_matrix_spec():
 
 
 def test_takagi_decomposition_spec():
-    from qpubench.schemas.dtu_gbs import TakagiDecompositionSpec
+    from qpubench.schemas.mqsdk_photoq import TakagiDecompositionSpec
     import math
     spec = TakagiDecompositionSpec(
         singular_values=[0.8, 0.6, 0.4, 0.2],
@@ -1703,7 +1703,7 @@ def test_takagi_decomposition_spec():
 
 
 def test_gbs_clique_finding_result():
-    from qpubench.schemas.dtu_gbs import GBSCliqueFindingResult, GBSGraphConfig, GraphScalingMethod
+    from qpubench.schemas.mqsdk_photoq import GBSCliqueFindingResult, GBSGraphConfig, GraphScalingMethod
     A = [0, 1, 1, 0,
          1, 0, 1, 1,
          1, 1, 0, 1,
@@ -1732,7 +1732,7 @@ def test_gbs_clique_finding_result():
 
 
 def test_vibronic_spectrum_config_and_result():
-    from qpubench.schemas.dtu_gbs import (
+    from qpubench.schemas.mqsdk_photoq import (
         DuschinskyResult,
         NormalModeData,
         VibronicGBSParams,
@@ -1795,7 +1795,7 @@ def test_vibronic_spectrum_config_and_result():
 
 
 def test_tdm_gbs_config():
-    from qpubench.schemas.dtu_gbs import TDMDelaySpec, TDMGBSConfig, TDMSqueezingLevel
+    from qpubench.schemas.mqsdk_photoq import TDMDelaySpec, TDMGBSConfig, TDMSqueezingLevel
     delays = TDMDelaySpec(delays=[1, 6, 36], effective_modes=216)
     cfg = TDMGBSConfig(
         delays=delays,
@@ -1810,7 +1810,7 @@ def test_tdm_gbs_config():
 
 
 def test_cluster_state_spec():
-    from qpubench.schemas.dtu_gbs import ClusterStateSpec, GaussianStateType
+    from qpubench.schemas.mqsdk_photoq import ClusterStateSpec, GaussianStateType
     import math
     spec = ClusterStateSpec(
         state_type=GaussianStateType.CLUSTER_1D,
@@ -1844,6 +1844,149 @@ def test_backend_spec_strawberry_fields_gaussian():
     assert b.computing_model == ComputingModel.GBS
     assert b.qubit_modality == QubitModality.PHOTONIC
     assert b.simulator is True
+
+
+# ---------------------------------------------------------------------------
+# photoq additions: pseudo-PNRD click-counting, simulation methods, new
+# backends (ORCA PT Series, DTU QCloud, Xanadu Aurora), dominating-set / BBS
+# ---------------------------------------------------------------------------
+
+def test_pseudo_pnrd_collision_error():
+    from qpubench.schemas.mqsdk_photoq import PseudoPNRDSpec
+    det = PseudoPNRDSpec(num_branches=4, multiplexing="spatial")
+    # 1 photon into 4 branches can never collide.
+    assert det.collision_error(1) == 0.0
+    # 2 photons into 4 branches: ways_total=C(5,2)=10, allowed=C(4,2)=6 -> 0.4.
+    assert abs(det.collision_error(2) - 0.4) < 1e-12
+    # More photons than branches always collide.
+    assert det.collision_error(5) == 1.0
+    with pytest.raises(ValueError):
+        PseudoPNRDSpec(num_branches=0)
+
+
+def test_click_pattern_probability_result():
+    from qpubench.schemas.mqsdk_photoq import (
+        ClickPatternProbabilityResult, SimulationMethod,
+    )
+    res = ClickPatternProbabilityResult(
+        num_modes=2, num_branches=2,
+        method=SimulationMethod.KENSINGTONIAN_FORMULA,
+        click_patterns=[[0, 0], [1, 0], [0, 1], [1, 1]],
+        probabilities=[0.5, 0.2, 0.2, 0.1],
+        total_probability=1.0, fock_cutoff=8,
+    )
+    assert len(res.click_patterns) == len(res.probabilities) == 4
+    assert res.method == SimulationMethod.KENSINGTONIAN_FORMULA
+    # length mismatch is rejected
+    with pytest.raises(ValueError):
+        ClickPatternProbabilityResult(
+            num_modes=2, num_branches=2,
+            method=SimulationMethod.BRUTE_FORCE_POVM,
+            click_patterns=[[0, 0]], probabilities=[0.5, 0.5],
+        )
+
+
+def test_method_comparison_roundtrip():
+    from qpubench.schemas.mqsdk_photoq import MethodComparison, SimulationMethod
+    mc = MethodComparison(
+        num_modes=4, num_branches=4,
+        reference_method=SimulationMethod.BRUTE_FORCE_POVM,
+        methods=[SimulationMethod.KENSINGTONIAN_FORMULA, SimulationMethod.TENSOR_NETWORK_MPS],
+        computation_time_s={"kensingtonian_formula": 0.01, "tensor_network_mps": 1.2},
+        total_variation_distance={"tensor_network_mps": 3e-4},
+        mps_truncation_fidelity=0.999, mps_bond_dimension=100,
+    )
+    dumped = mc.model_dump()
+    assert MethodComparison.model_validate(dumped).mps_bond_dimension == 100
+
+
+def test_time_bin_interferometer_and_pt_series():
+    from qpubench.schemas.mqsdk_photoq import (
+        TimeBinInterferometerSpec, PTSeriesSamplingConfig, PTSeriesSamplingResult,
+        PTSeriesInputType,
+    )
+    tbi = TimeBinInterferometerSpec(
+        num_modes=4, num_loops=2, input_type=PTSeriesInputType.GBS,
+        squeezing=[0.5, 0.5, 0.5, 0.5],
+    )
+    # 2 loops on 4 modes -> 2 * (4-1) = 6 angles expected.
+    assert tbi.num_angles_expected == 6
+    cfg = PTSeriesSamplingConfig(interferometer=tbi, num_samples=100, device="PT-2")
+    res = PTSeriesSamplingResult(
+        config=cfg, samples=[[0, 1, 0, 2], [1, 0, 1, 0]], mean_photon_number=1.25,
+    )
+    assert res.config.interferometer.num_modes == 4
+    assert len(res.samples) == 2
+
+
+def test_qcloud_job_spec_and_params():
+    from qpubench.schemas.mqsdk_photoq import (
+        QCloudJobSpec, QCloudJobType, QCloudJobResult, TNSamplingParams,
+        TNCovarianceParams,
+    )
+    cov = TNCovarianceParams(nmodes=8, r_db=8.0, loss=0.5, basis="pi4")
+    assert cov.nmodes == 8
+    tn = TNSamplingParams(cov_matrix=[1.0, 0.0, 0.0, 1.0], d=8, chi=100, dd=1, N=1000, n=1)
+    job = QCloudJobSpec(job_type=QCloudJobType.TN_SAMPLING, params=tn.model_dump(), worker="tn-sampling")
+    assert job.job_type.value == "tn-sampling"
+    assert job.base_url == "https://qcloud.dtu.dk"
+    result = QCloudJobResult(spec=job, status="succeeded", samples=[[0, 1, 2]])
+    assert result.status == "succeeded"
+
+
+def test_aurora_dataset_spec():
+    from qpubench.schemas.mqsdk_photoq import AuroraDatasetSpec, AuroraExperiment
+    spec = AuroraDatasetSpec(
+        experiment=AuroraExperiment.DECODER_DEMO, condition="signal",
+        batch_index=3, s3_key="decoder_demo/signal/batch_3/quadratures.npy",
+    )
+    assert spec.num_qubit_modes == 12
+    assert spec.experiment == AuroraExperiment.DECODER_DEMO
+
+
+def test_dominating_set_bbs():
+    from qpubench.schemas.mqsdk_photoq import (
+        DominatingSetProblemSpec, BBSConfig, BBSResult,
+        DominatingSetBenchmarkResult, PTSeriesInputType, GBSBackendType,
+    )
+    problem = DominatingSetProblemSpec(num_nodes=6, edges=[(0, 1), (1, 2), (2, 3)], seed=0)
+    cfg = BBSConfig(
+        problem=problem, num_iterations=50, num_samples=100,
+        input_state=PTSeriesInputType.GBS, backend=GBSBackendType.ORCA_PT_SERIES,
+    )
+    res = BBSResult(
+        config=cfg, best_bitstring=[1, 0, 0, 1, 0, 0], best_set_size=2,
+        is_dominating=True, energy_history=[5.0, 3.0, 2.0], convergence_iteration=3,
+    )
+    assert res.best_set_size == 2
+    assert res.is_dominating is True
+    bench = DominatingSetBenchmarkResult(
+        graph_sizes=[6, 8], methods=["BBS 1-loop (gbs)", "greedy"],
+        mean_set_size={"BBS 1-loop (gbs)": [2.0, 3.0], "greedy": [2.3, 3.7]},
+    )
+    assert bench.graph_sizes == [6, 8]
+
+
+def test_backend_spec_orca_pt_series():
+    b = BackendSpec.orca_pt_series(num_modes=8, num_loops=2, device="PT-2")
+    assert b.provider == "orca"
+    assert b.computing_model == ComputingModel.GBS
+    assert b.qubit_modality == QubitModality.PHOTONIC
+    assert b.auth["num_loops"] == "2"
+
+
+def test_backend_spec_dtu_qcloud():
+    b = BackendSpec.dtu_qcloud(job_type="tn-sampling")
+    assert b.provider == "dtu_qcloud"
+    assert b.computing_model == ComputingModel.GBS
+    assert b.auth["job_type"] == "tn-sampling"
+
+
+def test_backend_spec_xanadu_aurora():
+    b = BackendSpec.xanadu_aurora(experiment="decoder_demo")
+    assert b.provider == "xanadu"
+    assert b.num_qubits == 12
+    assert b.auth["experiment"] == "decoder_demo"
 
 
 # ---------------------------------------------------------------------------

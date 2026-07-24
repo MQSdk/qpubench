@@ -187,7 +187,7 @@ Lives in
 \midrule\noalign{}
 \endhead
 \textbf{Schema} & \emph{What} are you benchmarking? & \texttt{schemas/}
---- 38 Pydantic v2 modules (= ``Schema v3.0.0'') \\
+--- 37 Pydantic v2 modules (= ``Schema v3.1.0'') \\
 \textbf{Adapter} & \emph{How} does it run? & \texttt{backends/} +
 \texttt{integrations/} (next slide) \\
 \textbf{Store} & \emph{How} is it persisted? & \texttt{store.py} ---
@@ -391,7 +391,7 @@ Key types
 \texttt{bind()}, \texttt{is\_parametric()} \\
 \texttt{observable} & \texttt{SparsePauliObservable},
 \texttt{PauliTerm} \\
-\texttt{backend} & \texttt{BackendSpec} --- 28 factory constructors \\
+\texttt{backend} & \texttt{BackendSpec} --- 31 factory constructors \\
 \bottomrule\noalign{}
 \end{longtable}
 \end{frame}
@@ -472,10 +472,9 @@ Computing model (qubit modality)
 \endhead
 \texttt{johnrscott\_mbqc\_fpga} & MBQC-FPGA --- bit-exact 16-bit program
 word \\
-\texttt{dtu\_photonic} & LOQC / FBQC (photonic) --- Fock states, HOM,
-photonic VQE/analog \\
-\texttt{dtu\_gbs} & GBS (photonic) --- hafnian, vibronic,
-TDM/Borealis \\
+\texttt{mqsdk\_photoq} & Photonic LOQC/FBQC + GBS --- Fock states, HOM,
+photonic VQE/analog, hafnian, vibronic, TDM/Borealis, pseudo-PNRD
+methods, ORCA/QCloud/Aurora backends, BBS \\
 \texttt{microsoft\_qdk} & Gate-based (QPE technique) --- SCF → active
 space → resource estimation \\
 \texttt{mqsdk\_qse} & Gate-based (KQD technique) --- Krylov Quantum
@@ -566,7 +565,7 @@ modalities, but not every pairing exists.
 \item
   \texttt{NEUTRAL\_ATOM} --- QuEra
 \item
-  \texttt{PHOTONIC} --- Quandela, Xanadu
+  \texttt{PHOTONIC} --- Quandela, Xanadu, ORCA, DTU
 \item
   \texttt{SILICON\_SPIN} --- Quantum Motion
 \end{itemize}
@@ -1365,14 +1364,20 @@ Schema modules are named
 \texttt{\textless{}org\textgreater{}\_\textless{}package\textgreater{}.py}
 --- one glance tells you who maintains it and what it's called.
 
-\begin{longtable}[]{@{}ll@{}}
+\begin{longtable}[]{@{}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 2\tabcolsep) * \real{0.4815}}
+  >{\raggedright\arraybackslash}p{(\columnwidth - 2\tabcolsep) * \real{0.5185}}@{}}
 \toprule\noalign{}
-Integration & Schema module \\
+\begin{minipage}[b]{\linewidth}\raggedright
+Integration
+\end{minipage} & \begin{minipage}[b]{\linewidth}\raggedright
+Schema module
+\end{minipage} \\
 \midrule\noalign{}
 \endhead
 Cebule SDK & \texttt{mqsdk\_cebule} \\
-Photochipsim / FBQC & \texttt{dtu\_photonic} \\
-DTU-GBS / photonic\_QC & \texttt{dtu\_gbs} \\
+photoq (photochipsim, DTU-GBS, photonic\_QC, pseudo-PNRD,
+ORCA/Xanadu/DTU backends) & \texttt{mqsdk\_photoq} \\
 QESEM (Qedma) & \texttt{qedma\_qesem} \\
 Bloqade / Aquila & \texttt{quera\_bloqade} \\
 IQM Resonance (garnet · deneb · sirius) & --- \\
@@ -1768,7 +1773,7 @@ CI if the schema version or module count drifts between code and docs \\
 \phantomsection\label{roadmap-links}
 \textbf{Repository}: \texttt{github.com/mqsdk/qpubench}
 
-\textbf{Schema v3.0.0} --- 38 modules · 7 computing models × 5 qubit
+\textbf{Schema v3.1.0} --- 37 modules · 7 computing models × 5 qubit
 modalities · zero quantum SDK deps in core
 
 \vspace{0.5em}

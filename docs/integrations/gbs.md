@@ -1,8 +1,8 @@
 # GBS (Gaussian Boson Sampling) integration
 
-qpubench models Gaussian Boson Sampling in `src/qpubench/schemas/dtu_gbs.py`. This covers the Gaussian-state / hafnian-based formalism — **distinct from `dtu_photonic.py`** which uses the permanent-based / Fock-state formalism for linear-optics chips.
+qpubench models Gaussian Boson Sampling in `src/qpubench/schemas/mqsdk_photoq.py` (the GBS section). This covers the Gaussian-state / hafnian-based formalism — **distinct from the LOQC section of the same module**, which uses the permanent-based / Fock-state formalism for linear-optics chips.
 
-| | `dtu_photonic.py` | `dtu_gbs.py` |
+| | LOQC (permanent) | GBS (hafnian) |
 |---|---|---|
 | State representation | Fock states | Covariance matrix (Gaussian states) |
 | Amplitude formula | Permanent | Hafnian |
@@ -16,7 +16,7 @@ Computing model: `ComputingModel.GBS`. Qubit modality: `QubitModality.PHOTONIC`
 ## Direct GBS sampling
 
 ```python
-from qpubench.schemas.dtu_gbs import (
+from qpubench.schemas.mqsdk_photoq import (
     SqueezingGateSpec, S2GateSpec, RotationGateSpec,
     InterferometerSpec, GBSProgramSpec, GBSMeasurementType,
     GBSSamplingConfig, GBSSamplingResult, GBSSample,
@@ -61,7 +61,7 @@ Store results in `QuantumResult.vendor_results["gbs_sampling"]`.
 ## Hafnian computation
 
 ```python
-from qpubench.schemas.dtu_gbs import (
+from qpubench.schemas.mqsdk_photoq import (
     GaussianStateSpec, HafnianMatrixSpec,
     HafnianComputationSpec, HafnianResult,
     QuadratureOrdering,
@@ -99,7 +99,7 @@ haf_result = HafnianResult(
 Encode a graph adjacency matrix into a GBS device via Takagi decomposition, then use the photon-number samples to find dense subgraphs (cliques).
 
 ```python
-from qpubench.schemas.dtu_gbs import (
+from qpubench.schemas.mqsdk_photoq import (
     GBSGraphConfig, GraphScalingMethod,
     TakagiDecompositionSpec, GBSCliqueFindingResult,
 )
@@ -145,7 +145,7 @@ Store in `QuantumResult.gbs_clique_finding`.
 Compute Frank-Condon profiles for molecular electronic transitions using GBS:
 
 ```python
-from qpubench.schemas.dtu_gbs import (
+from qpubench.schemas.mqsdk_photoq import (
     VibronicSpectrumConfig, NormalModeData, DuschinskyResult,
     VibronicGBSParams, VibronicSpectrumResult,
 )
@@ -206,7 +206,7 @@ Store in `QuantumResult.vibronic_spectrum`.
 Xanadu Borealis uses a time-domain multiplexed (TDM) architecture with three fibre-loop delays [1, 6, 36] to realise 216 effective modes:
 
 ```python
-from qpubench.schemas.dtu_gbs import (
+from qpubench.schemas.mqsdk_photoq import (
     TDMDelaySpec, TDMGBSConfig, TDMGBSResult, TDMSqueezingLevel,
 )
 
@@ -241,7 +241,7 @@ backend = BackendSpec.xanadu_borealis(via_braket=True)
 ## CV cluster states
 
 ```python
-from qpubench.schemas.dtu_gbs import ClusterStateSpec, GaussianStateType
+from qpubench.schemas.mqsdk_photoq import ClusterStateSpec, GaussianStateType
 import math
 
 cluster = ClusterStateSpec(
@@ -255,13 +255,208 @@ cluster = ClusterStateSpec(
 
 ---
 
+## Pseudo-PNRD (click-counting) detectors & the four simulation methods
+
+The photoq paper *"Classical simulation of Gaussian boson sampling with click-counting detectors"* studies GBS devices read out by **pseudo photon-number-resolving detectors** (pPNRD): a mode is demultiplexed across `N` on/off (click) detectors, and the detector reports the number `k ∈ {0, …, N}` of branches that clicked. This is the `GBSMeasurementType.PSEUDO_PNR` detector model.
+
+```python
+from qpubench.schemas.mqsdk_photoq import (
+    PseudoPNRDSpec, SimulationMethod, ClickPatternProbabilityResult,
+    KensingtonianResult, MethodComparison, MPSSimulationConfig,
+)
+from qpubench.schemas.primitives import ComplexNumber
+
+# One mode demultiplexed across N=4 on/off detectors.
+det = PseudoPNRDSpec(num_branches=4, multiplexing="spatial")
+det.collision_error(2)   # 0.4 — P(two of 2 photons share one of 4 branches)
+
+# The full click-pattern distribution P(k), computed by method i.
+dist = ClickPatternProbabilityResult(
+    num_modes=2,
+    num_branches=4,
+    method=SimulationMethod.KENSINGTONIAN_FORMULA,
+    click_patterns=[[0, 0], [1, 0], [0, 1], [1, 1]],
+    probabilities=[0.61, 0.14, 0.14, 0.11],
+    total_probability=1.0,
+    computation_time_s=0.002,
+)
+
+# Method i also exposes the raw matrix-function value per pattern.
+ken = KensingtonianResult(
+    click_pattern=[1, 1], num_branches=4,
+    value=ComplexNumber(re=0.11, im=0.0), probability=0.11,
+)
+```
+
+The `SimulationMethod` enum names the paper's four methods (and one variant):
+
+| `SimulationMethod` | Paper | Idea | photoq code |
+|---|---|---|---|
+| `KENSINGTONIAN_FORMULA` | i | Kensingtonian matrix function — the click-counting analogue of the hafnian (Eq. 26, arXiv:2305.00853) | `methods/kenform/` |
+| `HAFNIAN_MODIFIED` | ii | Fock/hafnian probabilities modified by the pPNRD model `P_{k,n}(N)` | `methods/kenhaf/` |
+| `TENSOR_NETWORK_MPS` | iii | Matrix-product-state simulation with a truncation-fidelity cutoff `f_t` | `methods/mps/`, `mps_fast/` |
+| `BRUTE_FORCE_POVM` | iv | Explicit POVM trace (demultiplex + vacuum projection); `THERMAL_POVM` is the thermal-Gaussian variant | `methods/utility/ppnrd.py` |
+
+Store a distribution in `QuantumResult.vendor_results["click_pattern_probability"]`.
+
+### Method comparison
+
+The paper's Figs. 5–11 compare the methods on one circuit (timing, TVD, KL, fidelity vs a reference method):
+
+```python
+mc = MethodComparison(
+    num_modes=4, num_branches=4,
+    reference_method=SimulationMethod.BRUTE_FORCE_POVM,
+    methods=[SimulationMethod.KENSINGTONIAN_FORMULA, SimulationMethod.TENSOR_NETWORK_MPS],
+    computation_time_s={"kensingtonian_formula": 0.01, "tensor_network_mps": 1.2},
+    total_variation_distance={"tensor_network_mps": 3e-4},
+    fidelity={"tensor_network_mps": 0.9997},
+    mps_truncation_fidelity=0.999, mps_bond_dimension=100,
+    circuit_label="clements_4mode",
+)
+```
+
+The MPS parameters double as the DTU QCloud `tn-sampling` job knobs (see below):
+
+```python
+mps = MPSSimulationConfig(
+    num_modes=8, physical_dimension=8, bond_dimension=100,
+    truncation_fidelity=0.999, num_branches=4,
+)
+```
+
+Store a comparison in `QuantumResult.vendor_results["method_comparison"]`.
+
+---
+
+## ORCA PT Series (time-bin interferometer)
+
+ORCA's PT-1/PT-2 are **time-bin interferometers**: one physical beamsplitter plus one or more fibre delay loops, applied across `num_modes` time bins. Each loop couples every adjacent pair of bins, so a loop needs `num_modes - 1` beamsplitter angles.
+
+```python
+from qpubench.schemas.mqsdk_photoq import (
+    TimeBinInterferometerSpec, PTSeriesSamplingConfig,
+    PTSeriesSamplingResult, PTSeriesInputType,
+)
+from qpubench.schemas.backend import BackendSpec
+
+tbi = TimeBinInterferometerSpec(
+    num_modes=8, num_loops=1,
+    input_type=PTSeriesInputType.GBS,     # or FOCK / DISTINGUISHABLE (classical control)
+    squeezing=[0.5] * 8,
+    beamsplitter_angles=[0.4] * 7,        # length num_loops * (num_modes - 1)
+)
+tbi.num_angles_expected                   # 7
+
+cfg = PTSeriesSamplingConfig(interferometer=tbi, num_samples=1000, device="PT-2")
+res = PTSeriesSamplingResult(
+    config=cfg, samples=[[0, 1, 0, 2, 1, 0, 0, 1]], mean_photon_number=1.2,
+)
+
+backend = BackendSpec.orca_pt_series(num_modes=8, num_loops=1, device="PT-2")
+```
+
+Store in `QuantumResult.vendor_results["pt_series_sampling"]`.
+
+---
+
+## DTU QCloud (REST API v1)
+
+`qcloud.dtu.dk` exposes a Bearer-token REST API with two GBS job types: `tn-covariance` (build a covariance matrix server-side) and `tn-sampling` (tensor-network GBS sampling — the successor of the DASQ Kensingtonian sampler, aligned with the paper's MPS method).
+
+```python
+from qpubench.schemas.mqsdk_photoq import (
+    QCloudJobType, QCloudJobSpec, QCloudJobResult,
+    TNCovarianceParams, TNSamplingParams,
+)
+from qpubench.schemas.backend import BackendSpec
+
+cov = TNCovarianceParams(nmodes=64, r_db=8.0, loss=0.5, basis="pi4")
+cov_job = QCloudJobSpec(
+    job_type=QCloudJobType.TN_COVARIANCE, params=cov.model_dump(), worker="catlab",
+)
+
+tn = TNSamplingParams(cov_matrix=[1.0, 0.0, 0.0, 1.0], d=8, chi=100, dd=1, N=10_000, n=1)
+sampling_job = QCloudJobSpec(
+    job_type=QCloudJobType.TN_SAMPLING, params=tn.model_dump(), worker="tn-sampling",
+)
+
+result = QCloudJobResult(spec=sampling_job, status="succeeded", samples=[[0, 1, 2]])
+
+backend = BackendSpec.dtu_qcloud(job_type="tn-sampling")
+```
+
+Store in `QuantumResult.vendor_results["qcloud_job"]`.
+
+---
+
+## Xanadu Aurora dataset
+
+Aurora is the modular photonic quantum computer of *"Scaling and networking a modular photonic quantum computer"* (Nature 638, 2025): 35 chips, 84 squeezers, 36 PNRDs, 12 qubit modes per clock cycle. It is a published **dataset** (public S3 bucket `xanadu-aurora-data`), not a programmable device — two experiment sets: cluster-state acquisition and the decoder demo.
+
+```python
+from qpubench.schemas.mqsdk_photoq import AuroraDatasetSpec, AuroraExperiment
+from qpubench.schemas.backend import BackendSpec
+
+spec = AuroraDatasetSpec(
+    experiment=AuroraExperiment.DECODER_DEMO,
+    condition="signal",            # signal | random | vacuum (decoder demo)
+    batch_index=3,
+    s3_key="decoder_demo/signal/batch_3/quadratures.npy",
+)
+
+backend = BackendSpec.xanadu_aurora(experiment="decoder_demo")
+```
+
+---
+
+## Minimum dominating set — Binary Bosonic Solver
+
+The BBS (Park, Stepney & D'Amico, [arXiv:2605.30935](https://arxiv.org/abs/2605.30935)) is a gradient-free variational algorithm: it reprograms the interferometer angles each iteration, threshold-maps the photon samples to a bit string, applies a learned per-bit flip layer, and evaluates the dominating-set cost. It is the paper's benchmark for the ORCA PT-2 boson sampler.
+
+```python
+from qpubench.schemas.mqsdk_photoq import (
+    DominatingSetProblemSpec, BBSConfig, BBSResult,
+    DominatingSetBenchmarkResult, PTSeriesInputType, GBSBackendType,
+)
+
+problem = DominatingSetProblemSpec(num_nodes=10, edges=[(0, 1), (1, 2), (2, 3)], seed=0)
+
+cfg = BBSConfig(
+    problem=problem, num_iterations=400, num_samples=600,     # the paper's NIter / NSamp
+    input_state=PTSeriesInputType.GBS, num_loops=1,
+    backend=GBSBackendType.ORCA_PT_SERIES,
+)
+
+res = BBSResult(
+    config=cfg, best_bitstring=[1, 0, 0, 1, 0, 0, 1, 0, 0, 0],
+    best_set_size=3, is_dominating=True, convergence_iteration=180,
+    runtime_s=44.0, sampling_time_s=43.99,      # sampling dominates the runtime
+)
+
+# BBS vs classical baselines across the graph family (the paper's Figure 3).
+bench = DominatingSetBenchmarkResult(
+    graph_sizes=[6, 8, 10, 12],
+    methods=["BBS 1-loop (gbs)", "greedy", "networkx", "ilp"],
+    mean_set_size={"BBS 1-loop (gbs)": [2.0, 2.7, 3.7, 4.0], "ilp": [2.0, 2.7, 3.7, 4.0]},
+    num_seeds=3,
+)
+```
+
+Store in `QuantumResult.vendor_results["bbs_result"]` and `["dominating_set_benchmark"]`.
+
+---
+
 ## Backends
 
 ```python
 from qpubench.schemas.backend import BackendSpec
 
-BackendSpec.strawberry_fields_gaussian(num_modes=8)   # local simulator
-BackendSpec.xanadu_x8(num_modes=8)                   # Xanadu X8 hardware (PNR)
+BackendSpec.strawberry_fields_gaussian(num_modes=8)   # local Gaussian simulator
+BackendSpec.xanadu_x8(num_modes=8)                    # Xanadu X8 hardware (PNR)
 BackendSpec.xanadu_borealis(via_braket=False)         # native SF RemoteEngine
 BackendSpec.xanadu_borealis(via_braket=True)          # via AWS Braket BraketEngine
+BackendSpec.orca_pt_series(num_modes=8, device="PT-2")  # ORCA PT Series TBI (simulated/hardware)
+BackendSpec.dtu_qcloud(job_type="tn-sampling")        # DTU QCloud REST API v1
+BackendSpec.xanadu_aurora(experiment="cluster_state") # Xanadu Aurora dataset
 ```

@@ -375,6 +375,78 @@ class BackendSpec(pydantic.BaseModel):
         )
 
     @classmethod
+    def orca_pt_series(
+        cls,
+        num_modes: int = 8,
+        num_loops: int = 1,
+        device: str = "PT-2",
+        simulated: bool = True,
+    ) -> BackendSpec:
+        """ORCA Computing PT Series time-bin interferometer (GBS boson sampler).
+
+        A single physical beamsplitter plus ``num_loops`` fibre delay loops,
+        applied across ``num_modes`` time bins.  simulated=True draws hafnian
+        samples from the TBI covariance matrix (thewalrus); simulated=False
+        targets real PT-1/PT-2 hardware via ORCA's ptseries SDK.
+        See mqsdk_photoq.TimeBinInterferometerSpec / PTSeriesSamplingConfig.
+        """
+        return cls(
+            name=f"orca_{device.lower()}_{num_modes}mode",
+            provider="orca",
+            computing_model=ComputingModel.GBS,
+            qubit_modality=QubitModality.PHOTONIC,
+            simulator=simulated,
+            num_qubits=num_modes,
+            auth={"device": device, "num_loops": str(num_loops)},
+        )
+
+    @classmethod
+    def dtu_qcloud(
+        cls,
+        job_type: str = "tn-sampling",
+        num_modes: int | None = None,
+        base_url: str = "https://qcloud.dtu.dk",
+    ) -> BackendSpec:
+        """DTU QCloud tensor-network GBS backend (REST API v1, qcloud.dtu.dk).
+
+        job_type  "tn-covariance" builds a covariance matrix server-side;
+                  "tn-sampling" runs tensor-network (MPS) GBS sampling — the
+                  successor of the DASQ Kensingtonian sampler, aligned with the
+                  photoq paper's tensor-network method.
+        Auth is a Bearer token; obtain one from the QCloud web UI.
+        See mqsdk_photoq.QCloudJobSpec / TNSamplingParams.
+        """
+        return cls(
+            name=f"dtu_qcloud_{job_type}",
+            provider="dtu_qcloud",
+            computing_model=ComputingModel.GBS,
+            qubit_modality=QubitModality.PHOTONIC,
+            simulator=True,
+            num_qubits=num_modes,
+            auth={"job_type": job_type, "base_url": base_url},
+        )
+
+    @classmethod
+    def xanadu_aurora(cls, experiment: str = "cluster_state") -> BackendSpec:
+        """Xanadu Aurora dataset backend — modular photonic QC (Nature 638, 2025).
+
+        Aurora (35 chips, 84 squeezers, 36 PNRDs, 12 qubit modes/cycle) is a
+        published *dataset*, not a programmable device: the two experiment sets
+        are 'cluster_state' (Fig. 3b) and 'decoder_demo' (Figs. 3c-d), served
+        from the public S3 bucket 'xanadu-aurora-data'.
+        See mqsdk_photoq.AuroraDatasetSpec.
+        """
+        return cls(
+            name=f"xanadu_aurora_{experiment}",
+            provider="xanadu",
+            computing_model=ComputingModel.GBS,
+            qubit_modality=QubitModality.PHOTONIC,
+            simulator=False,
+            num_qubits=12,
+            auth={"experiment": experiment, "dataset": "xanadu-aurora-data"},
+        )
+
+    @classmethod
     def qesem(
         cls,
         backend_name: str,

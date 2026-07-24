@@ -179,9 +179,11 @@ class QuantumResult(pydantic.BaseModel):
     #
     # Established keys (matching the vendor schema they carry):
     #   photonic_simulation / photonic_vqe / photonic_sensitivity / hom_result
-    #     / indist_purification / photonic_analog_sim   (dtu_photonic)
+    #     / indist_purification / photonic_analog_sim / gbs_sampling
+    #     / gbs_clique_finding / vibronic_spectrum / tdm_gbs
+    #     / click_pattern_probability / method_comparison / pt_series_sampling
+    #     / qcloud_job / bbs_result / dominating_set_benchmark  (mqsdk_photoq)
     #   qpe_result / qchem_pipeline                     (microsoft_qdk)
-    #   gbs_sampling / gbs_clique_finding / vibronic_spectrum / tdm_gbs (dtu_gbs)
     #   kqd_pipeline                                    (mqsdk_qse)
     #   qesem_result                                    (qedma_qesem)
     #   qcschema_record                                 (molssi_qcschema)

@@ -50,7 +50,7 @@ class CircuitSpec(pydantic.BaseModel):
         spec = CircuitSpec(..., measurement_pattern=pattern)      # model or dict
         pattern = MBQCPattern.model_validate(spec.measurement_pattern)
 
-        from qpubench.schemas.dtu_photonic import PhotonicCircuitSpec
+        from qpubench.schemas.mqsdk_photoq import PhotonicCircuitSpec
         photonic = PhotonicCircuitSpec.model_validate(spec.photonic_circuit)
     """
     computing_model:     ComputingModel          = ComputingModel.GATE_BASED
@@ -65,7 +65,7 @@ class CircuitSpec(pydantic.BaseModel):
     parameter_bindings:  list[ParameterBinding]  = []
     gate_counts:         dict[str, int]          = {}
     measurement_pattern: dict[str, Any] | None   = None  # e.g. johnrscott_mbqc_fpga.MBQCPattern dump
-    photonic_circuit:    dict[str, Any] | None   = None  # e.g. dtu_photonic.PhotonicCircuitSpec dump
+    photonic_circuit:    dict[str, Any] | None   = None  # e.g. mqsdk_photoq.PhotonicCircuitSpec dump
 
     @pydantic.field_validator("measurement_pattern", "photonic_circuit", mode="before")
     @classmethod
