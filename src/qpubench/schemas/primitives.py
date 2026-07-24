@@ -110,6 +110,7 @@ class AlgorithmFamily(str, enum.Enum):
     UCC_VQE           = "ucc_vqe"            # disentangled / fixed-pool UCC VQE
     UCC_PQE           = "ucc_pqe"            # UCC projective quantum eigensolver
     SPQE              = "spqe"               # selected projective quantum eigensolver
+    QAOA              = "qaoa"               # quantum approximate optimization algorithm
     EXCITATION_SOLVE  = "excitation_solve"   # Fourier-series VQE parameter optimizer
     TN_QC_OPT         = "tn_qc_opt"          # tensor-network + circuit hybrid VQE (Cebule)
     GA_CIRCUIT_SEARCH = "ga_circuit_search"  # evolutionary circuit search (Xenakis)

@@ -170,7 +170,14 @@ from .contraction_path import (
     ContractionPathStrategy,
 )
 from .circuit import CircuitSpec, ParameterBinding
-from .execution import AdaptVQERunConfig, AlgorithmSpec, ExecutionOptions, TranspilerConfig, ZNEConfig
+from .execution import (
+    AdaptVQERunConfig,
+    AlgorithmSpec,
+    ExecutionOptions,
+    QAOARunConfig,
+    TranspilerConfig,
+    ZNEConfig,
+)
 from .evangelistalab_qforte import (
     QForteAlgorithmConfig,
     QForteCircuitSpec,
@@ -624,6 +631,7 @@ __all__ = [
     "AdaptVQERunConfig",
     "AlgorithmSpec",
     "ExecutionOptions",
+    "QAOARunConfig",
     "TranspilerConfig",
     "ZNEConfig",
     # evangelistalab_qforte

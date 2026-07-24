@@ -42,6 +42,7 @@ Requires `pip install 'qpubench[adapt_vqe]'` (scipy + numpy) for anything that r
 | Problem | File |
 |---|---|
 | Assemble a VQE calculator (ansatz growth + energy oracle + optimizer) | `vqe_calculator.py` |
+| Run QAOA for MaxCut (fixed cost/mixer ansatz, `QAOARunConfig`, exact statevector) | `qaoa_maxcut.py` |
 | Choose a classical minimizer and stopping criterion from the catalogue | `minimizer_and_stopping_criterion.py` |
 | Control how ADAPT-VQE picks its next operator (gradient screening) | `adapt_gate_selector.py` |
 | Trade selection cost vs. quality: gradient-screen vs. brute-force gate selectors | `gate_selector.py` |

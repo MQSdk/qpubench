@@ -1,12 +1,13 @@
-# Variational quantum algorithms (VQE, ADAPT-VQE)
+# Variational quantum algorithms (VQE, ADAPT-VQE, QAOA)
 
-Variational quantum algorithms (VQAs) find the lowest eigenvalue of a Hamiltonian by preparing a parametrized quantum state (an *ansatz*), measuring its energy, and letting a classical optimizer adjust the parameters to drive that energy down. This page covers the two ways VQAs run in qpubench: plain VQE as a loop over ordinary circuit runs (any registered backend, your optimizer), and self-driving implementations like ADAPT-VQE behind a package-agnostic contract, so you can swap the underlying engine — QForte, a from-scratch Qiskit-convention engine, or a QDK/Azure-flavored one — without changing your run configuration.
+Variational quantum algorithms (VQAs) find the lowest eigenvalue of a Hamiltonian by preparing a parametrized quantum state (an *ansatz*), measuring its energy, and letting a classical optimizer adjust the parameters to drive that energy down. This page covers the ways VQAs run in qpubench: plain VQE as a loop over ordinary circuit runs (any registered backend, your optimizer), QAOA as the same kind of loop applied to a combinatorial cost Hamiltonian, and self-driving implementations like ADAPT-VQE behind a package-agnostic contract, so you can swap the underlying engine — QForte, a from-scratch Qiskit-convention engine, or a QDK/Azure-flavored one — without changing your run configuration.
 
 ## The family
 
 | Algorithm | `AlgorithmFamily` | Ansatz | What varies |
 |---|---|---|---|
 | **VQE** | none needed (UCC-type ansätze: `UCC_VQE`) | Fixed, chosen up front (e.g. UCCSD) | Only the parameters are optimized |
+| **QAOA** | `QAOA` | Fixed: p alternating cost/mixer layers | Only the 2·p angles (γ, β) are optimized, over a combinatorial cost Hamiltonian |
 | **ADAPT-VQE** | `ADAPT_VQE` | Grown one operator at a time | The ansatz *structure* adapts to the problem, then parameters are optimized |
 | UCC-PQE / SPQE | `UCC_PQE` / `SPQE` | Fixed / adaptive | Projective (residual) equations instead of energy minimization |
 
@@ -54,6 +55,42 @@ res = minimize(energy, x0, method="BFGS")       # 4. the optimizer
 Two conventions to note. First, the input to a VQE workflow is the *parametrized* circuit plus a separate initial guess — you never store parameter values in your master ansatz; binding happens per evaluation, and the bound copy inside each `BenchmarkRecord` is what makes that record exactly reproducible later. Second, changing where the energies are evaluated — statevector simulator, shot-based sampling, real hardware — means re-registering a different adapter and changing the backend name in `runner.run()`; nothing about the ansatz, guess, or optimizer changes.
 
 For building the Hamiltonian to attach as `ansatz.observables`, see [Examples — Real Hamiltonian sources](../examples/README.md#real-hamiltonian-sources). For UCC-specific VQE where a library drives the loop for you (a full chemistry stack behind it), see the SlowQuant integration (`integrations/slowquant/`, an `AlgorithmAdapter` for `AlgorithmFamily.UCC_VQE`-family runs).
+
+## Running QAOA
+
+QAOA is the *same execution path as plain VQE* — a classical optimization loop over ordinary circuit runs, no `AlgorithmAdapter` — pointed at a **combinatorial** cost Hamiltonian instead of a molecular one. It takes the exact same four ingredients (ansatz, backend, initial guess, optimizer), with two specifics:
+
+- **The ansatz is not free-form.** It is a fixed structure of `p` alternating layers: a *cost* unitary `exp(-iγ·H_C)` followed by a *mixer* unitary `exp(-iβ·H_M)`, repeated `p` times, over an initial `|+⟩^n` state. Only the `2·p` angles `(γ, β)` are optimized. For MaxCut on a graph the cost is `H_C = Σ_{(i,j)∈E} Z_iZ_j`, and *minimizing* `⟨H_C⟩` maximizes the number of cut edges.
+- **`QAOARunConfig` names the knobs.** `p` (`reps`), the `mixer`, the `optimizer`, and the angle `initialization` strategy live in `QAOARunConfig` (on `ExecutionOptions.qaoa_run_config`) — the package-agnostic contract, the QAOA counterpart of `AdaptVQERunConfig`. The run is *labelled* by a `VQAConfig` with `problem_type="optimization"` and `algorithm="QAOA"`. See [Algorithms & `AlgorithmSpec`](algorithm_spec.md#vqaconfig-vs-adaptvqerunconfig--two-objects-two-jobs) for why the knobs are not fields on `VQAConfig`.
+
+```python
+import numpy as np
+from scipy.optimize import minimize
+from qpubench import BenchmarkRunner, ExecutionOptions, QAOARunConfig, VQAConfig
+from qpubench.schemas.circuit import CircuitSpec
+
+runner = BenchmarkRunner()
+runner.register(AerAdapter(), name="aer")            # or any registered backend
+
+config = QAOARunConfig(reps=3, mixer="x", optimizer="COBYLA")   # p = 3 layers
+cost   = maxcut_cost_observable(edges)               # SparsePauliObservable: Σ Z_iZ_j
+
+def energy(params: np.ndarray) -> float:
+    gammas, betas = params[:config.reps], params[config.reps:]
+    circuit = CircuitSpec.from_openqasm3(              # p cost+mixer layers, angles bound
+        qaoa_maxcut_qasm(edges, gammas, betas), num_qubits=n, observables=[cost])
+    record = runner.run(circuit, "aer",
+        options=ExecutionOptions(qaoa_run_config=config),
+        vqa=VQAConfig(problem_type="optimization", algorithm="QAOA",
+                      optimizer=config.optimizer))
+    return record.result.expectation_values[0].value  # ⟨H_C⟩
+
+x0  = np.zeros(2 * config.reps)                        # 2·p angles
+res = minimize(energy, x0, method=config.optimizer)
+best_cut = (len(edges) - res.fun) / 2                  # read the cut off the objective
+```
+
+Everything else is identical to plain VQE: each evaluation binds the current angles into a fresh circuit, runs it as an ordinary `CircuitSpec`, and is persisted as a full `BenchmarkRecord`, so the stored history *is* the QAOA convergence trace. Swapping simulator for shot-based sampling or real hardware means re-registering a different adapter and setting `shots=...`, nothing more. A complete, genuinely-executing version (graph definition, `qaoa_maxcut_qasm`, brute-force cross-check, approximation ratio) is in `examples/guides/qaoa_maxcut.py`.
 
 ## The package-agnostic contract (library-driven algorithms)
 
@@ -150,7 +187,7 @@ result, vqa, vqa_result = engine.run()
 
 ## Where to go next
 
-- Runnable examples: `examples/guides/vqe_calculator.py` (assemble a calculator), `examples/guides/ground_state_energy_problem.py` (define the problem), `examples/demos/adapt_vqe_convergence_study.py` (sweep the gradient threshold), and `examples/qforte_vqe_benchmark.py` (three QForte methods on He/cc-pVDZ).
+- Runnable examples: `examples/guides/qaoa_maxcut.py` (QAOA MaxCut, end to end), `examples/guides/vqe_calculator.py` (assemble a calculator), `examples/guides/ground_state_energy_problem.py` (define the problem), `examples/demos/adapt_vqe_convergence_study.py` (sweep the gradient threshold), and `examples/qforte_vqe_benchmark.py` (three QForte methods on He/cc-pVDZ).
 - Building real Hamiltonians to feed a VQA: [Examples — Real Hamiltonian sources](../examples/README.md#real-hamiltonian-sources).
-- The record and metadata schemas: [`record` / `VQAConfig`](schemas.md#record), [`execution` / `AdaptVQERunConfig`](schemas.md#execution).
+- The record and metadata schemas: [`record` / `VQAConfig`](schemas.md#record), [`execution` / `AdaptVQERunConfig` / `QAOARunConfig`](schemas.md#execution).
 - Writing your own algorithm adapter: [Backends & adapters](backends.md#writing-a-new-algorithmadapter) and the [integrations directory](../integrations/README.md).

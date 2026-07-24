@@ -12,7 +12,7 @@ from .advantage import QuantumAdvantageRecord
 from .execution import ExecutionOptions
 from .result import QuantumResult
 
-SCHEMA_VERSION = "4.0.0"
+SCHEMA_VERSION = "4.1.0"
 
 def _utcnow() -> datetime.datetime:
     return datetime.datetime.now(datetime.UTC)
@@ -32,7 +32,7 @@ class VQAConfig(pydantic.BaseModel):
     Algorithm fields
     ----------------
     algorithm:  "UCCNVQE" | "ADAPTVQE" | "UCCNPQE" | "SPQE" | "VQE"
-                | "TN_QC_OPT" | "COVO" | "MOL_MAP" | "QASM_GEN" | ...
+                | "QAOA" | "TN_QC_OPT" | "COVO" | "MOL_MAP" | "QASM_GEN" | ...
     pool_type:  operator pool for UCC variants ("SD", "GSD", "SDTQ", "sa_SD")
     optimizer:  classical optimizer name
     mapper:     "Parity" | "JordanWigner" | "BravyiKitaev" | "MQS"

@@ -47,6 +47,7 @@ for a family. Today that is true for exactly one family:
 |---|---|---|
 | `ADAPT_VQE` | `evangelistalab_qforte`, `ibm_qiskit_adapt_vqe`, `microsoft_qdk_adapt_vqe` | `AdaptVQERunConfig` |
 | `UCC_VQE` / `UCC_PQE` / `SPQE` | `evangelistalab_qforte` only | `QForteAlgorithmConfig` |
+| `QAOA` | none yet (runs as a plain optimization loop, like vanilla VQE) | `QAOARunConfig` |
 | `EXCITATION_SOLVE` | `dlr_excitation_solve` only | `ExcitationSolveConfig` |
 | `TN_QC_OPT` | `mqsdk_cebule` only | `TNQCOptInput` |
 | `GA_CIRCUIT_SEARCH` | `mqsdk_xenakis` only | `GAConfig` / `GenomeConfig` |
@@ -54,24 +55,30 @@ for a family. Today that is true for exactly one family:
 
 The single-implementation families still carry a `family` tag — not because a
 comparison is possible today, but so a *second* implementation has a name to
-converge on instead of inventing its own ad-hoc label.
+converge on instead of inventing its own ad-hoc label. `QAOA` is the same case
+as vanilla VQE: no `AlgorithmAdapter` drives it — you run the fixed cost/mixer
+ansatz through any backend in a plain optimization loop (see
+[Variational quantum algorithms](vqa.md#running-qaoa)) — but its runtime
+hyperparameter contract, `QAOARunConfig`, already exists so a future QAOA
+adapter has one shared config to accept.
 
 ---
 
 ## `VQAConfig` vs. `AdaptVQERunConfig` — two objects, two jobs
 
-`VQAConfig` is the single config that describes a variational run (VQE today,
-QAOA in future). A natural question is *why isn't the ADAPT-VQE configuration
-just an argument on `VQAConfig`?* Because the two live on different objects, at
-different layers, and answer different questions:
+`VQAConfig` is the single config that describes a variational run (VQE,
+ADAPT-VQE, or QAOA). A natural question is *why isn't the ADAPT-VQE
+configuration just an argument on `VQAConfig`?* Because the two live on
+different objects, at different layers, and answer different questions:
 
 - **`VQAConfig`** (on `BenchmarkRecord.vqa`, in [`record`](schemas.md#record))
   is experiment **metadata** — it labels *what* you ran (`problem_type`,
   `molecule`, `basis`, `algorithm`, `ansatz`, `optimizer` name) so records are
   filterable and comparable in the store. By contract it has `extra="forbid"`
-  and **changes nothing about execution**. It is the config that will grow to
-  cover QAOA too (via `problem_type="optimization"` plus QAOA-descriptive
-  fields).
+  and **changes nothing about execution**. A QAOA run names itself here with
+  `problem_type="optimization"` and `algorithm="QAOA"`; its actual knobs (p,
+  mixer, optimizer) live in `QAOARunConfig`, not as new `VQAConfig` fields —
+  same layering as ADAPT-VQE below.
 
   ```python
   from qpubench.schemas import VQAConfig
@@ -104,15 +111,16 @@ different layers, and answer different questions:
    where every adapter reads it, not on a per-record metadata object. Keeping
    each algorithm family's real knobs in their own config (keyed by
    `AlgorithmFamily`) also stops `VQAConfig` ballooning into a grab-bag of every
-   algorithm's parameters as QAOA, ADAPT, etc. are added.
+   algorithm's parameters — the same reason QAOA's knobs went into
+   `QAOARunConfig` rather than onto `VQAConfig`.
 
-So `VQAConfig` **names** the experiment and `AdaptVQERunConfig` **configures** the
-run: an ADAPT-VQE benchmark uses both (metadata in `VQAConfig`, adaptive knobs
-in `ExecutionOptions.adapt_vqe_run_config`), while a fixed-ansatz VQE or a future
-QAOA run uses `VQAConfig` alone (no adaptive knobs to set). Each energy
-evaluation is an ordinary `CircuitSpec` run through a `BackendAdapter`; the
-runner derives `VQAResult.final_eigenvalue` from the measured expectation
-values.
+So `VQAConfig` **names** the experiment and a family's run-config **configures**
+the run: an ADAPT-VQE benchmark uses both (metadata in `VQAConfig`, adaptive
+knobs in `ExecutionOptions.adapt_vqe_run_config`), a QAOA benchmark likewise
+pairs `VQAConfig` with `ExecutionOptions.qaoa_run_config`, while a fixed-ansatz
+VQE uses `VQAConfig` alone (no extra knobs to set). Each energy evaluation is an
+ordinary `CircuitSpec` run through a `BackendAdapter`; the runner derives
+`VQAResult.final_eigenvalue` from the measured expectation values.
 
 > `CircuitFormat` has no `VQE` member — VQE is an *algorithm*, not a way of
 > serializing a circuit. See the [`CircuitFormat` note](schemas.md#primitives).

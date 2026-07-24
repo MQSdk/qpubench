@@ -91,6 +91,39 @@ class AdaptVQERunConfig(pydantic.BaseModel):
     use_analytic_gradient: bool  = True
 
 
+class QAOARunConfig(pydantic.BaseModel):
+    """Package-agnostic QAOA hyperparameters (AlgorithmFamily.QAOA).
+
+    The Quantum Approximate Optimization Algorithm prepares a fixed-structure
+    ansatz built from p alternating layers of a problem (cost) unitary and a
+    mixer unitary, then optimizes the 2·p angles (γ, β) classically to minimize
+    ⟨cost⟩.  Unlike ADAPT-VQE the ansatz structure is fixed up front — only p,
+    the mixer, and the optimizer choose it — so this config is the common
+    contract every QAOA implementation accepts, regardless of which package
+    (or hand-rolled loop) runs it.  Set on ExecutionOptions.qaoa_run_config.
+
+    reps                 p — number of cost+mixer layers; ansatz has 2·p angles
+    mixer                mixer Hamiltonian: "x" (transverse field, standard) |
+                          "xy" (ring/parity-preserving) | "grover"
+    optimizer            classical optimizer name; each adapter/loop maps this
+                          onto its own supported set (e.g. scipy method name).
+                          COBYLA is the usual default for shot-based QAOA.
+    max_iterations       classical-optimizer step cap
+    initialization       starting-angle strategy: "zeros" | "random" |
+                          "ramp" (linear γ ramp-up / β ramp-down, TQA-style)
+    alpha_cvar           CVaR tail fraction for the cost objective; 1.0 = plain
+                          expectation value, <1.0 optimizes the best-α quantile
+                          of sampled bitstrings (matches
+                          classiq_classiq.ClassiqCombinatorialOptimizationSpec)
+    """
+    reps:            int   = 1
+    mixer:           str   = "x"
+    optimizer:       str   = "COBYLA"
+    max_iterations:  int   = 100
+    initialization:  str   = "ramp"
+    alpha_cvar:      float = 1.0
+
+
 class ExecutionOptions(pydantic.BaseModel):
     """Execution parameters shared across all modalities.
 
@@ -110,6 +143,8 @@ class ExecutionOptions(pydantic.BaseModel):
     algorithm_spec     which algorithm to run (name + AlgorithmFamily)
     adapt_vqe_run_config   shared hyperparameter contract for
                        AlgorithmFamily.ADAPT_VQE, package-agnostic
+    qaoa_run_config    shared hyperparameter contract for
+                       AlgorithmFamily.QAOA, package-agnostic
 
     MBQC fields
     -----------
@@ -145,6 +180,7 @@ class ExecutionOptions(pydantic.BaseModel):
     )
     algorithm_spec:       AlgorithmSpec | None    = None
     adapt_vqe_run_config:     AdaptVQERunConfig | None   = None
+    qaoa_run_config:      QAOARunConfig | None    = None
     cluster_depth:        int | None              = None
     adaptive_corrections: bool                    = True
     mitigation_options:   dict[str, Any]          = {}

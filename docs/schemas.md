@@ -47,7 +47,7 @@ Computing model (paradigm) and qubit modality are separate, independent axes on 
 | [`circuit`](#circuit) | Circuit or problem specification | all · all | `CircuitSpec` (`from_openqasm3`, `openqasm3`, `bind`), `ParameterBinding` |
 | [`observable`](#observable) | Sparse Pauli observables | all · all | `SparsePauliObservable`, `PauliTerm` |
 | [`backend`](#backend) | Hardware / simulator description | all · all | `BackendSpec` (31 factory constructors) |
-| [`execution`](#execution) | Execution options and algorithm hyperparameters | all · all | `ExecutionOptions`, `AlgorithmSpec`, `AdaptVQERunConfig` (ADAPT runtime hyperparameters; experiment metadata lives in `record.VQAConfig`), `ZNEConfig`, `TranspilerConfig` |
+| [`execution`](#execution) | Execution options and algorithm hyperparameters | all · all | `ExecutionOptions`, `AlgorithmSpec`, `AdaptVQERunConfig` / `QAOARunConfig` (ADAPT / QAOA runtime hyperparameters; experiment metadata lives in `record.VQAConfig`), `ZNEConfig`, `TranspilerConfig` |
 | [`result`](#result) | Execution results (expectation values, counts, fidelity, per-iteration algorithm history) | all · all | `QuantumResult` (15 result-type fields), `ExpectationResult`, `ShotResult`, `TranspileLayout` |
 | [`record`](#record) | Top-level benchmark record and algorithm metadata | all · all | `BenchmarkRecord`, `VQAConfig`, `VQAResult` |
 
@@ -331,15 +331,17 @@ adapters accept the same shared config for it. Today:
 |---|---|---|
 | `ADAPT_VQE` | 3 — `evangelistalab_qforte`, `ibm_qiskit_adapt_vqe`, `microsoft_qdk_adapt_vqe` | `AdaptVQERunConfig` (below) — the only family with a real "switch the adapter, keep the config" story today |
 | `UCC_VQE` / `UCC_PQE` / `SPQE` | 1 — `evangelistalab_qforte` only | `QForteAlgorithmConfig` |
+| `QAOA` | 0 — no `AlgorithmAdapter` yet; runs as a plain optimization loop (like vanilla VQE, see [`vqa`](vqa.md#running-qaoa)) | `QAOARunConfig` (below) — the package-agnostic contract an adapter or loop reads |
 | `EXCITATION_SOLVE` | 1 — `dlr_excitation_solve` only | `ExcitationSolveConfig` |
 | `TN_QC_OPT` | 1 — `mqsdk_cebule` only | `TNQCOptInput` |
 | `GA_CIRCUIT_SEARCH` | 1 — `mqsdk_xenakis` only | `GAConfig`/`GenomeConfig` |
 | `QPE` | 0 — schema/metadata only, no `AlgorithmAdapter` | `microsoft_qdk.QPEConfig`, a field of the QDK chemistry pipeline record, never dispatched through `BenchmarkRunner` |
 
-The single-implementation families and `QPE` still carry a `family` tag —
-not because a comparison is possible today, but so a *second*
-implementation (e.g. a native-VQE `AlgorithmAdapter`, or a hardware QPE
-run) has a name to converge on instead of inventing its own ad hoc label.
+The single-implementation families, `QAOA`, and `QPE` still carry a
+`family` tag — not because a comparison is possible today, but so a
+*second* implementation (e.g. a native-VQE `AlgorithmAdapter`, a QAOA
+adapter, or a hardware QPE run) has a name to converge on instead of
+inventing its own ad hoc label.
 `GA_CIRCUIT_SEARCH`'s only real head-to-head comparison today is against
 Classiq's synthesis (a different `AlgorithmFamily`-less strategy — see
 `classiq_classiq.CircuitOptimizationComparison`), not against another
@@ -376,6 +378,27 @@ shared by every ADAPT-VQE-family adapter (`evangelistalab_qforte`,
 | `max_micro_iterations` | `200` | Optimizer steps per macro-iteration |
 | `use_analytic_gradient` | `True` | Analytic gradient vs finite-difference (QForte has analytic; the `generic_adapt_vqe` engine used by `ibm_qiskit_adapt_vqe`/`microsoft_qdk_adapt_vqe` always uses finite differences — see its README) |
 
+### `QAOARunConfig`
+
+Package-agnostic hyperparameter contract for `AlgorithmFamily.QAOA`. Same
+layering as `AdaptVQERunConfig`: it is the *runtime* contract (on
+`ExecutionOptions.qaoa_run_config`), while experiment metadata — including
+`algorithm="QAOA"` and the optimization `problem_type` — lives in
+[`VQAConfig`](#record). QAOA's ansatz is *fixed-structure* (p alternating
+cost/mixer layers with 2·p angles), so unlike ADAPT-VQE there is no operator
+pool or gradient-driven growth; the config just picks p, the mixer, and the
+classical optimizer. No `AlgorithmAdapter` implements it yet — it drives a
+plain optimization loop today (see [`vqa`](vqa.md#running-qaoa)).
+
+| Field | Default | Description |
+|---|---|---|
+| `reps` | `1` | p — number of cost+mixer layers; ansatz carries 2·p angles (γ, β) |
+| `mixer` | `"x"` | Mixer Hamiltonian: `"x"` (transverse field, standard) · `"xy"` (ring/parity-preserving) · `"grover"` |
+| `optimizer` | `"COBYLA"` | Classical optimizer name; each adapter/loop maps it onto its own set |
+| `max_iterations` | `100` | Classical-optimizer step cap |
+| `initialization` | `"ramp"` | Starting-angle strategy: `"zeros"` · `"random"` · `"ramp"` (TQA-style linear schedule) |
+| `alpha_cvar` | `1.0` | CVaR tail fraction; `1.0` = plain expectation, `<1.0` optimizes the best-α quantile of sampled bitstrings |
+
 ### `ExecutionOptions` QESEM fields
 
 | Field | Default | Description |
@@ -399,6 +422,7 @@ shared by every ADAPT-VQE-family adapter (`evangelistalab_qforte`,
 | `transpiler` | `TranspilerConfig()` | Routing / layout / synthesis options |
 | `algorithm_spec` | `None` | Which algorithm to run (`name` + `AlgorithmFamily`) |
 | `adapt_vqe_run_config` | `None` | Package-agnostic hyperparameters for `AlgorithmFamily.ADAPT_VQE` |
+| `qaoa_run_config` | `None` | Package-agnostic hyperparameters for `AlgorithmFamily.QAOA` |
 | `cluster_depth` | `None` | MBQC: measurement rounds |
 | `adaptive_corrections` | `True` | MBQC: apply byproduct corrections |
 

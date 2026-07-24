@@ -1027,7 +1027,7 @@ def test_runner_register_and_run_shorthand_misuse():
 # AlgorithmSpec and algorithm-driven schemas
 # ---------------------------------------------------------------------------
 
-from qpubench.schemas.execution import AdaptVQERunConfig, AlgorithmSpec
+from qpubench.schemas.execution import AdaptVQERunConfig, AlgorithmSpec, QAOARunConfig
 from qpubench.schemas.result import AdaptIteration
 from qpubench.schemas.primitives import AlgorithmFamily
 
@@ -1074,6 +1074,43 @@ def test_algorithm_family_qpe_tag():
     implementation has a name to converge on."""
     alg = AlgorithmSpec(name="QPE", family=AlgorithmFamily.QPE)
     assert alg.family == AlgorithmFamily.QPE
+
+
+def test_qaoa_run_config_defaults():
+    cfg = QAOARunConfig()
+    assert cfg.reps == 1
+    assert cfg.mixer == "x"
+    assert cfg.optimizer == "COBYLA"
+    assert cfg.max_iterations == 100
+    assert cfg.initialization == "ramp"
+    assert cfg.alpha_cvar == pytest.approx(1.0)
+
+
+def test_qaoa_run_config_in_execution_options():
+    """QAOA runs as a plain optimization loop (no AlgorithmAdapter), but its
+    package-agnostic knobs travel on ExecutionOptions.qaoa_run_config next to
+    adapt_vqe_run_config — labelled by VQAConfig(algorithm="QAOA")."""
+    opts = ExecutionOptions(
+        algorithm_spec=AlgorithmSpec(name="QAOA", family=AlgorithmFamily.QAOA),
+        qaoa_run_config=QAOARunConfig(reps=3, mixer="xy", alpha_cvar=0.25),
+    )
+    assert opts.qaoa_run_config is not None
+    assert opts.qaoa_run_config.reps == 3
+    assert opts.qaoa_run_config.mixer == "xy"
+    assert opts.qaoa_run_config.alpha_cvar == pytest.approx(0.25)
+    assert opts.algorithm_spec.family == AlgorithmFamily.QAOA
+    # round-trips as part of the options
+    restored = ExecutionOptions.model_validate_json(opts.model_dump_json())
+    assert restored.qaoa_run_config.reps == 3
+
+
+def test_vqa_config_names_qaoa_run():
+    """A QAOA run is named by VQAConfig; its knobs live in QAOARunConfig, not
+    as VQAConfig fields (same layering as ADAPT-VQE)."""
+    vqa = VQAConfig(problem_type="optimization", algorithm="QAOA",
+                    optimizer="COBYLA")
+    assert vqa.algorithm == "QAOA"
+    assert vqa.problem_type == "optimization"
 
 
 def test_algorithm_spec_json_roundtrip():
