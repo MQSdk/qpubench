@@ -4,7 +4,7 @@ Energy vs. a convergence knob (the gradient threshold).
 
 Mechanism: registers IBMQiskitAdaptVQEAdapter (a thin AlgorithmAdapter
 wrapper over the real generic_adapt_vqe engine) with BenchmarkRunner and
-uses runner.sweep() to vary AdaptVQEConfig.gradient_threshold — the
+uses runner.sweep() to vary AdaptVQERunConfig.gradient_threshold — the
 idiomatic qpubench way to run a convergence study, as opposed to calling
 GenericAdaptVQEEngine directly (see examples/guides/vqe_calculator.py).
 
@@ -22,7 +22,7 @@ import sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
 
 from qpubench import AlgorithmSpec, BenchmarkRunner, CircuitSpec, ExecutionOptions
-from qpubench.schemas.execution import AdaptVQEConfig
+from qpubench.schemas.execution import AdaptVQERunConfig
 from qpubench.schemas.primitives import AlgorithmFamily, CircuitFormat
 
 from examples.common.toy_hamiltonians import (
@@ -59,7 +59,7 @@ def main() -> None:
     options_list = [
         ExecutionOptions(
             algorithm_spec=AlgorithmSpec(name="ADAPTVQE", family=AlgorithmFamily.ADAPT_VQE),
-            adapt_vqe_config=AdaptVQEConfig(
+            adapt_vqe_run_config=AdaptVQERunConfig(
                 gradient_threshold=t, max_macro_iterations=15, max_micro_iterations=200,
             ),
         )

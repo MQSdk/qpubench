@@ -127,7 +127,7 @@ class SlowQuantAlgorithmAdapter:
         from slowquant.unitary_coupled_cluster.ucc_wavefunction import WaveFunctionUCC
 
         problem = _parse_problem_spec(circuit)
-        adapt_cfg = options.adapt_vqe_config
+        adapt_cfg = options.adapt_vqe_run_config
 
         sq = SlowQuant()
         sq.set_molecule(

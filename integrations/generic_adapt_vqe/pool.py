@@ -143,7 +143,7 @@ def generate_singles_doubles_pool(
     num_qubits: int,
     num_electrons: int,
 ) -> list[PoolOperator]:
-    """Spin-orbital singles + doubles excitation pool ("SD" in AdaptVQEConfig.pool_type).
+    """Spin-orbital singles + doubles excitation pool ("SD" in AdaptVQERunConfig.pool_type).
 
     occupied = [0, num_electrons)   virtual = [num_electrons, num_qubits)
     Matches the ADAPT-VQE convention of screening single and double

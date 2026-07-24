@@ -29,7 +29,7 @@ project — this adapter depends on the shared engine there.
 ## Quick start
 
 ```python
-from qpubench import BenchmarkRunner, ExecutionOptions, AlgorithmSpec, AdaptVQEConfig
+from qpubench import BenchmarkRunner, ExecutionOptions, AlgorithmSpec, AdaptVQERunConfig
 from qpubench.schemas.circuit import CircuitSpec
 from qpubench.schemas.primitives import AlgorithmFamily, CircuitFormat
 from microsoft_qdk_adapt_vqe.adapter import MicrosoftQDKAdaptVQEAdapter
@@ -43,7 +43,7 @@ runner.register(
 problem = CircuitSpec(num_qubits=0, format=CircuitFormat.MOLECULE_JSON, serialized=problem_json)
 options = ExecutionOptions(
     algorithm_spec=AlgorithmSpec(name="ADAPTVQE", family=AlgorithmFamily.ADAPT_VQE),
-    adapt_vqe_config=AdaptVQEConfig(pool_type="SD", optimizer="BFGS"),
+    adapt_vqe_run_config=AdaptVQERunConfig(pool_type="SD", optimizer="BFGS"),
 )
 record = runner.run(problem, "microsoft_qdk", options)
 ```

@@ -6,11 +6,10 @@ compiler required — pure wheel), and already the engine behind
 mean-field/DFT, solvation, and embedding problem specs as typed Pydantic
 schemas in `src/qpubench/schemas/pyscf_pyscf.py`.
 
-**Why this module exists.** While checking whether Quantinuum's InQuanto is
-necessary for embedding and periodic-boundary quantum chemistry, the answer
-turned out to be no — PySCF (+ two smaller PySCF-based packages for
-embedding specifically) covers the same ground for free. See "Embedding"
-below for what's real vs. schema-only.
+**Why this module exists.** PySCF (+ two smaller PySCF-based packages for
+embedding specifically) covers embedding and periodic-boundary quantum
+chemistry for free, with no commercial SDK required. See "Embedding" below
+for what's real vs. schema-only.
 
 ---
 
@@ -83,9 +82,7 @@ calls neither for real. Write that adapter yourself once you've installed
 one from source, following the `erikkjellgren_slowquant.py` /
 `microsoft_qdk.py` "schema, not solver" pattern.
 
-**Projection-based WF-in-DFT embedding** (Manby–Miller formulation — the
-exact technique InQuanto's `InQ_tut_wft_dft` tutorial demonstrates
-commercially):
+**Projection-based WF-in-DFT embedding** (Manby–Miller formulation):
 
 ```python
 from qpubench.schemas.pyscf_pyscf import ProjectionEmbeddingConfig
@@ -128,12 +125,3 @@ pool = generate_singles_doubles_pool(
 ```
 
 ---
-
-## Why not InQuanto?
-
-InQuanto (Quantinuum) offers the same projection-based embedding and
-periodic PBC drivers (via InQuanto-PySCF) — as a commercial platform. PySCF
-covers the same capability for free and fits qpubench's zero-commercial-
-SDK-in-core posture better. InQuanto remains a legitimate alternative if
-you'd rather have one integrated, vendor-supported platform than assemble
-PySCF + PsiEmbed/libDMET by hand — qpubench just doesn't require it.

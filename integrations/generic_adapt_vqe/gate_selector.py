@@ -29,7 +29,7 @@ import math
 from collections.abc import Callable
 from typing import Any, Protocol, runtime_checkable
 
-from qpubench.schemas.execution import AdaptVQEConfig
+from qpubench.schemas.execution import AdaptVQERunConfig
 
 from .pool import PoolOperator
 
@@ -44,7 +44,7 @@ class GateSelector(Protocol):
         selected: list[int],
         amplitudes: list[float],
         energy_fn: EnergyFn,
-        config: AdaptVQEConfig,
+        config: AdaptVQERunConfig,
     ) -> tuple[int, float, bool]:
         """Return (best_operator_index, score, converged).
 
@@ -76,7 +76,7 @@ class FastGateSelector:
         selected: list[int],
         amplitudes: list[float],
         energy_fn: EnergyFn,
-        config: AdaptVQEConfig,
+        config: AdaptVQERunConfig,
     ) -> tuple[int, float, bool]:
         eps = self.epsilon
         best_idx, best_grad = -1, 0.0
@@ -125,7 +125,7 @@ class BruteForceGateSelector:
         selected: list[int],
         amplitudes: list[float],
         energy_fn: EnergyFn,
-        config: AdaptVQEConfig,
+        config: AdaptVQERunConfig,
     ) -> tuple[int, float, bool]:
         from scipy.optimize import minimize
 

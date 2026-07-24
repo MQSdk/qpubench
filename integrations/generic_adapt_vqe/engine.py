@@ -22,7 +22,7 @@ rather than an analytic commutator, trading some measurement efficiency
 for reusing the already-verified circuit-exponential construction directly
 (see circuit_synthesis.py) instead of adding a second from-scratch
 Pauli-algebra implementation (commutator expansion) with its own
-correctness risk. AdaptVQEConfig.use_analytic_gradient is honored by other
+correctness risk. AdaptVQERunConfig.use_analytic_gradient is honored by other
 adapters (QForte has real analytic gradients); this reference engine
 always uses finite differences and documents that limitation rather than
 claiming a capability it doesn't have.
@@ -32,7 +32,7 @@ from __future__ import annotations
 from typing import Any
 
 from qpubench.schemas.circuit import CircuitSpec
-from qpubench.schemas.execution import AdaptVQEConfig, ExecutionOptions
+from qpubench.schemas.execution import AdaptVQERunConfig, ExecutionOptions
 from qpubench.schemas.observable import SparsePauliObservable
 from qpubench.schemas.primitives import CircuitFormat
 from qpubench.schemas.record import VQAConfig, VQAResult
@@ -72,7 +72,7 @@ class GenericAdaptVQEEngine:
         num_qubits: int,
         num_electrons: int,
         energy_backend: Any,
-        config: AdaptVQEConfig | None = None,
+        config: AdaptVQERunConfig | None = None,
         energy_options: ExecutionOptions | None = None,
         gate_selector: GateSelector | None = None,
     ) -> None:
@@ -80,7 +80,7 @@ class GenericAdaptVQEEngine:
         self.num_qubits     = num_qubits
         self.num_electrons  = num_electrons
         self.energy_backend = energy_backend
-        self.config          = config or AdaptVQEConfig()
+        self.config          = config or AdaptVQERunConfig()
         self.energy_options   = energy_options or ExecutionOptions()
         self.gate_selector    = gate_selector or FastGateSelector()
         self.pool: list[PoolOperator] = generate_singles_doubles_pool(num_qubits, num_electrons)

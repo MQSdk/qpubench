@@ -42,7 +42,7 @@ import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
 
-from qpubench.schemas.execution import AdaptVQEConfig
+from qpubench.schemas.execution import AdaptVQERunConfig
 
 
 def try_real_slowquant() -> None:
@@ -77,7 +77,7 @@ def solve(hamiltonian, num_qubits: int, num_electrons: int) -> float:
         num_qubits=num_qubits,
         num_electrons=num_electrons,
         energy_backend=ToyStatevectorAdapter(),
-        config=AdaptVQEConfig(max_macro_iterations=15, gradient_threshold=1e-5,
+        config=AdaptVQERunConfig(max_macro_iterations=15, gradient_threshold=1e-5,
                                max_micro_iterations=200),
     )
     _, _vqa, vqa_result = engine.run()

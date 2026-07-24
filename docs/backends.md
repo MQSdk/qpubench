@@ -43,7 +43,7 @@ spec: BackendSpec
 Use this when the **library generates its own circuit** from a problem specification and drives its own execution loop.  
 Examples: QForte (ADAPT-VQE, UCCNVQE), OpenFermion VQE stacks.
 
-The `CircuitSpec` argument here carries a *problem*, not gates: `format=CircuitFormat.MOLECULE_JSON` with `serialized` holding a molecule JSON dict or file path. Which algorithm to run is specified in `options.algorithm_spec`, and its hyperparameters in the family-specific config (e.g. `options.adapt_vqe_config`). The two protocol methods mirror `BackendAdapter`'s:
+The `CircuitSpec` argument here carries a *problem*, not gates: `format=CircuitFormat.MOLECULE_JSON` with `serialized` holding a molecule JSON dict or file path. Which algorithm to run is specified in `options.algorithm_spec`, and its hyperparameters in the family-specific config (e.g. `options.adapt_vqe_run_config`). The two protocol methods mirror `BackendAdapter`'s:
 
 - **`validate_problem(circuit)`** — same contract as `validate()`, but checks the problem specification (does the file exist, is the molecule dict well-formed) instead of a gate list.
 - **`run_algorithm(circuit, options)`** — runs the full algorithm and returns three objects instead of one: the `QuantumResult` (execution outcome), a `VQAConfig` (the experiment inputs as the library understood them), and a `VQAResult` (computed outputs — final energy, convergence history). An algorithm run produces all three, whereas a single circuit run only produces a result.
@@ -329,7 +329,7 @@ Note on algorithms vs. backends: the QDK simulator and Azure Quantum rows are or
 
 ### Algorithm libraries (`AlgorithmAdapter`)
 
-These register with the same runner as the backends above, but take a problem specification instead of a circuit and drive their own execution loop. The `AlgorithmFamily` column is the package-agnostic identity that lets you compare runs of the same algorithm across different implementations — `ADAPT_VQE` currently has three interchangeable implementations sharing one `AdaptVQEConfig` (see [VQA algorithms](vqa.md)).
+These register with the same runner as the backends above, but take a problem specification instead of a circuit and drive their own execution loop. The `AlgorithmFamily` column is the package-agnostic identity that lets you compare runs of the same algorithm across different implementations — `ADAPT_VQE` currently has three interchangeable implementations sharing one `AdaptVQERunConfig` (see [VQA algorithms](vqa.md)).
 
 | Library | Adapter | Algorithms (`AlgorithmFamily`) | Location |
 |---|---|---|---|

@@ -26,7 +26,7 @@ from typing import Any
 from qpubench.schemas.backend import BackendSpec
 from qpubench.schemas.circuit import CircuitSpec
 from qpubench.schemas.evangelistalab_qforte import QForteAlgorithmConfig
-from qpubench.schemas.execution import AdaptVQEConfig, AlgorithmSpec, ExecutionOptions
+from qpubench.schemas.execution import AdaptVQERunConfig, AlgorithmSpec, ExecutionOptions
 from qpubench.schemas.primitives import AlgorithmFamily, CircuitFormat, ComputingModel
 from qpubench.schemas.record import VQAConfig, VQAResult
 from qpubench.schemas.result import QuantumResult
@@ -107,16 +107,16 @@ def _build_system(qf: Any, circuit: CircuitSpec) -> Any:
 
 def _build_qforte_config(
     alg_spec: AlgorithmSpec,
-    adapt_vqe_config: AdaptVQEConfig | None,
+    adapt_vqe_run_config: AdaptVQERunConfig | None,
 ) -> QForteAlgorithmConfig:
-    """Compose the package-agnostic AdaptVQEConfig with QForte-only extras.
+    """Compose the package-agnostic AdaptVQERunConfig with QForte-only extras.
 
     QForte-only knobs (diis_max_dim, use_cumulative_thresh, add_equiv_ops,
     qubit_excitations, compact_excitations, opt_ftol, noise_factor) are
     passed via AlgorithmSpec.extra_params — the escape hatch documented on
     AlgorithmSpec for adapter-specific kwargs.
     """
-    base = adapt_vqe_config or AdaptVQEConfig()
+    base = adapt_vqe_run_config or AdaptVQERunConfig()
     extras = {
         k: v for k, v in alg_spec.extra_params.items()
         if k in QForteAlgorithmConfig.model_fields and k != "base"
@@ -207,7 +207,7 @@ class QForteAlgorithmAdapter:
         alg_spec      = options.algorithm_spec or AlgorithmSpec(
             name=self._default, family=AlgorithmFamily.ADAPT_VQE
         )
-        qforte_config = _build_qforte_config(alg_spec, options.adapt_vqe_config)
+        qforte_config = _build_qforte_config(alg_spec, options.adapt_vqe_run_config)
         mol           = _build_system(qf, circuit)
         alg           = _make_algorithm(qf, mol, alg_spec.name, qforte_config)
         _execute_algorithm(alg, alg_spec.name, qforte_config)
@@ -285,7 +285,7 @@ class ExternalEvalAlgorithmAdapter:
         alg_spec      = options.algorithm_spec or AlgorithmSpec(
             name=self._default, family=AlgorithmFamily.ADAPT_VQE
         )
-        qforte_config = _build_qforte_config(alg_spec, options.adapt_vqe_config)
+        qforte_config = _build_qforte_config(alg_spec, options.adapt_vqe_run_config)
         mol           = _build_system(qf, circuit)
 
         # Probe the base algorithm for system metadata (no run)

@@ -30,7 +30,7 @@ Vendor imports (mqsdk, qpubench) are deferred to inside each function body
 so this module can be *parsed* by the kfp compiler in an environment that has
 neither package installed — only the container image named in base_image
 needs them at run time (mirrors the "import qforte inside the method, not at
-module level" rule in INTEGRATION_GUIDE.md).
+module level" rule in docs/backends.md).
 
 No `from __future__ import annotations` here (unlike the rest of this
 repo): kfp's component decorator inspects live type objects at decoration

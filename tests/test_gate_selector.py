@@ -21,7 +21,7 @@ from integrations.generic_adapt_vqe.gate_selector import (
     FastGateSelector,
     GateSelector,
 )
-from qpubench.schemas.execution import AdaptVQEConfig
+from qpubench.schemas.execution import AdaptVQERunConfig
 
 
 @pytest.fixture
@@ -74,7 +74,7 @@ def test_brute_force_selector_converged_flag_uses_energy_threshold(h2_hamiltonia
     selector = BruteForceGateSelector()
     engine = GenericAdaptVQEEngine(
         hamiltonian=h2_hamiltonian, num_qubits=num_qubits, num_electrons=num_electrons,
-        energy_backend=ToyStatevectorAdapter(), config=AdaptVQEConfig(),
+        energy_backend=ToyStatevectorAdapter(), config=AdaptVQERunConfig(),
         gate_selector=selector,
     )
     best_idx, improvement, converged = selector.select(

@@ -51,7 +51,7 @@ import time
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
 
-from qpubench.schemas.execution import AdaptVQEConfig
+from qpubench.schemas.execution import AdaptVQERunConfig
 from qpubench.schemas.pyscf_pyscf import PySCFAtomSpec, PySCFCellSpec, PySCFMeanFieldConfig, PySCFMeanFieldMethod
 
 from examples.common.real_molecules import (
@@ -144,7 +144,7 @@ def main() -> None:
             num_qubits=record.num_qubits,
             num_electrons=CARBON_CAPTURE_ACTIVE_ELECTRONS,
             energy_backend=ToyStatevectorAdapter(),
-            config=AdaptVQEConfig(max_macro_iterations=15, gradient_threshold=1e-5,
+            config=AdaptVQERunConfig(max_macro_iterations=15, gradient_threshold=1e-5,
                                    max_micro_iterations=200),
         )
         _, _vqa, vqa_result = engine.run()

@@ -101,4 +101,4 @@ print(comparison.depth_delta, comparison.search_cost_label)
 
 See `../../docs/integrations/classiq.md` for the full schema reference and
 `../../docs/integrations/xenakis.md` for the GA-search side, and
-`../../INTEGRATION_GUIDE.md` for why the adapter is structured this way.
+`../../docs/backends.md` for why the adapter is structured this way.

@@ -23,7 +23,7 @@ import sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
 
 from qpubench import AlgorithmSpec, BenchmarkRunner, CircuitSpec, ExecutionOptions
-from qpubench.schemas.execution import AdaptVQEConfig
+from qpubench.schemas.execution import AdaptVQERunConfig
 from qpubench.schemas.primitives import AlgorithmFamily, CircuitFormat
 from qpubench.schemas.reactions import ReactionCoordinateSpec, ReactionPathResult
 
@@ -63,7 +63,7 @@ def main() -> None:
     )
     options = ExecutionOptions(
         algorithm_spec=AlgorithmSpec(name="ADAPTVQE", family=AlgorithmFamily.ADAPT_VQE),
-        adapt_vqe_config=AdaptVQEConfig(max_macro_iterations=15, gradient_threshold=1e-5,
+        adapt_vqe_run_config=AdaptVQERunConfig(max_macro_iterations=15, gradient_threshold=1e-5,
                                         max_micro_iterations=200),
     )
     records = runner.sweep(

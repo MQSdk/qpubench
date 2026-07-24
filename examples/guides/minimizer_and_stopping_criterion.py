@@ -2,9 +2,9 @@
 
 ``qpubench.schemas.optimizer_catalog`` provides ``MINIMIZER_CATALOG`` /
 ``STOPPING_CRITERION_CATALOG``: a catalogue/registry object to "choose"
-from, so ``AdaptVQEConfig.optimizer`` isn't just free text. The catalogue
+from, so ``AdaptVQERunConfig.optimizer`` isn't just free text. The catalogue
 is a lookup table over the same
-AdaptVQEConfig fields generic_adapt_vqe already consumes — not a new
+AdaptVQERunConfig fields generic_adapt_vqe already consumes — not a new
 execution mechanism — so this example now iterates the catalogue entries
 instead of a hardcoded list of names.
 
@@ -20,7 +20,7 @@ import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
 
-from qpubench.schemas.execution import AdaptVQEConfig
+from qpubench.schemas.execution import AdaptVQERunConfig
 from qpubench.schemas.optimizer_catalog import MINIMIZER_CATALOG, STOPPING_CRITERION_CATALOG
 
 from examples.common.toy_hamiltonians import (
@@ -40,7 +40,7 @@ def run_with(optimizer: str, gradient_threshold: float) -> tuple[float, int]:
         num_qubits=NUM_QUBITS,
         num_electrons=NUM_ELECTRONS,
         energy_backend=ToyStatevectorAdapter(),
-        config=AdaptVQEConfig(
+        config=AdaptVQERunConfig(
             optimizer=optimizer,
             gradient_threshold=gradient_threshold,
             max_macro_iterations=15,
@@ -72,7 +72,7 @@ def main() -> None:
 
     print("\nAll catalogued stopping criteria:")
     for entry in STOPPING_CRITERION_CATALOG.values():
-        print(f"  {entry.name:20s} -> AdaptVQEConfig.{entry.field_name:22s} "
+        print(f"  {entry.name:20s} -> AdaptVQERunConfig.{entry.field_name:22s} "
               f"[{entry.applies_to}] {entry.description}")
 
 

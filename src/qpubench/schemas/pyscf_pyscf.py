@@ -1,10 +1,9 @@
 """PySCF interoperability: molecules, mean-field/DFT, solvation, and
 embedding (DMET / projection-based WF-in-DFT) problem specs.
 
-Added 2026-07-08 while checking whether Quantinuum's InQuanto is necessary
-for embedding and periodic-boundary quantum chemistry — it isn't. PySCF
-(pip-installable, no compiler required — verified in this repo's own CI
-sandbox) covers the same ground for free:
+PySCF (pip-installable, no compiler required — verified in this repo's own
+CI sandbox) covers embedding and periodic-boundary quantum chemistry with no
+commercial SDK required:
 
   - Mean-field / DFT           pyscf.scf, pyscf.dft         — verified, real
   - Continuum solvation        pyscf.solvent.pcm (PCM/COSMO) — verified, real
@@ -30,10 +29,8 @@ environment level-shift) and the standard DMET impurity/bath/correlation-
 potential formulation respectively; verify exact field names against
 whichever package you wire in.
 
-Deliberately NOT using Quantinuum's InQuanto: it offers the same
-projection-based embedding and periodic PBC drivers, but as a commercial
-platform — PySCF (+ PsiEmbed/libDMET) covers the same capability for free
-and fits qpubench's zero-commercial-SDK-in-core posture. See
+PySCF (+ PsiEmbed/libDMET) covers projection-based embedding and periodic PBC
+drivers for free, fitting qpubench's zero-commercial-SDK-in-core posture. See
 docs/integrations/pyscf.md for the full writeup.
 """
 from __future__ import annotations
@@ -183,10 +180,9 @@ class PySCFSolvationResult(pydantic.BaseModel):
 # ---------------------------------------------------------------------------
 
 class ProjectionEmbeddingConfig(pydantic.BaseModel):
-    """Projection-based WF-in-DFT embedding (Manby-Miller formulation) —
-    the technique InQuanto's ``InQ_tut_wft_dft`` tutorial demonstrates
-    commercially; PsiEmbed (github.com/danclaudino/PsiEmbed, PySCF-based)
-    is the free equivalent.
+    """Projection-based WF-in-DFT embedding (Manby-Miller formulation);
+    PsiEmbed (github.com/danclaudino/PsiEmbed, PySCF-based) is the free
+    reference implementation of the technique.
 
     Schema-only: no adapter in this repo calls PsiEmbed (it isn't on PyPI —
     install from source to use this for real). Field names follow the

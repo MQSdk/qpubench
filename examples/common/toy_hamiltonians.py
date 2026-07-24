@@ -1,8 +1,8 @@
 """Illustrative qubit Hamiltonians for the guide/demo/tutorial examples.
 
 qpubench performs no real electronic-structure calculations (see
-INTEGRATION_GUIDE.md and integrations/generic_adapt_vqe/README.md — "Not
-molecular electronic structure"). Every "molecule" used by the examples in
+integrations/generic_adapt_vqe/README.md — "Not molecular electronic
+structure"). Every "molecule" used by the examples in
 guides/, demos/, and tutorials/ is one of the small qubit Hamiltonians
 defined here — NOT derived from real orbital integrals, NOT presented as
 physically accurate. They exist purely to drive genuinely-executing

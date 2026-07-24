@@ -1,7 +1,9 @@
 """Guards against numeric drift between code and documentation.
 
-The schema version and module count are stated in several documents; these
-tests derive the true values from the code and fail if any copy disagrees.
+The schema version and module count are stated canonically in the README;
+these tests derive the true values from the code and fail if the README
+disagrees.  docs/schemas.md must NOT re-pin those numbers — it points at the
+README instead — so a version bump touches one document, not many.
 """
 import pathlib
 import re
@@ -29,24 +31,23 @@ def test_readme_schema_badge_matches_code():
     )
 
 
-def test_schemas_doc_header_matches_code():
-    doc = (REPO / "docs" / "schemas.md").read_text(encoding="utf-8")
-    m = re.search(r"Schema version \*\*(\d+\.\d+\.\d+)\*\* — (\d+) modules", doc)
-    assert m, "docs/schemas.md header must state 'Schema version **X.Y.Z** — N modules'"
-    assert m.group(1) == SCHEMA_VERSION, (
-        f"docs/schemas.md says {m.group(1)}, code says {SCHEMA_VERSION}"
-    )
-    assert int(m.group(2)) == _module_count(), (
-        f"docs/schemas.md says {m.group(2)} modules, "
-        f"src/qpubench/schemas/ has {_module_count()}"
-    )
-
-
 def test_readme_module_count_matches_code():
+    """The README is the canonical home for the module count."""
     readme = (REPO / "README.md").read_text(encoding="utf-8")
-    counts = {int(n) for n in re.findall(r"\((\d+) modules", readme)}
-    assert counts <= {_module_count()}, (
-        f"README states module count(s) {counts}, actual is {_module_count()}"
+    counts = {int(n) for n in re.findall(r"(\d+) schema modules", readme)}
+    assert counts == {_module_count()}, (
+        f"README states {counts} schema modules, actual is {_module_count()}"
+    )
+
+
+def test_schemas_doc_does_not_repin_version_or_count():
+    """Version and module count live in the README, not in schemas.md."""
+    doc = (REPO / "docs" / "schemas.md").read_text(encoding="utf-8")
+    assert not re.search(
+        r"Schema version \*\*\d+\.\d+\.\d+\*\* — \d+ modules", doc
+    ), (
+        "docs/schemas.md must not re-pin the schema version / module count; "
+        "state them in the README instead"
     )
 
 

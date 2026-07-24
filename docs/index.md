@@ -1,8 +1,8 @@
 # QPUBench
 
-**QPUBench is a benchmark framework for quantum computing that separates *what* you benchmark from *how* it runs and *where* the results go.**
+**QPUBench is a benchmark framework for quantum computing paradigms and quantum computers (QPUs) that separates *what* you benchmark from *how* it runs and *where* the results go.**
 
-You describe a circuit or problem once, as a typed [Pydantic v2](https://docs.pydantic.dev/) model. You run it against any registered backend — a local simulator, IBM or IQM hardware, an MBQC FPGA, or an algorithm library that builds its own circuits. Every run produces the same self-describing `BenchmarkRecord`, so results from different hardware, paradigms, and vendors are directly comparable and remain readable years later without any quantum SDK installed.
+You describe a circuit or problem once, as a typed [Pydantic v2](https://docs.pydantic.dev/) model. You run it against any registered backend — a local simulator, IBM or IQM hardware, or an algorithm library that builds its own circuits. Every run produces the same self-describing `BenchmarkRecord`, so results from different hardware, paradigms, and vendors are directly comparable and remain readable years later without any quantum SDK installed.
 
 The core package depends only on `pydantic`. Every quantum SDK is an optional extra.
 
@@ -13,7 +13,7 @@ The core package depends only on `pydantic`. Every quantum SDK is an optional ex
 QPUBench is built from three small, independent layers. Understanding them is enough to use the whole framework.
 
 **1. Schemas — what you benchmark.**
-`CircuitSpec` (a circuit or problem), `BackendSpec` (a machine), `ExecutionOptions` (how to run), and `QuantumResult` (what came back) are plain Pydantic models. They serialize to JSON, validate on construction, and never import a quantum SDK. A `BenchmarkRecord` bundles one circuit × one backend × one options set × one result, stamped with a schema version and a UUID.
+`CircuitSpec` (a circuit or problem), `BackendSpec` (a machine), `ExecutionOptions` (how to run), and `QuantumResult` (what came back) are plain Pydantic models. They serialize to JSON, validate on construction, and never import a quantum SDK. A `BenchmarkRecord` bundles one circuit × one backend × one options set × one result, stamped with a schema version, a UUID (`experiment_id`), and a UTC `timestamp` recording when the run was created.
 
 **2. Adapters — how execution happens.**
 An adapter is any object with three members: `spec`, `validate(circuit)`, and `run(circuit, options)` (the `BackendAdapter` protocol). Libraries that generate their *own* circuits from a problem description — ADAPT-VQE engines, for example — implement the sibling `AlgorithmAdapter` protocol instead, and the runner dispatches automatically. No base class to inherit; protocols are structural.
@@ -47,45 +47,55 @@ Works identically with `uv`, Poetry 2, and conda — see the [installation guide
 
 ## Your first benchmark
 
-This runs end-to-end with the bare install — no quantum SDK, no credentials. It prepares a Bell state, measures the ⟨ZZ⟩ correlation on a stub backend, and appends the record to an NDJSON file:
+This runs end-to-end with the bare install — no quantum SDK, no credentials. It prepares a 3-qubit GHZ state, measures two observables on a stub backend, and appends the record to an NDJSON file. Compared with the README's minimal Bell example, this one deliberately reaches for a few more knobs — multiple observables, an explicit `ExecutionOptions` (reproducibility seed, transpiler tier), and record tags/notes — so you meet them early:
 
 ```python
-import pathlib
 from qpubench import (
-    BenchmarkRunner, NDJSONStore, CircuitSpec,
+    BenchmarkRunner, CircuitSpec, ExecutionOptions,
     SparsePauliObservable, PauliTerm, PauliLabel, ComplexNumber,
 )
 
-# What to benchmark: a 2-qubit Bell circuit with one observable
-bell_qasm = """OPENQASM 2.0;
+# What to benchmark: a 3-qubit GHZ circuit with TWO observables
+ghz_qasm = """OPENQASM 2.0;
 include "qelib1.inc";
-qreg q[2];
+qreg q[3];
 h q[0];
-cx q[0],q[1];"""
+cx q[0],q[1];
+cx q[1],q[2];"""
 
-circuit = CircuitSpec(
-    num_qubits=2,
-    serialized=bell_qasm,
-    observables=[
-        SparsePauliObservable(num_qubits=2, terms=[
-            PauliTerm(qubit_indices=(0, 1),
-                      pauli_ops=(PauliLabel.Z, PauliLabel.Z),
-                      coefficient=ComplexNumber(re=1.0))
-        ])
-    ],
-)
+zzz = SparsePauliObservable(num_qubits=3, terms=[
+    PauliTerm(qubit_indices=(0, 1, 2),
+              pauli_ops=(PauliLabel.Z, PauliLabel.Z, PauliLabel.Z),
+              coefficient=ComplexNumber(re=1.0))])
+xxx = SparsePauliObservable(num_qubits=3, terms=[
+    PauliTerm(qubit_indices=(0, 1, 2),
+              pauli_ops=(PauliLabel.X, PauliLabel.X, PauliLabel.X),
+              coefficient=ComplexNumber(re=1.0))])
 
-# How to run it, and where results go
-runner = BenchmarkRunner(store=NDJSONStore(pathlib.Path("results/bell.ndjson")))
+circuit = CircuitSpec(num_qubits=3, serialized=ghz_qasm, observables=[zzz, xxx])
+
+# How to run it, and where results go.  A plain string path becomes an
+# append-only NDJSONStore — no pathlib, no store import needed.
+runner = BenchmarkRunner(store="results/ghz.ndjson")
 runner.register(name="stub", seed=42)
 
-record = runner.run(circuit, "stub", shots=4096)
+# An explicit ExecutionOptions exposes settings runner.run(..., shots=) hides:
+# a reproducibility seed and the transpiler optimization tier (0–3).
+options = ExecutionOptions(shots=4096, seed=7, optimization_level=2)
 
-ev = record.result.expectation_values[0]
-print(f"<ZZ> = {ev.value:.4f} ± {ev.std_error:.4f}")
+record = runner.run(
+    circuit, "stub", options,
+    tags=["tutorial", "ghz"],          # queryable labels on the record
+    notes="first GHZ benchmark",       # free-text provenance
+)
+
+for ev in record.result.expectation_values:
+    label = "".join(p.name for p in circuit.observables[ev.observable_index].terms[0].pauli_ops)
+    print(f"<{label}> = {ev.value:.4f} ± {ev.std_error:.4f}")
+print("created at:", record.timestamp)          # UTC timestamp, auto-stamped
 ```
 
-Registering with just a `name` and a `seed` creates a **`StubGateAdapter`** behind the scenes: a built-in placeholder backend that returns random, seed-reproducible values instead of simulating anything. It exists so you can build and test the full pipeline — circuit, runner, store — before installing a quantum SDK or touching real hardware. Likewise, `runner.run(..., shots=4096)` builds `ExecutionOptions(shots=4096)` for you; pass a full `ExecutionOptions` only when you need more detailed control (error mitigation, transpiler settings, algorithm hyperparameters).
+Registering with just a `name` and a `seed` creates a **`StubGateAdapter`** behind the scenes: a built-in placeholder backend that returns random, seed-reproducible values instead of simulating anything. It exists so you can build and test the full pipeline — circuit, runner, store — before installing a quantum SDK or touching real hardware. `runner.run(..., shots=4096)` would build `ExecutionOptions(shots=4096)` for you; here we pass a full `ExecutionOptions` to reach the extra settings (`seed`, `optimization_level`, and later error mitigation, transpiler settings, or algorithm hyperparameters). When a circuit carries observables the stub takes the estimator path and returns expectation values; drop the observables and it samples bitstrings into `record.result.shots` instead (set `memory=True` for per-shot data).
 
 To run the same circuit on a real simulator, change **one line**:
 
@@ -93,22 +103,40 @@ To run the same circuit on a real simulator, change **one line**:
 from qpubench.backends import AerAdapter          # pip install "qpubench[qiskit]"
 
 runner.register(AerAdapter(), name="aer")
-record = runner.run(circuit, "aer", shots=4096)   # <ZZ> ≈ 1.0
+record = runner.run(circuit, "aer", options)      # <ZZZ> ≈ 0, <XXX> ≈ 1 for GHZ
 ```
 
 That substitution — same circuit, same options, same record format, different machine — is the entire point of the framework.
 
+### Simulators you can drop in
+
+Every backend below is a **real, credential-free simulator** that swaps into that one line the same way. The stub needs nothing installed; the rest need only their extra:
+
+| Simulator | Install extra | Register it with |
+|---|---|---|
+| Stub (random, seeded — no SDK) | *(built-in)* | `runner.register(name="stub", seed=42)` |
+| Stub MBQC (random round results) | *(built-in)* | `runner.register(StubMBQCAdapter(seed=7), name="mbqc")` |
+| Qiskit Aer (statevector + QASM) | `[qiskit]` | `runner.register(AerAdapter(), name="aer")` |
+| PennyLane `lightning.qubit` | `[pennylane]` | `runner.register(PennyLaneLightningAdapter(), name="pennylane")` |
+| AWS Braket local (`LocalSimulator`) | `[braket]` | `runner.register(BraketAdapter(device_arn="local"), name="braket")` |
+| Qibo local (`numpy` / `qibojit`) | `[qibo]` | `runner.register(QiboAdapter(platform="numpy"), name="qibo")` |
+| Mitiq ZNE (wraps another simulator) | `[mitiq]` | `runner.register(MitiqZNEAdapter(AerAdapter()), name="mitiq")` |
+
+All adapter classes import from `qpubench.backends`. Fake-noise hardware backends (IBM `FakeManilaV2`, IQM `IQMFakeAdonis`, Quantinuum `machine_debug=True`) also run without credentials — see [Backends & adapters](backends.md) for those and for real-hardware access.
+
 ### What got saved
 
-Each line of `results/bell.ndjson` is one complete, versioned record:
+Each line of `results/ghz.ndjson` is one complete, versioned record. A plain string path opens the store for reading too:
 
 ```python
-store = NDJSONStore(pathlib.Path("results/bell.ndjson"))
+from qpubench import NDJSONStore
+
+store = NDJSONStore("results/ghz.ndjson")
 for r in store.query(backend__name="aer_statevector"):
-    print(r.experiment_id, r.result.expectation_values[0].value)
+    print(r.experiment_id, r.timestamp, r.tags, r.result.expectation_values[0].value)
 ```
 
-Records embed the circuit source, backend description, options, timings, and results, so a stored file is a self-contained benchmark archive.
+Records embed the circuit source, backend description, options, timings, tags, notes, and results, so a stored file is a self-contained benchmark archive.
 
 ---
 
@@ -156,10 +184,11 @@ runner.add_hook(lambda r: print(r.backend.name, r.result.status.value))
 | See every backend and its status (real vs. stub) | [Backends & adapters](backends.md) |
 | Store, query, and analyze results (incl. S3 / Hugging Face) | [Stores & persistence](persistence.md) |
 | Run variational algorithms (VQE, ADAPT-VQE) | [VQA algorithms](vqa.md) |
+| Understand algorithm identity, families, and configs | [Algorithms & `AlgorithmSpec`](algorithm_spec.md) |
 | Run simulators on CPU / GPU, or MBQC programs on FPGA | [Compute architectures](compute_architectures.md) |
 | Bridge an external framework's data (QForte, PySCF, QCSchema, GBS, …) | [Integrations](integrations.md) |
 | Avoid cross-SDK convention traps (Pauli encodings, bit orders) | [Compatibility](compatibility.md) |
-| Write your own adapter, step by step | [Integration guide](https://github.com/mqsdk/qpubench/blob/main/INTEGRATION_GUIDE.md) |
+| Write your own adapter, step by step | [Backends & adapters](backends.md) and the [integrations directory](https://github.com/mqsdk/qpubench/tree/main/integrations) |
 | Learn from runnable code | [examples/](https://github.com/mqsdk/qpubench/tree/main/examples) — guides, demos, and full tutorials |
 
 The examples directory follows a three-tier layout: `guides/` are focused how-tos (one concept each), `demos/` are self-contained showcases, and `tutorials/` are multi-step scientific workflows such as a bond-dissociation curve or an SN2 reaction path.
@@ -196,7 +225,7 @@ class MySimulatorAdapter:
         )
 ```
 
-Two rules keep the ecosystem healthy: SDK imports live **inside** methods (so importing your adapter never requires the SDK), and recoverable failures return `status=FAILED` with an `error_message` rather than raising. Templates for both protocols are in [`integrations/template/`](https://github.com/mqsdk/qpubench/tree/main/integrations/template), and the [integration guide](https://github.com/mqsdk/qpubench/blob/main/INTEGRATION_GUIDE.md) walks through testing your adapter with the SDK mocked out.
+Two rules keep the ecosystem healthy: SDK imports live **inside** methods (so importing your adapter never requires the SDK), and recoverable failures return `status=FAILED` with an `error_message` rather than raising. Templates for both protocols are in [`integrations/template/`](https://github.com/mqsdk/qpubench/tree/main/integrations/template), and [Backends & adapters](backends.md) walks through testing your adapter with the SDK mocked out.
 
 ---
 

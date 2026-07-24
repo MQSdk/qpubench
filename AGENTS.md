@@ -86,7 +86,7 @@ with patch("my_adapter.my_library", MagicMock()) as mock_lib:
 assert record.result.status == JobStatus.SUCCEEDED
 ```
 
-See `INTEGRATION_GUIDE.md §5` for the full pattern.
+See `docs/backends.md` (writing adapters, mocking the SDK for tests) for the full pattern.
 
 ## Tracking feedback and follow-ups
 

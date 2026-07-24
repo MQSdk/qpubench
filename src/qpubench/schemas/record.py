@@ -12,7 +12,7 @@ from .advantage import QuantumAdvantageRecord
 from .execution import ExecutionOptions
 from .result import QuantumResult
 
-SCHEMA_VERSION = "3.1.0"
+SCHEMA_VERSION = "4.0.0"
 
 def _utcnow() -> datetime.datetime:
     return datetime.datetime.now(datetime.UTC)

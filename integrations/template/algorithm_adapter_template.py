@@ -97,11 +97,11 @@ class MyAlgorithmAdapter:
 
         # TODO: step 2 — read algorithm config
         # AlgorithmSpec carries name + AlgorithmFamily; hyperparameters live
-        # in a family-specific config (e.g. options.adapt_vqe_config for
+        # in a family-specific config (e.g. options.adapt_vqe_run_config for
         # AlgorithmFamily.ADAPT_VQE) or in AlgorithmSpec.extra_params.
         alg_spec = options.algorithm_spec
         # name       = alg_spec.name if alg_spec else "MY_DEFAULT_ALG"
-        # optimizer  = options.adapt_vqe_config.optimizer if options.adapt_vqe_config else "BFGS"
+        # optimizer  = options.adapt_vqe_run_config.optimizer if options.adapt_vqe_run_config else "BFGS"
 
         # TODO: step 3 — run algorithm
         # alg = mylib.MyAlgorithm(problem)
@@ -140,7 +140,7 @@ class MyAlgorithmAdapter:
             problem_type="chemistry",      # TODO: or "optimization", "ml"
             # molecule=...,               # TODO: molecule name if applicable
             algorithm=alg_spec.name if alg_spec else None,
-            optimizer=options.adapt_vqe_config.optimizer if options.adapt_vqe_config else None,
+            optimizer=options.adapt_vqe_run_config.optimizer if options.adapt_vqe_run_config else None,
         )
         vqa_result = VQAResult(
             final_eigenvalue=final_energy,

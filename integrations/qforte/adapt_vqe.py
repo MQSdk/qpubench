@@ -14,7 +14,7 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from qpubench.schemas.circuit import CircuitSpec
-from qpubench.schemas.execution import AdaptVQEConfig, AlgorithmSpec, ExecutionOptions
+from qpubench.schemas.execution import AdaptVQERunConfig, AlgorithmSpec, ExecutionOptions
 from qpubench.schemas.primitives import AlgorithmFamily
 from qpubench.schemas.record import BenchmarkRecord
 from qpubench.schemas.result import AdaptIteration
@@ -71,7 +71,7 @@ class AdaptVQERunner:
         self,
         molecule: CircuitSpec,
         alg_spec: AlgorithmSpec,
-        adapt_vqe_config: AdaptVQEConfig | None = None,
+        adapt_vqe_run_config: AdaptVQERunConfig | None = None,
         *,
         tags:   list[str] | None = None,
         run_id: str | None       = None,
@@ -81,7 +81,7 @@ class AdaptVQERunner:
         record = self._runner.run(
             molecule,
             self._backend_name,
-            ExecutionOptions(algorithm_spec=alg_spec, adapt_vqe_config=adapt_vqe_config),
+            ExecutionOptions(algorithm_spec=alg_spec, adapt_vqe_run_config=adapt_vqe_run_config),
             tags=tags or ["adapt-vqe"],
             run_id=run_id,
             notes=notes,
@@ -119,7 +119,7 @@ class AdaptVQERunner:
         _optimizers = optimizers or ["BFGS", "jacobi"]
         alg_spec = AlgorithmSpec(name="ADAPTVQE", family=AlgorithmFamily.ADAPT_VQE)
         configs = [
-            AdaptVQEConfig(
+            AdaptVQERunConfig(
                 pool_type=pool_type,
                 optimizer=opt,
                 gradient_threshold=gradient_threshold,
@@ -153,7 +153,7 @@ class AdaptVQERunner:
         _pool_types = pool_types or ["SD", "GSD"]
         alg_spec = AlgorithmSpec(name="ADAPTVQE", family=AlgorithmFamily.ADAPT_VQE)
         configs = [
-            AdaptVQEConfig(
+            AdaptVQERunConfig(
                 pool_type=pt,
                 optimizer=optimizer,
                 gradient_threshold=gradient_threshold,
@@ -183,7 +183,7 @@ class AdaptVQERunner:
     ) -> list[BenchmarkRecord]:
         """Compare ADAPT-VQE against UCCNVQE (and optionally UCCNPQE/SPQE)."""
         _names = alg_names or ["UCCNVQE", "ADAPTVQE"]
-        cfg = AdaptVQEConfig(pool_type=pool_type, optimizer=optimizer)
+        cfg = AdaptVQERunConfig(pool_type=pool_type, optimizer=optimizer)
         alg_specs = [
             AlgorithmSpec(
                 name=name,
@@ -214,8 +214,8 @@ class AdaptVQERunner:
         rows: list[dict] = []
         for rec in records:
             alg  = rec.vqa.algorithm if rec.vqa else "?"
-            opt  = rec.options.adapt_vqe_config.optimizer if rec.options.adapt_vqe_config else "?"
-            pool = rec.options.adapt_vqe_config.pool_type if rec.options.adapt_vqe_config else "?"
+            opt  = rec.options.adapt_vqe_run_config.optimizer if rec.options.adapt_vqe_run_config else "?"
+            pool = rec.options.adapt_vqe_run_config.pool_type if rec.options.adapt_vqe_run_config else "?"
 
             if rec.result.adapt_history:
                 for it in rec.result.adapt_history:
@@ -258,10 +258,10 @@ class AdaptVQERunner:
             rows.append({
                 "experiment_id":  rec.experiment_id,
                 "algorithm":      rec.vqa.algorithm if rec.vqa else "?",
-                "optimizer":      (rec.options.adapt_vqe_config.optimizer
-                                   if rec.options.adapt_vqe_config else "?"),
-                "pool_type":      (rec.options.adapt_vqe_config.pool_type
-                                   if rec.options.adapt_vqe_config else "?"),
+                "optimizer":      (rec.options.adapt_vqe_run_config.optimizer
+                                   if rec.options.adapt_vqe_run_config else "?"),
+                "pool_type":      (rec.options.adapt_vqe_run_config.pool_type
+                                   if rec.options.adapt_vqe_run_config else "?"),
                 "final_energy":   ev[0].value if ev else None,
                 "energy_error":   rec.vqa_result.energy_error if rec.vqa_result else None,
                 "chem_accuracy":  rec.vqa_result.chemical_accuracy if rec.vqa_result else None,
@@ -333,7 +333,7 @@ class ExternalEvalAdaptVQERunner:
         self,
         molecule: CircuitSpec,
         alg_spec: AlgorithmSpec,
-        adapt_vqe_config: AdaptVQEConfig | None = None,
+        adapt_vqe_run_config: AdaptVQERunConfig | None = None,
         *,
         tags:   list[str] | None = None,
         run_id: str | None       = None,
@@ -342,7 +342,7 @@ class ExternalEvalAdaptVQERunner:
         record = self._runner.run(
             molecule,
             self._backend_name,
-            ExecutionOptions(algorithm_spec=alg_spec, adapt_vqe_config=adapt_vqe_config),
+            ExecutionOptions(algorithm_spec=alg_spec, adapt_vqe_run_config=adapt_vqe_run_config),
             tags=tags or ["adapt-vqe", "external-eval"],
             run_id=run_id,
             notes=notes,
@@ -359,19 +359,19 @@ class ExternalEvalAdaptVQERunner:
         molecule: CircuitSpec,
         alg_spec: AlgorithmSpec,
         backend_names: list[str],
-        adapt_vqe_config: AdaptVQEConfig | None = None,
+        adapt_vqe_run_config: AdaptVQERunConfig | None = None,
         *,
         run_id: str | None = None,
         tags: list[str] | None = None,
     ) -> list[BenchmarkRecord]:
         """Run the same ADAPT-VQE configuration on multiple energy backends."""
-        pool_type = adapt_vqe_config.pool_type if adapt_vqe_config else "default"
+        pool_type = adapt_vqe_run_config.pool_type if adapt_vqe_run_config else "default"
         records = []
         for name in backend_names:
             rec = self._runner.run(
                 molecule,
                 name,
-                ExecutionOptions(algorithm_spec=alg_spec, adapt_vqe_config=adapt_vqe_config),
+                ExecutionOptions(algorithm_spec=alg_spec, adapt_vqe_run_config=adapt_vqe_run_config),
                 run_id=run_id or f"compare_backends_{pool_type}",
                 tags=tags or ["adapt-vqe", "backend-comparison"],
             )

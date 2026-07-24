@@ -27,7 +27,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
 from qpubench import BenchmarkRunner, ExecutionOptions, StubGateAdapter
 from qpubench.schemas.circuit import CircuitSpec
-from qpubench.schemas.execution import AdaptVQEConfig, AlgorithmSpec
+from qpubench.schemas.execution import AdaptVQERunConfig, AlgorithmSpec
 from qpubench.schemas.observable import PauliTerm, SparsePauliObservable
 from qpubench.schemas.primitives import AlgorithmFamily, CircuitFormat, ComplexNumber, PauliLabel
 
@@ -236,7 +236,7 @@ def test_engine_runs_to_completion():
         num_qubits=4,
         num_electrons=2,
         energy_backend=StubGateAdapter(seed=42),
-        config=AdaptVQEConfig(max_macro_iterations=2, max_micro_iterations=10),
+        config=AdaptVQERunConfig(max_macro_iterations=2, max_micro_iterations=10),
     )
     assert len(engine.pool) == 5  # 2x2 singles + 1x1 doubles
     result, vqa, vqa_result = engine.run()
@@ -259,7 +259,7 @@ def test_engine_circuit_starts_with_hf_reference():
 
 
 # ---------------------------------------------------------------------------
-# Adapters — same AlgorithmFamily.ADAPT_VQE, same AdaptVQEConfig, two packages
+# Adapters — same AlgorithmFamily.ADAPT_VQE, same AdaptVQERunConfig, two packages
 # ---------------------------------------------------------------------------
 
 def _molecule_problem() -> CircuitSpec:
@@ -279,7 +279,7 @@ def test_adapter_runs_via_benchmark_runner(adapter_cls):
     runner.register(adapter_cls(energy_backend=StubGateAdapter(seed=7)), name="adapter")
     opts = ExecutionOptions(
         algorithm_spec=AlgorithmSpec(name="ADAPTVQE", family=AlgorithmFamily.ADAPT_VQE),
-        adapt_vqe_config=AdaptVQEConfig(max_macro_iterations=1, max_micro_iterations=5),
+        adapt_vqe_run_config=AdaptVQERunConfig(max_macro_iterations=1, max_micro_iterations=5),
     )
     record = runner.run(_molecule_problem(), "adapter", opts)
     assert record.result.status.value == "succeeded"
@@ -288,7 +288,7 @@ def test_adapter_runs_via_benchmark_runner(adapter_cls):
 
 
 def test_same_config_switches_implementation_between_adapters():
-    """The actual deliverable: one AdaptVQEConfig, two interchangeable adapters."""
+    """The actual deliverable: one AdaptVQERunConfig, two interchangeable adapters."""
     runner = BenchmarkRunner()
     runner.register(
         IBMQiskitAdaptVQEAdapter(energy_backend=StubGateAdapter(seed=1)),
@@ -298,9 +298,9 @@ def test_same_config_switches_implementation_between_adapters():
         MicrosoftQDKAdaptVQEAdapter(energy_backend=StubGateAdapter(seed=1)),
         name="microsoft_qdk_adapt_vqe",
     )
-    shared_config = AdaptVQEConfig(max_macro_iterations=1, max_micro_iterations=5)
+    shared_config = AdaptVQERunConfig(max_macro_iterations=1, max_micro_iterations=5)
     alg_spec = AlgorithmSpec(name="ADAPTVQE", family=AlgorithmFamily.ADAPT_VQE)
-    opts = ExecutionOptions(algorithm_spec=alg_spec, adapt_vqe_config=shared_config)
+    opts = ExecutionOptions(algorithm_spec=alg_spec, adapt_vqe_run_config=shared_config)
 
     problem = _molecule_problem()
     rec_a = runner.run(problem, "ibm_qiskit_adapt_vqe", opts)

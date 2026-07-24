@@ -47,7 +47,7 @@ def main() -> None:
         FastGateSelector,
         GateSelector,
     )
-    from qpubench.schemas.execution import AdaptVQEConfig
+    from qpubench.schemas.execution import AdaptVQERunConfig
 
     h2_geometry = [("H", (0.0, 0.0, 0.0)), ("H", (0.0, 0.0, 0.7414))]
     hamiltonian, record = build_qubit_hamiltonian(
@@ -58,7 +58,7 @@ def main() -> None:
     print(f"H2/STO-3G qubit Hamiltonian: {num_qubits} qubits, "
           f"{len(hamiltonian.terms)} Pauli terms\n")
 
-    config = AdaptVQEConfig(max_macro_iterations=6)
+    config = AdaptVQERunConfig(max_macro_iterations=6)
 
     selectors: list[tuple[str, GateSelector]] = [
         ("FastGateSelector", FastGateSelector()),

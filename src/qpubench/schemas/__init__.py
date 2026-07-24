@@ -45,6 +45,7 @@ from .mqsdk_cebule import (
     AtomOrderInput,
     AtomOrderResult,
     CebuleTaskEnvelope,
+    CebuleTaskType,
     CosmoInput,
     CosmoMethod,
     CosmoResult,
@@ -169,7 +170,7 @@ from .contraction_path import (
     ContractionPathStrategy,
 )
 from .circuit import CircuitSpec, ParameterBinding
-from .execution import AdaptVQEConfig, AlgorithmSpec, ExecutionOptions, TranspilerConfig, ZNEConfig
+from .execution import AdaptVQERunConfig, AlgorithmSpec, ExecutionOptions, TranspilerConfig, ZNEConfig
 from .evangelistalab_qforte import (
     QForteAlgorithmConfig,
     QForteCircuitSpec,
@@ -193,15 +194,10 @@ from .johnrscott_mbqc_fpga import (
 from .mqsdk_photoq import (
     AuroraDatasetSpec,
     AuroraExperiment,
-    BBSConfig,
-    BBSResult,
     BeamsplitterSpec,
     ClickPatternProbabilityResult,
     ClusterStateSpec,
     DistributionDistanceMetric,
-    DominatingSetBenchmarkResult,
-    DominatingSetProblemSpec,
-    DuschinskyResult,
     FBQCRunConfig,
     FockAmplitude,
     FockState,
@@ -228,12 +224,9 @@ from .mqsdk_photoq import (
     IndistinguishabilityPurificationSpec,
     InterferometerSpec,
     KensingtonianResult,
-    LatentPriorConfig,
-    LatentPriorResult,
     MPSSimulationConfig,
     MZISpec,
     MethodComparison,
-    NormalModeData,
     PICPlatform,
     PICSpec,
     PTSeriesInputType,
@@ -273,9 +266,6 @@ from .mqsdk_photoq import (
     TNSamplingParams,
     TakagiDecompositionSpec,
     TimeBinInterferometerSpec,
-    VibronicGBSParams,
-    VibronicSpectrumConfig,
-    VibronicSpectrumResult,
 )
 from .microsoft_qdk import (
     ActiveSpaceSelectionConfig,
@@ -483,7 +473,6 @@ from .quantum_motion_hardware import QuantumMotionDeviceSpec
 from .observable import PauliTerm, SparsePauliObservable
 from .primitives import (
     AlgorithmFamily,
-    CebuleTaskType,
     CircuitFormat,
     ComplexNumber,
     ComputingModel,
@@ -568,13 +557,9 @@ __all__ = [
     # mqsdk_photoq (photonic LOQC + GBS + pPNRD methods + backends + apps)
     "AuroraDatasetSpec",
     "AuroraExperiment",
-    "BBSConfig",
-    "BBSResult",
     "BeamsplitterSpec",
     "ClickPatternProbabilityResult",
     "DistributionDistanceMetric",
-    "DominatingSetBenchmarkResult",
-    "DominatingSetProblemSpec",
     "FBQCRunConfig",
     "FockAmplitude",
     "FockState",
@@ -585,8 +570,6 @@ __all__ = [
     "IndistinguishabilityPurificationResult",
     "IndistinguishabilityPurificationSpec",
     "KensingtonianResult",
-    "LatentPriorConfig",
-    "LatentPriorResult",
     "MPSSimulationConfig",
     "MZISpec",
     "MethodComparison",
@@ -638,7 +621,7 @@ __all__ = [
     "MBQCQubitState",
     "MBQCRound",
     # execution
-    "AdaptVQEConfig",
+    "AdaptVQERunConfig",
     "AlgorithmSpec",
     "ExecutionOptions",
     "TranspilerConfig",
@@ -845,7 +828,6 @@ __all__ = [
     "XenakisRunConfig",
     # mqsdk_photoq (GBS types, continued)
     "ClusterStateSpec",
-    "DuschinskyResult",
     "GBSBackendType",
     "GBSCliqueFindingResult",
     "GBSGraphConfig",
@@ -862,7 +844,6 @@ __all__ = [
     "HafnianResult",
     "HomodyneMeasurementSpec",
     "InterferometerSpec",
-    "NormalModeData",
     "QuadratureOrdering",
     "RotationGateSpec",
     "S2GateSpec",
@@ -872,9 +853,6 @@ __all__ = [
     "TDMGBSResult",
     "TDMSqueezingLevel",
     "TakagiDecompositionSpec",
-    "VibronicGBSParams",
-    "VibronicSpectrumConfig",
-    "VibronicSpectrumResult",
     # qedma_qesem
     "QESEMCharacterizationResult",
     "QESEMCharacterizationStatus",

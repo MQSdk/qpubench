@@ -1027,7 +1027,7 @@ def test_runner_register_and_run_shorthand_misuse():
 # AlgorithmSpec and algorithm-driven schemas
 # ---------------------------------------------------------------------------
 
-from qpubench.schemas.execution import AdaptVQEConfig, AlgorithmSpec
+from qpubench.schemas.execution import AdaptVQERunConfig, AlgorithmSpec
 from qpubench.schemas.result import AdaptIteration
 from qpubench.schemas.primitives import AlgorithmFamily
 
@@ -1039,7 +1039,7 @@ def test_algorithm_spec_defaults():
 
 
 def test_adapt_vqe_config_defaults():
-    cfg = AdaptVQEConfig()
+    cfg = AdaptVQERunConfig()
     assert cfg.pool_type == "SD"
     assert cfg.optimizer == "BFGS"
     assert cfg.use_analytic_gradient is True
@@ -1050,7 +1050,7 @@ def test_adapt_vqe_config_defaults():
 
 def test_algorithm_spec_adapt_vqe():
     alg = AlgorithmSpec(name="ADAPTVQE", family=AlgorithmFamily.ADAPT_VQE)
-    cfg = AdaptVQEConfig(pool_type="SDTQ", optimizer="jacobi", max_macro_iterations=30)
+    cfg = AdaptVQERunConfig(pool_type="SDTQ", optimizer="jacobi", max_macro_iterations=30)
     assert alg.name == "ADAPTVQE"
     assert alg.family == AlgorithmFamily.ADAPT_VQE
     assert cfg.pool_type == "SDTQ"
@@ -1060,12 +1060,12 @@ def test_algorithm_spec_adapt_vqe():
 def test_algorithm_spec_in_execution_options():
     opts = ExecutionOptions(
         algorithm_spec=AlgorithmSpec(name="ADAPTVQE", family=AlgorithmFamily.ADAPT_VQE),
-        adapt_vqe_config=AdaptVQEConfig(pool_type="GSD"),
+        adapt_vqe_run_config=AdaptVQERunConfig(pool_type="GSD"),
     )
     assert opts.algorithm_spec is not None
     assert opts.algorithm_spec.name == "ADAPTVQE"
-    assert opts.adapt_vqe_config is not None
-    assert opts.adapt_vqe_config.pool_type == "GSD"
+    assert opts.adapt_vqe_run_config is not None
+    assert opts.adapt_vqe_run_config.pool_type == "GSD"
 
 
 def test_algorithm_family_qpe_tag():
@@ -1258,7 +1258,7 @@ def test_adapt_vqe_via_algorithm_adapter():
         "mock_qforte",
         ExecutionOptions(
             algorithm_spec=AlgorithmSpec(name="ADAPTVQE", family=AlgorithmFamily.ADAPT_VQE),
-            adapt_vqe_config=AdaptVQEConfig(gradient_threshold=1.0e-4),
+            adapt_vqe_run_config=AdaptVQERunConfig(gradient_threshold=1.0e-4),
         ),
     )
     assert record.result.adapt_history is not None
@@ -1731,69 +1731,6 @@ def test_gbs_clique_finding_result():
     assert len(restored.raw_samples) == 3
 
 
-def test_vibronic_spectrum_config_and_result():
-    from qpubench.schemas.mqsdk_photoq import (
-        DuschinskyResult,
-        NormalModeData,
-        VibronicGBSParams,
-        VibronicSpectrumConfig,
-        VibronicSpectrumResult,
-    )
-    import json
-    cfg = VibronicSpectrumConfig(
-        molecule_name="water",
-        ground_state_file="Ground_Water.out.txt",
-        excited_state_file="Excited_Water.txt",
-        temperature_K=0.0,
-        num_samples=100,
-        freq_range_cm1=(-1000.0, 8000.0),
-    )
-    ground = NormalModeData(
-        num_atoms=3,
-        num_modes=3,
-        equilibrium_geometry=[0.0, -0.121, 0.0, 1.425, 0.962, 0.0, -1.425, 0.962, 0.0],
-        normal_mode_vectors=[1.0] * 9,
-        frequencies_cm1=[1595.0, 3657.0, 3756.0],
-        atomic_masses_amu=[15.995, 1.008, 1.008],
-    )
-    dusch = DuschinskyResult(
-        num_modes=3,
-        rotation_matrix_Ud=[1.0, 0.0, 0.0,
-                            0.0, 1.0, 0.0,
-                            0.0, 0.0, 1.0],
-        displacement_delta=[0.01, 0.02, 0.0],
-    )
-    params = VibronicGBSParams(
-        num_modes=3,
-        t=[0.1, 0.05, 0.0],
-        U1_real=[1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0],
-        U1_imag=[0.0] * 9,
-        r=[0.2, 0.15, 0.05],
-        U2_real=[1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0],
-        U2_imag=[0.0] * 9,
-        alpha_real=[0.0, 0.0, 0.0],
-        alpha_imag=[0.0, 0.0, 0.0],
-    )
-    result = VibronicSpectrumResult(
-        config=cfg,
-        ground_state_data=ground,
-        duschinsky=dusch,
-        gbs_params=params,
-        sample_energies_cm1=[0.0, 1595.0, 3657.0],
-        histogram_bins=[0.0, 1000.0, 2000.0, 4000.0],
-        histogram_counts=[50.0, 30.0, 20.0],
-        reference_peak_positions=[0.0, 1420.0, 3100.0],
-        reference_peak_intensities=[100.0, 23.9, 2.6],
-        num_samples_completed=100,
-    )
-    json_str = result.model_dump_json()
-    data = json.loads(json_str)
-    assert data["config"]["molecule_name"] == "water"
-    restored = VibronicSpectrumResult.model_validate_json(json_str)
-    assert restored.duschinsky.num_modes == 3
-    assert len(restored.sample_energies_cm1) == 3
-
-
 def test_tdm_gbs_config():
     from qpubench.schemas.mqsdk_photoq import TDMDelaySpec, TDMGBSConfig, TDMSqueezingLevel
     delays = TDMDelaySpec(delays=[1, 6, 36], effective_modes=216)
@@ -1942,29 +1879,6 @@ def test_aurora_dataset_spec():
     )
     assert spec.num_qubit_modes == 12
     assert spec.experiment == AuroraExperiment.DECODER_DEMO
-
-
-def test_dominating_set_bbs():
-    from qpubench.schemas.mqsdk_photoq import (
-        DominatingSetProblemSpec, BBSConfig, BBSResult,
-        DominatingSetBenchmarkResult, PTSeriesInputType, GBSBackendType,
-    )
-    problem = DominatingSetProblemSpec(num_nodes=6, edges=[(0, 1), (1, 2), (2, 3)], seed=0)
-    cfg = BBSConfig(
-        problem=problem, num_iterations=50, num_samples=100,
-        input_state=PTSeriesInputType.GBS, backend=GBSBackendType.ORCA_PT_SERIES,
-    )
-    res = BBSResult(
-        config=cfg, best_bitstring=[1, 0, 0, 1, 0, 0], best_set_size=2,
-        is_dominating=True, energy_history=[5.0, 3.0, 2.0], convergence_iteration=3,
-    )
-    assert res.best_set_size == 2
-    assert res.is_dominating is True
-    bench = DominatingSetBenchmarkResult(
-        graph_sizes=[6, 8], methods=["BBS 1-loop (gbs)", "greedy"],
-        mean_set_size={"BBS 1-loop (gbs)": [2.0, 3.0], "greedy": [2.3, 3.7]},
-    )
-    assert bench.graph_sizes == [6, 8]
 
 
 def test_backend_spec_orca_pt_series():
@@ -3442,7 +3356,7 @@ from qpubench.schemas.mqsdk_cebule import (
     WulffConstructionInput,
     WulffFacet,
 )
-from qpubench.schemas.primitives import CebuleTaskType
+from qpubench.schemas.mqsdk_cebule import CebuleTaskType
 
 
 def test_cebule_task_type_confirmed_members_present():

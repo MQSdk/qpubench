@@ -60,7 +60,7 @@ For building the Hamiltonian to attach as `ansatz.observables`, see [Examples �
 An ADAPT-VQE run is described by two objects, neither tied to any vendor SDK:
 
 - **`AlgorithmSpec`** carries identity only: `name` + `AlgorithmFamily.ADAPT_VQE`.
-- **`AdaptVQEConfig`** (in `schemas/execution.py`) carries the hyperparameters every implementation accepts:
+- **`AdaptVQERunConfig`** (in `schemas/execution.py`) carries the hyperparameters every implementation accepts:
 
 | Field | Meaning | Default |
 |---|---|---|
@@ -72,11 +72,11 @@ An ADAPT-VQE run is described by two objects, neither tied to any vendor SDK:
 | `max_micro_iterations` | Optimizer steps per macro-iteration | `200` |
 | `use_analytic_gradient` | Analytic gradient vs. finite differences | `True` |
 
-Because the config is package-agnostic, the *same* `AdaptVQEConfig` runs against any registered ADAPT-VQE adapter — register a different one under a different name and compare the resulting `BenchmarkRecord`s directly:
+Because the config is package-agnostic, the *same* `AdaptVQERunConfig` runs against any registered ADAPT-VQE adapter — register a different one under a different name and compare the resulting `BenchmarkRecord`s directly:
 
 ```python
 from qpubench import (
-    AdaptVQEConfig, AlgorithmFamily, AlgorithmSpec, BenchmarkRunner, ExecutionOptions,
+    AdaptVQERunConfig, AlgorithmFamily, AlgorithmSpec, BenchmarkRunner, ExecutionOptions,
 )
 from qpubench.schemas.circuit import CircuitSpec
 from qpubench.schemas.primitives import CircuitFormat
@@ -87,7 +87,7 @@ mol = CircuitSpec(num_qubits=0, format=CircuitFormat.MOLECULE_JSON,
 
 options = ExecutionOptions(
     algorithm_spec=AlgorithmSpec(name="ADAPTVQE", family=AlgorithmFamily.ADAPT_VQE),
-    adapt_vqe_config=AdaptVQEConfig(pool_type="SD", optimizer="BFGS",
+    adapt_vqe_run_config=AdaptVQERunConfig(pool_type="SD", optimizer="BFGS",
                                     gradient_threshold=1e-4, max_macro_iterations=20),
 )
 
@@ -113,7 +113,7 @@ Here `ExecutionOptions` is built explicitly because the run needs more than a sh
 
 ### QForte engine
 
-QForte's pybind11 object model (Circuit, Gate, QubitOperator, …) and its Algorithm/AnsatzAlgorithm/ADAPTVQE attribute surface are modeled as typed schemas in `schemas/evangelistalab_qforte.py` — no ad-hoc `getattr()` scraping of private attributes. `QForteAlgorithmConfig` wraps the shared `AdaptVQEConfig` plus QForte-only extras (`diis_max_dim`, `use_cumulative_thresh`, `add_equiv_ops`). The adapter also ships an `ExternalEvalAlgorithmAdapter` that routes every energy evaluation through any qpubench `BackendAdapter` (Aer, IBM, …) instead of QForte's own simulator. See `integrations/qforte/README.md` for the file-by-file layout.
+QForte's pybind11 object model (Circuit, Gate, QubitOperator, …) and its Algorithm/AnsatzAlgorithm/ADAPTVQE attribute surface are modeled as typed schemas in `schemas/evangelistalab_qforte.py` — no ad-hoc `getattr()` scraping of private attributes. `QForteAlgorithmConfig` wraps the shared `AdaptVQERunConfig` plus QForte-only extras (`diis_max_dim`, `use_cumulative_thresh`, `add_equiv_ops`). The adapter also ships an `ExternalEvalAlgorithmAdapter` that routes every energy evaluation through any qpubench `BackendAdapter` (Aer, IBM, …) instead of QForte's own simulator. See `integrations/qforte/README.md` for the file-by-file layout.
 
 ### Generic engine (Qiskit / QDK adapters)
 
@@ -135,7 +135,7 @@ Direct use of the engine (bypassing the adapters):
 
 ```python
 from qpubench import StubGateAdapter
-from qpubench.schemas.execution import AdaptVQEConfig
+from qpubench.schemas.execution import AdaptVQERunConfig
 from generic_adapt_vqe.engine import GenericAdaptVQEEngine
 
 engine = GenericAdaptVQEEngine(
@@ -143,7 +143,7 @@ engine = GenericAdaptVQEEngine(
     num_qubits=4,
     num_electrons=2,
     energy_backend=StubGateAdapter(seed=0),   # or a real backend
-    config=AdaptVQEConfig(pool_type="SD", optimizer="BFGS"),
+    config=AdaptVQERunConfig(pool_type="SD", optimizer="BFGS"),
 )
 result, vqa, vqa_result = engine.run()
 ```
@@ -152,5 +152,5 @@ result, vqa, vqa_result = engine.run()
 
 - Runnable examples: `examples/guides/vqe_calculator.py` (assemble a calculator), `examples/guides/ground_state_energy_problem.py` (define the problem), `examples/demos/adapt_vqe_convergence_study.py` (sweep the gradient threshold), and `examples/qforte_vqe_benchmark.py` (three QForte methods on He/cc-pVDZ).
 - Building real Hamiltonians to feed a VQA: [Examples — Real Hamiltonian sources](../examples/README.md#real-hamiltonian-sources).
-- The record and metadata schemas: [`record` / `VQAConfig`](schemas.md#record), [`execution` / `AdaptVQEConfig`](schemas.md#execution).
-- Writing your own algorithm adapter: [Backends & adapters](backends.md#writing-a-new-algorithmadapter) and the [integration guide](../INTEGRATION_GUIDE.md).
+- The record and metadata schemas: [`record` / `VQAConfig`](schemas.md#record), [`execution` / `AdaptVQERunConfig`](schemas.md#execution).
+- Writing your own algorithm adapter: [Backends & adapters](backends.md#writing-a-new-algorithmadapter) and the [integrations directory](../integrations/README.md).

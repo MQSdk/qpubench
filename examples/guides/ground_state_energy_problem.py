@@ -21,7 +21,7 @@ import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
 
-from qpubench.schemas.execution import AdaptVQEConfig
+from qpubench.schemas.execution import AdaptVQERunConfig
 from qpubench.schemas.record import VQAConfig
 
 from examples.common.toy_hamiltonians import (
@@ -56,7 +56,7 @@ def main() -> None:
         num_qubits=NUM_QUBITS,
         num_electrons=NUM_ELECTRONS,
         energy_backend=ToyStatevectorAdapter(),
-        config=AdaptVQEConfig(max_macro_iterations=15, gradient_threshold=1e-5, max_micro_iterations=200),
+        config=AdaptVQERunConfig(max_macro_iterations=15, gradient_threshold=1e-5, max_micro_iterations=200),
     )
     result, vqa, vqa_result = engine.run()
 

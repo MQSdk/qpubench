@@ -7,7 +7,7 @@ same pattern `integrations/qforte/ExternalEvalAlgorithmAdapter` established
 for QForte, generalized so QForte itself isn't required.
 
 > **See [docs/vqa.md](../../docs/vqa.md) for the overall VQA picture** — how
-> VQE and ADAPT-VQE relate and the package-agnostic `AdaptVQEConfig`
+> VQE and ADAPT-VQE relate and the package-agnostic `AdaptVQERunConfig`
 > contract this engine consumes. This README covers the engine internals.
 
 Used by `integrations/ibm_qiskit_adapt_vqe/` and
@@ -52,7 +52,7 @@ run it with `pip install 'qpubench[adapt_vqe]'`.
 
 ```python
 from qpubench import StubGateAdapter
-from qpubench.schemas.execution import AdaptVQEConfig
+from qpubench.schemas.execution import AdaptVQERunConfig
 from generic_adapt_vqe.engine import GenericAdaptVQEEngine
 
 engine = GenericAdaptVQEEngine(
@@ -60,7 +60,7 @@ engine = GenericAdaptVQEEngine(
     num_qubits=4,
     num_electrons=2,
     energy_backend=StubGateAdapter(seed=0),   # or a real backend
-    config=AdaptVQEConfig(pool_type="SD", optimizer="BFGS"),
+    config=AdaptVQERunConfig(pool_type="SD", optimizer="BFGS"),
 )
 result, vqa, vqa_result = engine.run()
 ```

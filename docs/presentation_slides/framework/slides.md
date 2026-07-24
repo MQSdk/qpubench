@@ -31,7 +31,7 @@ header-includes:
 
 | Layer | Answers | Lives in |
 |---|---|---|
-| **Schema** | *What* are you benchmarking? | `schemas/` — 37 Pydantic v2 modules (= "Schema v3.1.0") |
+| **Schema** | *What* are you benchmarking? | `schemas/` — 37 Pydantic v2 modules (= "Schema v4.0.0") |
 | **Adapter** | *How* does it run? | `backends/` + `integrations/` (next slide) |
 | **Store** | *How* is it persisted? | `store.py` — `NDJSONStore`, `ParquetStore`, `S3Store` |
 \normalsize
@@ -134,6 +134,17 @@ Every schema module is a set of typed Pydantic models for one vendor/technique's
 **If you just want to see the package in action**: skip ahead to *Adapters* (real running code) or *Examples & Coverage* at the end (a full worked example). Come back here when you need to look up what a specific module contains — that's what a GitHub repo's own reference docs (`docs/schemas.md`) are for; these slides just mirror the module list so it's not a total blank spot.
 \normalsize
 
+## The three module groups
+
+The schema library splits into **three groups** (same split as `docs/schemas.md`):
+
+1. **Core record format** — the unprefixed modules defining the types every benchmark shares: `primitives` · `circuit` · `observable` · `backend` · `execution` · `result` · `record`.
+2. **Cross-cutting catalogues & registries** — unprefixed modules that aggregate *multiple* external sources or define framework-own catalogues: `advantage` (IBM Quantum Advantage Tracker) · `optimizer_catalog` · `hamiltonian_library` · `basis_sets` · `contraction_path` · `reactions` · `polarizable_embedding`.
+3. **Project mirrors** — one module per external project, named `<org_or_maintainer>_<package>.py` so the filename alone names the upstream source.
+
+\vspace{0.3em}
+Two orthogonal axes — **computing model** (paradigm) and **qubit modality** (QPU) — are stamped on every circuit, backend, and result, independently of the group.
+
 ## Core Schema Modules (1/3)
 
 All rows are computing-model/qubit-modality **all / all** — these are the framework's own foundational types, not vendor-specific.
@@ -160,7 +171,7 @@ All rows are computing-model/qubit-modality **all / all** — these are the fram
 
 | Module | Key types |
 |--------|-----------|
-| `optimizer_catalog` | `MINIMIZER_CATALOG`, `STOPPING_CRITERION_CATALOG` — over `AdaptVQEConfig` fields |
+| `optimizer_catalog` | `MINIMIZER_CATALOG`, `STOPPING_CRITERION_CATALOG` — over `AdaptVQERunConfig` fields |
 | `hamiltonian_library` | `HamiltonianSource`, `HamiltonianLibraryRecord` — metadata for real Hamiltonians (PennyLane qchem, HamLib, ab initio) |
 | `contraction_path` | `ContractionPathStrategy/Config/Result` — real quimb + cotengra |
 \normalsize
@@ -174,7 +185,7 @@ Named `<org>_<package>.py` — who maintains the upstream project + what it's ca
 | Module | Computing model (qubit modality) |
 |--------|---------------------|
 | `johnrscott_mbqc_fpga` | MBQC-FPGA — bit-exact 16-bit program word |
-| `mqsdk_photoq` | Photonic LOQC/FBQC + GBS — Fock states, HOM, photonic VQE/analog, hafnian, vibronic, TDM/Borealis, pseudo-PNRD methods, ORCA/QCloud/Aurora backends, BBS |
+| `mqsdk_photoq` | Photonic LOQC/FBQC + GBS — Fock states, HOM, photonic VQE/analog, hafnian, TDM/Borealis, pseudo-PNRD methods, ORCA/QCloud/Aurora backends |
 | `microsoft_qdk` | Gate-based (QPE technique) — SCF → active space → resource estimation |
 | `mqsdk_qse` | Gate-based (KQD technique) — Krylov Quantum Diagonalization / SQD |
 
@@ -456,7 +467,7 @@ def validate_problem(self, circuit):
 ```python
 def run_algorithm(self, circuit, options):
     import qforte as qf    # deferred import
-    cfg = options.adapt_vqe_config
+    cfg = options.adapt_vqe_run_config
     mol = qf.system_factory(...)
     alg = qf.ADAPTVQE(mol, ...)
     alg.run(pool_type=cfg.pool_type,
@@ -480,10 +491,10 @@ def run_algorithm(self, circuit, options):
 \footnotesize
 
 ```python
-config = AdaptVQEConfig(pool_type="SD", optimizer="BFGS")
+config = AdaptVQERunConfig(pool_type="SD", optimizer="BFGS")
 opts = ExecutionOptions(algorithm_spec=AlgorithmSpec(
     name="ADAPTVQE", family=AlgorithmFamily.ADAPT_VQE),
-    adapt_vqe_config=config)
+    adapt_vqe_run_config=config)
 
 runner.run(mol, "qforte", opts)                  # native C++
 runner.run(mol, "ibm_qiskit_adapt_vqe", opts)     # from-scratch Qiskit
@@ -900,7 +911,7 @@ Full breakdown — what's fully supported vs. partial, and why — in `examples/
 
 ```python
 hamiltonian = toy_hamiltonian()                              # Schema layer
-config = AdaptVQEConfig(pool_type="SD", optimizer="BFGS", gradient_threshold=1e-5)
+config = AdaptVQERunConfig(pool_type="SD", optimizer="BFGS", gradient_threshold=1e-5)
 
 calculator = GenericAdaptVQEEngine(                           # Adapter layer
     hamiltonian=hamiltonian, num_qubits=4, num_electrons=2,
@@ -982,7 +993,7 @@ Every push to `main` and every PR runs the full gate set in CI (`.github/workflo
 
 **Repository**: `github.com/mqsdk/qpubench`
 
-**Schema v3.1.0** — 37 modules · 7 computing models × 5 qubit modalities · zero quantum SDK deps in core
+**Schema v4.0.0** — 37 modules · 7 computing models × 5 qubit modalities · zero quantum SDK deps in core
 
 \vspace{0.5em}
 
@@ -993,7 +1004,7 @@ cp integrations/template/backend_adapter_template.py  my_adapter.py
 # fill the three TODOs: spec, validate(), run()
 ```
 
-See `INTEGRATION_GUIDE.md` and `AGENTS.md` for the full development workflow.
+See `docs/backends.md` and `AGENTS.md` for the full development workflow.
 
 \vspace{0.5em}
 

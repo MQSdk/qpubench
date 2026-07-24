@@ -70,7 +70,7 @@ def inline_psi4_spec(mol_geometry: list, basis: str = "sto-6g") -> str:
 # ---------------------------------------------------------------------------
 
 from qpubench import (
-    AdaptVQEConfig,
+    AdaptVQERunConfig,
     AlgorithmFamily,
     AlgorithmSpec,
     BenchmarkRecord,
@@ -89,20 +89,20 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 from integrations.qforte.adapter import QForteAlgorithmAdapter
 
 
-ALGORITHMS: list[tuple[AlgorithmSpec, AdaptVQEConfig]] = [
+ALGORITHMS: list[tuple[AlgorithmSpec, AdaptVQERunConfig]] = [
     (
         AlgorithmSpec(name="UCCNVQE", family=AlgorithmFamily.UCC_VQE),
-        AdaptVQEConfig(pool_type="SD", optimizer="BFGS", use_analytic_gradient=True,
+        AdaptVQERunConfig(pool_type="SD", optimizer="BFGS", use_analytic_gradient=True,
                        energy_threshold=1.0e-5),
     ),
     (
         AlgorithmSpec(name="UCCNVQE", family=AlgorithmFamily.UCC_VQE),
-        AdaptVQEConfig(pool_type="SD", optimizer="jacobi", use_analytic_gradient=True,
+        AdaptVQERunConfig(pool_type="SD", optimizer="jacobi", use_analytic_gradient=True,
                        energy_threshold=1.0e-5),
     ),
     (
         AlgorithmSpec(name="ADAPTVQE", family=AlgorithmFamily.ADAPT_VQE),
-        AdaptVQEConfig(pool_type="SD", optimizer="BFGS", use_analytic_gradient=True,
+        AdaptVQERunConfig(pool_type="SD", optimizer="BFGS", use_analytic_gradient=True,
                        gradient_threshold=1.0e-4, energy_threshold=1.0e-5,
                        max_macro_iterations=20),
     ),
@@ -153,7 +153,7 @@ def main() -> None:
         circuits=[mol_spec],
         backend_names=["qforte"],
         options_list=[
-            ExecutionOptions(algorithm_spec=alg_spec, adapt_vqe_config=cfg)
+            ExecutionOptions(algorithm_spec=alg_spec, adapt_vqe_run_config=cfg)
             for alg_spec, cfg in ALGORITHMS
         ],
         run_id="he_ccpvdz_vqe_sweep",
@@ -173,7 +173,7 @@ def main() -> None:
 
     # Compare final energies
     energies = {
-        r.vqa.algorithm + "/" + (r.options.adapt_vqe_config.optimizer if r.options.adapt_vqe_config else "?"):
+        r.vqa.algorithm + "/" + (r.options.adapt_vqe_run_config.optimizer if r.options.adapt_vqe_run_config else "?"):
         r.result.expectation_values[0].value
         for r in records
         if r.result.expectation_values

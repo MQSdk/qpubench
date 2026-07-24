@@ -57,7 +57,7 @@ def hamlib_section() -> None:
         from examples.common.toy_hamiltonians import exact_ground_state_energy
         from examples.common.toy_statevector_backend import ToyStatevectorAdapter
         from integrations.generic_adapt_vqe.engine import GenericAdaptVQEEngine
-        from qpubench.schemas.execution import AdaptVQEConfig
+        from qpubench.schemas.execution import AdaptVQERunConfig
     except ImportError:
         print("  scipy/numpy not installed — run: pip install 'qpubench[adapt_vqe]'")
         return
@@ -68,7 +68,7 @@ def hamlib_section() -> None:
         num_qubits=record.num_qubits,
         num_electrons=2,   # neutral H2
         energy_backend=ToyStatevectorAdapter(),
-        config=AdaptVQEConfig(max_macro_iterations=15, gradient_threshold=1e-5, max_micro_iterations=200),
+        config=AdaptVQERunConfig(max_macro_iterations=15, gradient_threshold=1e-5, max_micro_iterations=200),
     )
     _, _vqa, vqa_result = engine.run()
     print(f"  exact (dense diagonalization): {exact:.9f} Ha")

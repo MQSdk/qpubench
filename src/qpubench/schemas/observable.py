@@ -13,7 +13,7 @@ class PauliTerm(pydantic.BaseModel):
     Compatible with:
       - Qrack: PauliExpectation(qubits[], paulis[]) via to_qrack_arrays()
       - Qiskit C: QkObsTerm {coeff, bit_terms[], indices[]} via to_qiskit_c_arrays()
-      - VQEBench legacy: dict["X1,Z3", float] via SparsePauliObservable.from_legacy_dict()
+      - Legacy sparse-dict: dict["X1,Z3", float] via SparsePauliObservable.from_legacy_dict()
     """
 
     qubit_indices: tuple[int, ...]
@@ -63,7 +63,7 @@ class SparsePauliObservable(pydantic.BaseModel):
         obs: dict[str, float],
         num_qubits: int,
     ) -> SparsePauliObservable:
-        """Convert VQEBench Observable dict format ('X1,Z3' -> float).
+        """Convert a legacy sparse-dict observable format ('X1,Z3' -> float).
 
         Each key is a comma-separated list of single-character Pauli followed
         by a 0-based qubit index.  Example: {"X1,Z3": 0.5, "Z0": -1.0}.

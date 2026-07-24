@@ -46,7 +46,7 @@ cp -r integrations/slowquant/ my_project/slowquant_adapter/
 import json
 from qpubench import BenchmarkRunner, NDJSONStore, CircuitSpec, ExecutionOptions
 from qpubench.schemas.primitives import CircuitFormat
-from qpubench.schemas.execution import AdaptVQEConfig
+from qpubench.schemas.execution import AdaptVQERunConfig
 from integrations.slowquant.adapter import SlowQuantAlgorithmAdapter
 
 runner = BenchmarkRunner(store=NDJSONStore("results.ndjson"))
@@ -64,7 +64,7 @@ problem = CircuitSpec(
         "excitations": "SD",
     }),
 )
-options = ExecutionOptions(adapt_vqe_config=AdaptVQEConfig(optimizer="SLSQP"))
+options = ExecutionOptions(adapt_vqe_run_config=AdaptVQERunConfig(optimizer="SLSQP"))
 record = runner.run(problem, "slowquant_ucc", options)
 print(record.result.slowquant_record.ucc_energy)
 ```

@@ -30,7 +30,7 @@ class BenchmarkRunner:
                         Detected automatically via isinstance() check.
 
     Usage pattern:
-        runner = BenchmarkRunner(store=NDJSONStore(Path("results.ndjson")))
+        runner = BenchmarkRunner(store="results.ndjson")   # str/Path → NDJSONStore
         runner.register(name="stub", seed=42)      # auto-creates a StubGateAdapter
         record = runner.run(circuit, "stub", shots=4096)
         # Real adapters are registered explicitly:
@@ -42,7 +42,17 @@ class BenchmarkRunner:
     Hooks receive every completed BenchmarkRecord before persistence.
     """
 
-    def __init__(self, store: Any | None = None) -> None:
+    def __init__(self, store: Any | str | None = None) -> None:
+        # Convenience: a filesystem path (str or pathlib.Path) becomes an
+        # append-only NDJSONStore, so the common case needs neither an explicit
+        # store import nor pathlib — just store="results/bell.ndjson".  Pass a
+        # ParquetStore / S3Store instance for the other backends.
+        import pathlib
+
+        if isinstance(store, (str, pathlib.Path)):
+            from .store import NDJSONStore
+
+            store = NDJSONStore(store)
         self._backends: dict[str, Any] = {}
         self._store = store
         self._hooks: list[Callable[[BenchmarkRecord], None]] = []

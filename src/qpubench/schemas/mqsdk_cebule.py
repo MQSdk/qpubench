@@ -73,8 +73,69 @@ from typing import Any
 import pydantic
 
 from .circuit import CircuitSpec
-from .primitives import CebuleTaskType, CircuitFormat
+from .primitives import CircuitFormat
 from .observable import SparsePauliObservable
+
+
+# ---------------------------------------------------------------------------
+# Task types
+# ---------------------------------------------------------------------------
+
+class CebuleTaskType(str, enum.Enum):
+    """Cebule (MQS) task types.
+
+    Lives in this module, not ``primitives``: it is specific to the
+    ``mqsdk_cebule`` project mirror, not a cross-cutting core primitive.
+
+    Confirmed directly against ``mqsdk/core/cebule.py``'s ``TaskType`` enum
+    at gitlab.com/mqsdk/python-sdk (re-checked 2026-07-10): every member up
+    to and including ``MAP_TO_QASM`` matches that source exactly —
+    ``MOL_MAP``/``QASM_GEN`` were flagged "unconfirmed" in an earlier
+    revision of this docstring (checked 2026-07-08); the SDK has since
+    added them for real, plus a new ``MAP_TO_QASM`` member neither this
+    module nor that earlier check knew about.
+
+    ``RXN_OPT``/catalyst-design members below are a different situation:
+    real per docs.mqs.dk's "RN Catalyst Design" section, but genuinely
+    absent from the public SDK repo — checked directly (2026-07-10)
+    against every file in gitlab.com/mqsdk/python-sdk's tree (``cebule.py``,
+    ``core.py``, ``data.py``, ``models.py``, ``utils/tasks.py``): zero
+    matches for "rxn", "catalyst", "surface", "wulff", or "tof" anywhere.
+    Likely a newer/enterprise API surface not yet reflected in the public
+    repo snapshot, same situation ``MOL_MAP``/``QASM_GEN`` were in before —
+    treat these as unconfirmed against source, not verified the way the
+    members above them are.
+    """
+    # Confirmed in the public SDK's TaskType enum.
+    COSMO                 = "cosmo"                  # continuum solvation (dielectric + VDW radii)
+    SIGMA                 = "sigma"                   # COSMO-SAC/-RS sigma profile
+    SOLUBILITY             = "solubility"              # solubility from sigma profiles
+    CAR_PARRINELLO_MD      = "car_parrinello_md"       # ab initio MD, QE-backed (periodic-capable)
+    BORN_OPPENHEIMER_MD    = "born_oppenheimer_md"     # ab initio MD, QE-backed (periodic-capable)
+    FORCE_FIELD_MD          = "force_field_md"          # classical MD (mixture/solvent box)
+    GEOMETRY_OPT            = "geometry_opt"            # force-field + semi-empirical geometry optimisation
+    PERIODIC_GEOMETRY_OPT   = "periodic_geometry_opt"   # geometry optimisation under periodic boundary conditions
+    GROUP_CONTRIBUTION      = "group_contribution"      # group-contribution property estimation for mixtures
+    ATOM_ORDER              = "atom_order"              # canonical atom ordering for a SMILES (+ optional geometry)
+    ACTIVITY_COEFFICIENT    = "activity_coefficient"    # confirmed to exist; no usage example found in source checked
+    GNN_DATASET_CREATE      = "gnn:dataset:create"
+    GNN_DATASET_DELETE      = "gnn:dataset:delete"
+    GNN_DATASET_EXTEND      = "gnn:dataset:extend"
+    GNN_DATASET_GET         = "gnn:dataset:get"
+    GNN_TRAIN                = "gnn:train"
+    GNN_PREDICT              = "gnn:predict"
+    TN_QC_OPT  = "tn_qc_opt"  # tensor-network + quantum circuit VQE
+    COVO       = "covo"        # correlation-optimised virtual orbitals
+    MOL_MAP    = "mol_map"     # molecular-to-qubit Hamiltonian mapping — now confirmed, see class docstring
+    QASM_GEN   = "qasm_gen"    # OpenQASM measurement circuit generation — now confirmed, see class docstring
+    MAP_TO_QASM = "map_to_qasm"  # newly discovered 2026-07-10; exact semantics vs. QASM_GEN not yet confirmed
+    # Not found anywhere in the public SDK repo — see class docstring.
+    RXN_OPT                    = "rxn_opt"                     # reaction-network flux optimisation (unconfirmed)
+    GAS_SPECIES_ENERGY          = "gas_species_energy"           # gas-phase reference energies (unconfirmed)
+    SURFACE_REACTION_ENERGIES   = "surface_reaction_energies"    # per-surface adsorption/reaction energies (unconfirmed)
+    GAN_TOF                     = "gan_tof"                       # GAN-based catalyst composition search (unconfirmed)
+    MAKE_SURF                    = "make_surf"                     # bimetallic alloy surface dataset generation (unconfirmed)
+    WULFF_CONSTRUCTION           = "wulff_construction"             # equilibrium crystal shape via Wulff geometry (unconfirmed)
 
 
 # ---------------------------------------------------------------------------

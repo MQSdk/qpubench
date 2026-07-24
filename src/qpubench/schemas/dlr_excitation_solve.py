@@ -1,10 +1,24 @@
 """ExcitationSolve optimizer data schemas.
 
-ExcitationSolve (github.com/dlr-wf/ExcitationSolve, Communications Physics 2025)
+ExcitationSolve (github.com/dlr-wf/ExcitationSolve, ``pip install
+excitationsolve``, Communications Physics 2025, doi:10.1038/s42005-025-02375-9)
 is a gradient-free optimizer for VQE ansätze built from excitation operators
 (G³ = G).  It fits a 2nd-order Fourier series to exactly 5 energy probe points
 per parameter, then locates the global minimum analytically via the companion
 matrix method.
+
+Upstream updates tracked here (checked against the ``main`` branch, 2026-07)
+---------------------------------------------------------------------------
+* Follow-up paper Haas et al. 2026 (arXiv:2602.10776) adds *operator-selection
+  and warm-start strategies* for the adaptive variant — reflected by the
+  ``operator_selection`` field on ``ExcitationAdaptResult`` and the
+  ``warm_start_double_excitations`` config flag below.
+* ``optimal_theta`` / ``optimal_theta_pyscf`` return the analytic optimal
+  parameter (and its energy lowering) for a single double excitation applied
+  to a Hartree-Fock reference — a cheap warm start captured by
+  ``AdaptVQEStep.optimal_theta`` when used.
+* ``parameter_occ`` is a new optimizer argument (per-parameter occurrence /
+  ordering hint), carried on ``ExcitationSolveConfig`` below.
 
 Schema coverage
 ---------------
@@ -67,6 +81,13 @@ class ExcitationSolveConfig(pydantic.BaseModel):
     hf_energy     optional Hartree-Fock reference for tracking chemical accuracy.
     save_parameters  store the full parameter vector after every iteration.
     mode          1D (default), 2D (two-parameter joint sweep), or ADAPT.
+    parameter_occ    optional per-parameter occurrence / ordering hint passed
+                     through to the upstream optimizer (``parameter_occ``);
+                     None leaves the default sweep order.
+    warm_start_double_excitations  initialise double-excitation parameters from
+                     the analytic ``optimal_theta`` / ``optimal_theta_pyscf``
+                     value relative to the Hartree-Fock reference before the
+                     first sweep (Haas et al. 2026 warm start).
     """
     maxiter:         int              = 100
     tol:             float            = 1.0e-12
@@ -74,6 +95,8 @@ class ExcitationSolveConfig(pydantic.BaseModel):
     hf_energy:       float | None     = None
     save_parameters: bool             = False
     mode:            ExcitationSolveMode = ExcitationSolveMode.ONE_D
+    parameter_occ:   list[int] | None = None    # upstream parameter_occ arg
+    warm_start_double_excitations: bool = False  # optimal_theta HF warm start
 
     @pydantic.field_validator("num_samples")
     @classmethod
@@ -229,6 +252,9 @@ class AdaptVQEStep(pydantic.BaseModel):
     n_function_evaluations  circuit calls in this step (≈ 5 × n_pool_evaluated)
     drain_pool         whether already-used operators were excluded from pool
     params_zero        whether parameters were initialised to zero this step
+    optimal_theta      analytic optimal parameter for the selected double
+                       excitation from ``optimal_theta`` / ``optimal_theta_pyscf``
+                       (warm start), if it was used this step; else None
     """
     step_index:             int
     prior_cost:             float
@@ -238,6 +264,7 @@ class AdaptVQEStep(pydantic.BaseModel):
     n_function_evaluations: int         = 0
     drain_pool:             bool        = False
     params_zero:            bool        = False
+    optimal_theta:          float | None = None    # analytic HF warm-start value
 
 
 class ExcitationAdaptResult(pydantic.BaseModel):
@@ -250,6 +277,10 @@ class ExcitationAdaptResult(pydantic.BaseModel):
     converged               True if max_gradient < convergence threshold before
                             the operator pool was exhausted
     config                  ExcitationSolve config used within each step
+    operator_selection      label of the operator-selection strategy used
+                            (Haas et al. 2026, arXiv:2602.10776), e.g.
+                            "max_gradient" (default) or "warm_start"; free-text
+                            so new upstream strategies need no schema change
     """
     steps:              list[AdaptVQEStep]
     final_energy:       float
@@ -257,6 +288,7 @@ class ExcitationAdaptResult(pydantic.BaseModel):
     n_operators_added:  int
     converged:          bool                       = False
     config:             ExcitationSolveConfig | None = None
+    operator_selection: str | None                 = None
 
     def grad_norm_history(self) -> list[float]:
         """Max gradient per step — mirrors AdaptIteration.grad_norm."""

@@ -3,7 +3,7 @@
 `AlgorithmFamily.ADAPT_VQE` via a from-scratch, Qiskit-circuit-convention
 implementation — a thin `AlgorithmAdapter` wrapper over
 `integrations/generic_adapt_vqe/`. Registered under a different name than
-`integrations/qforte/`, it lets you run the exact same `AdaptVQEConfig`
+`integrations/qforte/`, it lets you run the exact same `AdaptVQERunConfig`
 against a different implementation and compare the resulting
 `BenchmarkRecord`s directly.
 
@@ -25,7 +25,7 @@ project — this adapter depends on the shared engine there.
 ## Quick start
 
 ```python
-from qpubench import BenchmarkRunner, ExecutionOptions, AlgorithmSpec, AdaptVQEConfig
+from qpubench import BenchmarkRunner, ExecutionOptions, AlgorithmSpec, AdaptVQERunConfig
 from qpubench.schemas.circuit import CircuitSpec
 from qpubench.schemas.primitives import AlgorithmFamily, CircuitFormat
 from ibm_qiskit_adapt_vqe.adapter import IBMQiskitAdaptVQEAdapter
@@ -39,7 +39,7 @@ runner.register(IBMQiskitAdaptVQEAdapter(energy_backend=AerAdapter()), name="ibm
 problem = CircuitSpec(num_qubits=0, format=CircuitFormat.MOLECULE_JSON, serialized=problem_json)
 options = ExecutionOptions(
     algorithm_spec=AlgorithmSpec(name="ADAPTVQE", family=AlgorithmFamily.ADAPT_VQE),
-    adapt_vqe_config=AdaptVQEConfig(pool_type="SD", optimizer="BFGS"),
+    adapt_vqe_run_config=AdaptVQERunConfig(pool_type="SD", optimizer="BFGS"),
 )
 record = runner.run(problem, "ibm_qiskit", options)
 ```

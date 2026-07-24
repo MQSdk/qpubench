@@ -9,7 +9,7 @@ only in its BackendSpec naming/defaults: it demonstrates that
 AlgorithmFamily.ADAPT_VQE can be satisfied by more than one package —
 evangelistalab/qforte's native C++ implementation
 (integrations/qforte/adapter.py), or this one, registered side by side and
-driven with the same AdaptVQEConfig.
+driven with the same AdaptVQERunConfig.
 
 Circuit synthesis here emits standard OpenQASM 3.0 (gate names h, rx, rz,
 cx) — the same convention IBMAdapter / AerAdapter already speak — so any
@@ -32,7 +32,7 @@ from typing import Any
 
 from qpubench.schemas.backend import BackendSpec
 from qpubench.schemas.circuit import CircuitSpec
-from qpubench.schemas.execution import AdaptVQEConfig, ExecutionOptions
+from qpubench.schemas.execution import AdaptVQERunConfig, ExecutionOptions
 from qpubench.schemas.observable import SparsePauliObservable
 from qpubench.schemas.primitives import CircuitFormat, ComputingModel
 from qpubench.schemas.record import VQAConfig, VQAResult
@@ -104,7 +104,7 @@ class IBMQiskitAdaptVQEAdapter:
     ) -> tuple[QuantumResult, VQAConfig, VQAResult]:
         spec        = json.loads(circuit.serialized or "{}")
         hamiltonian = SparsePauliObservable.model_validate(spec["hamiltonian"])
-        config      = options.adapt_vqe_config or AdaptVQEConfig()
+        config      = options.adapt_vqe_run_config or AdaptVQERunConfig()
 
         engine = GenericAdaptVQEEngine(
             hamiltonian=hamiltonian,

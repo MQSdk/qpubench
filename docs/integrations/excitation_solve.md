@@ -1,8 +1,14 @@
 # ExcitationSolve integration
 
-[ExcitationSolve](https://github.com/dlr-wf/ExcitationSolve) (*Communications Physics* 2025) is a gradient-free VQE optimizer for excitation-operator ansätze (G³ = G). It fits a 2nd-order Fourier series to 5 energy probe points per parameter and locates the global minimum analytically via the companion matrix method.
+[ExcitationSolve](https://github.com/dlr-wf/ExcitationSolve) (`pip install excitationsolve`, *Communications Physics* 2025, [doi:10.1038/s42005-025-02375-9](https://doi.org/10.1038/s42005-025-02375-9)) is a gradient-free VQE optimizer for excitation-operator ansätze (G³ = G). It fits a 2nd-order Fourier series to 5 energy probe points per parameter and locates the global minimum analytically via the companion matrix method.
 
 Schemas: `src/qpubench/schemas/dlr_excitation_solve.py`
+
+**Tracking the upstream release** (checked against the `main` branch, July 2026):
+
+- The follow-up paper Haas et al. 2026 ([arXiv:2602.10776](https://arxiv.org/abs/2602.10776)) adds **operator-selection and warm-start strategies** for the adaptive variant. Recorded via `ExcitationAdaptResult.operator_selection` (free-text strategy label, e.g. `"max_gradient"` or `"warm_start"`) and `AdaptVQEStep.optimal_theta`.
+- `optimal_theta` / `optimal_theta_pyscf` compute the **analytic optimal parameter** (and its energy lowering) for a single double excitation applied to a Hartree-Fock reference — a cheap warm start, toggled by `ExcitationSolveConfig.warm_start_double_excitations`.
+- The new upstream `parameter_occ` optimizer argument (per-parameter occurrence / ordering hint) is carried on `ExcitationSolveConfig.parameter_occ`.
 
 ---
 
@@ -34,6 +40,8 @@ cfg = ExcitationSolveConfig(
     hf_energy=-1.1175,    # optional HF reference for chemical accuracy tracking
     save_parameters=True,
     mode=ExcitationSolveMode.ONE_D,
+    parameter_occ=None,                    # optional per-parameter ordering hint
+    warm_start_double_excitations=False,   # analytic optimal_theta HF warm start
 )
 
 # In AlgorithmSpec for use with BenchmarkRunner
@@ -132,6 +140,7 @@ step = AdaptVQEStep(
     n_pool_evaluated=12,          # operators tested this step
     n_function_evaluations=60,    # = n_pool_evaluated * 5
     drain_pool=True,
+    optimal_theta=0.113,          # analytic HF warm-start value, if used
 )
 
 adapt_result = ExcitationAdaptResult(
@@ -141,6 +150,7 @@ adapt_result = ExcitationAdaptResult(
     n_operators_added=3,
     converged=True,
     config=cfg,
+    operator_selection="warm_start",   # Haas et al. 2026 strategy label
 )
 
 print(adapt_result.grad_norm_history())   # max_gradient per step

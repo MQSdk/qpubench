@@ -11,7 +11,7 @@ Schema modules are named `<org_or_maintainer>_<package>.py` — the maintainer/G
 | QForte | [github.com/evangelistalab/qforte](https://github.com/evangelistalab/qforte) | `schemas/evangelistalab_qforte.py` | ADAPT-VQE · UCCN-VQE · UCCN-PQE · SPQE | `GATE_BASED` | — | [integrations/qforte/](../integrations/qforte/) |
 | ExcitationSolve | [github.com/dlr-wf/ExcitationSolve](https://github.com/dlr-wf/ExcitationSolve) | `schemas/dlr_excitation_solve.py` | Fourier-series VQE optimizer · ADAPT-VQE | `GATE_BASED` | — | [excitation_solve.md](integrations/excitation_solve.md) |
 | GSOpt | [github.com/bestquark/gsopt](https://github.com/bestquark/gsopt) | `schemas/bestquark_gsopt.py` | VQE · TN · DMRG · AFQMC · Gibbs benchmark lanes | `GATE_BASED` | — | [gsopt.md](integrations/gsopt.md) |
-| photoq (MQSdk) | photoq (photochipsim, DTU-GBS, photonic_QC, GBS-with-pseudo-PNRD, ORCA/Xanadu/DTU backends) | `schemas/mqsdk_photoq.py` | LOQC VQE · FBQC · HOM · Sobol · GBS sampling · clique finding · vibronic spectra · TDM/Borealis · pseudo-PNRD click-counting methods · ORCA PT Series / DTU QCloud / Xanadu Aurora backends · dominating-set/BBS benchmark | `GATE_BASED` (LOQC) / `FUSION_BASED` / `GBS` | `PHOTONIC` | [photonic.md](integrations/photonic.md) · [gbs.md](integrations/gbs.md) |
+| photoq (MQSdk) | photoq — linear-optics chips + FBQC, GBS, pseudo-PNRD, ORCA/Xanadu/DTU backends | `schemas/mqsdk_photoq.py` | LOQC VQE · FBQC · HOM · Sobol · GBS sampling · clique finding · TDM/Borealis · pseudo-PNRD click-counting methods · ORCA PT Series / DTU QCloud / Xanadu Aurora backends | `GATE_BASED` (LOQC) / `FUSION_BASED` / `GBS` | `PHOTONIC` | [photonic.md](integrations/photonic.md) · [gbs.md](integrations/gbs.md) |
 | QDK Chemistry | [microsoft/qsharp](https://github.com/microsoft/qsharp) | `schemas/microsoft_qdk.py` | SCF · active-space selection (MACIS) · state preparation · QPE/IQPE · resource estimation — pipeline stages usable independently | `GATE_BASED` | — | [qdk_chemistry.md](integrations/qdk_chemistry.md) |
 | MQSdk/qse (KQD) | [github.com/MQSdk/qse](https://github.com/MQSdk/qse) | `schemas/mqsdk_qse.py` | KQD (Hadamard test) · SQD (sample-based Krylov) | `GATE_BASED` (KQD technique) | — | [qse.md](integrations/qse.md) |
 | QESEM (Qedma) | [docs.qedma.io](https://docs.qedma.io/) | `schemas/qedma_qesem.py` | QET noise-scaled mitigation · device characterization | `GATE_BASED` + `QESEM` | `SUPERCONDUCTING` | [qesem.md](integrations/qesem.md) |
@@ -37,7 +37,7 @@ Error-mitigation and hardware-vendor schemas that used to be bundled in one `err
 
 For the full picture of the variational-algorithm family — how VQE and ADAPT-VQE relate, the package-agnostic contract, and worked examples — see **[VQA algorithms](vqa.md)**. In brief:
 
-`AlgorithmSpec` carries identity only (`name` + `AlgorithmFamily`); hyperparameters live in a family-specific config so the same run configuration works across every adapter that implements that family. `AlgorithmFamily.ADAPT_VQE` has three interchangeable implementations, sharing the package-agnostic `AdaptVQEConfig` (`schemas/execution.py`):
+`AlgorithmSpec` carries identity only (`name` + `AlgorithmFamily`); hyperparameters live in a family-specific config so the same run configuration works across every adapter that implements that family. `AlgorithmFamily.ADAPT_VQE` has three interchangeable implementations, sharing the package-agnostic `AdaptVQERunConfig` (`schemas/execution.py`):
 
 | Adapter | Schema module | Engine |
 |---|---|---|

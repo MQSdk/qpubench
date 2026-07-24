@@ -26,7 +26,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
 
 from qpubench import AlgorithmSpec, BenchmarkRunner, CircuitSpec, ExecutionOptions
 from qpubench.backends.ibm_adapter import IBMAdapter
-from qpubench.schemas.execution import AdaptVQEConfig
+from qpubench.schemas.execution import AdaptVQERunConfig
 from qpubench.schemas.primitives import AlgorithmFamily, CircuitFormat
 
 from examples.common.toy_hamiltonians import NUM_ELECTRONS, NUM_QUBITS, toy_hamiltonian
@@ -47,7 +47,7 @@ def main() -> None:
     )
     options = ExecutionOptions(
         algorithm_spec=AlgorithmSpec(name="ADAPTVQE", family=AlgorithmFamily.ADAPT_VQE),
-        adapt_vqe_config=AdaptVQEConfig(max_macro_iterations=15, gradient_threshold=1e-3),
+        adapt_vqe_run_config=AdaptVQERunConfig(max_macro_iterations=15, gradient_threshold=1e-3),
     )
 
     print("Wiring ADAPT-VQE energy evaluations through IBMAdapter (real hardware oracle)...")
@@ -63,7 +63,7 @@ def main() -> None:
         # examples/guides/quantum_computers.py for the same caveat.
         print(f"IBMAdapter.run() is a stub: {record.result.error_message}")
         print("Re-running with ToyStatevectorAdapter as the runnable stand-in "
-              "(same AdaptVQEConfig, same problem):")
+              "(same AdaptVQERunConfig, same problem):")
         runner.register(
             IBMQiskitAdaptVQEAdapter(energy_backend=ToyStatevectorAdapter()),
             name="adapt_vqe+toy",

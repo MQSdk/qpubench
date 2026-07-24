@@ -187,7 +187,7 @@ Lives in
 \midrule\noalign{}
 \endhead
 \textbf{Schema} & \emph{What} are you benchmarking? & \texttt{schemas/}
---- 37 Pydantic v2 modules (= ``Schema v3.1.0'') \\
+--- 37 Pydantic v2 modules (= ``Schema v4.0.0'') \\
 \textbf{Adapter} & \emph{How} does it run? & \texttt{backends/} +
 \texttt{integrations/} (next slide) \\
 \textbf{Store} & \emph{How} is it persisted? & \texttt{store.py} ---
@@ -437,7 +437,7 @@ Key types
 \midrule\noalign{}
 \endhead
 \texttt{optimizer\_catalog} & \texttt{MINIMIZER\_CATALOG},
-\texttt{STOPPING\_CRITERION\_CATALOG} --- over \texttt{AdaptVQEConfig}
+\texttt{STOPPING\_CRITERION\_CATALOG} --- over \texttt{AdaptVQERunConfig}
 fields \\
 \texttt{hamiltonian\_library} & \texttt{HamiltonianSource},
 \texttt{HamiltonianLibraryRecord} --- metadata for real Hamiltonians
@@ -473,8 +473,8 @@ Computing model (qubit modality)
 \texttt{johnrscott\_mbqc\_fpga} & MBQC-FPGA --- bit-exact 16-bit program
 word \\
 \texttt{mqsdk\_photoq} & Photonic LOQC/FBQC + GBS --- Fock states, HOM,
-photonic VQE/analog, hafnian, vibronic, TDM/Borealis, pseudo-PNRD
-methods, ORCA/QCloud/Aurora backends, BBS \\
+photonic VQE/analog, hafnian, TDM/Borealis, pseudo-PNRD
+methods, ORCA/QCloud/Aurora backends \\
 \texttt{microsoft\_qdk} & Gate-based (QPE technique) --- SCF → active
 space → resource estimation \\
 \texttt{mqsdk\_qse} & Gate-based (KQD technique) --- Krylov Quantum
@@ -967,7 +967,7 @@ adapter for that family accepts:
 
 \begin{Shaded}
 \begin{Highlighting}[]
-\NormalTok{config }\OperatorTok{=}\NormalTok{ AdaptVQEConfig(pool\_type}\OperatorTok{=}\StringTok{"SD"}\NormalTok{, optimizer}\OperatorTok{=}\StringTok{"BFGS"}\NormalTok{)}
+\NormalTok{config }\OperatorTok{=}\NormalTok{ AdaptVQERunConfig(pool\_type}\OperatorTok{=}\StringTok{"SD"}\NormalTok{, optimizer}\OperatorTok{=}\StringTok{"BFGS"}\NormalTok{)}
 \NormalTok{opts }\OperatorTok{=}\NormalTok{ ExecutionOptions(algorithm\_spec}\OperatorTok{=}\NormalTok{AlgorithmSpec(}
 \NormalTok{    name}\OperatorTok{=}\StringTok{"ADAPTVQE"}\NormalTok{, family}\OperatorTok{=}\NormalTok{AlgorithmFamily.ADAPT\_VQE),}
 \NormalTok{    adapt\_vqe\_config}\OperatorTok{=}\NormalTok{config)}
@@ -1673,7 +1673,7 @@ runnable file:
 \begin{Shaded}
 \begin{Highlighting}[]
 \NormalTok{hamiltonian }\OperatorTok{=}\NormalTok{ toy\_hamiltonian()                              }\CommentTok{\# Schema layer}
-\NormalTok{config }\OperatorTok{=}\NormalTok{ AdaptVQEConfig(pool\_type}\OperatorTok{=}\StringTok{"SD"}\NormalTok{, optimizer}\OperatorTok{=}\StringTok{"BFGS"}\NormalTok{, gradient\_threshold}\OperatorTok{=}\FloatTok{1e{-}5}\NormalTok{)}
+\NormalTok{config }\OperatorTok{=}\NormalTok{ AdaptVQERunConfig(pool\_type}\OperatorTok{=}\StringTok{"SD"}\NormalTok{, optimizer}\OperatorTok{=}\StringTok{"BFGS"}\NormalTok{, gradient\_threshold}\OperatorTok{=}\FloatTok{1e{-}5}\NormalTok{)}
 
 \NormalTok{calculator }\OperatorTok{=}\NormalTok{ GenericAdaptVQEEngine(                           }\CommentTok{\# Adapter layer}
 \NormalTok{    hamiltonian}\OperatorTok{=}\NormalTok{hamiltonian, num\_qubits}\OperatorTok{=}\DecValTok{4}\NormalTok{, num\_electrons}\OperatorTok{=}\DecValTok{2}\NormalTok{,}
@@ -1785,7 +1785,7 @@ CI if the schema version or module count drifts between code and docs \\
 \phantomsection\label{roadmap-links}
 \textbf{Repository}: \texttt{github.com/mqsdk/qpubench}
 
-\textbf{Schema v3.1.0} --- 37 modules · 7 computing models × 5 qubit
+\textbf{Schema v4.0.0} --- 37 modules · 7 computing models × 5 qubit
 modalities · zero quantum SDK deps in core
 
 \vspace{0.5em}

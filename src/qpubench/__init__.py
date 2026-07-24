@@ -4,6 +4,8 @@ from .observability import BenchmarkLogger, JSONFormatter
 from .runner import BenchmarkRunner
 from .schemas import (
     AdaptIteration,
+    AdaptVQERunConfig,
+    AlgorithmFamily,
     AlgorithmSpec,
     BackendSpec,
     BenchmarkRecord,
@@ -40,7 +42,9 @@ __version__ = "0.1.0"
 __all__ = [
     "__version__",
     "AdaptIteration",
+    "AdaptVQERunConfig",
     "AlgorithmAdapter",
+    "AlgorithmFamily",
     "AlgorithmSpec",
     "BackendAdapter",
     "BackendSpec",

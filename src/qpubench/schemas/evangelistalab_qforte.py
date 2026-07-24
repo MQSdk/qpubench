@@ -14,7 +14,7 @@ just for a pybind11 boundary instead of a VHDL one.
 
 Algorithm layer (src/qforte/abc/algorithm.py, abc/ansatz.py, ucc/adaptvqe.py)
 -------------------------------------------------------------------------
-QForteAlgorithmConfig wraps the package-agnostic AdaptVQEConfig
+QForteAlgorithmConfig wraps the package-agnostic AdaptVQERunConfig
 (execution.py) plus QForte-only knobs; QForteRunResult captures the real
 Algorithm / AnsatzAlgorithm / ADAPTVQE instance attributes (verified against
 upstream source — many of these were previously read via bare getattr() in
@@ -28,7 +28,7 @@ from __future__ import annotations
 
 import pydantic
 
-from .execution import AdaptVQEConfig
+from .execution import AdaptVQERunConfig
 from .observable import PauliTerm, SparsePauliObservable
 from .primitives import ComplexNumber, PauliLabel
 
@@ -152,9 +152,9 @@ class QForteSqOpPoolSpec(pydantic.BaseModel):
 class QForteAlgorithmConfig(pydantic.BaseModel):
     """Full QForte algorithm.run() configuration.
 
-    Wraps the package-agnostic AdaptVQEConfig (base) plus QForte-only knobs
+    Wraps the package-agnostic AdaptVQERunConfig (base) plus QForte-only knobs
     that have no equivalent in other ADAPT-VQE implementations. Field names
-    on `base` map onto QForte's run() kwargs as documented on AdaptVQEConfig;
+    on `base` map onto QForte's run() kwargs as documented on AdaptVQERunConfig;
     the extras below map onto AnsatzAlgorithm / ADAPTVQE constructor and
     run() kwargs directly (verified against upstream source).
 
@@ -172,7 +172,7 @@ class QForteAlgorithmConfig(pydantic.BaseModel):
     noise_factor              UCCNVQE-only: artificial shot-noise injection
     """
 
-    base: AdaptVQEConfig = pydantic.Field(default_factory=AdaptVQEConfig)
+    base: AdaptVQERunConfig = pydantic.Field(default_factory=AdaptVQERunConfig)
     use_cumulative_thresh: bool = False
     add_equiv_ops: bool = False
     qubit_excitations: bool = False

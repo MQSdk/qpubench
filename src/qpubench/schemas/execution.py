@@ -10,7 +10,7 @@ from .primitives import AlgorithmFamily, ErrorMitigationStrategy
 class ZNEConfig(pydantic.BaseModel):
     """Zero-noise extrapolation parameters.
 
-    Mirrors VQEBench ZneOptions and IBM Qiskit Runtime resilience_level=2.
+    Mirrors IBM Qiskit Runtime resilience_level=2 ZNE options.
     extrapolator: "linear", "poly2", "richardson"
     """
     noise_factors: tuple[float, ...] = (1.0, 3.0, 5.0)
@@ -43,12 +43,12 @@ class AlgorithmSpec(pydantic.BaseModel):
             runs of "the same algorithm" across different implementing
             adapters — e.g. family=ADAPT_VQE lets a caller switch between
             the evangelistalab_qforte, ibm_qiskit_adapt_vqe, and
-            microsoft_qdk_adapt_vqe adapters using the same AdaptVQEConfig.
+            microsoft_qdk_adapt_vqe adapters using the same AdaptVQERunConfig.
     extra_params  escape hatch for adapter-specific kwargs not covered by a
                   typed config.
 
     Hyperparameters live in each algorithm's own schema module, not here:
-      ADAPT_VQE (generic)    → AdaptVQEConfig (this module)
+      ADAPT_VQE (generic)    → AdaptVQERunConfig (this module)
       QForte-specific extras → evangelistalab_qforte.QForteAlgorithmConfig
       ExcitationSolve        → dlr_excitation_solve.ExcitationSolveConfig
       Xenakis GA search      → mqsdk_xenakis.GAConfig / GenomeConfig
@@ -60,7 +60,7 @@ class AlgorithmSpec(pydantic.BaseModel):
     extra_params:  dict[str, Any]         = {}
 
 
-class AdaptVQEConfig(pydantic.BaseModel):
+class AdaptVQERunConfig(pydantic.BaseModel):
     """Package-agnostic ADAPT-VQE hyperparameters (AlgorithmFamily.ADAPT_VQE).
 
     The common contract every ADAPT-VQE implementation accepts, regardless
@@ -108,7 +108,7 @@ class ExecutionOptions(pydantic.BaseModel):
     Algorithm-driven fields (QForte and similar libraries)
     -------------------------------------------------------
     algorithm_spec     which algorithm to run (name + AlgorithmFamily)
-    adapt_vqe_config   shared hyperparameter contract for
+    adapt_vqe_run_config   shared hyperparameter contract for
                        AlgorithmFamily.ADAPT_VQE, package-agnostic
 
     MBQC fields
@@ -144,7 +144,7 @@ class ExecutionOptions(pydantic.BaseModel):
         default_factory=TranspilerConfig
     )
     algorithm_spec:       AlgorithmSpec | None    = None
-    adapt_vqe_config:     AdaptVQEConfig | None   = None
+    adapt_vqe_run_config:     AdaptVQERunConfig | None   = None
     cluster_depth:        int | None              = None
     adaptive_corrections: bool                    = True
     mitigation_options:   dict[str, Any]          = {}

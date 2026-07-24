@@ -7,7 +7,7 @@ schemas in `schemas/evangelistalab_qforte.py` — no more ad hoc `getattr()`
 scraping of private attributes with an untyped contract.
 
 > **See [docs/vqa.md](../../docs/vqa.md) for the overall VQA picture** — how
-> VQE and ADAPT-VQE relate, the package-agnostic `AdaptVQEConfig` contract,
+> VQE and ADAPT-VQE relate, the package-agnostic `AdaptVQERunConfig` contract,
 > and how this QForte engine compares to the other two `ADAPT_VQE`
 > implementations. This README covers the QForte adapter specifically.
 
@@ -16,7 +16,7 @@ repo — `integrations/ibm_qiskit_adapt_vqe/` and
 `integrations/microsoft_qdk_adapt_vqe/` implement the same family without
 requiring QForte, sharing a package-agnostic engine
 (`integrations/generic_adapt_vqe/`). Register any of the three under a
-different name and drive them with the same `AdaptVQEConfig`.
+different name and drive them with the same `AdaptVQERunConfig`.
 
 ## Files
 
@@ -68,7 +68,7 @@ table   = AdaptVQERunner.summary_table(records)
 ## Running on an external backend (Aer, Qrack, IBM)
 
 ```python
-from qpubench import AdaptVQEConfig, AlgorithmFamily
+from qpubench import AdaptVQERunConfig, AlgorithmFamily
 from qpubench.backends.aer_adapter import AerAdapter   # fill the TODOs first
 from qforte_adapter.adapter import ExternalEvalAlgorithmAdapter
 from qforte_adapter.adapt_vqe import ExternalEvalAdaptVQERunner
@@ -81,10 +81,10 @@ ext = ExternalEvalAdaptVQERunner(runner, "qforte+aer")
 record = ext.run(
     mol,
     AlgorithmSpec(name="ADAPTVQE", family=AlgorithmFamily.ADAPT_VQE),
-    AdaptVQEConfig(pool_type="SD"),
+    AdaptVQERunConfig(pool_type="SD"),
 )
 print(record.result.metadata["hook_call_count"])
 ```
 
-See `../../INTEGRATION_GUIDE.md` for the full explanation of why this is structured
-the way it is.
+See [`docs/backends.md`](../../docs/backends.md) for the full explanation of why this
+is structured the way it is.

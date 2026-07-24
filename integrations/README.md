@@ -12,8 +12,9 @@ implementations you copy into your own project and adapt.
 | `slowquant/` | Real SlowQuant UCC/UPS VQE adapter (not on PyPI — git-only install, see `slowquant/README.md`) |
 | `kubeflow/` | Cebule task chain as a Kubeflow Pipelines (kfp) DAG — algorithmic steps as dashboard-visible components |
 
-Read `../INTEGRATION_GUIDE.md` first for the design principles and step-by-step
-recipes. The files here are the code that corresponds to the guide.
+Read [`../docs/backends.md`](../docs/backends.md) first for the design principles
+and the two adapter protocols. The files here are the reference code that
+corresponds to that guide.
 
 ## Quick decision tree
 

@@ -2,7 +2,7 @@
 
 [![Python ≥ 3.11](https://img.shields.io/badge/python-≥3.11-blue)](https://python.org)
 [![License: LGPL v3](https://img.shields.io/badge/License-LGPL_v3-green)](LICENSE)
-[![Schema v3.1.0](https://img.shields.io/badge/schema-v3.1.0-orange)](docs/schemas.md)
+[![Schema v4.0.0](https://img.shields.io/badge/schema-v4.0.0-orange)](docs/schemas.md)
 
 **QPUBench is a framework for running quantum benchmarks and recording every
 result in one common format, so runs from different SDKs, machines, and even
@@ -18,12 +18,23 @@ suite of standard benchmark circuits with a leaderboard.
 
 | Scenario | Supported? |
 |---|---|
-| Absolute performance of a quantum algorithm (accuracy / cost) | **Yes.** Expectation values with error bars, energy error against computed classical references (chemical accuracy), timings, and QPU-cost estimates. |
+| Absolute performance of a quantum algorithm (accuracy / cost) | **Yes.** Expectation values with error bars, energy error against a stored classical reference (FCI / exact diagonalization), timings, and QPU-cost estimates. See the note below on what "reference" means here. |
 | Comparing implementations of the same algorithm | **Yes — a core design goal.** E.g. one ADAPT-VQE configuration runs unchanged against three different engines, producing directly comparable records. |
 | Comparing different algorithms | **Yes.** Records are tagged with a package-agnostic algorithm family, so different algorithms on the same problem stay comparable in one store. |
 | Comparing different hardware | **Yes.** Register several backends (Aer, IBM, IQM, Braket, Quantinuum, Qibo, …) and sweep the same circuits across all of them. |
 | Comparing different quantum computing modalities | **Yes — this is the "modality-agnostic" in the tagline.** The record format covers gate-based, MBQC, boson sampling, neutral-atom analog, and more. Runnable adapters today are mostly gate-based; other modalities enter via schemas and integrations. |
 | Comparing a quantum algorithm to a classical algorithm | **Partially.** Classical reference values (FCI / exact diagonalization) are computed and stored so quantum results are judged against them, but classical algorithms are not benchmarked as first-class runs. |
+
+> **A note on "chemical accuracy".** QPUBench reports an *energy error* — the
+> gap between a run's result and a **classically computed** reference (FCI or
+> exact diagonalization), and flags whether that gap is below 1.6 mHartree.
+> This is a numerical-convergence check against a computed value; it is **not**
+> the same as "chemical accuracy" in the strict sense many chemists mean, which
+> is agreement with an **experimentally measured** quantity from reality. A
+> result within 1.6 mHartree of a computed FCI reference can still be far from
+> the true physical value if the model (basis set, active space, Hamiltonian)
+> is itself an approximation. Treat the stored reference as a computed baseline,
+> not as ground truth from experiment.
 | Modelling noise | **No.** Backends bring their own noise models (e.g. pass a Qiskit Aer noise model to the Aer adapter); QPUBench records what ran, it does not define noise models. |
 | Measuring noise | **No.** It can *store* device-characterization results produced by external tools (e.g. Qedma's QESEM), but it does not perform characterization itself. |
 
@@ -44,9 +55,8 @@ credentials needed. It prepares a two-qubit Bell state, measures the ⟨ZZ⟩
 correlation, and appends the result record to an NDJSON file:
 
 ```python
-import pathlib
 from qpubench import (
-    BenchmarkRunner, NDJSONStore, CircuitSpec,
+    BenchmarkRunner, CircuitSpec,
     SparsePauliObservable, PauliTerm, PauliLabel, ComplexNumber,
 )
 
@@ -68,7 +78,7 @@ circuit = CircuitSpec(
     ],
 )
 
-runner = BenchmarkRunner(store=NDJSONStore(pathlib.Path("results/bell.ndjson")))
+runner = BenchmarkRunner(store="results/bell.ndjson")   # str path → NDJSONStore
 runner.register(name="stub", seed=42)
 record = runner.run(circuit, "stub", shots=4096)
 
@@ -98,8 +108,8 @@ Three layers, three responsibilities:
   [Pydantic v2](https://docs.pydantic.dev/) models with no quantum SDK imports.
 - **Adapters** execute — a `BackendAdapter` runs a circuit you provide; an
   `AlgorithmAdapter` wraps a library that generates its own circuits from a
-  problem (e.g. a molecule) and drives its own loop. Both register with the
-  same `BenchmarkRunner`.
+  problem (e.g. the ground state energy calculation of a molecule) and drives
+  its own loop. Both register with the same `BenchmarkRunner`.
 - **Stores** persist — every record lands in NDJSON, Parquet, or S3 through
   one `save`/`load`/`query` interface.
 
@@ -107,7 +117,10 @@ Three layers, three responsibilities:
 
 Just typed Python classes (Pydantic models) that you **import and
 instantiate** — `CircuitSpec` in the quick start is one. You pick them from
-the library; there is nothing to design or register yourself.
+the library; there is nothing to design or register yourself. The library
+ships **37 schema modules** at the current schema version (see the badge
+above), split into three groups — core record format, cross-cutting
+catalogues, and per-project mirrors.
 
 - The **core modules** (`circuit`, `backend`, `execution`, `result`,
   `record`, …) define the record format every benchmark uses. For most
@@ -131,6 +144,7 @@ Full model-by-model reference: [docs/schemas.md](docs/schemas.md)
 | [Backends & adapters](docs/backends.md) | Available backends and their status; adapter protocols |
 | [Stores & persistence](docs/persistence.md) | NDJSON · Parquet · S3; querying results |
 | [VQA algorithms](docs/vqa.md) | VQE and ADAPT-VQE, including the interchangeable engines |
+| [Algorithms & `AlgorithmSpec`](docs/algorithm_spec.md) | Algorithm identity vs. hyperparameters, the family dispatch model, vanilla VQE vs. ADAPT |
 | [Integrations](docs/integrations.md) | Bridges to external frameworks (QForte, PySCF, QCSchema, GBS, …) |
 | [Examples](examples/README.md) | Runnable guides, demos, and tutorials |
 

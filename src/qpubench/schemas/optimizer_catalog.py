@@ -1,7 +1,7 @@
 """Minimizer / stopping-criterion catalogue.
 
 Closes qrunch's "Choose a Minimizer" / "Choose a Stopping Criterion" guides'
-missing piece: ``AdaptVQEConfig.optimizer`` (``execution.py``) is a
+missing piece: ``AdaptVQERunConfig.optimizer`` (``execution.py``) is a
 free-text field each adapter maps onto its own supported set (e.g.
 ``integrations/generic_adapt_vqe`` maps it directly onto a
 ``scipy.optimize.minimize`` method name) — there was no catalogue/registry
@@ -20,13 +20,13 @@ class MinimizerCatalogEntry(pydantic.BaseModel):
     """One classical optimizer choice, as understood by
     ``scipy.optimize.minimize`` (the real solver
     ``integrations/generic_adapt_vqe/engine.py`` calls with
-    ``AdaptVQEConfig.optimizer`` as the method name).
+    ``AdaptVQERunConfig.optimizer`` as the method name).
 
-    name                catalogue key, matches AdaptVQEConfig.optimizer.
+    name                catalogue key, matches AdaptVQERunConfig.optimizer.
     scipy_method        the exact string passed to
                         ``scipy.optimize.minimize(method=...)``.
     supports_gradient   whether this method can use an analytic/finite-
-                        difference gradient (``AdaptVQEConfig.
+                        difference gradient (``AdaptVQERunConfig.
                         use_analytic_gradient``) rather than being purely
                         derivative-free.
     stochastic          whether repeated runs from the same starting point
@@ -77,13 +77,13 @@ MINIMIZER_CATALOG: dict[str, MinimizerCatalogEntry] = {
 
 
 class StoppingCriterionCatalogEntry(pydantic.BaseModel):
-    """One convergence criterion, mapped to the ``AdaptVQEConfig`` field it
+    """One convergence criterion, mapped to the ``AdaptVQERunConfig`` field it
     actually controls (``execution.py`` — no separate stopping-criterion
     object exists; this catalogue documents the mapping qrunch's guide
     treats as a distinct concept).
 
     name         catalogue key.
-    field_name   the AdaptVQEConfig field this criterion configures.
+    field_name   the AdaptVQERunConfig field this criterion configures.
     applies_to   "macro" (ADAPT-VQE ansatz growth) or "micro" (per-iteration
                  classical optimizer).
     """

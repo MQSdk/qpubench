@@ -118,7 +118,7 @@ class TestBuildQubitHamiltonian:
         from examples.common.toy_hamiltonians import exact_ground_state_energy
         from examples.common.toy_statevector_backend import ToyStatevectorAdapter
         from integrations.generic_adapt_vqe.engine import GenericAdaptVQEEngine
-        from qpubench.schemas.execution import AdaptVQEConfig
+        from qpubench.schemas.execution import AdaptVQERunConfig
 
         obs, record = build_qubit_hamiltonian(
             [("H", (0.0, 0.0, 0.0)), ("H", (0.0, 0.0, 0.74))], basis="sto-3g",
@@ -129,7 +129,7 @@ class TestBuildQubitHamiltonian:
             num_qubits=record.num_qubits,
             num_electrons=2,
             energy_backend=ToyStatevectorAdapter(),
-            config=AdaptVQEConfig(max_macro_iterations=15, gradient_threshold=1e-5, max_micro_iterations=200),
+            config=AdaptVQERunConfig(max_macro_iterations=15, gradient_threshold=1e-5, max_micro_iterations=200),
         )
         _, _vqa, vqa_result = engine.run()
         assert vqa_result.final_eigenvalue == pytest.approx(exact, abs=1e-6)

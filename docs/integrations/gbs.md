@@ -140,67 +140,6 @@ Store in `QuantumResult.gbs_clique_finding`.
 
 ---
 
-## Vibronic spectra (GAMESS + Duschinsky + GBS)
-
-Compute Frank-Condon profiles for molecular electronic transitions using GBS:
-
-```python
-from qpubench.schemas.mqsdk_photoq import (
-    VibronicSpectrumConfig, NormalModeData, DuschinskyResult,
-    VibronicGBSParams, VibronicSpectrumResult,
-)
-
-config = VibronicSpectrumConfig(
-    molecule_name="water",
-    ground_state_file="Ground_Water.out.txt",
-    excited_state_file="Excited_Water.txt",
-    temperature_K=0.0,
-    num_samples=50_000,
-    freq_range_cm1=(-1000.0, 8000.0),
-)
-
-ground = NormalModeData(
-    num_atoms=3,
-    num_modes=3,
-    equilibrium_geometry=[0.0, -0.121, 0.0, 1.425, 0.962, 0.0, -1.425, 0.962, 0.0],
-    normal_mode_vectors=[1.0] * 9,
-    frequencies_cm1=[1595.0, 3657.0, 3756.0],
-    atomic_masses_amu=[15.995, 1.008, 1.008],
-)
-
-duschinsky = DuschinskyResult(
-    num_modes=3,
-    rotation_matrix_Ud=[1, 0, 0, 0, 1, 0, 0, 0, 1],  # 3×3 flattened
-    displacement_delta=[0.01, 0.02, 0.0],
-)
-
-gbs_params = VibronicGBSParams(
-    num_modes=3,
-    t=[0.1, 0.05, 0.0],
-    U1_real=[1, 0, 0, 0, 1, 0, 0, 0, 1],
-    U1_imag=[0.0] * 9,
-    r=[0.2, 0.15, 0.05],
-    U2_real=[1, 0, 0, 0, 1, 0, 0, 0, 1],
-    U2_imag=[0.0] * 9,
-    alpha_real=[0.0, 0.0, 0.0],
-    alpha_imag=[0.0, 0.0, 0.0],
-)
-
-spectrum = VibronicSpectrumResult(
-    config=config,
-    ground_state_data=ground,
-    duschinsky=duschinsky,
-    gbs_params=gbs_params,
-    sample_energies_cm1=[0.0, 1595.0, 3657.0],
-    histogram_bins=[0.0, 1000.0, 2000.0, 4000.0],
-    histogram_counts=[50.0, 30.0, 20.0],
-)
-```
-
-Store in `QuantumResult.vibronic_spectrum`.
-
----
-
 ## Borealis TDM GBS
 
 Xanadu Borealis uses a time-domain multiplexed (TDM) architecture with three fibre-loop delays [1, 6, 36] to realise 216 effective modes:
@@ -407,43 +346,6 @@ spec = AuroraDatasetSpec(
 
 backend = BackendSpec.xanadu_aurora(experiment="decoder_demo")
 ```
-
----
-
-## Minimum dominating set — Binary Bosonic Solver
-
-The BBS (Park, Stepney & D'Amico, [arXiv:2605.30935](https://arxiv.org/abs/2605.30935)) is a gradient-free variational algorithm: it reprograms the interferometer angles each iteration, threshold-maps the photon samples to a bit string, applies a learned per-bit flip layer, and evaluates the dominating-set cost. It is the paper's benchmark for the ORCA PT-2 boson sampler.
-
-```python
-from qpubench.schemas.mqsdk_photoq import (
-    DominatingSetProblemSpec, BBSConfig, BBSResult,
-    DominatingSetBenchmarkResult, PTSeriesInputType, GBSBackendType,
-)
-
-problem = DominatingSetProblemSpec(num_nodes=10, edges=[(0, 1), (1, 2), (2, 3)], seed=0)
-
-cfg = BBSConfig(
-    problem=problem, num_iterations=400, num_samples=600,     # the paper's NIter / NSamp
-    input_state=PTSeriesInputType.GBS, num_loops=1,
-    backend=GBSBackendType.ORCA_PT_SERIES,
-)
-
-res = BBSResult(
-    config=cfg, best_bitstring=[1, 0, 0, 1, 0, 0, 1, 0, 0, 0],
-    best_set_size=3, is_dominating=True, convergence_iteration=180,
-    runtime_s=44.0, sampling_time_s=43.99,      # sampling dominates the runtime
-)
-
-# BBS vs classical baselines across the graph family (the paper's Figure 3).
-bench = DominatingSetBenchmarkResult(
-    graph_sizes=[6, 8, 10, 12],
-    methods=["BBS 1-loop (gbs)", "greedy", "networkx", "ilp"],
-    mean_set_size={"BBS 1-loop (gbs)": [2.0, 2.7, 3.7, 4.0], "ilp": [2.0, 2.7, 3.7, 4.0]},
-    num_seeds=3,
-)
-```
-
-Store in `QuantumResult.vendor_results["bbs_result"]` and `["dominating_set_benchmark"]`.
 
 ---
 

@@ -27,7 +27,7 @@ import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
 
-from qpubench.schemas.execution import AdaptVQEConfig
+from qpubench.schemas.execution import AdaptVQERunConfig
 
 from examples.common.real_molecules import (
     BOUND_CS_DISTANCE,
@@ -57,7 +57,7 @@ def solve(c_s_distance: float) -> tuple[float, float]:
         num_qubits=record.num_qubits,
         num_electrons=COVALENT_LIGAND_ACTIVE_ELECTRONS,
         energy_backend=ToyStatevectorAdapter(),
-        config=AdaptVQEConfig(max_macro_iterations=15, gradient_threshold=1e-5,
+        config=AdaptVQERunConfig(max_macro_iterations=15, gradient_threshold=1e-5,
                                max_micro_iterations=200),
     )
     _, _vqa, vqa_result = engine.run()

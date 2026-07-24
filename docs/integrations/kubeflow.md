@@ -70,7 +70,7 @@ covers single-node Qrack/Aer/TN_QC_OPT runs. Reserve
 coordination (a statevector simulation sharded across several GPU nodes, a
 large `sweep()` batch dispatched as coordinated parallel workers), and
 `OptimizerClient` for genuine **hyperparameter search** over qpubench's own
-config space (`AdaptVQEConfig.pool_type`/`optimizer`/`gradient_threshold`,
+config space (`AdaptVQERunConfig.pool_type`/`optimizer`/`gradient_threshold`,
 transpiler settings) — call it from inside that one component's body and
 label the dashboard node by what it does ("GPU Statevector Sweep",
 "ADAPT-VQE Hyperparameter Search"), never "TrainJob".
