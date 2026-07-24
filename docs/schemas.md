@@ -205,6 +205,10 @@ BackendSpec.lightning_qubit(num_qubits=None)          # PennyLane (Cebule defaul
 
 # Gate-based hardware
 BackendSpec.ibm(backend_name, *, instance, channel, token_ref)
+BackendSpec.quantinuum(device_name="H2-1E", *, num_qubits=None, user_ref="")  # Quantinuum H-Series (trapped-ion)
+BackendSpec.qibo_simulator(backend="numpy", num_qubits=None)   # local Qibo simulator
+BackendSpec.qibolab(platform, *, num_qubits=None)              # self-hosted QPU (Qibolab)
+BackendSpec.qibo_cloud(platform="sim", *, client="qibo-client", token_ref="")  # remote QPU (qibo-cloud-backends)
 
 # MBQC
 BackendSpec.mbqc_fpga(num_logical_qubits, *, fpga_family="xilinx_7series")

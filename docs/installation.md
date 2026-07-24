@@ -15,6 +15,8 @@ pip install -e .
 # Specific extras
 pip install -e ".[qiskit]"     # Qiskit Aer + IBM Quantum Runtime V2 + qiskit-nature
 pip install -e ".[qrack]"      # PyQrack GPU/CPU simulator
+pip install -e ".[quantinuum]" # Quantinuum H-Series (pytket-quantinuum + pytket-qiskit)
+pip install -e ".[qibo]"       # Qibo simulator / Qibolab hardware / Qibo cloud
 pip install -e ".[storage]"    # Parquet store (pyarrow + pandas)
 pip install -e ".[all]"        # all PyPI-available extras
 

@@ -33,7 +33,8 @@ qpubench provides circuit → adapter executes it → returns QuantumResult
 ```
 
 Examples: Qiskit Aer, Qrack GPU simulator, IBM Quantum Runtime, IQM,
-MBQC-FPGA, any custom statevector simulator.
+Quantinuum H-Series, Qibo (simulator / Qibolab / cloud), MBQC-FPGA, any
+custom statevector simulator.
 
 **AlgorithmAdapter** — the algorithm-driven path:
 ```
@@ -433,6 +434,8 @@ shows 61 tests that run entirely without any quantum SDK.
 | `src/qpubench/backends/ibm_adapter.py` | IBM Quantum Runtime V2 | `BackendAdapter` + `TranspilableBackend` (fill TODOs) |
 | `src/qpubench/backends/qrack_adapter.py` | PyQrack GPU simulator | `BackendAdapter` (fill TODOs) |
 | `src/qpubench/backends/braket_adapter.py` | AWS Braket (Rigetti/IonQ/OQC/SV1/DM1/TN1) | `BackendAdapter` (fill TODOs) |
+| `src/qpubench/backends/quantinuum_adapter.py` | Quantinuum H-Series (trapped-ion, via pytket) | `BackendAdapter` + `TranspilableBackend` (fill TODOs) |
+| `src/qpubench/backends/qibo_adapter.py` | Qibo (local simulator / Qibolab hardware / Qibo cloud) | `BackendAdapter` (fill TODOs) |
 | `integrations/template/backend_adapter_template.py` | Generic gate-based | `BackendAdapter` template |
 | `integrations/template/algorithm_adapter_template.py` | Generic algorithm library | `AlgorithmAdapter` template |
 | `integrations/qforte/adapter.py` | QForte (UCCNVQE, ADAPT-VQE) | `AlgorithmAdapter` — complete implementation |

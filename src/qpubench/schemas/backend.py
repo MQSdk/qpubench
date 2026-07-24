@@ -42,7 +42,8 @@ class BackendSpec(pydantic.BaseModel):
       provider="aer"   — Qiskit Aer (statevector, QASM, noise model)
       provider="ibm"   — IBM Quantum Runtime
       provider="iqm"   — IQM hardware
-      provider="qibo"  — Qibo cloud (planned; no adapter yet)
+      provider="quantinuum" — Quantinuum H-Series (pytket-quantinuum)
+      provider="qibo"  — Qibo simulator / Qibolab hardware / Qibo cloud
       provider="qrack" — Qrack GPU/CPU simulator (PyQrack ctypes interface)
       provider="mbqc"  — MBQC-FPGA
 
@@ -667,6 +668,130 @@ class BackendSpec(pydantic.BaseModel):
             num_qubits=num_qubits,
             native_gates=["prx", "cz", "move"],
             auth={"api_token_ref": api_token_ref, "device_name": device_name, "endpoint": url},
+        )
+
+    @classmethod
+    def quantinuum(
+        cls,
+        device_name: str = "H2-1E",
+        *,
+        num_qubits: int | None = None,
+        user_ref: str = "",
+    ) -> BackendSpec:
+        """Quantinuum H-Series trapped-ion QPU (accessed via pytket-quantinuum).
+
+        Devices (H2 generation — see Quantinuum's API options docs):
+          "H2-1"    — 56-qubit H2 hardware
+          "H2-1E"   — H2 emulator (physically-accurate noise model, cloud)
+          "H2-1SC"  — H2 syntax checker (free circuit validation, no shots)
+          "H1-1" / "H1-1E" / "H1-1SC"  — 20-qubit H1 generation
+
+        All-to-all connectivity (ion shuttling / QCCD), so no SWAP routing.
+        Native gates: Rz, PhasedX (U1q), ZZPhase (RZZ) / ZZMax.
+
+        Authentication: pytket-quantinuum logs in through the Quantinuum
+        Nexus credential store — run ``QuantinuumBackend.login()`` once (or
+        ``qnexus.login()``) to cache a token; ``user_ref`` is the env-var name
+        holding the account username/email for non-interactive login.
+        """
+        _NUM_QUBITS = {
+            "H2-1": 56, "H2-1E": 56, "H2-1SC": 56,
+            "H1-1": 20, "H1-1E": 20, "H1-1SC": 20,
+        }
+        return cls(
+            name=f"quantinuum_{device_name}",
+            provider="quantinuum",
+            computing_model=ComputingModel.GATE_BASED,
+            qubit_modality=QubitModality.TRAPPED_ION,
+            simulator=device_name.endswith(("E", "SC")),
+            num_qubits=num_qubits or _NUM_QUBITS.get(device_name),
+            native_gates=["rz", "phasedx", "zzphase", "zzmax"],
+            auth={"device_name": device_name, "user_ref": user_ref},
+        )
+
+    @classmethod
+    def qibo_simulator(
+        cls,
+        backend: str = "numpy",
+        num_qubits: int | None = None,
+    ) -> BackendSpec:
+        """Local Qibo simulator (``qibo.set_backend(backend)``).
+
+        backend  Qibo simulation engine: "numpy" (reference), "qibojit"
+                 (Numba/CuPy JIT), "tensorflow", "pytorch". All run locally
+                 with no credentials.
+        """
+        return cls(
+            name=f"qibo_{backend}",
+            provider="qibo",
+            computing_model=ComputingModel.GATE_BASED,
+            simulator=True,
+            num_qubits=num_qubits,
+            auth={"execution": "local", "platform": backend},
+        )
+
+    @classmethod
+    def qibolab(
+        cls,
+        platform: str,
+        *,
+        num_qubits: int | None = None,
+        qubit_modality: QubitModality = QubitModality.SUPERCONDUCTING,
+    ) -> BackendSpec:
+        """Self-hosted QPU driven by Qibolab (``qibo.set_backend("qibolab", platform=...)``).
+
+        Qibolab compiles circuits to pulse sequences and drives the control
+        electronics of a self-hosted lab QPU. ``platform`` names a Qibolab
+        Platform (a lab's device + instrument configuration), resolved from
+        the ``QIBOLAB_PLATFORMS`` directory. See
+        https://qibo.science/qibolab/stable/.
+        """
+        return cls(
+            name=f"qibolab_{platform}",
+            provider="qibo",
+            computing_model=ComputingModel.GATE_BASED,
+            qubit_modality=qubit_modality,
+            simulator=False,
+            num_qubits=num_qubits,
+            auth={"execution": "qibolab", "platform": platform},
+        )
+
+    @classmethod
+    def qibo_cloud(
+        cls,
+        platform: str = "sim",
+        *,
+        client: str = "qibo-client",
+        token_ref: str = "",
+        num_qubits: int | None = None,
+        qubit_modality: QubitModality = QubitModality.SUPERCONDUCTING,
+    ) -> BackendSpec:
+        """Remote QPU via qibo-cloud-backends
+        (``qibo.set_backend("qibo-cloud-backends", client=..., platform=...)``).
+
+        client    "qibo-client"  — Qibo cloud infrastructure (TII); token env
+                                    var QIBO_CLIENT_TOKEN.
+                  "qiskit-client" — IBM Quantum servers; token env var
+                                    IBMQ_TOKEN.
+        platform  remote device id, e.g. "sim" (Qibo cloud simulator) or
+                  "ibm_kyiv" (IBM QPU via the qiskit client).
+        token_ref env-var name holding the client access token.
+        See https://qibo.science/qibo-cloud-backends/stable/.
+        """
+        is_sim = platform == "sim"
+        return cls(
+            name=f"qibo_cloud_{platform}",
+            provider="qibo",
+            computing_model=ComputingModel.GATE_BASED,
+            qubit_modality=None if is_sim else qubit_modality,
+            simulator=is_sim,
+            num_qubits=num_qubits,
+            auth={
+                "execution": "cloud",
+                "platform":  platform,
+                "client":    client,
+                "token_ref": token_ref,
+            },
         )
 
     @classmethod

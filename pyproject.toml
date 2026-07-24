@@ -48,6 +48,8 @@ qiskit  = ["qiskit>=2.0", "qiskit-aer", "qiskit-ibm-runtime", "qiskit-nature>=0.
 qrack   = ["pyqrack"]
 braket  = ["amazon-braket-sdk", "qiskit-braket-provider"]   # generic gate-based AWS Braket adapter (backends/braket_adapter.py)
 iqm     = ["iqm-client[qiskit]"]   # IQM hardware adapter (backends/iqm_adapter.py) — standalone qiskit-iqm is obsolete, bundled here instead
+quantinuum = ["pytket-quantinuum", "pytket-qiskit"]   # Quantinuum H-Series adapter (backends/quantinuum_adapter.py) — pytket-qiskit converts the CircuitSpec QASM to a pytket Circuit
+qibo    = ["qibo", "qibo-cloud-backends"]   # Qibo simulator / Qibolab hardware / Qibo cloud adapter (backends/qibo_adapter.py) — QASM3 CircuitSpecs also need the [qiskit] extra for QASM2 conversion
 classiq = ["classiq"]
 mitiq   = ["mitiq", "ply"]   # Mitiq ZNE error-mitigation adapter (backends/unitaryfund_mitiq_adapter.py) — ply works around a real cirq-core QASM-import gap, see that module's docstring
 pyscf   = ["pyscf"]   # mean-field/DFT, PCM/COSMO solvation, periodic pbc — schemas/pyscf_pyscf.py
@@ -74,6 +76,8 @@ all     = [
     "qiskit>=2.0", "qiskit-aer", "qiskit-ibm-runtime", "qiskit-nature>=0.7", "qiskit_qasm3_import",
     "amazon-braket-sdk", "qiskit-braket-provider",
     "iqm-client[qiskit]",
+    "pytket-quantinuum", "pytket-qiskit",
+    "qibo", "qibo-cloud-backends",
     "classiq",
     "mitiq", "ply",
     "pyscf",
@@ -157,6 +161,9 @@ module = [
     "pennylane.*",
     "pyarrow.*",
     "pyscf.*",
+    "pytket.*",
+    "qibo.*",
+    "qibo_cloud_backends.*",
     "qiskit.*",
     "qiskit_aer.*",
     "qiskit_braket_provider.*",

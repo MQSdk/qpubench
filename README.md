@@ -21,7 +21,7 @@ suite of standard benchmark circuits with a leaderboard.
 | Absolute performance of a quantum algorithm (accuracy / cost) | **Yes.** Expectation values with error bars, energy error against computed classical references (chemical accuracy), timings, and QPU-cost estimates. |
 | Comparing implementations of the same algorithm | **Yes — a core design goal.** E.g. one ADAPT-VQE configuration runs unchanged against three different engines, producing directly comparable records. |
 | Comparing different algorithms | **Yes.** Records are tagged with a package-agnostic algorithm family, so different algorithms on the same problem stay comparable in one store. |
-| Comparing different hardware | **Yes.** Register several backends (Aer, IBM, IQM, Braket, …) and sweep the same circuits across all of them. |
+| Comparing different hardware | **Yes.** Register several backends (Aer, IBM, IQM, Braket, Quantinuum, Qibo, …) and sweep the same circuits across all of them. |
 | Comparing different quantum computing modalities | **Yes — this is the "modality-agnostic" in the tagline.** The record format covers gate-based, MBQC, boson sampling, neutral-atom analog, and more. Runnable adapters today are mostly gate-based; other modalities enter via schemas and integrations. |
 | Comparing a quantum algorithm to a classical algorithm | **Partially.** Classical reference values (FCI / exact diagonalization) are computed and stored so quantum results are judged against them, but classical algorithms are not benchmarked as first-class runs. |
 | Modelling noise | **No.** Backends bring their own noise models (e.g. pass a Qiskit Aer noise model to the Aer adapter); QPUBench records what ran, it does not define noise models. |

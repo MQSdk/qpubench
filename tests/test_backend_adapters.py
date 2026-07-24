@@ -306,3 +306,122 @@ class TestIQMAdapter:
             tqc, layout = adapter.transpile(_bell_circuit(), ExecutionOptions())
         assert tqc.format == CircuitFormat.QASM3
         assert layout.num_physical == 5
+
+
+# ---------------------------------------------------------------------------
+# Quantinuum — real compile/run logic without a live account
+# ---------------------------------------------------------------------------
+#
+# transpile(): exercised offline via QuantinuumBackend(machine_debug=True),
+# which performs real Quantinuum compilation to the Rz/PhasedX/ZZPhase native
+# gate set. run(): the full sampler plumbing (qiskit->tket conversion,
+# process_circuit, get_result, counts parsing) is exercised against a local
+# pytket simulator (pytket.extensions.qiskit.AerBackend), which returns real
+# Bell-correlated counts — machine_debug returns only trivial all-zero shots,
+# so it cannot validate the counts path. Only the credential-fetching
+# `_get_backend()` call needs a real Quantinuum account.
+
+pytket_quantinuum = pytest.importorskip("pytket.extensions.quantinuum")
+pytket_qiskit = pytest.importorskip("pytket.extensions.qiskit")
+
+# Native gate types pytket may leave after Quantinuum compilation.
+_QTM_NATIVE_OPS = {"PhasedX", "Rz", "ZZPhase", "ZZMax", "TK2", "Measure", "Barrier"}
+
+
+class TestQuantinuumAdapter:
+    def _debug_backend(self) -> object:
+        from pytket.extensions.quantinuum import QuantinuumBackend
+
+        return QuantinuumBackend(device_name="H2-1E", machine_debug=True)
+
+    def _sim_backend(self) -> object:
+        from pytket.extensions.qiskit import AerBackend
+
+        return AerBackend()
+
+    def test_transpile(self) -> None:
+        from qpubench.backends.quantinuum_adapter import QuantinuumAdapter
+
+        adapter = QuantinuumAdapter("H2-1E")
+        with patch.object(QuantinuumAdapter, "_get_backend", return_value=self._debug_backend()):
+            tqc, layout = adapter.transpile(_bell_circuit(), ExecutionOptions())
+        assert tqc.format == CircuitFormat.QASM3
+        assert tqc.gate_counts
+        # Compiled to Quantinuum native gates only.
+        assert set(tqc.gate_counts) <= _QTM_NATIVE_OPS
+        assert layout.num_virtual == 2
+
+    def test_sampler(self) -> None:
+        from qpubench.backends.quantinuum_adapter import QuantinuumAdapter
+
+        adapter = QuantinuumAdapter("H2-1E")
+        with patch.object(QuantinuumAdapter, "_get_backend", return_value=self._sim_backend()):
+            result = adapter.run(_bell_circuit(), ExecutionOptions(shots=1000, seed=7))
+        assert result.status == JobStatus.SUCCEEDED
+        assert result.shots is not None
+        assert result.shots.num_qubits == 2
+        _assert_bell_counts(result.shots.counts)
+
+    def test_estimator_not_implemented(self) -> None:
+        """Real, documented upstream limitation — Quantinuum has no Estimator."""
+        from qpubench.backends.quantinuum_adapter import QuantinuumAdapter
+
+        adapter = QuantinuumAdapter("H2-1E")
+        with patch.object(QuantinuumAdapter, "_get_backend", return_value=self._debug_backend()):
+            with pytest.raises(NotImplementedError):
+                adapter.run(_bell_circuit(with_observable=True), ExecutionOptions())
+
+
+# ---------------------------------------------------------------------------
+# Qibo — local numpy simulator: fully real, no credentials needed
+# ---------------------------------------------------------------------------
+#
+# The Qibolab (self-hosted hardware) and Qibo cloud paths need a real lab /
+# account, but the local-simulator path (execution="local", default "numpy"
+# backend) runs the full adapter end-to-end with no credentials — QASM load,
+# measurement injection, frequency/sample parsing, and the big-endian ->
+# little-endian bitstring fix.
+
+qibo = pytest.importorskip("qibo")
+
+
+class TestQiboAdapter:
+    def test_sampler(self) -> None:
+        from qpubench.backends.qibo_adapter import QiboAdapter
+
+        adapter = QiboAdapter()  # local numpy simulator
+        result = adapter.run(_bell_circuit(), ExecutionOptions(shots=1000))
+        assert result.status == JobStatus.SUCCEEDED
+        assert result.shots is not None
+        assert result.shots.num_qubits == 2
+        _assert_bell_counts(result.shots.counts)
+
+    def test_bit_ordering_matches_qiskit_convention(self) -> None:
+        """X on qubit 0 must read as '01' (q0 rightmost), not qibo's '10'."""
+        from qpubench.backends.qibo_adapter import QiboAdapter
+
+        x_on_q0 = CircuitSpec(
+            num_qubits=2,
+            format=CircuitFormat.QASM3,
+            serialized='OPENQASM 3.0;\ninclude "stdgates.inc";\nqubit[2] q;\nx q[0];\n',
+        )
+        adapter = QiboAdapter()
+        result = adapter.run(x_on_q0, ExecutionOptions(shots=100))
+        assert result.shots.counts == {"01": 100}
+
+    def test_estimator_not_implemented(self) -> None:
+        """Real, documented limitation — Qibo hardware returns samples."""
+        from qpubench.backends.qibo_adapter import QiboAdapter
+
+        adapter = QiboAdapter()
+        with pytest.raises(NotImplementedError):
+            adapter.run(_bell_circuit(with_observable=True), ExecutionOptions())
+
+    def test_spec_execution_modes(self) -> None:
+        from qpubench.backends.qibo_adapter import QiboAdapter
+
+        assert QiboAdapter().spec.simulator is True
+        assert QiboAdapter("sim", execution="cloud").spec.provider == "qibo"
+        assert QiboAdapter("my_lab", execution="qibolab").spec.simulator is False
+        with pytest.raises(ValueError):
+            QiboAdapter(execution="bogus")

@@ -24,7 +24,7 @@ spec: BackendSpec
 ```
 
 Use this when **you** provide the circuit and the backend executes it.  
-Examples: Qiskit Aer, PennyLane Lightning, IBM Quantum Runtime, IQM, AWS Braket, MBQC-FPGA.
+Examples: Qiskit Aer, PennyLane Lightning, IBM Quantum Runtime, IQM, AWS Braket, Quantinuum, Qibo, MBQC-FPGA.
 
 The three members:
 
@@ -79,11 +79,13 @@ Shorthand: `runner.register(name="stub_gate", seed=42)` — when no adapter obje
 ### Real adapters (SDK required)
 
 `aer_adapter.py`, `ibm_adapter.py`, `iqm_adapter.py`, `braket_adapter.py`,
-`pennylane_lightning_adapter.py`, and `unitaryfund_mitiq_adapter.py`
-in `src/qpubench/backends/` are real, working implementations (no TODOs) —
-verified against the installed SDKs (`qiskit-aer` 0.17.x, `qiskit-ibm-runtime`
-0.47.x, `iqm-client[qiskit]` 34.x, `amazon-braket-sdk` + `qiskit-braket-provider`
-0.17.x, `pennylane-lightning`, `mitiq`):
+`quantinuum_adapter.py`, `qibo_adapter.py`, `pennylane_lightning_adapter.py`,
+and `unitaryfund_mitiq_adapter.py` in `src/qpubench/backends/` are real,
+working implementations (no TODOs) — verified against the installed SDKs
+(`qiskit-aer` 0.17.x, `qiskit-ibm-runtime` 0.47.x, `iqm-client[qiskit]` 34.x,
+`amazon-braket-sdk` + `qiskit-braket-provider` 0.17.x, `pytket-quantinuum`
+0.59.x + `pytket-qiskit` 0.77.x, `qibo` 0.2.x + `qibo-cloud-backends` 0.0.x,
+`pennylane-lightning`, `mitiq`):
 
 | File | Backend | Provider string | Tested how |
 |---|---|---|---|
@@ -91,6 +93,8 @@ verified against the installed SDKs (`qiskit-aer` 0.17.x, `qiskit-ibm-runtime`
 | `braket_adapter.py` | AWS Braket (via `qiskit-braket-provider`'s `BraketSampler`/`BraketEstimator`) | `"aws_braket"` | Fully executed via `BraketLocalBackend` (`device_arn="local"`) — no AWS account needed |
 | `ibm_adapter.py` | IBM Quantum Runtime V2 (Session/Batch/Single, TREX/ZNE/PEC resilience) | `"ibm"` | Transpile/run logic fully executed against `qiskit_ibm_runtime.fake_provider.FakeManilaV2`; only the credential-fetching `QiskitRuntimeService` call needs a real account |
 | `iqm_adapter.py` | IQM hardware (Sampler path only — no Estimator; see below) | `"iqm"` | Transpile/run logic fully executed against `iqm.qiskit_iqm.fake_backends.IQMFakeAdonis`; only the credential-fetching `IQMProvider` call needs a real account |
+| `quantinuum_adapter.py` | Quantinuum H-Series (Sampler path only — no Estimator; see below) | `"quantinuum"` | Transpile compiled offline via `QuantinuumBackend(machine_debug=True)` (real native-gate compilation); sampler plumbing executed against a local pytket simulator; only the credential-fetching `QuantinuumBackend` login needs a real account |
+| `qibo_adapter.py` | Qibo — local simulator / Qibolab hardware / Qibo cloud (Sampler path only — no Estimator; see below) | `"qibo"` | Local `numpy` simulator fully executed (no credentials); only the Qibolab (`set_backend("qibolab", …)`) and cloud (`set_backend("qibo-cloud-backends", …)`) paths need a real lab / account |
 | `pennylane_lightning_adapter.py` | PennyLane `lightning.qubit` simulator (Estimator + Sampler) | `"pennylane"` | Fully executed — no credentials needed |
 | `unitaryfund_mitiq_adapter.py` | Mitiq ZNE error-mitigation wrapper around another adapter | — | Fully executed around `AerAdapter` |
 
@@ -101,7 +105,34 @@ IQM's Estimator path (`circuit.observables` populated) still raises
 `NotImplementedError` — this is a real, current upstream limitation
 (`iqm-client[qiskit]` exposes no `EstimatorV2`-equivalent as of 34.x), not
 an unfinished stub. Use the Sampler path and reconstruct expectation values
-classically from counts.
+classically from counts. The Quantinuum and Qibo adapters raise the same way:
+Quantinuum exposes no server-side expectation-value primitive, and real Qibo
+hardware (Qibolab / cloud) returns measurement samples, not expectation values.
+
+**Quantinuum access path**: unlike the IBM/IQM/Braket adapters, Quantinuum
+has no Qiskit `BackendV2`/PUB-primitive interface — the official Python route
+is `pytket-quantinuum`'s `QuantinuumBackend` (submitting through Quantinuum
+Nexus). `quantinuum_adapter.py` therefore converts the CircuitSpec's QASM into
+a pytket `Circuit` (`pytket-qiskit`'s `qiskit_to_tk`), compiles with the
+device's own `get_compiled_circuit`, and serialises the transpiled circuit
+back to OpenQASM 3.0 via `tk_to_qiskit` + `qasm3.dumps`. Authentication is
+through the Quantinuum Nexus credential store — run `QuantinuumBackend.login()`
+(or `qnexus.login()`) once to cache a token. See Quantinuum's
+[API options](https://docs.quantinuum.com/systems/trainings/h2/getting_started/api_options.html).
+
+**Qibo access paths**: one `QiboAdapter` covers Qibo's three execution
+surfaces, selected by `execution=`: `"local"` runs a local simulator
+(`qibo.set_backend("numpy")` / `"qibojit"` — no credentials); `"qibolab"`
+drives a self-hosted lab QPU by compiling to pulse sequences
+([Qibolab](https://qibo.science/qibolab/stable/)); `"cloud"` submits to a
+remote QPU through
+[qibo-cloud-backends](https://qibo.science/qibo-cloud-backends/stable/)
+(`client="qibo-client"` for the TII cloud, `"qiskit-client"` for IBM servers,
+token from `QIBO_CLIENT_TOKEN` / `IBMQ_TOKEN`). Qibo's `Circuit.from_qasm`
+reads OpenQASM 2.0, so QASM3 CircuitSpecs are converted via Qiskit first
+(the `[qiskit]` extra); QASM2 CircuitSpecs need no Qiskit. Note Qibo is
+big-endian (qubit 0 leftmost); the adapter reverses bitstrings to the Qiskit
+little-endian convention used everywhere else in the framework.
 
 **Package-name change**: the standalone `qiskit-iqm`/`qiskit_on_iqm`
 packages are now obsolete (importing raises
@@ -242,9 +273,10 @@ Where a **Factory** is listed, it names a `BackendSpec` classmethod that pre-fil
 | Qiskit Aer (statevector + QASM) | `"aer"` | `GATE_BASED` | — (simulator) | `AerAdapter` | Real, tested — EstimatorV2/SamplerV2; `BackendSpec.qiskit_aer(method, num_qubits)` factory (statevector / MPS / stabilizer) |
 | IBM Quantum Runtime V2 | `"ibm"` | `GATE_BASED` | `SUPERCONDUCTING` | `IBMAdapter` | Real, tested against a fake backend — implements `TranspilableBackend`; needs real credentials for live hardware |
 | IQM hardware | `"iqm"` | `GATE_BASED` | `SUPERCONDUCTING` | `IQMAdapter` | Real, tested against a fake backend — implements `TranspilableBackend`; Sampler path only (no Estimator — real upstream limitation); `BackendSpec.iqm()` / `.iqm_resonance()` / `.iqm_local_server()` |
+| Quantinuum H-Series (H2-1/H2-1E/H2-1SC, H1) | `"quantinuum"` | `GATE_BASED` | `TRAPPED_ION` | `QuantinuumAdapter` | Real, tested offline via `machine_debug` + local pytket sim — implements `TranspilableBackend`; Sampler path only (no Estimator — real upstream limitation); via `pytket-quantinuum`; `BackendSpec.quantinuum(device_name)` |
 | Qrack GPU/CPU simulator | `"qrack"` | `GATE_BASED` | — (simulator) | `QrackAdapter` | Stub — see `integrations/qrack/IMPLEMENTATION_NOTES.md` |
 | AWS Braket (Rigetti/IonQ/OQC/SV1/DM1/TN1) | `"aws_braket"` | `GATE_BASED` | configurable | `BraketAdapter` | Real, tested via `BraketLocalBackend` — implements `TranspilableBackend`; `BackendSpec.braket(device_arn)`; via `qiskit-braket-provider` |
-| Qibo cloud (planned — no adapter, schema, or extra yet) | `"qibo"` | `GATE_BASED` | — | Copy `backend_adapter_template.py` | Planned |
+| Qibo (local simulator / Qibolab hardware / Qibo cloud) | `"qibo"` | `GATE_BASED` | `SUPERCONDUCTING` (hardware) or — (simulator) | `QiboAdapter` | Real, tested — local `numpy` simulator fully executed (no credentials); Sampler path only (no Estimator — hardware returns samples); `BackendSpec.qibo_simulator()` / `.qibolab(platform)` / `.qibo_cloud(platform)` |
 | PennyLane `lightning.qubit` | `"pennylane"` | `GATE_BASED` | — (simulator) | `PennyLaneLightningAdapter` | Real, tested — Estimator + Sampler; `BackendSpec.lightning_qubit()` |
 | CUDA-Q | `"cudaq"` | `GATE_BASED` | — (simulator) | Copy template | `BackendSpec.cudaq()` |
 | Cebule cloud | `"cebule"` | `GATE_BASED` | — (heterogeneous) | Copy template | `BackendSpec.cebule()` |

@@ -143,7 +143,7 @@ All rows are computing-model/qubit-modality **all / all** — these are the fram
 | `primitives` | `ComputingModel`, `QubitModality`, `CircuitFormat`, `PauliLabel`, `ComplexNumber` |
 | `circuit` | `CircuitSpec` — `from_openqasm3()`, `bind()`, `is_parametric()` |
 | `observable` | `SparsePauliObservable`, `PauliTerm` |
-| `backend` | `BackendSpec` — 31 factory constructors |
+| `backend` | `BackendSpec` — 35 factory constructors |
 
 ## Core Schema Modules (2/3)
 
@@ -213,7 +213,7 @@ Two **independent, orthogonal** axes — not one flat enum (a fixed set of named
 ::: {.column width="50%"}
 **`QubitModality`** (QPU modality)
 
-- `SUPERCONDUCTING` — IBM, IQM
+- `SUPERCONDUCTING` — IBM, IQM, Qibo/Qibolab
 - `TRAPPED_ION` — Quantinuum, IonQ
 - `NEUTRAL_ATOM` — QuEra
 - `PHOTONIC` — Quandela, Xanadu, ORCA, DTU
@@ -337,7 +337,7 @@ Verified against real `cantera==3.2.0`, all 3 reaction types. Real gotcha found:
 └───────────────┘
 ```
 
-Aer · PennyLane · IBM · IQM · Braket · MBQC
+Aer · PennyLane · IBM · IQM · Braket · Quantinuum · Qibo · MBQC
 :::
 ::: {.column width="33%"}
 **`AlgorithmAdapter`**
@@ -554,10 +554,10 @@ mitigated.expectation_values[0].value       # 0.997  (extrapolated)
 Verified against a real depolarizing-noise Aer simulator (2%/5% error on H/CX): ZNE recovers `0.997` vs. raw noisy `0.950` and noiseless-exact `1.0` — real Mitiq `Factory.run()`/`.reduce()` calls, the adapter `base.py` described but that never existed until now.
 \normalsize
 
-## Running on Real Hardware — IBM, IQM & AWS Braket
+## Running on Real Hardware — IBM · IQM · Braket · Quantinuum · Qibo
 
 \scriptsize
-All three adapters are **real, verified end-to-end** — Aer/Braket need no credentials (`BraketLocalBackend`); IBM/IQM verified against bundled fake backends. `opts = ExecutionOptions(shots=4096)` shared by all three.
+All five adapters are **real, verified end-to-end** — Aer/Braket/Qibo(local sim) need no credentials; IBM/IQM/Quantinuum verified against bundled fake / offline backends. `opts = ExecutionOptions(shots=4096)` shared by all.
 
 :::::: {.columns}
 ::: {.column width="33%"}
@@ -603,7 +603,9 @@ Needs an S3 result location.
 :::
 ::::::
 
-All three implement `TranspilableBackend`. Two real SDK migrations found while verifying: `qiskit-iqm` standalone is obsolete (`iqm-client[qiskit]` replaces it); IBM's old `channel="ibm_quantum"` is gone (`"ibm_quantum_platform"` replaces it).
+**Plus two more, same contract:** **Quantinuum** H-Series (trapped-ion) via `pytket-quantinuum` — `QuantinuumAdapter("H2-1")`; **Qibo** — one `QiboAdapter` spanning local simulator, self-hosted **Qibolab** hardware, and **Qibo cloud** (`execution="local"|"qibolab"|"cloud"`).
+
+IBM/IQM/Braket/Quantinuum implement `TranspilableBackend`; Qibo transpiles internally. Verified: `qiskit-iqm` standalone obsolete → `iqm-client[qiskit]`; IBM `channel="ibm_quantum"` → `"ibm_quantum_platform"`.
 \normalsize
 
 ## IBM Quantum Advantage Tracker
@@ -727,6 +729,8 @@ Same `ResultStore` protocol as `NDJSONStore`: `save()` / `load()` / `query()` / 
 
 ## Integration Ecosystem — `BackendAdapter`
 
+\footnotesize
+
 Schema modules are named `<org>_<package>.py` — one glance tells you who maintains it and what it's called.
 
 | Integration | Schema module |
@@ -736,7 +740,11 @@ Schema modules are named `<org>_<package>.py` — one glance tells you who maint
 | QESEM (Qedma) | `qedma_qesem` |
 | Bloqade / Aquila | `quera_bloqade` |
 | IQM Resonance (garnet · deneb · sirius) | — |
+| Quantinuum H-Series (H2-1 · H2-1E · H2-1SC) | — |
+| Qibo (simulator · Qibolab · cloud) | — |
 | Quantum Motion CMOS spin-qubit | `quantum_motion_hardware` |
+
+\normalsize
 
 ## Integration Ecosystem — `AlgorithmAdapter`
 

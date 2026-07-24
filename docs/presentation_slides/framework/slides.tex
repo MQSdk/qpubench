@@ -391,7 +391,7 @@ Key types
 \texttt{bind()}, \texttt{is\_parametric()} \\
 \texttt{observable} & \texttt{SparsePauliObservable},
 \texttt{PauliTerm} \\
-\texttt{backend} & \texttt{BackendSpec} --- 31 factory constructors \\
+\texttt{backend} & \texttt{BackendSpec} --- 35 factory constructors \\
 \bottomrule\noalign{}
 \end{longtable}
 \end{frame}
@@ -559,7 +559,7 @@ modalities, but not every pairing exists.
 \begin{itemize}
 \tightlist
 \item
-  \texttt{SUPERCONDUCTING} --- IBM, IQM
+  \texttt{SUPERCONDUCTING} --- IBM, IQM, Qibo/Qibolab
 \item
   \texttt{TRAPPED\_ION} --- Quantinuum, IonQ
 \item
@@ -798,7 +798,7 @@ vendor satisfying one shape with real code. \normalsize
 └───────────────┘
 \end{verbatim}
 
-Aer · PennyLane · IBM · IQM · Braket · MBQC
+Aer · PennyLane · IBM · IQM · Braket · Quantinuum · Qibo · MBQC
 \end{column}
 
 \begin{column}{0.33\textwidth}
@@ -1115,15 +1115,15 @@ noiseless-exact \texttt{1.0} --- real Mitiq
 \texttt{base.py} described but that never existed until now. \normalsize
 \end{frame}
 
-\begin{frame}[fragile]{Running on Real Hardware --- IBM, IQM \& AWS
-Braket}
-\phantomsection\label{running-on-real-hardware-ibm-iqm-aws-braket}
+\begin{frame}[fragile]{Running on Real Hardware --- IBM · IQM · Braket ·
+Quantinuum · Qibo}
+\phantomsection\label{running-on-real-hardware-ibm-iqm-braket-quantinuum-qibo}
 \scriptsize
 
-All three adapters are \textbf{real, verified end-to-end} --- Aer/Braket
-need no credentials (\texttt{BraketLocalBackend}); IBM/IQM verified
-against bundled fake backends.
-\texttt{opts\ =\ ExecutionOptions(shots=4096)} shared by all three.
+All five adapters are \textbf{real, verified end-to-end} ---
+Aer/Braket/Qibo(local sim) need no credentials; IBM/IQM/Quantinuum
+verified against bundled fake / offline backends.
+\texttt{opts\ =\ ExecutionOptions(shots=4096)} shared by all.
 
 \begin{columns}[T]
 \begin{column}{0.33\textwidth}
@@ -1177,11 +1177,17 @@ Needs an S3 result location.
 \end{column}
 \end{columns}
 
-All three implement \texttt{TranspilableBackend}. Two real SDK
-migrations found while verifying: \texttt{qiskit-iqm} standalone is
-obsolete (\texttt{iqm-client{[}qiskit{]}} replaces it); IBM's old
-\texttt{channel="ibm\_quantum"} is gone
-(\texttt{"ibm\_quantum\_platform"} replaces it). \normalsize
+\textbf{Plus two more, same contract:} \textbf{Quantinuum} H-Series
+(trapped-ion) via \texttt{pytket-quantinuum} ---
+\texttt{QuantinuumAdapter("H2-1")}; \textbf{Qibo} --- one
+\texttt{QiboAdapter} spanning local simulator, self-hosted
+\textbf{Qibolab} hardware, and \textbf{Qibo cloud}
+(\texttt{execution="local"\textbar{}"qibolab"\textbar{}"cloud"}).
+
+IBM/IQM/Braket/Quantinuum implement \texttt{TranspilableBackend}; Qibo
+transpiles internally. Verified: \texttt{qiskit-iqm} standalone obsolete
+→ \texttt{iqm-client{[}qiskit{]}}; IBM \texttt{channel="ibm\_quantum"} →
+\texttt{"ibm\_quantum\_platform"}. \normalsize
 \end{frame}
 
 \begin{frame}[fragile]{IBM Quantum Advantage Tracker}
@@ -1360,6 +1366,8 @@ Same \texttt{ResultStore} protocol as \texttt{NDJSONStore}:
 \begin{frame}[fragile]{Integration Ecosystem ---
 \texttt{BackendAdapter}}
 \phantomsection\label{integration-ecosystem-backendadapter}
+\footnotesize
+
 Schema modules are named
 \texttt{\textless{}org\textgreater{}\_\textless{}package\textgreater{}.py}
 --- one glance tells you who maintains it and what it's called.
@@ -1381,9 +1389,13 @@ ORCA/Xanadu/DTU backends) & \texttt{mqsdk\_photoq} \\
 QESEM (Qedma) & \texttt{qedma\_qesem} \\
 Bloqade / Aquila & \texttt{quera\_bloqade} \\
 IQM Resonance (garnet · deneb · sirius) & --- \\
+Quantinuum H-Series (H2-1 · H2-1E · H2-1SC) & --- \\
+Qibo (simulator · Qibolab · cloud) & --- \\
 Quantum Motion CMOS spin-qubit & \texttt{quantum\_motion\_hardware} \\
 \bottomrule\noalign{}
 \end{longtable}
+
+\normalsize
 \end{frame}
 
 \begin{frame}[fragile]{Integration Ecosystem ---
