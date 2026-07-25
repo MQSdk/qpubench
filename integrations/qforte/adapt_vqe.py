@@ -20,6 +20,15 @@ from qpubench.schemas.record import BenchmarkRecord
 from qpubench.schemas.result import AdaptIteration
 from qpubench import BenchmarkRunner
 
+# QForte algorithm name → package-agnostic family. UCCNVQE is a fixed-ansatz
+# VQE (UCC is the ansatz choice); UCCNPQE/SPQE are projective eigensolvers.
+_QFORTE_FAMILY = {
+    "ADAPTVQE": AlgorithmFamily.ADAPT_VQE,
+    "UCCNVQE":  AlgorithmFamily.VQE,
+    "UCCNPQE":  AlgorithmFamily.UCC_PQE,
+    "SPQE":     AlgorithmFamily.SPQE,
+}
+
 
 
 # ---------------------------------------------------------------------------
@@ -187,7 +196,7 @@ class AdaptVQERunner:
         alg_specs = [
             AlgorithmSpec(
                 name=name,
-                family=AlgorithmFamily.ADAPT_VQE if name == "ADAPTVQE" else AlgorithmFamily.UCC_VQE,
+                family=_QFORTE_FAMILY.get(name, AlgorithmFamily.VQE),
             )
             for name in _names
         ]

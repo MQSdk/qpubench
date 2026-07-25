@@ -2,7 +2,7 @@
 
 [![Python ≥ 3.11](https://img.shields.io/badge/python-≥3.11-blue)](https://python.org)
 [![License: LGPL v3](https://img.shields.io/badge/License-LGPL_v3-green)](LICENSE)
-[![Schema v4.1.0](https://img.shields.io/badge/schema-v4.1.0-orange)](docs/schemas.md)
+[![Schema v4.2.0](https://img.shields.io/badge/schema-v4.2.0-orange)](docs/schemas.md)
 
 **QPUBench is a framework for running quantum benchmarks and recording every
 result in one common format, so runs from different SDKs, machines, and even
@@ -99,6 +99,55 @@ record = runner.run(circuit, "aer", shots=4096)   # <ZZ> ≈ 1.0 for a Bell stat
 That is the whole loop: describe → run → record. Everything else — VQE,
 sweeps across backends, real hardware, other paradigms — is the same loop
 with different pieces. Continue with the [user guide](docs/index.md).
+
+## Plain VQE in a dozen lines
+
+Plain VQE is *not* a special object or an algorithm adapter — it is exactly
+that same describe → run → record loop wrapped in a classical optimizer. You
+keep one unbound parametrized ansatz (with its Hamiltonian attached as an
+observable), and each energy evaluation binds the current parameters into a
+copy and runs it as an ordinary circuit. Here a one-qubit `Ry(θ)` ansatz is
+driven to the ground state of `H = Z` (minimum ⟨Z⟩ = −1 at θ = π):
+
+```python
+import numpy as np
+from scipy.optimize import minimize
+from qpubench import (
+    BenchmarkRunner, CircuitSpec, VQAConfig,
+    SparsePauliObservable, PauliTerm, PauliLabel, ComplexNumber,
+)
+from qpubench.backends import AerAdapter        # pip install "qpubench[qiskit]"
+from qpubench.schemas.primitives import CircuitFormat
+
+ansatz = CircuitSpec(                            # the unbound master copy — reused every step
+    num_qubits=1,
+    format=CircuitFormat.QASM3,
+    serialized='OPENQASM 3.0; include "stdgates.inc"; input float[64] theta; qubit[1] q; ry(theta) q[0];',
+    parameters=["theta"],
+    observables=[SparsePauliObservable(num_qubits=1, terms=[   # H = Z, the thing we minimize
+        PauliTerm(qubit_indices=(0,), pauli_ops=(PauliLabel.Z,),
+                  coefficient=ComplexNumber(re=1.0))])],
+)
+
+runner = BenchmarkRunner()
+runner.register(AerAdapter(), name="aer")        # swap for hardware here — nothing else changes
+
+def energy(theta: np.ndarray) -> float:
+    bound = ansatz.bind({"theta": float(theta[0])})   # .bind() never mutates the master
+    # VQAConfig only *labels* the run for the record; it sets no parameters.
+    record = runner.run(bound, "aer",
+        vqa=VQAConfig(problem_type="chemistry", ansatz="ry", optimizer="COBYLA"))
+    return record.result.expectation_values[0].value
+
+res = minimize(energy, x0=[0.1], method="COBYLA")
+print(f"ground-state energy ≈ {res.fun:.4f}")   # → -1.0000
+```
+
+qpubench ships no optimizer of its own — the loop is a few lines and any
+optimizer works. Every evaluation is persisted as a full `BenchmarkRecord`, so
+the stored history *is* the convergence trace. The full guide (real chemistry
+Hamiltonians, QAOA, the interchangeable ADAPT-VQE engines) is in
+[VQA algorithms](docs/vqa.md).
 
 ## How it works
 

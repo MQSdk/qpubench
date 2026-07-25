@@ -96,22 +96,32 @@ class AlgorithmFamily(str, enum.Enum):
     AlgorithmSpec.name stays the library-specific label; family is what
     lets a caller compare runs of "the same algorithm" across adapters.
 
-    Current real cross-adapter coverage (as of schema v2.7.0): only
+    A family is a broad *strategy*, not a specific ansatz or optimizer. So
+    fixed-ansatz VQE is one family (VQE) whether the ansatz is UCC-type
+    (QForte's UCCNVQE) or something else, and whether the parameters are
+    optimized by BFGS or by ExcitationSolve's Fourier-series sweep — those
+    are choices *under* VQE (recorded in VQAConfig.ansatz / .optimizer and
+    the family's run-config), not families of their own. Likewise the same
+    Fourier-series optimizer used to fit an adaptively-grown ansatz is a
+    choice under ADAPT_VQE.
+
+    Current real cross-adapter coverage (as of schema v4.2.0): only
     ADAPT_VQE has more than one implementation actually registered as an
     AlgorithmAdapter (evangelistalab_qforte, ibm_qiskit_adapt_vqe,
-    microsoft_qdk_adapt_vqe — all sharing execution.AdaptVQERunConfig). Every
-    other value below has exactly one implementing module today; the
+    microsoft_qdk_adapt_vqe — all sharing execution.AdaptVQERunConfig). Most
+    other values below have exactly one implementing module today; the
     family tag still exists so a second implementation has something to
     converge on, rather than each package inventing its own ad hoc label.
     QPE is schema/metadata only (microsoft_qdk.QPEConfig, part of the QDK
     chemistry pipeline record) — no AlgorithmAdapter runs it yet.
     """
     ADAPT_VQE         = "adapt_vqe"          # adaptive derivative-assembled pseudo-Trotterized VQE
-    UCC_VQE           = "ucc_vqe"            # disentangled / fixed-pool UCC VQE
+    VQE               = "vqe"                # fixed-ansatz VQE — UCC-type ansätze (QForte's
+                                             #   UCCNVQE) and the ExcitationSolve optimizer are
+                                             #   choices under this, not separate families
     UCC_PQE           = "ucc_pqe"            # UCC projective quantum eigensolver
     SPQE              = "spqe"               # selected projective quantum eigensolver
     QAOA              = "qaoa"               # quantum approximate optimization algorithm
-    EXCITATION_SOLVE  = "excitation_solve"   # Fourier-series VQE parameter optimizer
     TN_QC_OPT         = "tn_qc_opt"          # tensor-network + circuit hybrid VQE (Cebule)
     GA_CIRCUIT_SEARCH = "ga_circuit_search"  # evolutionary circuit search (Xenakis)
     QPE               = "qpe"                # quantum phase estimation (iterative or textbook)

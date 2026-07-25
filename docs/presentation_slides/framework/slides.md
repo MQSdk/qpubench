@@ -31,7 +31,7 @@ header-includes:
 
 | Layer | Answers | Lives in |
 |---|---|---|
-| **Schema** | *What* are you benchmarking? | `schemas/` — 37 Pydantic v2 modules (= "Schema v4.1.0") |
+| **Schema** | *What* are you benchmarking? | `schemas/` — 37 Pydantic v2 modules (= "Schema v4.2.0") |
 | **Adapter** | *How* does it run? | `backends/` + `integrations/` (next slide) |
 | **Store** | *How* is it persisted? | `store.py` — `NDJSONStore`, `ParquetStore`, `S3Store` |
 \normalsize
@@ -993,7 +993,7 @@ Every push to `main` and every PR runs the full gate set in CI (`.github/workflo
 
 **Repository**: `github.com/mqsdk/qpubench`
 
-**Schema v4.1.0** — 37 modules · 7 computing models × 5 qubit modalities · zero quantum SDK deps in core
+**Schema v4.2.0** — 37 modules · 7 computing models × 5 qubit modalities · zero quantum SDK deps in core
 
 \vspace{0.5em}
 

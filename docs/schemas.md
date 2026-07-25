@@ -108,7 +108,7 @@ The **Group** column matches the thematic groups used in the README's schema ove
 |---|---|
 | `ComputingModel` | `GATE_BASED` · `MBQC` · `FUSION_BASED` · `ADIABATIC` · `ANNEALING` · `GBS` · `SAMPLING` |
 | `QubitModality` | `SUPERCONDUCTING` · `TRAPPED_ION` · `NEUTRAL_ATOM` · `PHOTONIC` · `SILICON_SPIN` |
-| `AlgorithmFamily` | `ADAPT_VQE` · `UCC_VQE` · `UCC_PQE` · `SPQE` · `EXCITATION_SOLVE` · `TN_QC_OPT` · `GA_CIRCUIT_SEARCH` · `QPE` — package-agnostic algorithm identity, orthogonal to `ComputingModel` |
+| `AlgorithmFamily` | `ADAPT_VQE` · `VQE` · `UCC_PQE` · `SPQE` · `QAOA` · `TN_QC_OPT` · `GA_CIRCUIT_SEARCH` · `QPE` — package-agnostic algorithm identity, orthogonal to `ComputingModel`. A family is a broad *strategy*: UCC-type ansätze and the ExcitationSolve optimizer are choices under `VQE`, not families of their own |
 | `CircuitFormat` | `QASM2` · `QASM3` · `QGC` · `MEASUREMENT_PATTERN` · `JSON` · `MOLECULE_JSON` · `FOCK_STATE_CIRCUIT` · `LINEAR_OPTICS_UNITARY` · `QMOD` |
 | `PauliLabel` | `I` · `X` · `Y` · `Z` |
 | `ErrorMitigationStrategy` | `NONE` · `DD` · `TREX` · `ZNE` · `PEC` · `QESEM` · `FIRE_OPAL` · `MITIQ_ZNE` · `MITIQ_PEC` · `MITIQ_CDR` · `MITIQ_REM` · `MITIQ_DDD` · `HAIQU` · `PARITY_QC` · `QMATTER` |
@@ -121,7 +121,7 @@ The **Group** column matches the thematic groups used in the README's schema ove
 > a stable comparison key across the whole framework it needs: clearer
 > criteria for what earns a member, coverage for sampling/annealing/photonic
 > paradigms, and a decision on whether single-implementation families
-> (`TN_QC_OPT`, `GA_CIRCUIT_SEARCH`, `EXCITATION_SOLVE`, `QPE`) stay here or
+> (`TN_QC_OPT`, `GA_CIRCUIT_SEARCH`, `QPE`) stay here or
 > move next to their owning module. Treat the enum as provisional.
 
 > **`CircuitFormat` is a serialization format, not an algorithm.** There is no
@@ -330,9 +330,9 @@ adapters accept the same shared config for it. Today:
 | `AlgorithmFamily` | Implementations | Shared config |
 |---|---|---|
 | `ADAPT_VQE` | 3 — `evangelistalab_qforte`, `ibm_qiskit_adapt_vqe`, `microsoft_qdk_adapt_vqe` | `AdaptVQERunConfig` (below) — the only family with a real "switch the adapter, keep the config" story today |
-| `UCC_VQE` / `UCC_PQE` / `SPQE` | 1 — `evangelistalab_qforte` only | `QForteAlgorithmConfig` |
+| `VQE` | 1 real adapter — `evangelistalab_qforte` (UCCNVQE, a UCC ansatz choice); the `dlr_excitation_solve` Fourier-series optimizer is also a choice under this family | per-adapter (`QForteAlgorithmConfig`, `ExcitationSolveConfig`) — no single shared config yet |
+| `UCC_PQE` / `SPQE` | 1 — `evangelistalab_qforte` only | `QForteAlgorithmConfig` |
 | `QAOA` | 0 — no `AlgorithmAdapter` yet; runs as a plain optimization loop (like vanilla VQE, see [`vqa`](vqa.md#running-qaoa)) | `QAOARunConfig` (below) — the package-agnostic contract an adapter or loop reads |
-| `EXCITATION_SOLVE` | 1 — `dlr_excitation_solve` only | `ExcitationSolveConfig` |
 | `TN_QC_OPT` | 1 — `mqsdk_cebule` only | `TNQCOptInput` |
 | `GA_CIRCUIT_SEARCH` | 1 — `mqsdk_xenakis` only | `GAConfig`/`GenomeConfig` |
 | `QPE` | 0 — schema/metadata only, no `AlgorithmAdapter` | `microsoft_qdk.QPEConfig`, a field of the QDK chemistry pipeline record, never dispatched through `BenchmarkRunner` |

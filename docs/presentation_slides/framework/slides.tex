@@ -187,7 +187,7 @@ Lives in
 \midrule\noalign{}
 \endhead
 \textbf{Schema} & \emph{What} are you benchmarking? & \texttt{schemas/}
---- 37 Pydantic v2 modules (= ``Schema v4.0.0'') \\
+--- 37 Pydantic v2 modules (= ``Schema v4.2.0'') \\
 \textbf{Adapter} & \emph{How} does it run? & \texttt{backends/} +
 \texttt{integrations/} (next slide) \\
 \textbf{Store} & \emph{How} is it persisted? & \texttt{store.py} ---
@@ -369,6 +369,38 @@ reference docs (\texttt{docs/schemas.md}) are for; these slides just
 mirror the module list so it's not a total blank spot. \normalsize
 \end{frame}
 
+\begin{frame}[fragile]{The three module groups}
+\phantomsection\label{the-three-module-groups}
+The schema library splits into \textbf{three groups} (same split as
+\texttt{docs/schemas.md}):
+
+\begin{enumerate}
+\tightlist
+\item
+  \textbf{Core record format} --- the unprefixed modules defining the
+  types every benchmark shares: \texttt{primitives} · \texttt{circuit} ·
+  \texttt{observable} · \texttt{backend} · \texttt{execution} ·
+  \texttt{result} · \texttt{record}.
+\item
+  \textbf{Cross-cutting catalogues \& registries} --- unprefixed modules
+  that aggregate \emph{multiple} external sources or define
+  framework-own catalogues: \texttt{advantage} (IBM Quantum Advantage
+  Tracker) · \texttt{optimizer\_catalog} · \texttt{hamiltonian\_library}
+  · \texttt{basis\_sets} · \texttt{contraction\_path} ·
+  \texttt{reactions} · \texttt{polarizable\_embedding}.
+\item
+  \textbf{Project mirrors} --- one module per external project, named
+  \texttt{\textless{}org\_or\_maintainer\textgreater{}\_\textless{}package\textgreater{}.py}
+  so the filename alone names the upstream source.
+\end{enumerate}
+
+\vspace{0.3em}
+
+Two orthogonal axes --- \textbf{computing model} (paradigm) and
+\textbf{qubit modality} (QPU) --- are stamped on every circuit, backend,
+and result, independently of the group.
+\end{frame}
+
 \begin{frame}[fragile]{Core Schema Modules (1/3)}
 \phantomsection\label{core-schema-modules-13}
 All rows are computing-model/qubit-modality \textbf{all / all} --- these
@@ -437,8 +469,8 @@ Key types
 \midrule\noalign{}
 \endhead
 \texttt{optimizer\_catalog} & \texttt{MINIMIZER\_CATALOG},
-\texttt{STOPPING\_CRITERION\_CATALOG} --- over \texttt{AdaptVQERunConfig}
-fields \\
+\texttt{STOPPING\_CRITERION\_CATALOG} --- over
+\texttt{AdaptVQERunConfig} fields \\
 \texttt{hamiltonian\_library} & \texttt{HamiltonianSource},
 \texttt{HamiltonianLibraryRecord} --- metadata for real Hamiltonians
 (PennyLane qchem, HamLib, ab initio) \\
@@ -473,8 +505,8 @@ Computing model (qubit modality)
 \texttt{johnrscott\_mbqc\_fpga} & MBQC-FPGA --- bit-exact 16-bit program
 word \\
 \texttt{mqsdk\_photoq} & Photonic LOQC/FBQC + GBS --- Fock states, HOM,
-photonic VQE/analog, hafnian, TDM/Borealis, pseudo-PNRD
-methods, ORCA/QCloud/Aurora backends \\
+photonic VQE/analog, hafnian, TDM/Borealis, pseudo-PNRD methods,
+ORCA/QCloud/Aurora backends \\
 \texttt{microsoft\_qdk} & Gate-based (QPE technique) --- SCF → active
 space → resource estimation \\
 \texttt{mqsdk\_qse} & Gate-based (KQD technique) --- Krylov Quantum
@@ -936,7 +968,7 @@ at module level.
 \begin{Highlighting}[]
 \KeywordTok{def}\NormalTok{ run\_algorithm(}\VariableTok{self}\NormalTok{, circuit, options):}
     \ImportTok{import}\NormalTok{ qforte }\ImportTok{as}\NormalTok{ qf    }\CommentTok{\# deferred import}
-\NormalTok{    cfg }\OperatorTok{=}\NormalTok{ options.adapt\_vqe\_config}
+\NormalTok{    cfg }\OperatorTok{=}\NormalTok{ options.adapt\_vqe\_run\_config}
 \NormalTok{    mol }\OperatorTok{=}\NormalTok{ qf.system\_factory(...)}
 \NormalTok{    alg }\OperatorTok{=}\NormalTok{ qf.ADAPTVQE(mol, ...)}
 \NormalTok{    alg.run(pool\_type}\OperatorTok{=}\NormalTok{cfg.pool\_type,}
@@ -970,7 +1002,7 @@ adapter for that family accepts:
 \NormalTok{config }\OperatorTok{=}\NormalTok{ AdaptVQERunConfig(pool\_type}\OperatorTok{=}\StringTok{"SD"}\NormalTok{, optimizer}\OperatorTok{=}\StringTok{"BFGS"}\NormalTok{)}
 \NormalTok{opts }\OperatorTok{=}\NormalTok{ ExecutionOptions(algorithm\_spec}\OperatorTok{=}\NormalTok{AlgorithmSpec(}
 \NormalTok{    name}\OperatorTok{=}\StringTok{"ADAPTVQE"}\NormalTok{, family}\OperatorTok{=}\NormalTok{AlgorithmFamily.ADAPT\_VQE),}
-\NormalTok{    adapt\_vqe\_config}\OperatorTok{=}\NormalTok{config)}
+\NormalTok{    adapt\_vqe\_run\_config}\OperatorTok{=}\NormalTok{config)}
 
 \NormalTok{runner.run(mol, }\StringTok{"qforte"}\NormalTok{, opts)                  }\CommentTok{\# native C++}
 \NormalTok{runner.run(mol, }\StringTok{"ibm\_qiskit\_adapt\_vqe"}\NormalTok{, opts)     }\CommentTok{\# from{-}scratch Qiskit}
@@ -1785,7 +1817,7 @@ CI if the schema version or module count drifts between code and docs \\
 \phantomsection\label{roadmap-links}
 \textbf{Repository}: \texttt{github.com/mqsdk/qpubench}
 
-\textbf{Schema v4.0.0} --- 37 modules · 7 computing models × 5 qubit
+\textbf{Schema v4.2.0} --- 37 modules · 7 computing models × 5 qubit
 modalities · zero quantum SDK deps in core
 
 \vspace{0.5em}
@@ -1800,7 +1832,7 @@ lines:
 \end{Highlighting}
 \end{Shaded}
 
-See \texttt{INTEGRATION\_GUIDE.md} and \texttt{AGENTS.md} for the full
+See \texttt{docs/backends.md} and \texttt{AGENTS.md} for the full
 development workflow.
 
 \vspace{0.5em}

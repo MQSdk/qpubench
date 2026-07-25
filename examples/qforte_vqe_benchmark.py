@@ -91,12 +91,12 @@ from integrations.qforte.adapter import QForteAlgorithmAdapter
 
 ALGORITHMS: list[tuple[AlgorithmSpec, AdaptVQERunConfig]] = [
     (
-        AlgorithmSpec(name="UCCNVQE", family=AlgorithmFamily.UCC_VQE),
+        AlgorithmSpec(name="UCCNVQE", family=AlgorithmFamily.VQE),
         AdaptVQERunConfig(pool_type="SD", optimizer="BFGS", use_analytic_gradient=True,
                        energy_threshold=1.0e-5),
     ),
     (
-        AlgorithmSpec(name="UCCNVQE", family=AlgorithmFamily.UCC_VQE),
+        AlgorithmSpec(name="UCCNVQE", family=AlgorithmFamily.VQE),
         AdaptVQERunConfig(pool_type="SD", optimizer="jacobi", use_analytic_gradient=True,
                        energy_threshold=1.0e-5),
     ),

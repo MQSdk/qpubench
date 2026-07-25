@@ -333,7 +333,7 @@ These register with the same runner as the backends above, but take a problem sp
 
 | Library | Adapter | Algorithms (`AlgorithmFamily`) | Location |
 |---|---|---|---|
-| QForte (internal eval) | `QForteAlgorithmAdapter` | `ADAPT_VQE`, `UCC_VQE` (UCCNVQE), `UCC_PQE`, `SPQE` | `integrations/qforte/adapter.py` |
+| QForte (internal eval) | `QForteAlgorithmAdapter` | `ADAPT_VQE`, `VQE` (UCCNVQE), `UCC_PQE`, `SPQE` | `integrations/qforte/adapter.py` |
 | QForte (external backend) | `ExternalEvalAlgorithmAdapter` | Same, with any `BackendAdapter` as the energy oracle | `integrations/qforte/adapter.py` |
 | Generic engine, Qiskit-flavored | `IBMQiskitAdaptVQEAdapter` | `ADAPT_VQE` | `integrations/ibm_qiskit_adapt_vqe/` |
 | Generic engine, QDK/Azure-flavored | `MicrosoftQDKAdaptVQEAdapter` | `ADAPT_VQE` | `integrations/microsoft_qdk_adapt_vqe/` |

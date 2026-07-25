@@ -40,15 +40,25 @@ consumer mirrors the same split used for backends and error mitigation.
 comparison. Set it, and records from different implementing adapters converge
 on one label you can group by in the store.
 
-It only pays off once **two or more** adapters accept the same shared config
-for a family. Today that is true for exactly one family:
+A family names a broad *strategy*, deliberately coarser than a specific ansatz
+or optimizer. Fixed-ansatz VQE is a single family, `VQE`, whether the ansatz is
+UCC-type (QForte's `UCCNVQE`) or hardware-efficient, and whether the parameters
+are fit by BFGS or by ExcitationSolve's Fourier-series sweep — those are choices
+*under* `VQE`, carried in `VQAConfig.ansatz` / `.optimizer` and the run-config,
+not families of their own. (The same Fourier-series optimizer is likewise a
+choice under `ADAPT_VQE` when it fits an adaptively-grown ansatz.) Keeping the
+granularity at the strategy level is what lets a UCC-VQE run and a
+hardware-efficient-VQE run land on one comparable label.
+
+Comparability across engines only pays off once **two or more** adapters accept
+the same shared config for a family. Today that is true for exactly one family:
 
 | `AlgorithmFamily` | Implementing adapters | Shared config |
 |---|---|---|
 | `ADAPT_VQE` | `evangelistalab_qforte`, `ibm_qiskit_adapt_vqe`, `microsoft_qdk_adapt_vqe` | `AdaptVQERunConfig` |
-| `UCC_VQE` / `UCC_PQE` / `SPQE` | `evangelistalab_qforte` only | `QForteAlgorithmConfig` |
+| `VQE` | `evangelistalab_qforte` (UCCNVQE — a UCC ansatz choice); the `dlr_excitation_solve` Fourier-series optimizer also runs under this family | per-adapter (`QForteAlgorithmConfig`, `ExcitationSolveConfig`) |
+| `UCC_PQE` / `SPQE` | `evangelistalab_qforte` only | `QForteAlgorithmConfig` |
 | `QAOA` | none yet (runs as a plain optimization loop, like vanilla VQE) | `QAOARunConfig` |
-| `EXCITATION_SOLVE` | `dlr_excitation_solve` only | `ExcitationSolveConfig` |
 | `TN_QC_OPT` | `mqsdk_cebule` only | `TNQCOptInput` |
 | `GA_CIRCUIT_SEARCH` | `mqsdk_xenakis` only | `GAConfig` / `GenomeConfig` |
 | `QPE` | none (schema/metadata only) | `microsoft_qdk.QPEConfig` |

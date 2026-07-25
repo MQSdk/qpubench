@@ -6,7 +6,7 @@ Variational quantum algorithms (VQAs) find the lowest eigenvalue of a Hamiltonia
 
 | Algorithm | `AlgorithmFamily` | Ansatz | What varies |
 |---|---|---|---|
-| **VQE** | none needed (UCC-type ansätze: `UCC_VQE`) | Fixed, chosen up front (e.g. UCCSD) | Only the parameters are optimized |
+| **VQE** | `VQE` (UCC-type ansätze and the ExcitationSolve optimizer are choices *under* it; a hand-rolled circuit-loop run needs no tag) | Fixed, chosen up front (e.g. UCCSD) | Only the parameters are optimized |
 | **QAOA** | `QAOA` | Fixed: p alternating cost/mixer layers | Only the 2·p angles (γ, β) are optimized, over a combinatorial cost Hamiltonian |
 | **ADAPT-VQE** | `ADAPT_VQE` | Grown one operator at a time | The ansatz *structure* adapts to the problem, then parameters are optimized |
 | UCC-PQE / SPQE | `UCC_PQE` / `SPQE` | Fixed / adaptive | Projective (residual) equations instead of energy minimization |
@@ -16,13 +16,13 @@ The distinction that matters for benchmarking: in plain VQE the ansatz circuit i
 - **Plain VQE is not an adapter of any kind.** It is a classical optimization loop that *uses* a `BackendAdapter`: each energy evaluation binds the current parameters into the ansatz and runs it as an ordinary circuit. The backend — simulator or hardware — is whatever adapter you registered; the optimizer and the loop live in your code (see the next section).
 - **ADAPT-VQE implementations are `AlgorithmAdapter`s**: the library receives a problem specification (a molecule), generates circuits internally, and drives its own loop; qpubench records the outcome.
 
-See [Backends & adapters](backends.md) for the two protocols. `AlgorithmFamily` tags exist for the library-driven algorithms so that runs of "the same algorithm" from different libraries can be compared; a plain VQE run needs no family tag, since it is fully described by its circuit, observable, and `VQAConfig` metadata.
+See [Backends & adapters](backends.md) for the two protocols. `AlgorithmFamily` tags exist for the library-driven algorithms so that runs of "the same algorithm" from different libraries can be compared — including `VQE` for a library-driven fixed-ansatz VQE such as QForte's `UCCNVQE` (there UCC is the *ansatz* choice, not a family of its own). A plain, hand-rolled VQE loop needs no family tag, since it is fully described by its circuit, observable, and `VQAConfig` metadata — though you may set `family=VQE` on it if you want it to group with library-driven VQE runs in the store.
 
 ## Running plain VQE
 
 A VQE run needs four ingredients, and qpubench keeps them separate:
 
-1. **A parametrized ansatz** — a `CircuitSpec` with named `parameters` and the Hamiltonian attached as `observables`. Keep this *unbound*: it is the reusable master copy.
+1. **A parametrized ansatz, with its Hamiltonian** — a `CircuitSpec` with named `parameters` and the Hamiltonian attached as `observables`. The two are conceptually distinct (the ansatz prepares the state; the Hamiltonian is the observable whose energy you measure), but they travel together on one `CircuitSpec`. Keep this *unbound*: it is the reusable master copy.
 2. **A backend** — any registered `BackendAdapter` (Aer, PennyLane Lightning, IBM hardware, …). This is where "which machine runs it" is decided.
 3. **An initial guess** — a plain vector of starting parameter values, separate from the circuit.
 4. **A classical optimizer** — e.g. `scipy.optimize.minimize`. qpubench deliberately does not bundle one; the loop is a few lines and any optimizer works.
@@ -43,6 +43,10 @@ runner.register(AerAdapter(), name="aer")       # 2. the backend: swap for hardw
 
 def energy(theta: np.ndarray) -> float:
     bound = ansatz.bind({name: float(v) for name, v in zip(ansatz.parameters, theta)})
+    # VQAConfig only *labels* this run for the record — it records what was
+    # run (problem, molecule, ansatz/optimizer names) so records are
+    # filterable later. It sets no execution parameters: the actual values
+    # are the bound `theta` above, not anything here.
     record = runner.run(bound, "aer",
         vqa=VQAConfig(problem_type="chemistry", molecule="H2", basis="sto-3g",
                       ansatz="my_ansatz", optimizer="BFGS"))
@@ -54,7 +58,7 @@ res = minimize(energy, x0, method="BFGS")       # 4. the optimizer
 
 Two conventions to note. First, the input to a VQE workflow is the *parametrized* circuit plus a separate initial guess — you never store parameter values in your master ansatz; binding happens per evaluation, and the bound copy inside each `BenchmarkRecord` is what makes that record exactly reproducible later. Second, changing where the energies are evaluated — statevector simulator, shot-based sampling, real hardware — means re-registering a different adapter and changing the backend name in `runner.run()`; nothing about the ansatz, guess, or optimizer changes.
 
-For building the Hamiltonian to attach as `ansatz.observables`, see [Examples — Real Hamiltonian sources](../examples/README.md#real-hamiltonian-sources). For UCC-specific VQE where a library drives the loop for you (a full chemistry stack behind it), see the SlowQuant integration (`integrations/slowquant/`, an `AlgorithmAdapter` for `AlgorithmFamily.UCC_VQE`-family runs).
+For building the Hamiltonian to attach as `ansatz.observables`, see [Examples — Real Hamiltonian sources](../examples/README.md#real-hamiltonian-sources). For UCC-specific VQE where a library drives the loop for you (a full chemistry stack behind it), see the SlowQuant integration (`integrations/slowquant/`, an `AlgorithmAdapter` for `AlgorithmFamily.VQE`-family runs with a UCC ansatz).
 
 ## Running QAOA
 
@@ -92,7 +96,7 @@ best_cut = (len(edges) - res.fun) / 2                  # read the cut off the ob
 
 Everything else is identical to plain VQE: each evaluation binds the current angles into a fresh circuit, runs it as an ordinary `CircuitSpec`, and is persisted as a full `BenchmarkRecord`, so the stored history *is* the QAOA convergence trace. Swapping simulator for shot-based sampling or real hardware means re-registering a different adapter and setting `shots=...`, nothing more. A complete, genuinely-executing version (graph definition, `qaoa_maxcut_qasm`, brute-force cross-check, approximation ratio) is in `examples/guides/qaoa_maxcut.py`.
 
-## The package-agnostic contract (library-driven algorithms)
+## The package-agnostic ADAPT-VQE contract (library-driven runs)
 
 An ADAPT-VQE run is described by two objects, neither tied to any vendor SDK:
 
