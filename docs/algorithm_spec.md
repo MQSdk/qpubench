@@ -56,25 +56,26 @@ the same shared config for a family. Today that is true for exactly one family:
 | `AlgorithmFamily` | Implementing adapters | Shared config |
 |---|---|---|
 | `ADAPT_VQE` | `evangelistalab_qforte`, `ibm_qiskit_adapt_vqe`, `microsoft_qdk_adapt_vqe` | `AdaptVQERunConfig` |
-| `VQE` | `evangelistalab_qforte` (UCCNVQE — a UCC ansatz choice); the `dlr_excitation_solve` Fourier-series optimizer also runs under this family | per-adapter (`QForteAlgorithmConfig`, `ExcitationSolveConfig`) |
+| `VQE` | `evangelistalab_qforte` (UCCNVQE — a UCC ansatz choice); the `dlr_excitation_solve` Fourier-series optimizer also runs under this family | `VQERunConfig` (per-adapter extras still in `QForteAlgorithmConfig` / `ExcitationSolveConfig`) |
 | `UCC_PQE` / `SPQE` | `evangelistalab_qforte` only | `QForteAlgorithmConfig` |
-| `QAOA` | none yet (runs as a plain optimization loop, like vanilla VQE) | `QAOARunConfig` |
+| `QAOA` | none yet (runs as a plain optimization loop) | `QAOARunConfig` |
 | `TN_QC_OPT` | `mqsdk_cebule` only | `TNQCOptInput` |
 | `GA_CIRCUIT_SEARCH` | `mqsdk_xenakis` only | `GAConfig` / `GenomeConfig` |
 | `QPE` | none (schema/metadata only) | `microsoft_qdk.QPEConfig` |
 
 The single-implementation families still carry a `family` tag — not because a
 comparison is possible today, but so a *second* implementation has a name to
-converge on instead of inventing its own ad-hoc label. `QAOA` is the same case
-as vanilla VQE: no `AlgorithmAdapter` drives it — you run the fixed cost/mixer
-ansatz through any backend in a plain optimization loop (see
-[Variational quantum algorithms](vqa.md#running-qaoa)) — but its runtime
-hyperparameter contract, `QAOARunConfig`, already exists so a future QAOA
-adapter has one shared config to accept.
+converge on instead of inventing its own ad-hoc label. The same goes for a
+family's shared config: `VQE` and `QAOA` each own one (`VQERunConfig`,
+`QAOARunConfig`) so an implementation has a contract to accept, even though
+neither is yet accepted by two adapters the way `AdaptVQERunConfig` is. `QAOA`
+has no `AlgorithmAdapter` at all today — you run the fixed cost/mixer ansatz
+through any backend in a plain optimization loop (see
+[Variational quantum algorithms](vqa.md#running-qaoa)).
 
 ---
 
-## `VQAConfig` vs. `AdaptVQERunConfig` — two objects, two jobs
+## `VQAConfig` & `RunConfig`
 
 `VQAConfig` is the single config that describes a variational run (VQE,
 ADAPT-VQE, or QAOA). A natural question is *why isn't the ADAPT-VQE
@@ -109,6 +110,34 @@ different objects, at different layers, and answer different questions:
   `ExecutionOptions`, next to `ZNEConfig`/`TranspilerConfig`, because that is
   the "how to execute" layer.
 
+### The `*RunConfig` objects
+
+Each variational family owns one package-agnostic runtime contract, keyed by
+`AlgorithmFamily` and set on the matching `ExecutionOptions` field. All three
+live in [`execution`](schemas.md#execution):
+
+| Config | Set on | `AlgorithmFamily` | Implementations today | Key fields |
+|---|---|---|---|---|
+| `VQERunConfig` | `ExecutionOptions.vqe_run_config` | `VQE` | 1 — `evangelistalab_qforte` (UCCNVQE); `dlr_excitation_solve` is an optimizer choice under the same family | `ansatz`, `layers`, `optimizer`, `max_iterations`, `energy_threshold`, `initialization`, `initial_parameters`, `init_scale`, `use_analytic_gradient` |
+| `AdaptVQERunConfig` | `ExecutionOptions.adapt_vqe_run_config` | `ADAPT_VQE` | 3 — `evangelistalab_qforte`, `ibm_qiskit_adapt_vqe`, `microsoft_qdk_adapt_vqe`, all accepting it unchanged | `pool_type`, `optimizer`, `gradient_threshold`, `energy_threshold`, `max_macro_iterations`, `max_micro_iterations`, `use_analytic_gradient` |
+| `QAOARunConfig` | `ExecutionOptions.qaoa_run_config` | `QAOA` | 0 — no adapter yet; a plain optimization loop reads it (see [Running QAOA](vqa.md#running-qaoa)) | `reps` (p), `mixer`, `optimizer`, `max_iterations`, `initialization`, `alpha_cvar` |
+
+The three are independent fields, not alternatives: nothing stops a caller
+populating several, and only the one `algorithm_spec.family` names is read.
+
+`VQERunConfig` is the fixed-ansatz case — the ansatz is chosen up front and
+never grows, so there is no operator pool and no gradient-driven macro loop.
+That is the whole difference from `AdaptVQERunConfig`, and why `layers` (a
+depth) replaces `max_macro_iterations` (a growth budget). It carries no `seed`:
+`ExecutionOptions.seed` already governs the random draw when
+`initialization="random"`.
+
+> **Not to be confused with GSOpt.** `bestquark_gsopt` also has VQE-ish configs,
+> but they are *records* of how one benchmark run was parameterised, not
+> contracts — and GSOpt is a method-agnostic harness whose VQE lane sits
+> alongside TN, DMRG, AFQMC and Gibbs lanes, so each lane has its own
+> `GSOpt*RunConfig`. See [GSOpt](integrations/gsopt.md).
+
 **Why it is not folded into `VQAConfig`:**
 
 1. **Layer separation.** `VQAConfig` is record metadata with no execution
@@ -125,12 +154,12 @@ different objects, at different layers, and answer different questions:
    `QAOARunConfig` rather than onto `VQAConfig`.
 
 So `VQAConfig` **names** the experiment and a family's run-config **configures**
-the run: an ADAPT-VQE benchmark uses both (metadata in `VQAConfig`, adaptive
-knobs in `ExecutionOptions.adapt_vqe_run_config`), a QAOA benchmark likewise
-pairs `VQAConfig` with `ExecutionOptions.qaoa_run_config`, while a fixed-ansatz
-VQE uses `VQAConfig` alone (no extra knobs to set). Each energy evaluation is an
-ordinary `CircuitSpec` run through a `BackendAdapter`; the runner derives
-`VQAResult.final_eigenvalue` from the measured expectation values.
+the run, and every variational benchmark uses both: an ADAPT-VQE run pairs
+`VQAConfig` with `ExecutionOptions.adapt_vqe_run_config`, a QAOA run with
+`.qaoa_run_config`, a fixed-ansatz VQE run with `.vqe_run_config`. Each energy
+evaluation is an ordinary `CircuitSpec` run through a `BackendAdapter`; the
+runner derives `VQAResult.final_eigenvalue` from the measured expectation
+values.
 
 > `CircuitFormat` has no `VQE` member — VQE is an *algorithm*, not a way of
 > serializing a circuit. See the [`CircuitFormat` note](schemas.md#primitives).

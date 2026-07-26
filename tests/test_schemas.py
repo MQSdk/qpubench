@@ -1027,7 +1027,12 @@ def test_runner_register_and_run_shorthand_misuse():
 # AlgorithmSpec and algorithm-driven schemas
 # ---------------------------------------------------------------------------
 
-from qpubench.schemas.execution import AdaptVQERunConfig, AlgorithmSpec, QAOARunConfig
+from qpubench.schemas.execution import (
+    AdaptVQERunConfig,
+    AlgorithmSpec,
+    QAOARunConfig,
+    VQERunConfig,
+)
 from qpubench.schemas.result import AdaptIteration
 from qpubench.schemas.primitives import AlgorithmFamily
 
@@ -1111,6 +1116,44 @@ def test_vqa_config_names_qaoa_run():
                     optimizer="COBYLA")
     assert vqa.algorithm == "QAOA"
     assert vqa.problem_type == "optimization"
+
+
+def test_vqe_run_config_in_execution_options():
+    """Fixed-ansatz VQE has a package-agnostic contract of its own, on
+    ExecutionOptions.vqe_run_config next to the ADAPT and QAOA ones."""
+    opts = ExecutionOptions(
+        algorithm_spec=AlgorithmSpec(name="UCCNVQE", family=AlgorithmFamily.VQE),
+        vqe_run_config=VQERunConfig(
+            ansatz="EfficientSU2", layers=3, optimizer="COBYLA",
+            initialization="random", init_scale=0.05,
+        ),
+    )
+    assert opts.vqe_run_config is not None
+    assert opts.vqe_run_config.ansatz == "EfficientSU2"
+    assert opts.vqe_run_config.layers == 3
+    assert opts.algorithm_spec.family == AlgorithmFamily.VQE
+    restored = ExecutionOptions.model_validate_json(opts.model_dump_json())
+    assert restored.vqe_run_config.initialization == "random"
+    assert restored.vqe_run_config.init_scale == pytest.approx(0.05)
+
+
+def test_vqe_run_config_defaults():
+    cfg = VQERunConfig()
+    assert cfg.ansatz == "UCCSD"
+    assert cfg.layers == 1
+    assert cfg.optimizer == "BFGS"
+    assert cfg.initial_parameters == []
+    # no seed of its own — ExecutionOptions.seed governs the random draw
+    assert "seed" not in VQERunConfig.model_fields
+
+
+def test_run_configs_are_independent_fields():
+    """The three family contracts coexist on ExecutionOptions; setting one
+    leaves the others None rather than displacing them."""
+    opts = ExecutionOptions(vqe_run_config=VQERunConfig(ansatz="TwoLocal"))
+    assert opts.vqe_run_config is not None
+    assert opts.adapt_vqe_run_config is None
+    assert opts.qaoa_run_config is None
 
 
 def test_algorithm_spec_json_roundtrip():
@@ -3857,3 +3900,118 @@ def test_orbital_optimizer_simple_kappa_rotation_matches_newton():
     assert abs(result.final_energy - e_newton) < 1.0e-3
     assert result.kappa is not None
     assert len(result.kappa) == n_params
+
+
+# ---------------------------------------------------------------------------
+# GSOpt per-lane run configurations
+# ---------------------------------------------------------------------------
+
+from qpubench.schemas.bestquark_gsopt import (  # noqa: E402
+    GSOptAFQMCRunConfig,
+    GSOptBenchmarkResult,
+    GSOptGibbsRunConfig,
+    GSOptRunConfig,
+    GSOptTNRunConfig,
+    GSOptVQERunConfig,
+)
+
+_GSOPT_VQE_CONFIG = dict(
+    name="uccsd_2_BH", ansatz="uccsd", layers=2, optimizer="cobyla",
+    max_steps=100, init_scale=0.01, seed=42,
+)
+_GSOPT_TN_CONFIG = dict(
+    name="simple_tn", method="dmrg2", init_state="random",
+    bond_schedule=[8, 12, 16, 24, 32, 48], cutoff=1.0e-6, solver_tol=1.0e-4,
+    max_sweeps=12, tau=0.1, chi=32, init_bond_dim=4, init_seed=42,
+    local_eig_ncv=4,
+)
+_GSOPT_DMRG_CONFIG = dict(
+    name="simple_dmrg", bond_schedule=[32, 64, 96, 128, 160, 192, 256],
+    cutoff=1.0e-10, solver_tol=1.0e-6, max_sweeps=64, init_bond_dim=13,
+    init_seed=42,
+)
+_GSOPT_AFQMC_CONFIG = dict(
+    name="afqmc_n2", trial="rhf", scf_conv_tol=1.0e-10, scf_max_cycle=64,
+    diis_space=8, level_shift=0.0, damping=0.0, init_guess="minao",
+    chol_cut=1.0e-6, num_walkers_per_rank=64, num_steps_per_block=25,
+    num_blocks=100, timestep=0.005, stabilize_freq=5, pop_control_freq=5,
+)
+_GSOPT_GIBBS_CONFIG = dict(
+    name="simple_gibbs", length=8, beta=0.8, coupling=1.0, field=0.3,
+    num_chains=64, burn_in_sweeps=50, sample_sweeps=200, thinning=2, seed=42,
+)
+
+
+def _gsopt_result(config: dict) -> dict:
+    """Minimal molecular-lane GSOptBenchmarkResult payload around a config."""
+    return dict(
+        task="vqe", molecule="BH",
+        cas=dict(active_electrons=4, active_orbitals=4),
+        score=-24.77, config=config, hf_energy=-24.75, iterations=50,
+        nfev=120, final_energy=-24.77, wall_seconds=12.0,
+        wall_budget_seconds=20.0,
+    )
+
+
+@pytest.mark.parametrize(
+    "payload,expected",
+    [
+        (_GSOPT_VQE_CONFIG,   GSOptVQERunConfig),
+        (_GSOPT_TN_CONFIG,    GSOptTNRunConfig),
+        (_GSOPT_DMRG_CONFIG,  GSOptTNRunConfig),   # DMRG config ⊂ TN config
+        (_GSOPT_AFQMC_CONFIG, GSOptAFQMCRunConfig),
+        (_GSOPT_GIBBS_CONFIG, GSOptGibbsRunConfig),
+        ({"name": "unknown_lane"}, GSOptRunConfig),
+    ],
+)
+def test_gsopt_lane_config_union_resolves(payload, expected):
+    """GSOpt is method-agnostic: each lane's `config` sub-object parses to its
+    own model, and an unrecognised one falls back to the bare base rather than
+    being coerced into some other lane's shape."""
+    result = GSOptBenchmarkResult(**_gsopt_result(payload))
+    assert type(result.config) is expected
+    # survives a JSON round-trip without silently dropping lane-specific fields
+    restored = GSOptBenchmarkResult.model_validate_json(result.model_dump_json())
+    assert type(restored.config) is expected
+    assert restored.config.model_dump() == result.config.model_dump()
+
+
+def test_gsopt_dmrg_config_leaves_tn_only_fields_none():
+    cfg = GSOptTNRunConfig(**_GSOPT_DMRG_CONFIG)
+    assert cfg.max_sweeps == 64
+    assert cfg.method is None and cfg.tau is None and cfg.chi is None
+
+
+def test_gsopt_lane_configs_share_only_name():
+    """The lane configs are siblings, not variations on a VQE shape: `name` is
+    the one field GSOpt's five RunConfig dataclasses agree on."""
+    shared = set.intersection(*(
+        set(m.model_fields) for m in (
+            GSOptVQERunConfig, GSOptTNRunConfig,
+            GSOptAFQMCRunConfig, GSOptGibbsRunConfig,
+        )
+    ))
+    assert shared == {"name"}
+
+
+def test_gsopt_to_vqa_config_rejects_non_vqe_lanes():
+    """A DMRG/AFQMC/Gibbs run is not a variational run, so VQAConfig does not
+    describe it — better to raise than emit a half-populated config."""
+    vqe = GSOptBenchmarkResult(**_gsopt_result(_GSOPT_VQE_CONFIG))
+    assert vqe.to_vqa_config()["algorithm"] == "uccsd"
+
+    afqmc = GSOptBenchmarkResult(**_gsopt_result(_GSOPT_AFQMC_CONFIG))
+    with pytest.raises(TypeError, match="GSOptVQERunConfig"):
+        afqmc.to_vqa_config()
+    # the lane-agnostic conversion still works
+    assert afqmc.to_quantum_result().total_time_s == pytest.approx(12.0)
+
+
+def test_gsopt_config_is_not_the_shared_vqe_contract():
+    """bestquark_gsopt records how one GSOpt run was parameterised; the
+    execution-layer VQERunConfig is a cross-implementation contract. Same
+    domain, different jobs — and no longer the same name."""
+    assert VQERunConfig.__module__.endswith("execution")
+    assert GSOptVQERunConfig.__module__.endswith("bestquark_gsopt")
+    assert not issubclass(GSOptVQERunConfig, VQERunConfig)
+    assert "vqe_run_config" in ExecutionOptions.model_fields

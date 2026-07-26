@@ -12,12 +12,16 @@ from .dlr_excitation_solve import (
 from .bestquark_gsopt import (
     REFERENCE_ENERGIES,
     ActiveSpaceSpec,
+    GSOptAFQMCRunConfig,
     GSOptBenchmarkLane,
     GSOptBenchmarkMeta,
     GSOptBenchmarkResult,
+    GSOptGibbsRunConfig,
+    GSOptRunConfig,
+    GSOptTNRunConfig,
+    GSOptVQERunConfig,
     VQEAnsatzType,
     VQEOptimizerType,
-    VQERunConfig,
     reference_energy,
 )
 from .mqsdk_xenakis import (
@@ -176,6 +180,7 @@ from .execution import (
     ExecutionOptions,
     QAOARunConfig,
     TranspilerConfig,
+    VQERunConfig,
     ZNEConfig,
 )
 from .evangelistalab_qforte import (
@@ -633,6 +638,7 @@ __all__ = [
     "ExecutionOptions",
     "QAOARunConfig",
     "TranspilerConfig",
+    "VQERunConfig",
     "ZNEConfig",
     # evangelistalab_qforte
     "QForteAlgorithmConfig",
@@ -812,12 +818,16 @@ __all__ = [
     # bestquark_gsopt
     "REFERENCE_ENERGIES",
     "ActiveSpaceSpec",
+    "GSOptAFQMCRunConfig",
     "GSOptBenchmarkLane",
     "GSOptBenchmarkMeta",
     "GSOptBenchmarkResult",
+    "GSOptGibbsRunConfig",
+    "GSOptRunConfig",
+    "GSOptTNRunConfig",
+    "GSOptVQERunConfig",
     "VQEAnsatzType",
     "VQEOptimizerType",
-    "VQERunConfig",
     "reference_energy",
     # mqsdk_xenakis
     "BitstringGenome",

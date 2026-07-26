@@ -4,13 +4,29 @@ GSOpt (github.com/bestquark/gsopt) is a fixed-budget ground-state optimisation
 benchmark harness.  It drives agent-based mutation loops across five benchmark
 categories and records structured JSON results from each run.
 
+GSOpt is *method-agnostic*: VQE is one of its five lanes, alongside tensor
+networks, DMRG, AFQMC and Gibbs sampling — several of which are not quantum
+algorithms and not variational at all.  So each lane gets its own run config
+(GSOpt*RunConfig below) rather than everything being bent into a VQE shape.
+None of them is a cross-implementation contract: for that see
+`execution.VQERunConfig` / `AdaptVQERunConfig` / `QAOARunConfig`, which are
+package-agnostic hyperparameters keyed by AlgorithmFamily.
+
 Schema coverage
 ---------------
 GSOptBenchmarkLane  benchmark category enum (vqe, tn, dmrg, afqmc, gibbs)
 VQEAnsatzType       hea_ry_ring | hea_ryrz_ring | uccsd
 VQEOptimizerType    cobyla | powell | nelder_mead  (classical optimisers)
 ActiveSpaceSpec     active electrons / orbitals + index arrays
-VQERunConfig        the "config" sub-object in simple_vqe.py JSON output
+
+Per-lane "config" sub-objects (each mirrors that lane's RunConfig dataclass):
+GSOptRunConfig       base — `name`, the only field all lanes share
+GSOptVQERunConfig    vqe lane   (examples/vqe/*, CUDA-Q)
+GSOptTNRunConfig     tn + dmrg lanes (MPS sweeping)
+GSOptAFQMCRunConfig  afqmc lane (PySCF + ipie)
+GSOptGibbsRunConfig  gibbs lane (MCMC thermal sampling)
+GSOptLaneRunConfig   union of the above, as used by GSOptBenchmarkResult
+
 GSOptBenchmarkResult  full JSON output of simple_vqe.py / evaluate.py
 GSOptBenchmarkMeta  .gsopt.json metadata file format
 
@@ -124,13 +140,36 @@ class ActiveSpaceSpec(pydantic.BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# VQE run configuration
+# Per-lane run configurations
 # ---------------------------------------------------------------------------
+#
+# GSOpt is a ground-state *benchmark harness*, not a VQE framework: each lane
+# drives a different ground-state method (see GSOptBenchmarkLane), and each
+# lane's source script defines its own frozen `RunConfig` dataclass, emitted
+# as the "config" sub-object of that lane's JSON.  The only field every lane
+# shares is `name`, so the lane configs below are siblings under a thin base
+# rather than variations on one VQE-shaped object.
+#
+# These are *records of one run's parameterisation*, lane-specific by
+# construction — not the package-agnostic runtime contracts in `execution`
+# (VQERunConfig / AdaptVQERunConfig / QAOARunConfig), which describe how to
+# drive an algorithm across implementations.
 
-class VQERunConfig(pydantic.BaseModel):
-    """Configuration of a single GSOpt VQE run (the "config" JSON sub-object).
+class GSOptRunConfig(pydantic.BaseModel):
+    """Base for every lane's "config" JSON sub-object.
 
-    name          human-readable run identifier (ansatz + layers + molecule)
+    Carries only what all five lanes agree on.  Subclasses add the fields
+    their lane's RunConfig dataclass actually defines; the agent-driven
+    mutation loop is what perturbs those fields between evaluations.
+
+    name  human-readable run identifier (e.g. "simple_dmrg", "uccsd_2_BH")
+    """
+    name: str
+
+
+class GSOptVQERunConfig(GSOptRunConfig):
+    """GSOpt VQE lane (examples/vqe/*, CUDA-Q circuits).
+
     ansatz        circuit structure; VQEAnsatzType value or custom string
     layers        number of ansatz repetition layers
     optimizer     classical optimizer; VQEOptimizerType value or custom string
@@ -144,7 +183,6 @@ class VQERunConfig(pydantic.BaseModel):
       powell_xtol        x-convergence tolerance for Powell
       nelder_mead_xatol  absolute tolerance on simplex x-coordinates
     """
-    name:               str
     ansatz:             str
     layers:             int
     optimizer:          str
@@ -157,6 +195,134 @@ class VQERunConfig(pydantic.BaseModel):
     nelder_mead_xatol:  float | None = None
 
 
+class GSOptTNRunConfig(GSOptRunConfig):
+    """GSOpt tensor-network lanes — TN (examples/tn/simple_tn.py) and DMRG
+    (examples/dmrg/*/simple_dmrg.py).
+
+    Both lanes optimise an MPS by sweeping, so they share one config; the
+    DMRG lane's RunConfig is a strict subset of the TN lane's, and the fields
+    it does not define are left None.  Per-lane defaults differ (the DMRG
+    benchmarks run tighter and longer — e.g. cutoff 1e-10 and max_sweeps 64
+    against the TN lane's 1e-6 and 12), so the shared fields below are
+    required rather than carrying a default that would be wrong for one lane.
+
+    bond_schedule   MPS bond dimensions applied across successive sweeps
+    cutoff          singular-value truncation cutoff
+    solver_tol      local eigensolver tolerance
+    max_sweeps      sweep cap
+    init_bond_dim   bond dimension of the initial state
+    init_seed       RNG seed for the initial state
+
+    TN-lane-only (None on a DMRG config):
+      method        update scheme, e.g. "dmrg2" (two-site) | "dmrg1"
+      init_state    initial MPS, e.g. "random" | "product"
+      tau           imaginary-time step for TEBD-style updates
+      chi           working bond dimension for the imaginary-time stage
+      local_eig_ncv Krylov subspace size for the local eigensolver
+    """
+    bond_schedule:  list[int]
+    cutoff:         float
+    solver_tol:     float
+    max_sweeps:     int
+    init_bond_dim:  int
+    init_seed:      int
+    method:         str | None   = None
+    init_state:     str | None   = None
+    tau:            float | None = None
+    chi:            int | None   = None
+    local_eig_ncv:  int | None   = None
+
+
+class GSOptAFQMCRunConfig(GSOptRunConfig):
+    """GSOpt AFQMC lane (examples/afqmc/molecular_benchmark.py, PySCF + ipie).
+
+    Splits into an SCF trial-wavefunction stage and the AFQMC walker
+    propagation itself; the mutation agent tunes both.
+
+    SCF / trial stage:
+      trial          trial wavefunction: "rhf" | "uhf"
+      scf_conv_tol   SCF convergence tolerance
+      scf_max_cycle  SCF iteration cap
+      diis_space     DIIS subspace size
+      level_shift    virtual-orbital level shift
+      damping        SCF damping factor
+      init_guess     "minao" | "atom" | "1e" | "huckel" | "mod_huckel"
+      chol_cut       Cholesky decomposition threshold for the ERI tensor
+
+    Walker propagation:
+      num_walkers_per_rank  walkers per MPI rank
+      num_steps_per_block   propagation steps per block
+      num_blocks            number of blocks (statistics)
+      timestep              imaginary-time step Δτ
+      stabilize_freq        re-orthogonalisation frequency
+      pop_control_freq      population-control frequency
+    """
+    trial:                str
+    scf_conv_tol:         float
+    scf_max_cycle:        int
+    diis_space:           int
+    level_shift:          float
+    damping:              float
+    init_guess:           str
+    chol_cut:             float
+    num_walkers_per_rank: int
+    num_steps_per_block:  int
+    num_blocks:           int
+    timestep:             float
+    stabilize_freq:       int
+    pop_control_freq:     int
+
+
+class GSOptGibbsRunConfig(GSOptRunConfig):
+    """GSOpt Gibbs lane (examples/gibbs/simple_gibbs_mcmc.py).
+
+    Samples a thermal state by MCMC and scores against the exact
+    distribution, so it is the one lane whose metric is a distribution
+    distance rather than an energy.  Unlike the other lanes the script emits
+    these flat at the top level of its JSON rather than under a "config"
+    key — pass them here explicitly when normalising a Gibbs result.
+
+    Physical model (script defaults in parentheses):
+      length     chain length L (8)
+      beta       inverse temperature β (0.8)
+      coupling   nearest-neighbour coupling J (1.0)
+      field      transverse/longitudinal field h (0.3)
+
+    MCMC settings, what the mutation agent mainly optimises (defaults):
+      num_chains       parallel chains (64)
+      burn_in_sweeps   discarded warm-up sweeps (50)
+      sample_sweeps    sweeps retained for statistics (200)
+      thinning         keep every n-th sweep, autocorrelation control (2)
+      seed             RNG seed (42)
+
+    All fields are required: this records what a given run actually used, and
+    defaulting them would additionally make a bare {"name": ...} object
+    validate as a Gibbs config and shadow GSOptRunConfig in
+    GSOptLaneRunConfig's union resolution.
+    """
+    length:         int
+    beta:           float
+    coupling:       float
+    field:          float
+    num_chains:     int
+    burn_in_sweeps: int
+    sample_sweeps:  int
+    thinning:       int
+    seed:           int
+
+
+GSOptLaneRunConfig = (
+    GSOptVQERunConfig
+    | GSOptTNRunConfig
+    | GSOptAFQMCRunConfig
+    | GSOptGibbsRunConfig
+    | GSOptRunConfig
+)
+"""Any lane's run config. Ordered most-specific-first so pydantic's smart
+union resolves a parsed `config` object to the lane model that actually
+matches, falling back to the bare base when it matches none."""
+
+
 # ---------------------------------------------------------------------------
 # Benchmark result
 # ---------------------------------------------------------------------------
@@ -167,6 +333,14 @@ class GSOptBenchmarkResult(pydantic.BaseModel):
     This is the canonical structure written to stdout and scored by evaluate.py.
     Reference fields (target_energy, final_error, chem_acc_step) are retained
     for full fidelity; the evaluator strips them before publishing the score.
+
+    Scope: this models the **molecular** lanes' result shape — `molecule`,
+    `cas` and `hf_energy` are required, which fits VQE and AFQMC.  The
+    spin-model lanes (TN, DMRG, Gibbs) report a different shape entirely
+    (`model`, `nsites`/`chain_length`, `energy_per_site`, `entropy_midchain`,
+    or a distribution distance for Gibbs) and are not modelled yet.  `config`
+    already accepts any lane's run config, so the config layer is lane-complete
+    ahead of the result layer.
 
     score         primary metric value (= final_energy for VQE; lower is better)
     metric        name of the scoring field (default "final_energy")
@@ -183,7 +357,7 @@ class GSOptBenchmarkResult(pydantic.BaseModel):
     score:                   float
     chemical_accuracy:       float = 1.0e-3
     supported_molecules:     list[str] = []
-    config:                  VQERunConfig
+    config:                  GSOptLaneRunConfig
     hf_energy:               float
     iterations:              int
     nfev:                    int
@@ -260,11 +434,23 @@ class GSOptBenchmarkResult(pydantic.BaseModel):
     def to_vqa_config(self) -> dict[str, Any]:
         """Return keyword arguments for constructing a VQAConfig (inputs only).
 
+        VQE lane only — `algorithm` / `optimizer` / `n_layers_circuit` are read
+        off the run config, which only the VQE lane defines.  Raises TypeError
+        on any other lane rather than silently emitting a half-populated
+        VQAConfig.
+
         Usage::
             from qpubench.schemas import VQAConfig, VQAResult
             vqa        = VQAConfig(**gsopt_result.to_vqa_config())
             vqa_result = VQAResult(**gsopt_result.to_vqa_result())
         """
+        if not isinstance(self.config, GSOptVQERunConfig):
+            raise TypeError(
+                "to_vqa_config() needs a GSOptVQERunConfig (the VQE lane); "
+                f"this result carries {type(self.config).__name__}. Non-VQE "
+                "lanes are not variational runs, so VQAConfig does not describe "
+                "them — build a BenchmarkRecord from to_quantum_result() instead."
+            )
         return dict(
             problem_type="chemistry",
             molecule=self.molecule,
@@ -319,11 +505,16 @@ class GSOptBenchmarkMeta(pydantic.BaseModel):
 __all__ = [
     "REFERENCE_ENERGIES",
     "ActiveSpaceSpec",
+    "GSOptAFQMCRunConfig",
     "GSOptBenchmarkLane",
     "GSOptBenchmarkMeta",
     "GSOptBenchmarkResult",
+    "GSOptGibbsRunConfig",
+    "GSOptLaneRunConfig",
+    "GSOptRunConfig",
+    "GSOptTNRunConfig",
+    "GSOptVQERunConfig",
     "VQEAnsatzType",
     "VQEOptimizerType",
-    "VQERunConfig",
     "reference_energy",
 ]

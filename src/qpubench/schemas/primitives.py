@@ -105,7 +105,7 @@ class AlgorithmFamily(str, enum.Enum):
     Fourier-series optimizer used to fit an adaptively-grown ansatz is a
     choice under ADAPT_VQE.
 
-    Current real cross-adapter coverage (as of schema v4.2.0): only
+    Current real cross-adapter coverage (as of schema v5.0.0): only
     ADAPT_VQE has more than one implementation actually registered as an
     AlgorithmAdapter (evangelistalab_qforte, ibm_qiskit_adapt_vqe,
     microsoft_qdk_adapt_vqe — all sharing execution.AdaptVQERunConfig). Most
@@ -114,6 +114,11 @@ class AlgorithmFamily(str, enum.Enum):
     converge on, rather than each package inventing its own ad hoc label.
     QPE is schema/metadata only (microsoft_qdk.QPEConfig, part of the QDK
     chemistry pipeline record) — no AlgorithmAdapter runs it yet.
+
+    Owning a shared run-config is a weaker claim than having two adapters:
+    VQE and QAOA each own one (execution.VQERunConfig, execution.QAOARunConfig)
+    so an implementation has a contract to accept, but neither is yet accepted
+    by two adapters the way AdaptVQERunConfig is.
     """
     ADAPT_VQE         = "adapt_vqe"          # adaptive derivative-assembled pseudo-Trotterized VQE
     VQE               = "vqe"                # fixed-ansatz VQE — UCC-type ansätze (QForte's

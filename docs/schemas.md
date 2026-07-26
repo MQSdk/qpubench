@@ -47,7 +47,7 @@ Computing model (paradigm) and qubit modality are separate, independent axes on 
 | [`circuit`](#circuit) | Circuit or problem specification | all · all | `CircuitSpec` (`from_openqasm3`, `openqasm3`, `bind`), `ParameterBinding` |
 | [`observable`](#observable) | Sparse Pauli observables | all · all | `SparsePauliObservable`, `PauliTerm` |
 | [`backend`](#backend) | Hardware / simulator description | all · all | `BackendSpec` (31 factory constructors) |
-| [`execution`](#execution) | Execution options and algorithm hyperparameters | all · all | `ExecutionOptions`, `AlgorithmSpec`, `AdaptVQERunConfig` / `QAOARunConfig` (ADAPT / QAOA runtime hyperparameters; experiment metadata lives in `record.VQAConfig`), `ZNEConfig`, `TranspilerConfig` |
+| [`execution`](#execution) | Execution options and algorithm hyperparameters | all · all | `ExecutionOptions`, `AlgorithmSpec`, `VQERunConfig` / `AdaptVQERunConfig` / `QAOARunConfig` (VQE / ADAPT / QAOA runtime hyperparameters; experiment metadata lives in `record.VQAConfig`), `ZNEConfig`, `TranspilerConfig` |
 | [`result`](#result) | Execution results (expectation values, counts, fidelity, per-iteration algorithm history) | all · all | `QuantumResult` (15 result-type fields), `ExpectationResult`, `ShotResult`, `TranspileLayout` |
 | [`record`](#record) | Top-level benchmark record and algorithm metadata | all · all | `BenchmarkRecord`, `VQAConfig`, `VQAResult` |
 
@@ -79,7 +79,7 @@ The **Group** column matches the thematic groups used in the README's schema ove
 | [`pyscf_pyscf`](#pyscf_pyscf) | Quantum chemistry & VQA | PySCF molecules/cells, mean-field/DFT, PCM/COSMO solvation (real), DMET/projection-based embedding (schema-only) | classical (chemistry) · — | `PySCFMoleculeSpec`, `PySCFCellSpec`, `PySCFMeanFieldConfig`, `PySCFSolvationConfig`, `DMETConfig`, `ERIBuilderConfig`, `OrbitalOptimizerConfig` |
 | [`erikkjellgren_slowquant`](#erikkjellgren_slowquant) | Quantum chemistry & VQA | SlowQuant UCC/VQE: ansatz config, SCF result, optimization, RDMs, linear response, circuit spec | `GATE_BASED` · — | `SlowQuantRecord`, `UCCWavefunctionConfig`, `UCCOptimizationResult`, `UCCLinearResponseResult`, `UCCExcitedStateResult`, `UCCCircuitSpec`, `UCCSCFResult`, `UCCRDMData` |
 | [`evangelistalab_qforte`](#evangelistalab_qforte) | Quantum chemistry & VQA | QForte: pybind11 object layer (Circuit/Gate/QubitOperator) + algorithm-run layer (config, result) for ADAPT-VQE / UCCN-VQE / UCCN-PQE / SPQE | `GATE_BASED` · — | `QForteCircuitSpec`, `QForteQubitOperatorSpec`, `QForteSqOpPoolSpec`, `QForteAlgorithmConfig`, `QForteRunResult` |
-| [`bestquark_gsopt`](#bestquark_gsopt) | Quantum chemistry & VQA | GSOpt fixed-budget benchmark results | `GATE_BASED` · — | `GSOptBenchmarkResult`, `ActiveSpaceSpec`, `REFERENCE_ENERGIES`, `VQERunConfig` |
+| [`bestquark_gsopt`](#bestquark_gsopt) | Quantum chemistry & VQA | GSOpt fixed-budget benchmark results | `GATE_BASED` · — | `GSOptBenchmarkResult`, `ActiveSpaceSpec`, `REFERENCE_ENERGIES`, per-lane `GSOptRunConfig` / `GSOptVQERunConfig` / `GSOptTNRunConfig` / `GSOptAFQMCRunConfig` / `GSOptGibbsRunConfig` |
 | [`dlr_excitation_solve`](#dlr_excitation_solve) | Quantum chemistry & VQA | ExcitationSolve Fourier-series VQE optimizer | `GATE_BASED` · — | `ExcitationSolveResult`, `ExcitationSolveSweep`, `ExcitationAdaptResult` |
 | [`classiq_classiq`](#classiq_classiq) | Quantum chemistry & VQA | Classiq synthesis + chemistry/QAOA | `GATE_BASED` · — | `ClassiqSynthesisResult`, `ClassiqChemistryModel`, `ClassiqVQEResult`, `ClassiqCombinatorialOptimizationSpec`, `ClassiqConstraints` |
 | [`mqsdk_qse`](#mqsdk_qse) | Quantum chemistry & VQA | Krylov Quantum Diagonalization (KQD / QSE / SQD) | `GATE_BASED` · — | `KQDPipelineSpec`, `KQDConfig`, `KrylovSubspaceMatrices`, `KrylovEigenResult`, `SQDConvergenceResult`, `CholeskyDecompositionSpec` |
@@ -127,10 +127,11 @@ The **Group** column matches the thematic groups used in the README's schema ove
 > **`CircuitFormat` is a serialization format, not an algorithm.** There is no
 > `VQE` member and there should not be — VQE is an *algorithm*, not a way of
 > encoding a circuit. Plain (vanilla) VQE **is** supported: describe it with
-> `VQAConfig(algorithm="VQE", ...)` (see [`record`](#record)) and run each
-> energy evaluation as an ordinary `CircuitSpec` through a `BackendAdapter`.
-> `AdaptVQERunConfig` only adds the extra hyperparameters the *adaptive* variant
-> needs; vanilla VQE needs none of them.
+> `VQAConfig(algorithm="VQE", ...)` (see [`record`](#record)), set its runtime
+> knobs in [`VQERunConfig`](#vqerunconfig), and run each energy evaluation as an
+> ordinary `CircuitSpec` through a `BackendAdapter`. `AdaptVQERunConfig` is the
+> *adaptive* variant's contract — it swaps `layers` for an operator pool and a
+> gradient-driven growth budget.
 
 ### Value types
 
@@ -330,9 +331,9 @@ adapters accept the same shared config for it. Today:
 | `AlgorithmFamily` | Implementations | Shared config |
 |---|---|---|
 | `ADAPT_VQE` | 3 — `evangelistalab_qforte`, `ibm_qiskit_adapt_vqe`, `microsoft_qdk_adapt_vqe` | `AdaptVQERunConfig` (below) — the only family with a real "switch the adapter, keep the config" story today |
-| `VQE` | 1 real adapter — `evangelistalab_qforte` (UCCNVQE, a UCC ansatz choice); the `dlr_excitation_solve` Fourier-series optimizer is also a choice under this family | per-adapter (`QForteAlgorithmConfig`, `ExcitationSolveConfig`) — no single shared config yet |
+| `VQE` | 1 real adapter — `evangelistalab_qforte` (UCCNVQE, a UCC ansatz choice); the `dlr_excitation_solve` Fourier-series optimizer is also a choice under this family | `VQERunConfig` (below) — the package-agnostic contract; per-adapter extras remain in `QForteAlgorithmConfig` / `ExcitationSolveConfig` |
 | `UCC_PQE` / `SPQE` | 1 — `evangelistalab_qforte` only | `QForteAlgorithmConfig` |
-| `QAOA` | 0 — no `AlgorithmAdapter` yet; runs as a plain optimization loop (like vanilla VQE, see [`vqa`](vqa.md#running-qaoa)) | `QAOARunConfig` (below) — the package-agnostic contract an adapter or loop reads |
+| `QAOA` | 0 — no `AlgorithmAdapter` yet; runs as a plain optimization loop (see [`vqa`](vqa.md#running-qaoa)) | `QAOARunConfig` (below) — the package-agnostic contract an adapter or loop reads |
 | `TN_QC_OPT` | 1 — `mqsdk_cebule` only | `TNQCOptInput` |
 | `GA_CIRCUIT_SEARCH` | 1 — `mqsdk_xenakis` only | `GAConfig`/`GenomeConfig` |
 | `QPE` | 0 — schema/metadata only, no `AlgorithmAdapter` | `microsoft_qdk.QPEConfig`, a field of the QDK chemistry pipeline record, never dispatched through `BenchmarkRunner` |
@@ -346,6 +347,34 @@ inventing its own ad hoc label.
 Classiq's synthesis (a different `AlgorithmFamily`-less strategy — see
 `classiq_classiq.CircuitOptimizationComparison`), not against another
 `GA_CIRCUIT_SEARCH` implementation.
+
+### `VQERunConfig`
+
+Package-agnostic hyperparameter contract for `AlgorithmFamily.VQE` — the
+fixed-ansatz case. Set on `ExecutionOptions.vqe_run_config`. The ansatz is
+chosen up front and never grows, so unlike `AdaptVQERunConfig` there is no
+operator pool and no gradient-driven macro loop: this config names the ansatz,
+its depth, the classical optimizer, and how the starting parameters are made.
+A UCC ansatz (QForte's UCCNVQE) and a Fourier-series parameter fit
+(`dlr_excitation_solve`) are both choices *under* this family, recorded in
+`ansatz` / `optimizer`.
+
+| Field | Default | Description |
+|---|---|---|
+| `ansatz` | `"UCCSD"` | Circuit family to build: `"UCCSD"` · `"EfficientSU2"` · `"TwoLocal"` · `"HEA"` · … ; each adapter maps it onto its own constructor |
+| `layers` | `1` | Ansatz repetition depth (Qiskit's `reps`); `1` for ansätze with no repeating block |
+| `optimizer` | `"BFGS"` | Classical optimizer name; each adapter maps it onto its own set |
+| `max_iterations` | `200` | Classical-optimizer step cap |
+| `energy_threshold` | `1e-5` | Optimizer convergence threshold on the energy |
+| `initialization` | `"zeros"` | Starting-parameter strategy: `"zeros"` · `"random"` · `"hf"` (Hartree-Fock reference) · `"custom"` |
+| `initial_parameters` | `[]` | Explicit starting vector; read when `initialization="custom"` |
+| `init_scale` | `1e-2` | Std-dev of the random draw when `initialization="random"` |
+| `use_analytic_gradient` | `True` | Analytic gradient (parameter-shift) vs finite-difference |
+
+> No `seed` field: `ExecutionOptions.seed` already governs the random draw.
+> And not to be confused with `bestquark_gsopt.GSOptVQERunConfig`, which is a
+> *record* of one GSOpt benchmark run's parameterisation rather than a contract
+> — see [`bestquark_gsopt`](#bestquark_gsopt).
 
 ### `AdaptVQERunConfig`
 
@@ -784,9 +813,27 @@ Full documentation → [docs/integrations/gsopt.md](integrations/gsopt.md)
 | `VQEAnsatzType` | `HEA_RY_RING` · `HEA_RYRZ_RING` · `UCCSD` · `CUSTOM` |
 | `VQEOptimizerType` | `COBYLA` · `POWELL` · `NELDER_MEAD` |
 | `ActiveSpaceSpec` | `active_electrons`, `active_orbitals`, orbital index arrays |
-| `VQERunConfig` | The `config` sub-object from `simple_vqe.py` JSON output |
-| `GSOptBenchmarkResult` | Full benchmark JSON; `to_quantum_result()`, `to_vqa_config()` |
+| `GSOptRunConfig` | Base for every lane's `config` sub-object — `name`, the one field all five lanes share |
+| `GSOptVQERunConfig` | `vqe` lane (CUDA-Q circuits): `ansatz`, `layers`, `optimizer`, `max_steps`, `init_scale`, `seed`, optimizer-specific tolerances |
+| `GSOptTNRunConfig` | `tn` + `dmrg` lanes (MPS sweeping): `bond_schedule`, `cutoff`, `solver_tol`, `max_sweeps`, `init_bond_dim`, `init_seed`; TN-only `method`, `init_state`, `tau`, `chi`, `local_eig_ncv` |
+| `GSOptAFQMCRunConfig` | `afqmc` lane (PySCF + ipie): SCF trial stage (`trial`, `scf_conv_tol`, `diis_space`, `chol_cut`, …) + walker propagation (`num_walkers_per_rank`, `num_blocks`, `timestep`, …) |
+| `GSOptGibbsRunConfig` | `gibbs` lane (MCMC thermal sampling): `length`, `beta`, `coupling`, `field`, `num_chains`, `burn_in_sweeps`, `sample_sweeps`, `thinning`, `seed` |
+| `GSOptLaneRunConfig` | Union of the above, most-specific-first; the type of `GSOptBenchmarkResult.config` |
+| `GSOptBenchmarkResult` | Full benchmark JSON; `to_quantum_result()`, `to_vqa_config()` (VQE lane only — raises `TypeError` otherwise) |
 | `GSOptBenchmarkMeta` | `.gsopt.json` metadata file format |
+
+> **GSOpt is method-agnostic.** VQE is one of its five lanes, alongside tensor
+> networks, DMRG, AFQMC and Gibbs sampling — several of which are neither
+> quantum nor variational. So each lane mirrors its own source script's
+> `RunConfig` dataclass instead of everything being bent into a VQE shape.
+> None of these is a cross-implementation contract; for that see
+> [`VQERunConfig`](#vqerunconfig) and friends in [`execution`](#execution).
+>
+> `GSOptBenchmarkResult` currently models the **molecular** lanes' result shape
+> (`molecule`, `cas`, `hf_energy` are required — fits VQE and AFQMC). The
+> spin-model lanes report `model` / `nsites` / `energy_per_site` /
+> `entropy_midchain`, or a distribution distance for Gibbs, and are not
+> modelled yet; the config layer is lane-complete ahead of the result layer.
 
 ---
 

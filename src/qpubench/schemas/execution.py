@@ -48,7 +48,9 @@ class AlgorithmSpec(pydantic.BaseModel):
                   typed config.
 
     Hyperparameters live in each algorithm's own schema module, not here:
+      VQE (generic)          → VQERunConfig (this module)
       ADAPT_VQE (generic)    → AdaptVQERunConfig (this module)
+      QAOA (generic)         → QAOARunConfig (this module)
       QForte-specific extras → evangelistalab_qforte.QForteAlgorithmConfig
       ExcitationSolve        → dlr_excitation_solve.ExcitationSolveConfig
       Xenakis GA search      → mqsdk_xenakis.GAConfig / GenomeConfig
@@ -58,6 +60,56 @@ class AlgorithmSpec(pydantic.BaseModel):
     name:          str
     family:        AlgorithmFamily | None = None
     extra_params:  dict[str, Any]         = {}
+
+
+class VQERunConfig(pydantic.BaseModel):
+    """Package-agnostic fixed-ansatz VQE hyperparameters (AlgorithmFamily.VQE).
+
+    The common contract every fixed-ansatz VQE implementation accepts,
+    regardless of which package runs it.  Unlike ADAPT-VQE the ansatz
+    structure is chosen up front and never grows during the run — there is
+    no operator pool and no gradient-driven macro loop — so this config only
+    names the ansatz, its depth, the classical optimizer, and how the
+    starting parameters are produced.  Set on ExecutionOptions.vqe_run_config.
+
+    A UCC-type ansatz (QForte's UCCNVQE) and a Fourier-series parameter fit
+    (dlr_excitation_solve) are both choices *under* this family, recorded in
+    `ansatz` / `optimizer` — they are not families of their own.
+
+    ansatz                circuit family to build: "UCCSD" | "EfficientSU2" |
+                           "TwoLocal" | "HEA" | ... ; each adapter maps this
+                           onto its own constructor
+    layers                ansatz repetition depth (Qiskit's `reps`); 1 for
+                           ansätze with no repeating block
+    optimizer             classical optimizer name; each adapter maps this
+                           onto its own supported set (e.g. scipy method name)
+    max_iterations        classical-optimizer step cap
+    energy_threshold      optimizer convergence threshold on the energy
+    initialization        starting-parameter strategy: "zeros" | "random" |
+                           "hf" (Hartree-Fock reference) | "custom" (use
+                           initial_parameters)
+    initial_parameters    explicit starting vector; read when
+                           initialization="custom"
+    init_scale            std-dev of the random draw when
+                           initialization="random"; seeded by
+                           ExecutionOptions.seed, which is why this config
+                           carries no seed of its own
+    use_analytic_gradient analytic gradient (parameter-shift) vs
+                           finite-difference
+
+    Distinct from bestquark_gsopt.GSOptVQERunConfig, which is not a contract
+    at all: that one records how one run of GSOpt's own VQE benchmark lane
+    was parameterised.
+    """
+    ansatz:                str         = "UCCSD"
+    layers:                int         = 1
+    optimizer:             str         = "BFGS"
+    max_iterations:        int         = 200
+    energy_threshold:      float       = 1.0e-5
+    initialization:        str         = "zeros"
+    initial_parameters:    list[float] = []
+    init_scale:            float       = 1.0e-2
+    use_analytic_gradient: bool        = True
 
 
 class AdaptVQERunConfig(pydantic.BaseModel):
@@ -141,10 +193,16 @@ class ExecutionOptions(pydantic.BaseModel):
     Algorithm-driven fields (QForte and similar libraries)
     -------------------------------------------------------
     algorithm_spec     which algorithm to run (name + AlgorithmFamily)
+    vqe_run_config     shared hyperparameter contract for
+                       AlgorithmFamily.VQE (fixed ansatz), package-agnostic
     adapt_vqe_run_config   shared hyperparameter contract for
                        AlgorithmFamily.ADAPT_VQE, package-agnostic
     qaoa_run_config    shared hyperparameter contract for
                        AlgorithmFamily.QAOA, package-agnostic
+
+    Set the one matching algorithm_spec.family; they are independent fields,
+    not alternatives to each other, so nothing stops a caller populating
+    several — only the one its family names is read.
 
     MBQC fields
     -----------
@@ -179,6 +237,7 @@ class ExecutionOptions(pydantic.BaseModel):
         default_factory=TranspilerConfig
     )
     algorithm_spec:       AlgorithmSpec | None    = None
+    vqe_run_config:       VQERunConfig | None     = None
     adapt_vqe_run_config:     AdaptVQERunConfig | None   = None
     qaoa_run_config:      QAOARunConfig | None    = None
     cluster_depth:        int | None              = None

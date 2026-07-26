@@ -103,14 +103,26 @@ record = BenchmarkRecord(
 
 ---
 
-## VQE run configuration
+## Per-lane run configuration
 
-The `config` sub-object from `simple_vqe.py` JSON maps to `VQERunConfig`:
+GSOpt is a ground-state benchmark *harness*, not a VQE framework. Its five
+lanes (`GSOptBenchmarkLane`) each drive a different method, and each lane's
+source script defines its own frozen `RunConfig` dataclass emitted as that
+lane's `config` sub-object. The only field all five agree on is `name`, so
+each lane gets its own model under a thin `GSOptRunConfig` base:
+
+| Lane | Source script | Config model |
+|---|---|---|
+| `vqe` | `examples/vqe/*/simple_vqe.py` | `GSOptVQERunConfig` |
+| `tn` | `examples/tn/simple_tn.py` | `GSOptTNRunConfig` |
+| `dmrg` | `examples/dmrg/*/simple_dmrg.py` | `GSOptTNRunConfig` (DMRG's fields are a subset of TN's) |
+| `afqmc` | `examples/afqmc/molecular_benchmark.py` | `GSOptAFQMCRunConfig` |
+| `gibbs` | `examples/gibbs/simple_gibbs_mcmc.py` | `GSOptGibbsRunConfig` |
 
 ```python
-from qpubench.schemas import VQERunConfig, VQEAnsatzType, VQEOptimizerType
+from qpubench.schemas import GSOptVQERunConfig, VQEAnsatzType, VQEOptimizerType
 
-config = VQERunConfig(
+config = GSOptVQERunConfig(
     name="uccsd_2_BH",
     ansatz=VQEAnsatzType.UCCSD,         # or "uccsd" string
     layers=2,
@@ -127,6 +139,41 @@ VQEAnsatzType.HEA_RY_RING.value    # "hea_ry_ring"
 VQEAnsatzType.HEA_RYRZ_RING.value  # "hea_ryrz_ring"
 VQEAnsatzType.UCCSD.value          # "uccsd"
 ```
+
+A non-VQE lane, e.g. DMRG:
+
+```python
+from qpubench.schemas import GSOptTNRunConfig
+
+config = GSOptTNRunConfig(
+    name="simple_dmrg",
+    bond_schedule=[32, 64, 96, 128, 160, 192, 256],
+    cutoff=1.0e-10,
+    solver_tol=1.0e-6,
+    max_sweeps=64,
+    init_bond_dim=13,
+    init_seed=42,
+)   # method / init_state / tau / chi / local_eig_ncv stay None — TN-lane only
+```
+
+`GSOptBenchmarkResult.config` is typed as the union of all five, so parsing a
+lane's JSON resolves to the right model automatically; an unrecognised config
+falls back to the bare `GSOptRunConfig` rather than being coerced into another
+lane's shape.
+
+> **These are not cross-implementation contracts.** They record how *one GSOpt
+> run* was parameterised. The package-agnostic contracts an adapter accepts to
+> drive an algorithm are `VQERunConfig` / `AdaptVQERunConfig` / `QAOARunConfig`
+> in `schemas.execution`, set on `ExecutionOptions` and keyed by
+> `AlgorithmFamily` — see
+> [Algorithms & `AlgorithmSpec`](../algorithm_spec.md#vqaconfig--runconfig).
+> `schemas.VQERunConfig` is that contract; GSOpt's VQE-lane record is
+> `GSOptVQERunConfig`.
+
+`to_vqa_config()` reads `ansatz` / `optimizer` / `layers` off the run config,
+which only the VQE lane defines, so it raises `TypeError` on any other lane
+rather than emitting a half-populated `VQAConfig`. `to_quantum_result()` is
+lane-agnostic and works either way.
 
 ---
 

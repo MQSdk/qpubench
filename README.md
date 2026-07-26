@@ -2,7 +2,7 @@
 
 [![Python ≥ 3.11](https://img.shields.io/badge/python-≥3.11-blue)](https://python.org)
 [![License: LGPL v3](https://img.shields.io/badge/License-LGPL_v3-green)](LICENSE)
-[![Schema v4.2.0](https://img.shields.io/badge/schema-v4.2.0-orange)](docs/schemas.md)
+[![Schema v5.0.0](https://img.shields.io/badge/schema-v5.0.0-orange)](docs/schemas.md)
 
 **QPUBench is a framework for running quantum benchmarks and recording every
 result in one common format, so runs from different SDKs, machines, and even
