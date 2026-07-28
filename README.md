@@ -25,6 +25,9 @@ suite of standard benchmark circuits with a leaderboard.
 | Comparing different quantum computing modalities | **Yes — this is the "modality-agnostic" in the tagline.** The record format covers gate-based, MBQC, boson sampling, neutral-atom analog, and more. Runnable adapters today are mostly gate-based; other modalities enter via schemas and integrations. |
 | Comparing a quantum algorithm to a classical algorithm | **Partially.** Classical reference values (FCI / exact diagonalization) are computed and stored so quantum results are judged against them, but classical algorithms are not benchmarked as first-class runs. |
 
+| Modelling noise | **No.** Backends bring their own noise models (e.g. pass a Qiskit Aer noise model to the Aer adapter); QPUBench records what ran, it does not define noise models. |
+| Measuring noise | **No.** It can *store* device-characterization results produced by external tools (e.g. Qedma's QESEM), but it does not perform characterization itself. |
+
 > **A note on "chemical accuracy".** QPUBench reports an *energy error* — the
 > gap between a run's result and a **classically computed** reference (FCI or
 > exact diagonalization), and flags whether that gap is below 1.6 mHartree.
@@ -35,8 +38,6 @@ suite of standard benchmark circuits with a leaderboard.
 > the true physical value if the model (basis set, active space, Hamiltonian)
 > is itself an approximation. Treat the stored reference as a computed baseline,
 > not as ground truth from experiment.
-| Modelling noise | **No.** Backends bring their own noise models (e.g. pass a Qiskit Aer noise model to the Aer adapter); QPUBench records what ran, it does not define noise models. |
-| Measuring noise | **No.** It can *store* device-characterization results produced by external tools (e.g. Qedma's QESEM), but it does not perform characterization itself. |
 
 ## Installation
 
