@@ -67,6 +67,8 @@ own docstring/class comments.
 | [`contraction_path`](#contraction_path) | quimb + cotengra | Tensor-network contraction-path strategy/config/result | `GATE_BASED` (TN simulation) · — | `ContractionPathStrategy`, `ContractionPathConfig`, `ContractionPathResult` |
 | [`reactions`](#reactions) | Cantera · PennyLane · Cebule (MQS) | Reaction-coordinate/PES sweep + kinetics mechanism + rate-constant bridge | all · all | `ReactionCoordinateSpec`, `ReactionPathResult`, `ArrheniusRateConstant`, `ReactionMechanism` |
 | [`polarizable_embedding`](#polarizable_embedding) | CPPE + PyFraME (wired through `pyscf.solvent.PE`) | Polarizable embedding ("The Frame") potfile-equivalent environment | classical (chemistry) · — | `PolarizableEmbeddingSite`, `PolarizableEmbeddingConfig`, `PolarizableEmbeddingResult` |
+| [`fragmentation`](#fragmentation) | Fragme∩t (Herbert group) · quantum-fragment-methods (IBM × Cleveland Clinic) · DMET/EWF literature | Problem-space decomposition: fragments, signed expansions, multilevel layers, adaptive screening, per-fragment solver assignment | all · all | `FragmentationSpec`, `FragmentSpec`, `FragmentExpansionTerm`, `FragmentationLayer`, `FragmentScreeningRule`, `FragmentSolverAssignment`, `FragmentationResult`, `FragmentResult` |
+| [`distributed_execution`](#distributed_execution) | DISQCO (arXiv:2503.19082, 2507.16036) · Qdislib (BSC, SC '25) | Circuit-space decomposition: QPU networks, partitioning with teleportation, gate/wire cutting, reconstruction | `GATE_BASED` · all | `QPUNetworkSpec`, `CircuitPartitionSpec`, `CircuitCutSpec`, `EntanglementCost`, `SubcircuitSpec`, `ReconstructionResult`, `DistributedRunConfig`, `DistributedRunResult` |
 
 ### Project mirrors (`<org_or_maintainer>_<package>`)
 
@@ -84,6 +86,10 @@ The **Group** column matches the thematic groups used in the README's schema ove
 | [`classiq_classiq`](#classiq_classiq) | Quantum chemistry & VQA | Classiq synthesis + chemistry/QAOA | `GATE_BASED` · — | `ClassiqSynthesisResult`, `ClassiqChemistryModel`, `ClassiqVQEResult`, `ClassiqCombinatorialOptimizationSpec`, `ClassiqConstraints` |
 | [`mqsdk_qse`](#mqsdk_qse) | Quantum chemistry & VQA | Krylov Quantum Diagonalization (KQD / QSE / SQD) | `GATE_BASED` · — | `KQDPipelineSpec`, `KQDConfig`, `KrylovSubspaceMatrices`, `KrylovEigenResult`, `SQDConvergenceResult`, `CholeskyDecompositionSpec` |
 | [`mqsdk_cebule`](#mqsdk_cebule) | Quantum chemistry & VQA | Cebule SDK (MQS) task inputs / outputs | `GATE_BASED` (`TN_QC_OPT`/`COVO`) + classical · — | `CosmoResult`, `SigmaResult`, `SolubilityResult`, `AbInitioMDResult`, `GeometryOptResult`, `TNQCOptResult`, `COVOResult` |
+| [`fragmentqc_fragment`](#fragmentqc_fragment) | Fragmentation & distribution | Fragme∩t (GitLab `fragment-qc/fragment`): `strategy.yaml` mirror, PIE trees, screening mods, per-layer backends | classical (chemistry) · — | `FragmentStrategy`, `FragmentPIETree`, `FragmentPIENode`, `FragmentModSpec`, `FragmentBackendSpec`, `FragmentFragmenterSpec`, `FragmentRunRecord` |
+| [`qiskitcommunity_fragment_methods`](#qiskitcommunity_fragment_methods) | Fragmentation & distribution | quantum-fragment-methods: EWF embedding + rule-based SQD / ext-SQD / FCI / CCSD solver assignment (arXiv:2512.17130) | `GATE_BASED` · `SUPERCONDUCTING` | `QFMWorkflowConfig`, `QFMEWFConfig`, `QFMSQDConfig`, `QFMFragment`, `QFMSolverResult`, `QFMWorkflowResult` |
+| [`felixburt_disqco`](#felixburt_disqco) | Fragmentation & distribution | DISQCO: multilevel hypergraph partitioning over a QPU network, ebit cost, circuit extraction | `GATE_BASED` · all | `DisqcoNetworkSpec`, `DisqcoPartitionResult`, `DisqcoFMConfig`, `DisqcoCoarsener`, `DisqcoHypergraphStats`, `DisqcoExtractedCircuit` |
+| [`bscwdc_qdislib`](#bscwdc_qdislib) | Fragmentation & distribution | Qdislib (BSC): gate/wire cutting, `find_cut`, quasiprobability reconstruction, PyCOMPSs distribution, semantic cache | `GATE_BASED` · all | `QdislibRunRecord`, `QdislibCutRecord`, `QdislibCutCost`, `QdislibFindCutConfig`, `QdislibSubcircuit`, `QdislibCacheStats` |
 | [`mqsdk_photoq`](#mqsdk_photoq) | Photonic / GBS | Linear-optics chips + FBQC, Gaussian Boson Sampling, pseudo-PNRD click-counting methods, ORCA PT Series / DTU QCloud / Xanadu Aurora backends | `GATE_BASED` (LOQC) / `FUSION_BASED` / `GBS` · `PHOTONIC` | `PhotonicCircuitSpec`, `GBSProgramSpec`, `HafnianResult`, `PseudoPNRDSpec`, `ClickPatternProbabilityResult`, `MethodComparison`, `TimeBinInterferometerSpec`, `QCloudJobSpec` |
 | [`johnrscott_mbqc_fpga`](#johnrscott_mbqc_fpga) | Other paradigms | MBQC-FPGA 16-bit program word, measurement patterns | `MBQC` · — (FPGA control logic) | `MBQCPattern`, `MBQCProgramWord`, `MBQCExecutionResult` — bit-exact 16-bit FPGA word |
 | [`quera_bloqade`](#quera_bloqade) | Other paradigms | Neutral atom AHS: Bloqade / Aquila atom arrangements, waveforms, drives, results | `ADIABATIC` · `NEUTRAL_ATOM` | `AtomArrangement`, `AHSProgramSpec`, `AHSDrivingField`, `AHSTimeSeries`, `AHSTaskResult`, `AHSShotResult`, `AquilaDeviceSpec`, `AHSBatchSpec` |
@@ -1724,3 +1730,219 @@ end-to-end walkthrough costing `data/IBM_VQE_Test_Benchmark.csv`.
 | `IBMPricingRates` | Partially — see docstring for confirmed-vs-cross-referenced split per field | Per-plan $/minute rates, free quota, minimums — all overridable |
 | `IBMAccessPlan` | — | `OPEN` \| `PAY_AS_YOU_GO` \| `FLEX` \| `PREMIUM` |
 | `PlanCostBreakdown` / `estimate_all_plans()` / `aggregate_benchmark_cost()` | Arithmetic only, real once `IBMPricingRates` is confirmed | Dollar cost per plan for a given QPU-time total |
+
+## `fragmentation`
+
+Full documentation → [docs/integrations/fragmentation.md](integrations/fragmentation.md)
+
+Added 2026-07-28. Cross-cutting module: the *general* vocabulary for
+decomposing an intractable molecular problem into fragments, shared by the
+two project mirrors ([`fragmentqc_fragment`](#fragmentqc_fragment) and
+[`qiskitcommunity_fragment_methods`](#qiskitcommunity_fragment_methods))
+rather than mirroring either.
+
+Every fragmentation method — MBE, GMBE, DMET, EWF, ONIOM — reduces to the
+same four things: a set of fragments, a signed **expansion** over them, a
+solver per fragment, and optionally screening rules (the *adaptive* part) and
+layers (the *multilevel* part). `FragmentExpansionTerm` is deliberately the
+most general form — an arbitrary real coefficient on an arbitrary fragment —
+so no method needs a schema of its own. A complete expansion has coefficients
+summing to 1; `FragmentationSpec.is_complete()` checks it, and a shortfall
+tells you screening dropped terms rather than that something failed.
+
+Fragmentation decomposes the *problem*;
+[`distributed_execution`](#distributed_execution) decomposes the *circuit*
+that solves each fragment. They compose: `FragmentResult.record_id` links a
+fragment to the `BenchmarkRecord` of the run that produced its energy, which
+may itself have been partitioned or cut across QPUs.
+
+| Type | Purpose |
+|---|---|
+| `FragmentationScheme` | `MBE` \| `GMBE` \| `BOTTOM_UP` \| `TOP_DOWN` \| `MBCP` \| `BSSE_BALANCED` \| `DMET` \| `EWF` \| `IAO` \| `ATOMIC` \| `ONIOM` \| `CUSTOM` — how fragment energies are combined |
+| `FragmenterType` | `PDB` \| `WATER` \| `COVALENT_COMPONENTS` \| `GROUPS` \| `SUPERSYSTEM` \| `RAW` \| `COMPOUND` \| `ATOMIC` \| `ORBITAL` \| `CUSTOM` — how fragments are carved out; orthogonal to the scheme |
+| `SolverKind` | `CLASSICAL` \| `QUANTUM` \| `HYBRID` |
+| `ScreeningMetric` | `com_distance` \| `closest_distance` \| `energy_delta` \| `energy_product` \| `bath_occupancy` \| `amplitude` \| `custom` |
+| `FragmentSpec` | One subsystem: atom **and** orbital indices, electron/orbital counts, bath size, and `num_qubits` — the estimate that decides whether it fits a given QPU |
+| `FragmentExpansionTerm` | `(fragment_id, coefficient)` plus optional per-term method override and a `screened` flag |
+| `FragmentScreeningRule` | Adaptive term dropping: metric + per-order `thresholds` + the cheap `backend` that evaluates it |
+| `FragmentationLayer` | One level of a multilevel calculation: `max_order`, `method`, `basis`, `sign` (−1 for subtractive ONIOM layers) |
+| `FragmentSolverAssignment` | Priority-ordered solver rule; `matches()` evaluates the machine-checkable `max_orbitals`/`max_electrons`/`max_qubits`/`max_order` limits |
+| `FragmentationSpec` | The whole plan; `coefficient_sum`, `is_complete()`, `terms_by_order()`, `assign_solver()`, `quantum_fragments()`, `max_fragment_qubits` |
+| `FragmentResult` | Per-fragment solver output; `weighted_energy`, `record_id` link to a `BenchmarkRecord` |
+| `FragmentationResult` | The reconstruction; `reconstructed_energy` (recomputed from the stored terms — compare it against `total_energy`), `energy_error`, `chemical_accuracy`, `quantum_fragment_fraction`, `to_quantum_result()` |
+
+## `distributed_execution`
+
+Full documentation → [docs/integrations/distributed_qc.md](integrations/distributed_qc.md)
+
+Added 2026-07-28. Cross-cutting module covering the two ways one logical
+circuit is run across several QPUs, shared by
+[`felixburt_disqco`](#felixburt_disqco) and
+[`bscwdc_qdislib`](#bscwdc_qdislib).
+
+The two mechanisms answer the same question and pay different currencies:
+
+- **Partitioning** keeps one entangled computation and teleports qubits
+  between QPUs. Cost = **EPR pairs (ebits)** on the network links, counted
+  per hop along real routes, so a partition that is cheap on a complete graph
+  can be expensive on a linear one. Needs a quantum network.
+- **Cutting** breaks the circuit into genuinely independent subcircuits with
+  no quantum link. Cost = **classical sampling overhead**: 6 quasiprobability
+  terms per gate cut, 8 per wire cut, so `k` cuts need `base ** k` subcircuit
+  evaluations. Exponential in cuts, but embarrassingly parallel and needs no
+  network at all.
+
+Sharing `QPUNetworkSpec`, `SubcircuitSpec` and `DistributedRunResult` is what
+makes them comparable — the same circuit can be benchmarked both ways and read
+off one set of fields. `DistributedRunResult.communication_cost` reports
+whichever currency the run paid; the two are *not* interchangeable units, so
+it is for identifying the dominant knob, not for direct comparison.
+
+| Type | Purpose |
+|---|---|
+| `DistributionStrategy` | `NONE` \| `PARTITION` \| `GATE_CUT` \| `WIRE_CUT` \| `HADAMARD_GATE_CUT` \| `MIXED_CUT` \| `CIRCUIT_KNITTING` |
+| `PartitionerType` | `FIDUCCIA_MATTHEYSES` \| `MULTILEVEL_FM` \| `GENETIC` \| `GENETIC_FM_HYBRID` \| `FGP` \| `KERNIGHAN_LIN` \| `GIRVAN_NEWMAN` \| `SPECTRAL` \| `METIS` \| `RANDOM` \| `MANUAL` |
+| `CoarseningStrategy` | `NONE` \| `FULL` \| `STATIC` \| `BLOCKS` \| `RECURSIVE` \| `RECURSIVE_BATCHES` \| `SUBGRAPH` \| `NETWORK` — the multilevel hierarchy the partitioner ran on |
+| `NetworkTopology` | `ALL_TO_ALL` \| `LINEAR` \| `GRID` \| `TREE` \| `RANDOM` \| `NETWORK_OF_GRIDS` \| `CUSTOM` |
+| `ReconstructionMethod` | `QUASIPROBABILITY` \| `SAMPLING` \| `LOCC` \| `NONE` |
+| `QPUNodeSpec` / `QPULinkSpec` / `QPUNetworkSpec` | The network: data vs communication qubits per node, per-link ebit rate/fidelity/latency; `neighbors()`, `is_connected()`, `from_sizes()` |
+| `QubitAssignment` | `(qubit, node_id, time_step)` — `time_step=None` is a static placement; a qubit with several time steps was teleported |
+| `CircuitPartitionSpec` | Assignment + partitioner + coarsening; `is_time_varying`, `qubits_per_node()`, `exceeds_capacity()` |
+| `EntanglementCost` | `ebits`, split into `cat_entanglements` / `teleportations`, plus `ebits_per_link` and `depth_overhead` |
+| `CutSpec` / `CircuitCutSpec` | Individual cuts and the whole decomposition; `sampling_overhead` is the product of per-cut term counts (6/8 by default) |
+| `SubcircuitSpec` / `SubcircuitResult` | One independently executable piece and its outcome; `qubit_map` back to the original circuit, `coefficient` may be negative |
+| `ReconstructionResult` | The recovered observable, with `exact_value` and derived `error` |
+| `DistributedRunConfig` | Execution-layer inputs — attach to `ExecutionOptions.distributed_run_config` |
+| `DistributedRunResult` | The full record; `ebits`, `sampling_overhead`, `communication_cost`, `to_quantum_result()` |
+
+## `fragmentqc_fragment`
+
+Full documentation → [docs/integrations/fragmentation.md](integrations/fragmentation.md)
+
+Added 2026-07-28. Mirror of [Fragme∩t](https://gitlab.com/fragment-qc/fragment)
+(Herbert group, Apache-2.0) — a framework for prototyping and benchmarking
+fragmentation *methods*, driven by a declarative `strategy.yaml`.
+
+The one idea imported wholesale is the **PIE tree**: nodes keyed by a set of
+primary-fragment indices, each with an integer coefficient. A 2-body MBE, a
+generalized MBE over overlapping fragments and a screened high-order expansion
+are all the same object, differing only in coefficients.
+`FragmentPIETree.to_expansion()` converts it to
+[`fragmentation`](#fragmentation)`.FragmentExpansionTerm`, which is what makes
+Fragme∩t results comparable with embedding-based methods.
+
+Upstream's own `fragment/schemas/` models are Pydantic **v1**; these are
+independent v2 mirrors, and qpubench never imports the upstream package.
+
+| Type | Purpose |
+|---|---|
+| `FragmentStrategy` | A whole `strategy.yaml` — field names match verbatim, so a real file round-trips; `to_fragmentation_spec()` converts one calculation |
+| `FragmentModSpec` / `FragmentModName` | The 11 mods, flattened into one superset model; `to_screening_rule()` returns `None` for non-screening mods (basis, MIC) |
+| `FragmentBackendSpec` / `FragmentBackendProgram` | Per-layer electronic-structure program (Q-Chem, CP2K, ORCA, NWChem, xTB, PySCF, MOPAC), with the nested PySCF `procedure` block flattened |
+| `FragmentFragmenterSpec` / `FragmentCombinator` | Fragmenter + `bottom_up` / `top_down` / `mbe` combinator |
+| `FragmentPIENode` / `FragmentPIETree` | The expansion; `coefficient_sum()` (1 when complete), `nonzero_nodes`, `to_expansion()`, `to_fragments()` |
+| `FragmentLayerSpec` / `FragmentCalculationSpec` | Multilevel layer stack (backend × view) and the calculation it belongs to |
+| `FragmentJobRecord` / `FragmentRunRecord` | One completed fragment job and the whole run; `to_fragmentation_result()` |
+
+## `qiskitcommunity_fragment_methods`
+
+Full documentation → [docs/integrations/fragmentation.md](integrations/fragmentation.md)
+
+Added 2026-07-28. Mirror of
+[quantum-fragment-methods](https://github.com/qiskit-community/quantum-fragment-methods)
+(IBM Quantum × Cleveland Clinic, Apache-2.0), implementing Shajan et al.,
+*Molecular Quantum Computations on a Protein* (arXiv:2512.17130).
+
+This is the piece that connects fragmentation to a QPU: a protein is
+partitioned into fragments, each gets a solver by **priority-ordered
+rule-based assignment** — quantum (SQD, ext-SQD) where it fits the hardware,
+classical (FCI, CCSD) elsewhere — and the energies are recombined. The
+per-fragment quantum subproblems are independent, so they are the natural unit
+of distribution across QPUs.
+
+**Credentials are deliberately absent.** The upstream `qpu.credentials` block
+holds an API token; `QFMQPUConfig` mirrors `channel` and `instance` (which
+service was used — a benchmark record should state that) but has **no token
+field**, and `from_config_dict()` drops it rather than carrying a secret into
+a stored record.
+
+| Type | Purpose |
+|---|---|
+| `QFMWorkflowConfig` | A whole `config.yaml`; `from_config_dict()` parses the upstream nesting, `to_fragmentation_spec()` emits the general spec with SQD/CCSD priority rules |
+| `QFMEWFConfig` / `QFMBathType` | Embedded-wavefunction settings; `truncation` is the single knob trading fragment size (qubit count) against accuracy — `to_screening_rule()` expresses it as a general screening rule |
+| `QFMSQDConfig` / `QFMLUCJConfig` / `QFMSBDConfig` | Sample-based quantum diagonalization: subspace size (`total_samples`), self-consistent iterations, LUCJ ansatz shape, external diagonalizer |
+| `QFMExtSQDConfig` | `dprime_cutoff` — dominant-configuration selection for extended SQD |
+| `QFMQPUConfig` / `QFMSamplerOptions` | Backend, channel/instance, shots, DD sequence, twirling |
+| `QFMFragment` | `from_fragment()` duck-types the upstream object (no import); `estimated_qubits` = 2 × spatial orbitals under Jordan-Wigner |
+| `QFMSolverResult` | Per-fragment energy; RDMs are **not** stored (records stay JSON-serialisable) — `has_rdm1`/`has_rdm2` record that they existed |
+| `QFMWorkflowResult` | The reconstructed total; `to_fragmentation_result()` |
+
+## `felixburt_disqco`
+
+Full documentation → [docs/integrations/distributed_qc.md](integrations/distributed_qc.md)
+
+Added 2026-07-28. Mirror of [DISQCO](https://github.com/felix-burt/DISQCO),
+implementing *A Multilevel Framework for Partitioning Quantum Circuits*
+(arXiv:2503.19082) and *Entanglement-Efficient Distribution of Quantum
+Circuits over Large-Scale Quantum Networks* (arXiv:2507.16036).
+
+A circuit becomes a **temporally extended hypergraph**: a vertex per
+`(qubit, time)`, a hyperedge per group of gates that can share one distributed
+control. Partitioning assigns every vertex to a QPU; because vertices are
+time-resolved, a qubit may live on different QPUs at different depths — the
+partitioner is choosing *when to teleport*. The objective is the auxiliary EPR
+pairs consumed along real network routes.
+
+"Multilevel" means two distinct things here, both recorded: **hypergraph
+coarsening** (contract the time axis, partition the coarsest level, project
+down and refine) and **network coarsening** (contract the network into
+sub-regions and partition hierarchically across them).
+
+> **Assignment array convention.** Upstream an assignment is a NumPy array
+> indexed `[qubit][time]` holding a QPU *index*.
+> `DisqcoPartitionResult.assignment` keeps that layout as nested lists, and the
+> conversion helpers map indices to `QPUNodeSpec.node_id` strings via the
+> network's node ordering — so the index order in `DisqcoNetworkSpec.qpu_sizes`
+> is significant. `to_partition_spec()` raises without a `network`, because the
+> indices are meaningless unnamed.
+
+| Type | Purpose |
+|---|---|
+| `DisqcoNetworkSpec` | `QuantumNetwork` mirror: `qpu_sizes`, `comm_sizes`, explicit `connectivity`, `hetero` flag; `to_network_spec()` |
+| `DisqcoPartitionerType` / `DisqcoCoarsener` / `DisqcoNetworkCoupling` | The upstream factory strings, each with a `to_*()` mapping into the general enums |
+| `DisqcoHypergraphStats` | Hypergraph shape plus `group_gates` / `anti_diag`, which materially change the achievable ebit count |
+| `DisqcoFMConfig` | FM / multilevel-FM hyperparameters; `is_multilevel` |
+| `DisqcoPartitionResult` | `final_cost` (the ebit objective), per-pass `cost_list` / `time_list`, `[qubit][time]` assignment; `ebits`, `improvement`, `is_time_varying`, `to_partition_spec()`, `to_distributed_run_result()` |
+| `DisqcoExtractedCircuit` | The extractor's output — data + communication registers per QPU, one shared classical register; `epr_pairs_per_link` counts only directly-linked pairs (multi-hop routes appear as several requests), `to_circuit_spec()` |
+
+## `bscwdc_qdislib`
+
+Full documentation → [docs/integrations/distributed_qc.md](integrations/distributed_qc.md)
+
+Added 2026-07-28. Mirror of [Qdislib](https://github.com/bsc-wdc/qdislib)
+(Barcelona Supercomputing Centre) — Tejedor et al., SC '25 Workshops
+(doi:10.1145/3731599.3767547) and the semantic circuit cache
+(arXiv:2604.26788); hardware-aware cut selection follows SparseCut
+(arXiv:2511.05492).
+
+Cutting replaces a two-qubit gate or a wire with a quasiprobability
+decomposition, splitting the circuit into subcircuits with no quantum link.
+Every evaluation is independent, which is exactly the shape PyCOMPSs
+distributes across CPUs, GPUs and QPUs.
+
+Upstream names cuts by gate label — a gate cut is `["CZ_2"]`, a wire cut a
+pair of endpoints `[("H_1", "CZ_2")]` — and callers dispatch on the element
+shape. `QdislibCutRecord.from_find_cut()` applies that same shape test once
+and stores the kind explicitly, so a stored record never re-infers it.
+
+| Type | Purpose |
+|---|---|
+| `QdislibCutKind` / `QdislibSoftware` | `gate` \| `wire` \| `hadamard` \| `mixed`; and the emission backend (`qibo` \| `qiskit` \| `cudaq` \| `pennylane`), which must match the backend the subcircuits are evaluated on |
+| `QdislibFindCutConfig` | `find_cut` arguments; supplying `coupling_map` switches on hardware-aware (SparseCut) selection |
+| `QdislibCutCost` | The `cut_cost()` dict — `num_cuts`, `kind`, `base`, `terms`; `from_cut_cost()` ingests it verbatim |
+| `QdislibCutRecord` | The chosen cut; `from_find_cut()` classifies a raw return value, `terms` = `6**gate × 8**wire`, `to_cut_spec()` |
+| `QdislibSubcircuit` / `QdislibSubcircuitResult` | One subcircuit and its evaluation, including `executed_on` (cpu/gpu/qpu) and `cache_hit` — the three-step workflow puts execution under the caller's control, so these vary within one run |
+| `QdislibCacheStats` | Semantic cache hits/misses and `hit_rate` — the cache keys on circuit *semantics*, so equivalent subcircuits share an entry |
+| `QdislibEstimateMetrics` | The `estimate(..., return_metrics=True)` dict |
+| `QdislibRunRecord` | The whole run; `sampling_overhead`, `qubit_reduction`, `error` against an exact reference, `to_distributed_run_result()`, `to_quantum_result()` |
+| `sampling_overhead()` / `max_cuts_for_budget()` | Size a run before launching it: terms for a cut mix, and the inverse — how many cuts fit a term budget |

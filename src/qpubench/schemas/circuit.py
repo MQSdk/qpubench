@@ -40,11 +40,19 @@ class CircuitSpec(pydantic.BaseModel):
     ----
     Populate measurement_pattern. serialized is optional (JSON archive copy).
 
+    Fragmented problems
+    -------------------
+    A fragmentation decomposes the *problem* (a protein into fragments), not
+    the circuit, but it is still what this spec describes — so it goes in
+    fragmentation.  A circuit-level decomposition (partitioning across a QPU
+    network, or gate/wire cutting) goes in distribution.
+
     Vendor-neutral extension fields
     -------------------------------
-    measurement_pattern and photonic_circuit are stored as plain dicts so the
-    core stays free of vendor schema imports.  Pass any Pydantic model (it is
-    dumped automatically) and rehydrate with the vendor schema of your choice:
+    measurement_pattern, photonic_circuit, fragmentation and distribution are
+    stored as plain dicts so the core stays free of vendor schema imports.
+    Pass any Pydantic model (it is dumped automatically) and rehydrate with the
+    schema of your choice:
 
         from qpubench.schemas.johnrscott_mbqc_fpga import MBQCPattern
         spec = CircuitSpec(..., measurement_pattern=pattern)      # model or dict
@@ -52,6 +60,12 @@ class CircuitSpec(pydantic.BaseModel):
 
         from qpubench.schemas.mqsdk_photoq import PhotonicCircuitSpec
         photonic = PhotonicCircuitSpec.model_validate(spec.photonic_circuit)
+
+        from qpubench.schemas.fragmentation import FragmentationSpec
+        frag = FragmentationSpec.model_validate(spec.fragmentation)
+
+        from qpubench.schemas.distributed_execution import CircuitCutSpec
+        cut = CircuitCutSpec.model_validate(spec.distribution)
     """
     computing_model:     ComputingModel          = ComputingModel.GATE_BASED
     qubit_modality:      QubitModality | None    = None
@@ -66,8 +80,13 @@ class CircuitSpec(pydantic.BaseModel):
     gate_counts:         dict[str, int]          = {}
     measurement_pattern: dict[str, Any] | None   = None  # e.g. johnrscott_mbqc_fpga.MBQCPattern dump
     photonic_circuit:    dict[str, Any] | None   = None  # e.g. mqsdk_photoq.PhotonicCircuitSpec dump
+    fragmentation:       dict[str, Any] | None   = None  # e.g. fragmentation.FragmentationSpec dump
+    distribution:        dict[str, Any] | None   = None  # e.g. distributed_execution.CircuitCutSpec dump
 
-    @pydantic.field_validator("measurement_pattern", "photonic_circuit", mode="before")
+    @pydantic.field_validator(
+        "measurement_pattern", "photonic_circuit", "fragmentation", "distribution",
+        mode="before",
+    )
     @classmethod
     def _dump_vendor_models(cls, v: Any) -> Any:
         # Accept any vendor Pydantic model directly; store its dict dump so

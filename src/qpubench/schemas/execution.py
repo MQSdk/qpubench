@@ -209,6 +209,29 @@ class ExecutionOptions(pydantic.BaseModel):
     cluster_depth         number of measurement rounds (D)
     adaptive_corrections  whether byproduct corrections are applied
 
+    Distributed execution
+    ---------------------
+    distributed_run_config  how to spread one circuit over several QPUs —
+                          partitioning across a quantum network, or gate /
+                          wire cutting.  Stored as a dict so the core stays
+                          free of the cross-cutting schema import; pass a
+                          model and it is dumped automatically:
+
+                              from qpubench.schemas.distributed_execution import (
+                                  DistributedRunConfig,
+                              )
+                              options = ExecutionOptions(
+                                  distributed_run_config=DistributedRunConfig(...),
+                              )
+                              cfg = DistributedRunConfig.model_validate(
+                                  options.distributed_run_config
+                              )
+
+                          These are the *inputs* (budgets, strategy, seed).
+                          The choices the tool made — which gates were cut,
+                          which qubit went to which QPU — are outputs and
+                          belong on CircuitSpec.distribution.
+
     Vendor mitigation options
     -------------------------
     mitigation_options    vendor-neutral dict for strategy-specific options,
@@ -243,6 +266,14 @@ class ExecutionOptions(pydantic.BaseModel):
     cluster_depth:        int | None              = None
     adaptive_corrections: bool                    = True
     mitigation_options:   dict[str, Any]          = {}
+    distributed_run_config: dict[str, Any] | None = None
+
+    @pydantic.field_validator("distributed_run_config", mode="before")
+    @classmethod
+    def _dump_distributed_run_config(cls, v: Any) -> Any:
+        # Accept distributed_execution.DistributedRunConfig directly; store its
+        # dict dump so the core keeps zero cross-module schema imports.
+        return v.model_dump() if isinstance(v, pydantic.BaseModel) else v
 
     @pydantic.field_validator("mitigation_options", mode="before")
     @classmethod
