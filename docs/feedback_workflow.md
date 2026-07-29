@@ -83,6 +83,10 @@ transcript, a raw `.txt` file dropped in `temporary/`), the general shape:
 
 3. **Label it.** This repo's convention so far:
    - `reviewer-feedback` — came from an external review pass
+   - `schema-review` — came from an internal cross-schema review of the core
+     record format; the finding is written up in
+     [schema_review.md](schema_review.md) and sequenced in
+     [roadmap.md](roadmap.md)
    - `docs` / `enhancement` / `bug` — what kind of change it needs
    - `follow-up` — a gap noticed *while* fixing something else, not the
      original ask
@@ -108,6 +112,24 @@ transcript, a raw `.txt` file dropped in `temporary/`), the general shape:
    resolved in the same pass — a follow-up discovered mid-fix (e.g. "this
    adapter doesn't exist yet either") is exactly what `git bug bug new`
    without a `status close` is for.
+
+### Not only external feedback
+
+The same intake works for findings the project generates about itself. The
+2026-07-29 cross-schema review ([schema_review.md](schema_review.md)) produced
+13 findings about the core record format; each was filed as one bug labelled
+`schema-review`, and [roadmap.md](roadmap.md) sequences them into phases.
+
+That split is deliberate and worth copying for the next review:
+
+| Where | Holds | Changes when |
+|---|---|---|
+| `schema_review.md` | the evidence — what is missing and why it matters | a finding is applied (say so) or disproved |
+| `roadmap.md` | the plan — phases, acceptance criteria, what is explicitly *not* being done | an item lands or is re-prioritised |
+| git-bug | the status | continuously |
+
+Duplicating status into the markdown is how a roadmap rots. Duplicating the
+evidence into a bug body is fine — a bug should stand alone.
 
 ### Example — this session's intake
 

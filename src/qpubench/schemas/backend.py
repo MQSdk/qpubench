@@ -212,6 +212,48 @@ class BackendSpec(pydantic.BaseModel):
         )
 
     @classmethod
+    def quest(
+        cls,
+        num_qubits: int | None = None,
+        *,
+        density_matrix: bool = False,
+        gpu: bool = False,
+        distributed_nodes: int = 1,
+        precision: int = 2,
+    ) -> BackendSpec:
+        """QuEST v4 — state-vector / density-matrix simulator (C, EPCC).
+
+        density_matrix     simulate 4**n amplitudes instead of 2**n; required
+                           for QuEST's mix* decoherence channels
+        distributed_nodes  MPI world size; >1 splits the state across nodes
+        precision          FLOAT_PRECISION: 1 (float), 2 (double), 4 (long
+                           double).  Compile-time in QuEST, and quad is
+                           unavailable on GPU.
+
+        Deployment and precision go into ``auth`` because BackendSpec has no
+        fields for them; ``questkit_quest.QuESTQuregSpec`` is the typed form,
+        and its ``to_backend_spec()`` produces the same shape.
+        """
+        parts = []
+        if gpu:
+            parts.append("gpu")
+        if distributed_nodes > 1:
+            parts.append(f"mpi{distributed_nodes}")
+        suffix = "_".join(parts) or "cpu"
+        return cls(
+            name=f"quest_{'density' if density_matrix else 'statevec'}_{suffix}",
+            provider="quest",
+            simulator=True,
+            num_qubits=num_qubits,
+            auth={
+                "precision":      str(precision),
+                "density_matrix": str(density_matrix),
+                "gpu":            str(gpu),
+                "num_nodes":      str(distributed_nodes),
+            },
+        )
+
+    @classmethod
     def cebule(
         cls,
         *,

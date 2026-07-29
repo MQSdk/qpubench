@@ -12,7 +12,7 @@ from .circuit import CircuitSpec
 from .execution import ExecutionOptions
 from .result import QuantumResult
 
-SCHEMA_VERSION = "6.0.0"
+SCHEMA_VERSION = "6.1.0"
 
 def _utcnow() -> datetime.datetime:
     return datetime.datetime.now(datetime.UTC)

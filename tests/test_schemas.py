@@ -4015,3 +4015,764 @@ def test_gsopt_config_is_not_the_shared_vqe_contract():
     assert GSOptVQERunConfig.__module__.endswith("bestquark_gsopt")
     assert not issubclass(GSOptVQERunConfig, VQERunConfig)
     assert "vqe_run_config" in ExecutionOptions.model_fields
+
+
+from qpubench.schemas.mirrors.hqs_active_space_finder import (  # noqa: E402
+    DEFAULT_ENTROPY_THRESHOLD,
+    ASFActiveSpace,
+    ASFCandidateSpace,
+    ASFOrbitalEntropy,
+    ASFSelectionConfig,
+    ASFSelectionMode,
+    ASFSelectionResult,
+)
+from qpubench.schemas.mirrors.hqs_qoqo import (  # noqa: E402
+    QoqoCircuitSpec,
+    QoqoDeviceSpec,
+    QoqoDeviceTopology,
+    QoqoExpectationRule,
+    QoqoImperfectReadout,
+    QoqoMeasurementSpec,
+    QoqoMeasurementType,
+    QoqoNoiseModelSpec,
+    QoqoNoiseModelType,
+    QoqoOperation,
+    QoqoOperationCategory,
+    QoqoParameter,
+    QoqoPauliProductMask,
+    QoqoPauliZProductInput,
+    QoqoPragma,
+    QoqoQuantumProgramSpec,
+)
+from qpubench.schemas.mirrors.hqs_qoqo_qasm import (  # noqa: E402
+    DEFAULT_QUBIT_REGISTER_NAME,
+    QasmDialect,
+    QoqoQasmConfig,
+    QoqoQasmTranslationResult,
+)
+from qpubench.schemas.mirrors.hqs_struqture import (  # noqa: E402
+    STRUQTURE_1_TO_2_NAMES,
+    DecoherenceProductSpec,
+    ModeProductSpec,
+    PauliProductSpec,
+    SingleDecoherenceOperator,
+    SingleSpinOperator,
+    StruqtureAlgebra,
+    StruqtureMappedHamiltonian,
+    StruqtureMapping,
+    StruqtureNoiseOperator,
+    StruqtureNoiseTerm,
+    StruqtureOpenSystem,
+    StruqtureOperator,
+    StruqtureSerialisationMeta,
+    StruqtureTerm,
+    StruqtureType,
+    StruqtureValue,
+)
+from qpubench.schemas.mirrors.questkit_quest import (  # noqa: E402
+    QuESTCalculation,
+    QuESTCalculationResult,
+    QuESTChannelType,
+    QuESTDeployment,
+    QuESTNoiseChannel,
+    QuESTPauliStr,
+    QuESTPauliStrSum,
+    QuESTPrecision,
+    QuESTQuregSpec,
+    QuESTRunRecord,
+)
+
+
+# ---------------------------------------------------------------------------
+# hqs_struqture
+# ---------------------------------------------------------------------------
+
+def test_struqture_pauli_product_round_trips_with_core_pauli_term():
+    """struqture's index type and the core PauliTerm are the same thing minus
+    the coefficient, so the conversion must be lossless in both directions."""
+    term = PauliTerm(
+        qubit_indices=(0, 2),
+        pauli_ops=(PauliLabel.X, PauliLabel.Z),
+        coefficient=ComplexNumber(re=0.5, im=-0.25),
+    )
+    product = PauliProductSpec.from_pauli_term(term)
+    assert product.to_struqture_string() == "0X2Z"
+    assert product.to_pauli_term(term.coefficient) == term
+
+
+def test_struqture_pauli_product_drops_identity_factors():
+    """struqture has no I in its single-spin basis: an unlisted qubit *is* the
+    identity, so an explicit I must be dropped rather than encoded."""
+    term = PauliTerm(
+        qubit_indices=(0, 1, 2),
+        pauli_ops=(PauliLabel.X, PauliLabel.I, PauliLabel.Z),
+    )
+    product = PauliProductSpec.from_pauli_term(term)
+    assert product.qubit_indices == (0, 2)
+    assert product.operators == (SingleSpinOperator.X, SingleSpinOperator.Z)
+
+
+def test_struqture_value_rejects_both_and_neither():
+    with pytest.raises(pydantic.ValidationError):
+        StruqtureValue()
+    with pytest.raises(pydantic.ValidationError):
+        StruqtureValue(numeric=ComplexNumber(re=1.0), symbolic_re="theta")
+    assert StruqtureValue.from_float(2.0).is_symbolic is False
+    assert StruqtureValue(symbolic_re="theta").is_symbolic is True
+
+
+def test_struqture_operator_observable_round_trip():
+    obs = SparsePauliObservable(
+        num_qubits=3,
+        terms=[
+            PauliTerm(qubit_indices=(0,), pauli_ops=(PauliLabel.Z,),
+                      coefficient=ComplexNumber(re=-1.0)),
+            PauliTerm(qubit_indices=(0, 1), pauli_ops=(PauliLabel.X, PauliLabel.X),
+                      coefficient=ComplexNumber(re=0.5)),
+        ],
+    )
+    operator = StruqtureOperator.from_sparse_pauli_observable(obs)
+    assert operator.meta.type_name == StruqtureType.PAULI_HAMILTONIAN.value
+    assert operator.current_number_spins == 2
+    assert operator.to_sparse_pauli_observable(num_qubits=3).terms == obs.terms
+
+
+def test_struqture_symbolic_operator_refuses_numeric_conversion():
+    """An unbound parameter has no numeric value; converting anyway would
+    silently invent one."""
+    operator = StruqtureOperator(
+        meta=StruqtureSerialisationMeta(type_name=StruqtureType.PAULI_HAMILTONIAN.value),
+        algebra=StruqtureAlgebra.SPINS,
+        terms=[
+            StruqtureTerm(
+                pauli_product=PauliProductSpec(
+                    qubit_indices=(0,), operators=(SingleSpinOperator.Z,)
+                ),
+                coefficient=StruqtureValue(symbolic_re="theta"),
+            )
+        ],
+    )
+    assert operator.is_symbolic
+    with pytest.raises(ValueError, match="Symbolic coefficients"):
+        operator.to_sparse_pauli_observable()
+
+
+def test_struqture_fermion_operator_refuses_observable_conversion():
+    operator = StruqtureOperator(
+        meta=StruqtureSerialisationMeta(type_name=StruqtureType.FERMION_HAMILTONIAN.value),
+        algebra=StruqtureAlgebra.FERMIONS,
+        terms=[
+            StruqtureTerm(
+                mode_product=ModeProductSpec(creators=(0,), annihilators=(0,)),
+                coefficient=StruqtureValue.from_float(1.0),
+            )
+        ],
+    )
+    with pytest.raises(ValueError, match="jordan_wigner"):
+        operator.to_sparse_pauli_observable()
+
+
+def test_struqture_hermitian_mode_product_requires_canonical_ordering():
+    """Each h.c. pair needs exactly one representative, or the conjugate term
+    is counted twice."""
+    ModeProductSpec(creators=(0,), annihilators=(2,), hermitian=True)
+    with pytest.raises(pydantic.ValidationError):
+        ModeProductSpec(creators=(2,), annihilators=(0,), hermitian=True)
+    # non-Hermitian products carry no such constraint
+    ModeProductSpec(creators=(2,), annihilators=(0,))
+
+
+def test_struqture_noise_term_needs_both_sides_of_the_pair():
+    """A Lindblad index is (L_i, L_j); a missing side is not the identity."""
+    left = DecoherenceProductSpec(
+        qubit_indices=(0,), operators=(SingleDecoherenceOperator.Z,)
+    )
+    with pytest.raises(pydantic.ValidationError):
+        StruqtureNoiseTerm(left_decoherence=left, rate=StruqtureValue.from_float(1.0))
+    term = StruqtureNoiseTerm(
+        left_decoherence=left,
+        right_decoherence=left,
+        rate=StruqtureValue.from_float(1.0),
+    )
+    assert term.is_diagonal
+
+
+def test_struqture_noise_operator_flags_off_diagonal_rates():
+    """Off-diagonal M_ij has no representation in a flat channel list, so a
+    consumer needs to be able to see it is there before dropping it."""
+    z = DecoherenceProductSpec(
+        qubit_indices=(0,), operators=(SingleDecoherenceOperator.Z,)
+    )
+    x = DecoherenceProductSpec(
+        qubit_indices=(0,), operators=(SingleDecoherenceOperator.X,)
+    )
+    meta = StruqtureSerialisationMeta(
+        type_name=StruqtureType.PAULI_LINDBLAD_NOISE_OPERATOR.value
+    )
+    diagonal_only = StruqtureNoiseOperator(
+        meta=meta,
+        algebra=StruqtureAlgebra.SPINS,
+        terms=[
+            StruqtureNoiseTerm(
+                left_decoherence=z, right_decoherence=z,
+                rate=StruqtureValue.from_float(0.1),
+            )
+        ],
+    )
+    assert not diagonal_only.has_off_diagonal_rates
+    mixed = diagonal_only.model_copy(
+        update={
+            "terms": [
+                *diagonal_only.terms,
+                StruqtureNoiseTerm(
+                    left_decoherence=z, right_decoherence=x,
+                    rate=StruqtureValue.from_float(0.01),
+                ),
+            ]
+        }
+    )
+    assert mixed.has_off_diagonal_rates
+
+
+def test_struqture_serialisation_meta_version_rule():
+    """struqture accepts a payload when the reader's major matches the
+    declared minimum and its minor is at least as new."""
+    meta = StruqtureSerialisationMeta(
+        type_name=StruqtureType.PAULI_HAMILTONIAN.value,
+        min_version=(2, 1, 0),
+        version="2.3.0",
+    )
+    assert meta.can_be_read_by((2, 1, 0))
+    assert meta.can_be_read_by((2, 5, 0))
+    assert not meta.can_be_read_by((2, 0, 9))
+    assert not meta.can_be_read_by((1, 9, 0))
+
+
+def test_struqture_mapped_hamiltonian_records_mapping_provenance():
+    """The point of the type: a qubit Hamiltonian with the fermionic operator
+    and mapping that produced it, so VQAConfig.mapper is checkable."""
+    source = StruqtureOperator(
+        meta=StruqtureSerialisationMeta(type_name=StruqtureType.FERMION_HAMILTONIAN.value),
+        algebra=StruqtureAlgebra.FERMIONS,
+        terms=[
+            StruqtureTerm(
+                mode_product=ModeProductSpec(creators=(0,), annihilators=(0,)),
+                coefficient=StruqtureValue.from_float(1.0),
+            )
+        ],
+    )
+    mapped = StruqtureOperator.from_sparse_pauli_observable(
+        SparsePauliObservable(
+            num_qubits=1,
+            terms=[PauliTerm(qubit_indices=(0,), pauli_ops=(PauliLabel.Z,))],
+        )
+    )
+    record = StruqtureMappedHamiltonian(source=source, mapped=mapped)
+    assert record.mapping is StruqtureMapping.JORDAN_WIGNER
+
+    with pytest.raises(pydantic.ValidationError):
+        StruqtureMappedHamiltonian(source=mapped, mapped=mapped)   # spin → spin
+    with pytest.raises(pydantic.ValidationError):
+        StruqtureMappedHamiltonian(source=source, mapped=source)   # target not spin
+
+
+def test_struqture_open_system_halves_must_share_an_algebra():
+    spin_meta = StruqtureSerialisationMeta(
+        type_name=StruqtureType.PAULI_HAMILTONIAN.value
+    )
+    system = StruqtureOperator(meta=spin_meta, algebra=StruqtureAlgebra.SPINS)
+    noise = StruqtureNoiseOperator(
+        meta=StruqtureSerialisationMeta(
+            type_name=StruqtureType.BOSON_LINDBLAD_NOISE_OPERATOR.value
+        ),
+        algebra=StruqtureAlgebra.BOSONS,
+    )
+    with pytest.raises(pydantic.ValidationError):
+        StruqtureOpenSystem(meta=spin_meta, system=system, noise=noise)
+
+
+def test_struqture_1_to_2_rename_map_is_complete_and_targets_real_types():
+    """The 1.x names must all map onto values StruqtureType actually has."""
+    known = {t.value for t in StruqtureType}
+    assert set(STRUQTURE_1_TO_2_NAMES.values()) <= known
+    assert STRUQTURE_1_TO_2_NAMES["SpinSystem"] == "PauliOperator"
+
+
+# ---------------------------------------------------------------------------
+# hqs_qoqo
+# ---------------------------------------------------------------------------
+
+def _qoqo_rotate(angle: str | float, qubit: int = 0) -> QoqoOperation:
+    param = (
+        QoqoParameter(expression=angle) if isinstance(angle, str)
+        else QoqoParameter(value=angle)
+    )
+    return QoqoOperation(name="RotateX", qubits=[qubit], parameters={"theta": param})
+
+
+def test_qoqo_circuit_derives_width_from_operations():
+    """qoqo circuits declare no width — a Circuit is just a list of
+    operations, and its size is whatever they imply."""
+    circuit = QoqoCircuitSpec(
+        operations=[
+            _qoqo_rotate(0.5, qubit=0),
+            QoqoOperation(name="CNOT", qubits=[0, 3]),
+        ],
+        definitions={"ro": 4},
+    )
+    assert circuit.num_qubits == 4
+    assert circuit.gate_counts() == {"RotateX": 1, "CNOT": 1}
+    spec = circuit.to_circuit_spec()
+    assert spec.num_qubits == 4
+    assert spec.num_classical_bits == 4
+    assert spec.serialized is None   # translation is qoqo_qasm's job, and lossy
+
+
+def test_qoqo_parameter_is_bound_or_free_never_both():
+    with pytest.raises(pydantic.ValidationError):
+        QoqoParameter()
+    with pytest.raises(pydantic.ValidationError):
+        QoqoParameter(value=1.0, expression="theta")
+
+
+def test_qoqo_circuit_reports_free_parameters_and_pragmas():
+    circuit = QoqoCircuitSpec(
+        operations=[
+            _qoqo_rotate("theta"),
+            _qoqo_rotate("2 * theta", qubit=1),
+            QoqoOperation(
+                name=QoqoPragma.DAMPING.value,
+                category=QoqoOperationCategory.PRAGMA,
+                qubits=[0],
+            ),
+        ]
+    )
+    assert circuit.is_parametric
+    assert circuit.free_parameters == ["theta", "2 * theta"]
+    assert circuit.pragmas == ["PragmaDamping"]
+    assert circuit.gate_counts() == {"RotateX": 2}   # PRAGMAs are not gates
+
+
+def test_qoqo_expectation_rule_is_linear_or_symbolic():
+    with pytest.raises(pydantic.ValidationError):
+        QoqoExpectationRule(name="energy")
+    with pytest.raises(pydantic.ValidationError):
+        QoqoExpectationRule(name="energy", linear={0: 1.0}, symbolic="pauli_product_0")
+
+
+def test_qoqo_pauli_z_product_input_checks_rule_indices():
+    """A combination rule referencing a product that was never measured is a
+    silently wrong energy, not a missing one."""
+    mask = QoqoPauliProductMask(readout="ro", index=0, qubit_mask=[0, 1])
+    QoqoPauliZProductInput(
+        number_qubits=2,
+        pauli_products=[mask],
+        expectation_rules=[QoqoExpectationRule(name="energy", linear={0: -1.0})],
+    )
+    with pytest.raises(pydantic.ValidationError):
+        QoqoPauliZProductInput(
+            number_qubits=2,
+            pauli_products=[mask],
+            expectation_rules=[QoqoExpectationRule(name="energy", linear={0: -1.0, 7: 1.0})],
+        )
+
+
+def test_qoqo_flipped_measurement_doubles_the_circuit_count():
+    """Flipped measurement cancels readout asymmetry by running each basis
+    twice — a real cost that belongs in the comparison."""
+    products = [
+        QoqoPauliProductMask(readout="ro_z", index=0, qubit_mask=[0]),
+        QoqoPauliProductMask(readout="ro_x", index=1, qubit_mask=[0]),
+    ]
+    plain = QoqoPauliZProductInput(number_qubits=1, pauli_products=products)
+    flipped = QoqoPauliZProductInput(
+        number_qubits=1, pauli_products=products, use_flipped_measurement=True
+    )
+    assert plain.num_circuits_per_evaluation == 2
+    assert flipped.num_circuits_per_evaluation == 4
+
+
+def test_qoqo_measurement_spec_requires_the_matching_input():
+    with pytest.raises(pydantic.ValidationError):
+        QoqoMeasurementSpec(measurement_type=QoqoMeasurementType.PAULI_Z_PRODUCT)
+    with pytest.raises(pydantic.ValidationError):
+        QoqoMeasurementSpec(measurement_type=QoqoMeasurementType.CHEATED)
+    # ClassicalRegister returns raw registers and takes no input at all
+    QoqoMeasurementSpec(measurement_type=QoqoMeasurementType.CLASSICAL_REGISTER)
+    with pytest.raises(pydantic.ValidationError):
+        QoqoMeasurementSpec(
+            measurement_type=QoqoMeasurementType.CLASSICAL_REGISTER,
+            pauli_input=QoqoPauliZProductInput(number_qubits=1),
+        )
+
+
+def test_qoqo_device_projects_lindblad_rates_onto_backend_spec():
+    """T1 = 1/M00 and T2 = 1/M22; the off-diagonal entries have no
+    BackendSpec representation and are dropped."""
+    device = QoqoDeviceSpec(
+        name="lattice",
+        topology=QoqoDeviceTopology.SQUARE_LATTICE,
+        number_qubits=4,
+        rows=2,
+        columns=2,
+        single_qubit_gates=["RotateX"],
+        two_qubit_gates=["CNOT"],
+        two_qubit_edges=[(0, 1), (1, 3)],
+        single_qubit_gate_times={"RotateX": {0: 2.0e-8}},
+        two_qubit_gate_times={"CNOT": {"0-1": 3.0e-7}},
+        decoherence_rates={
+            0: [[1.0e4, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 0.0, 5.0e3]],
+        },
+    )
+    assert device.damping_rate(0) == 1.0e4
+    assert device.dephasing_rate(0) == 5.0e3
+    backend = device.to_backend_spec()
+    assert backend.num_qubits == 4
+    assert backend.coupling_map == [(0, 1), (1, 3)]
+    assert backend.qubit_t1(0) == pytest.approx(1.0e-4)
+    assert backend.gate_error("CNOT", (0, 1)) is None   # qoqo has no error rates
+    cnot = next(g for g in backend.gate_characteristics if g.gate_name == "CNOT")
+    assert cnot.duration_s == pytest.approx(3.0e-7)
+
+
+def test_qoqo_square_lattice_dimensions_must_match_qubit_count():
+    with pytest.raises(pydantic.ValidationError):
+        QoqoDeviceSpec(
+            name="bad", topology=QoqoDeviceTopology.SQUARE_LATTICE,
+            number_qubits=5, rows=2, columns=2,
+        )
+    with pytest.raises(pydantic.ValidationError):
+        QoqoDeviceSpec(
+            name="bad", topology=QoqoDeviceTopology.SQUARE_LATTICE, number_qubits=4,
+        )
+
+
+def test_qoqo_decoherence_matrix_must_be_three_by_three():
+    """The rate matrix is indexed over (sigma+, sigma-, sigma^z)."""
+    with pytest.raises(pydantic.ValidationError):
+        QoqoDeviceSpec(
+            name="d", topology=QoqoDeviceTopology.ALL_TO_ALL, number_qubits=1,
+            decoherence_rates={0: [[1.0, 0.0], [0.0, 1.0]]},
+        )
+
+
+def test_qoqo_noise_model_requires_its_own_payload():
+    with pytest.raises(pydantic.ValidationError):
+        QoqoNoiseModelSpec(model_type=QoqoNoiseModelType.IMPERFECT_READOUT)
+    with pytest.raises(pydantic.ValidationError):
+        QoqoNoiseModelSpec(model_type=QoqoNoiseModelType.SINGLE_QUBIT_OVERROTATION)
+    model = QoqoNoiseModelSpec(
+        model_type=QoqoNoiseModelType.IMPERFECT_READOUT,
+        readout=QoqoImperfectReadout.uniform(3, 0.02, 0.05),
+    )
+    assert model.readout is not None
+    assert model.readout.prob_detect_1_as_0 == {0: 0.05, 1: 0.05, 2: 0.05}
+
+
+def test_qoqo_noise_model_dumps_a_struqture_noise_operator():
+    """The mirror stores the Lindblad operator as a plain dict so it does not
+    import another mirror; it must still round-trip through that mirror."""
+    z = DecoherenceProductSpec(
+        qubit_indices=(0,), operators=(SingleDecoherenceOperator.Z,)
+    )
+    noise = StruqtureNoiseOperator(
+        meta=StruqtureSerialisationMeta(
+            type_name=StruqtureType.PLUS_MINUS_LINDBLAD_NOISE_OPERATOR.value
+        ),
+        algebra=StruqtureAlgebra.SPINS,
+        terms=[
+            StruqtureNoiseTerm(
+                left_decoherence=z, right_decoherence=z,
+                rate=StruqtureValue.from_float(0.1),
+            )
+        ],
+    )
+    model = QoqoNoiseModelSpec(
+        model_type=QoqoNoiseModelType.CONTINUOUS_DECOHERENCE,
+        lindblad_noise=noise,
+    )
+    assert isinstance(model.lindblad_noise, dict)
+    assert StruqtureNoiseOperator.model_validate(model.lindblad_noise) == noise
+
+
+def test_qoqo_quantum_program_parameter_order_is_the_contract():
+    program = QoqoQuantumProgramSpec(
+        measurement=QoqoMeasurementSpec(
+            measurement_type=QoqoMeasurementType.PAULI_Z_PRODUCT,
+            pauli_input=QoqoPauliZProductInput(number_qubits=2),
+        ),
+        input_parameter_names=["theta", "phi"],
+    )
+    assert program.num_free_parameters == 2
+    assert program.input_parameter_names[0] == "theta"
+
+
+# ---------------------------------------------------------------------------
+# hqs_qoqo_qasm
+# ---------------------------------------------------------------------------
+
+def test_qasm_dialect_maps_onto_core_circuit_format():
+    """Two records can both say format=QASM3 while only one is portable."""
+    assert QasmDialect.V3_BRAKET.circuit_format is CircuitFormat.QASM3
+    assert QasmDialect.V2_QULACS.circuit_format is CircuitFormat.QASM2
+    assert QasmDialect.V3_VANILLA.is_portable
+    assert not QasmDialect.V3_BRAKET.is_portable
+    assert not QasmDialect.V2_QULACS.is_portable   # omits gate definitions
+
+
+def test_qasm_dialect_values_are_the_strings_upstream_parses():
+    """Stored configs are handed back to qoqo_qasm verbatim."""
+    assert QoqoQasmConfig(dialect=QasmDialect.V3_ROQOQO).version_string == "3.0Roqoqo"
+    assert QoqoQasmConfig().qubit_register_name == DEFAULT_QUBIT_REGISTER_NAME
+
+
+def test_qasm_translation_success_and_faithfulness_are_different():
+    """A translation that dropped noise pragmas succeeded, and describes a
+    different experiment."""
+    vanilla = QoqoQasmConfig(dialect=QasmDialect.V3_VANILLA)
+    dropped = QoqoQasmTranslationResult(
+        config=vanilla, qasm="OPENQASM 3.0;", dropped_pragmas=["PragmaDamping"],
+    )
+    assert dropped.succeeded
+    assert not dropped.is_faithful
+
+    refused = QoqoQasmTranslationResult(config=vanilla, untranslated_ops=["PragmaLoop"])
+    assert not refused.succeeded
+
+
+def test_qasm_pragma_carrying_dialect_cannot_report_dropped_pragmas():
+    with pytest.raises(pydantic.ValidationError):
+        QoqoQasmTranslationResult(
+            config=QoqoQasmConfig(dialect=QasmDialect.V3_BRAKET),
+            qasm="OPENQASM 3.0;",
+            dropped_pragmas=["PragmaDamping"],
+        )
+
+
+# ---------------------------------------------------------------------------
+# hqs_active_space_finder
+# ---------------------------------------------------------------------------
+
+def test_asf_active_space_derives_size_and_qubit_count():
+    space = ASFActiveSpace(nel=6, mo_list=[3, 4, 5, 6, 7, 8], mo_coeff_ref="chk:mp2no")
+    assert space.norb == 6
+    assert space.cas_label == "CAS(6,6)"
+    assert space.num_qubits_jordan_wigner == 12
+
+
+def test_asf_active_space_validates_against_its_mo_basis():
+    """Indices are meaningless without the orbitals they index."""
+    with pytest.raises(pydantic.ValidationError):
+        ASFActiveSpace(nel=2, mo_list=[0, 5], mo_coeff_shape=(10, 4))
+    with pytest.raises(pydantic.ValidationError):
+        ASFActiveSpace(nel=2, mo_list=[0, 0])          # duplicate index
+    with pytest.raises(pydantic.ValidationError):
+        ASFActiveSpace(nel=5, mo_list=[0, 1])          # 5 electrons, 4 spin-orbitals
+    with pytest.raises(pydantic.ValidationError):
+        ASFActiveSpace(nel=2, mo_list=[0], mo_coeff_shape=(4, 10))   # more MOs than AOs
+
+
+def test_asf_active_space_index_remapping_round_trips():
+    space = ASFActiveSpace(nel=4, mo_list=[2, 5, 9])
+    assert space.to_active_indices([5, 9]) == [1, 2]
+    assert space.from_active_indices([1, 2]) == [5, 9]
+
+
+def test_asf_to_gsopt_active_space_drops_the_orbital_link():
+    """The conversion is lossy in the one way that matters, and says so."""
+    space = ASFActiveSpace(nel=4, mo_list=[4, 5], mo_coeff_ref="chk:mp2no")
+    converted = space.to_gsopt_active_space(occupied_indices=[0, 1, 2, 3])
+    assert converted.active_electrons == 4
+    assert converted.active_orbitals == 2
+    assert converted.active_indices == [4, 5]
+    assert not hasattr(converted, "mo_coeff_ref")
+
+
+def test_asf_sized_selection_requires_a_requested_size():
+    with pytest.raises(pydantic.ValidationError):
+        ASFSelectionConfig(mode=ASFSelectionMode.SIZED)
+    ASFSelectionConfig(mode=ASFSelectionMode.SIZED, requested_size=4)
+    ASFSelectionConfig(mode=ASFSelectionMode.SIZED, requested_size=(6, 6))
+
+
+def test_asf_selection_result_must_match_its_mode():
+    space = ASFActiveSpace(nel=2, mo_list=[0, 1])
+    with pytest.raises(pydantic.ValidationError):
+        ASFSelectionResult(config=ASFSelectionConfig())          # entropy, no space
+    with pytest.raises(pydantic.ValidationError):
+        ASFSelectionResult(                                       # many, no candidates
+            config=ASFSelectionConfig(mode=ASFSelectionMode.MANY),
+            active_space=space,
+        )
+    result = ASFSelectionResult(
+        config=ASFSelectionConfig(mode=ASFSelectionMode.MANY),
+        candidates=[ASFCandidateSpace(active_space=space, rank=0)],
+    )
+    assert result.selected_orbitals == []
+
+
+def test_asf_default_entropy_threshold_matches_upstream():
+    """-0.1 * ln(0.25); a natural-log entropy scale, not a tuned constant."""
+    assert DEFAULT_ENTROPY_THRESHOLD == pytest.approx(-0.1 * math.log(0.25))
+    assert ASFSelectionConfig().entropy_threshold == DEFAULT_ENTROPY_THRESHOLD
+
+
+def test_asf_result_reports_the_entropy_spectrum():
+    result = ASFSelectionResult(
+        config=ASFSelectionConfig(),
+        active_space=ASFActiveSpace(nel=2, mo_list=[4]),
+        entropies=[
+            ASFOrbitalEntropy(mo_index=3, entropy=0.01),
+            ASFOrbitalEntropy(mo_index=4, entropy=0.62, selected=True),
+        ],
+    )
+    assert result.max_entropy == pytest.approx(0.62)
+    assert result.selected_orbitals == [4]
+
+
+# ---------------------------------------------------------------------------
+# questkit_quest
+# ---------------------------------------------------------------------------
+
+def test_quest_density_matrix_costs_the_square_of_a_statevector():
+    statevec = QuESTQuregSpec(num_qubits=10)
+    density = QuESTQuregSpec(num_qubits=10, is_density_matrix=True)
+    assert statevec.num_amplitudes == 2 ** 10
+    assert density.num_amplitudes == 4 ** 10
+    assert statevec.bytes_per_amplitude == 16          # double precision qcomp
+    assert density.state_bytes == statevec.state_bytes ** 2 // 16
+
+
+def test_quest_single_precision_halves_the_amplitude_width():
+    single = QuESTQuregSpec(num_qubits=8, precision=QuESTPrecision.SINGLE)
+    assert single.bytes_per_amplitude == 8
+    assert single.precision.epsilon > QuESTPrecision.DOUBLE.epsilon
+
+
+def test_quest_rejects_quad_precision_on_gpu():
+    """QuEST refuses to build FLOAT_PRECISION=4 against CUDA."""
+    with pytest.raises(pydantic.ValidationError):
+        QuESTQuregSpec(
+            num_qubits=4,
+            precision=QuESTPrecision.QUAD,
+            deployment=QuESTDeployment(gpu_accelerated=True),
+        )
+
+
+def test_quest_deployment_flags_and_node_count_must_agree():
+    with pytest.raises(pydantic.ValidationError):
+        QuESTDeployment(distributed=True)                    # num_nodes still 1
+    with pytest.raises(pydantic.ValidationError):
+        QuESTDeployment(num_nodes=4)                         # not marked distributed
+    with pytest.raises(pydantic.ValidationError):
+        QuESTDeployment(distributed=True, num_nodes=4, rank=4)
+    dep = QuESTDeployment(
+        multithreaded=True, gpu_accelerated=True, distributed=True, num_nodes=4
+    )
+    assert dep.summary == "omp+gpu+mpi(4)"
+
+
+def test_quest_distributed_state_splits_across_nodes():
+    spec = QuESTQuregSpec(
+        num_qubits=20,
+        deployment=QuESTDeployment(distributed=True, num_nodes=4),
+    )
+    assert spec.bytes_per_node == spec.state_bytes // 4
+
+
+def test_quest_backend_spec_carries_deployment_and_precision():
+    spec = QuESTQuregSpec(
+        num_qubits=12,
+        is_density_matrix=True,
+        precision=QuESTPrecision.SINGLE,
+        deployment=QuESTDeployment(gpu_accelerated=True),
+    )
+    backend = spec.to_backend_spec()
+    assert backend.provider == "quest"
+    assert backend.simulator
+    assert backend.auth["precision"] == "1"
+    assert backend.auth["deployment"] == "gpu"
+
+
+def test_backend_spec_quest_factory():
+    backend = BackendSpec.quest(16, gpu=True, distributed_nodes=8)
+    assert backend.provider == "quest"
+    assert backend.name == "quest_statevec_gpu_mpi8"
+    assert backend.auth["num_nodes"] == "8"
+
+
+def test_quest_pauli_str_sum_round_trips_with_core_observable():
+    obs = SparsePauliObservable(
+        num_qubits=3,
+        terms=[
+            PauliTerm(qubit_indices=(0, 1), pauli_ops=(PauliLabel.X, PauliLabel.Y),
+                      coefficient=ComplexNumber(re=0.75)),
+            PauliTerm(qubit_indices=(2,), pauli_ops=(PauliLabel.Z,),
+                      coefficient=ComplexNumber(re=-1.5)),
+        ],
+    )
+    quest_sum = QuESTPauliStrSum.from_sparse_pauli_observable(obs)
+    assert quest_sum.num_terms == 2
+    assert quest_sum.to_sparse_pauli_observable(num_qubits=3).terms == obs.terms
+
+
+def test_quest_pauli_base4_encoding_is_sequential_unlike_qrack():
+    """QuEST packs I=0,X=1,Y=2,Z=3; Qrack/Q# uses I=0,X=1,Z=2,Y=3. Mixing the
+    two silently swaps Y and Z."""
+    y_on_zero = QuESTPauliStr(qubit_indices=(0,), pauli_ops=(PauliLabel.Y,))
+    z_on_zero = QuESTPauliStr(qubit_indices=(0,), pauli_ops=(PauliLabel.Z,))
+    assert y_on_zero.to_base4_masks() == (2, 0)
+    assert z_on_zero.to_base4_masks() == (3, 0)
+    assert PauliLabel.Y.to_qrack_int() == 3
+    assert PauliLabel.Z.to_qrack_int() == 2
+
+
+def test_quest_pauli_base4_splits_high_qubits_into_the_second_word():
+    string = QuESTPauliStr(
+        qubit_indices=(1, 33), pauli_ops=(PauliLabel.X, PauliLabel.Z)
+    )
+    low, high = string.to_base4_masks()
+    assert low == 1 << 2
+    assert high == 3 << 2
+
+
+def test_quest_noise_requires_a_density_matrix():
+    """QuEST's mix* channels are undefined on a state vector."""
+    channel = QuESTNoiseChannel(
+        channel=QuESTChannelType.DAMPING, targets=[0], probability=0.01, position=4
+    )
+    with pytest.raises(pydantic.ValidationError):
+        QuESTRunRecord(qureg=QuESTQuregSpec(num_qubits=4), noise_channels=[channel])
+    record = QuESTRunRecord(
+        qureg=QuESTQuregSpec(num_qubits=4, is_density_matrix=True),
+        noise_channels=[channel],
+    )
+    assert record.noise_channels[0].position == 4
+
+
+def test_quest_named_channels_require_their_own_arguments():
+    with pytest.raises(pydantic.ValidationError):
+        QuESTNoiseChannel(channel=QuESTChannelType.DEPOLARISING, targets=[0])
+    with pytest.raises(pydantic.ValidationError):
+        QuESTNoiseChannel(channel=QuESTChannelType.PAULIS, targets=[0], prob_x=0.01)
+    with pytest.raises(pydantic.ValidationError):
+        QuESTNoiseChannel(channel=QuESTChannelType.KRAUS_MAP, targets=[0])
+
+
+def test_quest_run_record_looks_up_calculations_by_call():
+    """calcFidelity and calcPurity are both 'a number near 1'."""
+    record = QuESTRunRecord(
+        qureg=QuESTQuregSpec(num_qubits=6),
+        calculations=[
+            QuESTCalculationResult(
+                calculation=QuESTCalculation.EXPEC_PAULI_STR_SUM,
+                value=ComplexNumber(re=-1.137),
+            ),
+            QuESTCalculationResult(
+                calculation=QuESTCalculation.PURITY, value=ComplexNumber(re=1.0),
+            ),
+        ],
+    )
+    energy = record.result_for(QuESTCalculation.EXPEC_PAULI_STR_SUM)
+    assert energy is not None and energy.real_value == pytest.approx(-1.137)
+    assert record.result_for(QuESTCalculation.FIDELITY) is None

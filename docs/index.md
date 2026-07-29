@@ -183,6 +183,8 @@ runner.add_hook(lambda r: print(r.backend.name, r.result.status.value))
 | Install with uv / Poetry / conda, set up credentials | [Installation](installation.md) |
 | Understand why the code is written the way it is | [Developer guide](developer_guide.md) |
 | Look up any model, field, or enum | [Schema reference](schemas.md) |
+| See what the core record format still lacks | [Schema review](schema_review.md) |
+| See what is planned, and pick something up | [Roadmap](roadmap.md) · `git bug bug --status open` |
 | See every backend and its status (real vs. stub) | [Backends & adapters](backends.md) |
 | Store, query, and analyze results (incl. S3 / Hugging Face) | [Stores & persistence](persistence.md) |
 | Run variational algorithms (VQE, ADAPT-VQE) | [VQA algorithms](vqa.md) |
@@ -236,7 +238,7 @@ Two rules keep the ecosystem healthy: SDK imports live **inside** methods (so im
 
 The same record format covers paradigms that most benchmark tools can't express side by side. `ComputingModel` (how a program is expressed: `GATE_BASED`, `MBQC`, `FUSION_BASED`, `ADIABATIC`, `ANNEALING`, `GBS`, `SAMPLING`) and `QubitModality` (what hardware realizes it: superconducting, trapped-ion, neutral-atom, photonic, silicon-spin) are independent axes on every circuit, backend, and result — so a gate-based run on photonic hardware and a Gaussian boson sampling run land in the same store and can be queried together.
 
-Vendor- and framework-specific schemas (37 modules, from QForte and PySCF to QuEra's analog Hamiltonian simulation and Qedma's QESEM error mitigation) live in [`qpubench.schemas`](schemas.md). They are split three ways by directory: `schemas/` holds the core record types, `schemas/mirrors/` one module per external project (named `<maintainer>_<package>.py`, so the filename tells you the upstream source), and `schemas/catalogs/` the cross-cutting catalogues that draw on several upstreams at once (basis sets, Hamiltonian metadata, the advantage tracker).
+Vendor- and framework-specific schemas (41 modules, from QForte and PySCF to QuEra's analog Hamiltonian simulation and Qedma's QESEM error mitigation) live in [`qpubench.schemas`](schemas.md). They are split three ways by directory: `schemas/` holds the core record types, `schemas/mirrors/` one module per external project (named `<maintainer>_<package>.py`, so the filename tells you the upstream source), and `schemas/catalogs/` the cross-cutting catalogues that draw on several upstreams at once (basis sets, Hamiltonian metadata, the advantage tracker).
 
 ---
 

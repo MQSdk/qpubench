@@ -20,6 +20,10 @@ A module in group 2 or 3 is reached as `qpubench.schemas.catalogs.<name>` /
 `qpubench.schemas.mirrors.<name>` if you need the file directly, but every
 public type is re-exported from `qpubench.schemas`, so you rarely should.
 
+Known gaps in the core record format — and what the mirror layer has revealed
+about them — are assessed in [schema_review.md](schema_review.md). Nothing
+there has been applied; it is the list of what should be.
+
 ---
 
 ## Module index
@@ -116,6 +120,11 @@ The **Group** column matches the thematic groups used in the README's schema ove
 | [`ibm_runtime_v2`](https://github.com/Qiskit/qiskit-ibm-runtime) | Error mitigation & vendors | Qiskit Runtime V2 EstimatorV2/SamplerV2 PUB format, BitArray, ExecutionSpans | `GATE_BASED` · `SUPERCONDUCTING` | `IBMEstimatorPUB`, `IBMSamplerPUB`, `IBMExecutionSpan`, `IBMRuntimeRecord` |
 | [`ibm_cost_estimator`](#ibm_cost_estimator) | Error mitigation & vendors | Real resource estimation (ALAP-scheduled transpile + IBM's own usage formula) + dollar cost breakdown across IBM's 4 access plans | `GATE_BASED` · `SUPERCONDUCTING` | `IBMAccessPlan`, `CircuitResourceEstimate`, `PlanCostBreakdown`, `BenchmarkCostEstimate` |
 | [`mqsdk_xenakis`](#mqsdk_xenakis) | Circuit search & tooling | Xenakis GA circuit genomes and run results | `GATE_BASED` · — | `LayerGenome`, `BitstringGenome`, `QNEATGenome`, `GARunResult`, `XenakisRunConfig` |
+| [`hqs_struqture`](#hqs_struqture) | Quantum chemistry & VQA | struqture (HQS): spin / boson / fermion / mixed operator algebra, Lindblad noise operators and open systems, symbolic coefficients, per-object version metadata | all · all | `StruqtureOperator`, `StruqtureNoiseOperator`, `StruqtureOpenSystem`, `StruqtureValue`, `PauliProductSpec`, `ModeProductSpec`, `StruqtureMappedHamiltonian`, `StruqtureSerialisationMeta` |
+| [`hqs_active_space_finder`](#hqs_active_space_finder) | Quantum chemistry & VQA | ActiveSpaceFinder (HQS): entropy- and cumulant-driven active-space selection over MP2 natural orbitals + screening DMRG; carries the MO basis its indices refer to | classical (chemistry) · — | `ASFActiveSpace`, `ASFSelectionConfig`, `ASFSelectionResult`, `ASFCandidateSpace`, `ASFOrbitalEntropy`, `ASFDMRGConfig` |
+| [`hqs_qoqo`](#hqs_qoqo) | Circuit search & tooling | qoqo / roqoqo (HQS): structured circuits with in-circuit PRAGMAs, measurement inputs and their post-processing rules, `QuantumProgram`, time-based device and noise models | `GATE_BASED` · all | `QoqoCircuitSpec`, `QoqoOperation`, `QoqoPragma`, `QoqoPauliZProductInput`, `QoqoExpectationRule`, `QoqoQuantumProgramSpec`, `QoqoDeviceSpec`, `QoqoNoiseModelSpec` |
+| [`hqs_qoqo_qasm`](#hqs_qoqo_qasm) | Circuit search & tooling | qoqo_qasm (HQS): OpenQASM version **and dialect** (Vanilla / Qulacs / Roqoqo / Braket), register naming, translation-coverage record | `GATE_BASED` · — | `QasmDialect`, `QoqoQasmConfig`, `QoqoQasmTranslationResult` |
+| [`questkit_quest`](#questkit_quest) | Other paradigms | QuEST v4 (EPCC): simulator deployment (OpenMP × GPU × MPI × cuQuantum), compile-time precision, state-vector vs density-matrix memory, `mix*` decoherence channels, `calc*` result surface | `GATE_BASED` · — | `QuESTQuregSpec`, `QuESTDeployment`, `QuESTPrecision`, `QuESTPauliStrSum`, `QuESTNoiseChannel`, `QuESTCalculationResult`, `QuESTRunRecord` |
 
 ---
 
@@ -1959,3 +1968,162 @@ and stores the kind explicitly, so a stored record never re-infers it.
 | `QdislibEstimateMetrics` | The `estimate(..., return_metrics=True)` dict |
 | `QdislibRunRecord` | The whole run; `sampling_overhead`, `qubit_reduction`, `error` against an exact reference, `to_distributed_run_result()`, `to_quantum_result()` |
 | `sampling_overhead()` / `max_cuts_for_budget()` | Size a run before launching it: terms for a cut mix, and the inverse — how many cuts fit a term budget |
+
+---
+
+## `hqs_struqture`
+
+Added 2026-07-29. Mirror of [struqture](https://github.com/HQSquantumsimulations/struqture)
+(HQS Quantum Simulations) — a typed serialisation format for operators, not a
+simulator. Four algebras (spins, bosons, fermions, mixed), each with the same
+four-layer stack: Product (the index) → Operator → Hamiltonian →
+LindbladNoiseOperator / LindbladOpenSystem.
+
+Two things it carries that nothing else in this package does:
+
+- **Second-quantised operators before a qubit mapping.** `SparsePauliObservable`
+  is the *result* of Jordan-Wigner; `StruqtureMappedHamiltonian` keeps the
+  fermionic source, the mapping, and the mapped qubit operator together, so
+  `VQAConfig.mapper` becomes verifiable rather than decorative.
+- **Lindblad dissipators keyed by an ordered pair** (L_i, L_j) with rate M_ij.
+  Off-diagonal entries — coherences between decay channels — have no
+  representation in a flat rate list; `StruqtureNoiseOperator.has_off_diagonal_rates`
+  flags a payload that would lose information on the way to a channel-list
+  simulator.
+
+Struqture's versioning is stricter than qpubench's and worth knowing about:
+every object embeds `{type_name, min_version, version}` and refuses a load
+when the reader is older than the writer's declared minimum — a per-type
+contract rather than one library-wide number.
+
+| Type | Purpose |
+|---|---|
+| `StruqtureSerialisationMeta` | Per-object `{type_name, min_version, version}`; `can_be_read_by()` applies struqture's own compatibility rule |
+| `StruqtureType` / `StruqtureAlgebra` | The 19 concrete 2.0 type names; which submodule an object lives in. `STRUQTURE_1_TO_2_NAMES` maps the pre-2.0 `*System` names |
+| `StruqtureValue` | A coefficient — numeric (`ComplexNumber`) **or** symbolic expression strings, mirroring `CalculatorComplex` |
+| `PauliProductSpec` | `{X,Y,Z}` product; converts both ways with the core `PauliTerm` |
+| `DecoherenceProductSpec` / `PlusMinusProductSpec` | The `{X,iY,Z}` and `{σ⁺,σ⁻,Z}` bases — **not** interchangeable with Pauli strings; iY carries a factor of i |
+| `ModeProductSpec` | Fermionic / bosonic normal-ordered product; `hermitian=True` enforces the canonical creators[0] ≤ annihilators[0] representative |
+| `MixedProductSpec` | Tensor product across spin/boson/fermion subsystems; `subsystem_counts` is the structural signature |
+| `StruqtureOperator` | Operator **or** Hamiltonian (same wire shape, distinguished by `meta.type_name`); `to_sparse_pauli_observable()` / `from_sparse_pauli_observable()` |
+| `StruqtureNoiseTerm` / `StruqtureNoiseOperator` | The dissipator, keyed by (left, right) product pairs |
+| `StruqtureOpenSystem` | Hamiltonian + noise — what a master-equation solver integrates |
+| `StruqtureMappedHamiltonian` | Fermionic source + `StruqtureMapping` + resulting spin operator |
+
+---
+
+## `hqs_active_space_finder`
+
+Added 2026-07-29. Mirror of [ActiveSpaceFinder](https://github.com/HQSquantumsimulations/ActiveSpaceFinder)
+(HQS, with Covestro) — SCF → MP2 natural orbitals → cheap screening DMRG →
+entropy + cumulant analysis → *several* candidate active spaces.
+
+This is the fourth active-space type in the package, and deliberately so —
+they sit at different points in the pipeline:
+
+| Where | Type | What it holds |
+|---|---|---|
+| record level | `VQAConfig.active_electrons` / `.active_orbitals` | the two numbers, for cross-run filtering |
+| chosen space | `bestquark_gsopt.ActiveSpaceSpec` | occupied + active MO indices |
+| one selector | `microsoft_qdk.ActiveSpaceSelectionConfig` / `…Result` | spin-resolved alpha/beta indices |
+| selection provenance | `hqs_active_space_finder.ASFActiveSpace` | indices **plus the MO basis they refer to** |
+
+That last column is ASF's own emphatic warning and a real correctness trap:
+the MP2-natural-orbital step reorders and remixes the MOs, so index 7 in an
+ASF result is not index 7 in the preceding SCF. `mo_coeff_ref` records the
+link; `to_gsopt_active_space()` converts to the index-only form and says in
+its docstring what it drops.
+
+| Type | Purpose |
+|---|---|
+| `ASFActiveSpace` | `nel` + `mo_list` + `mo_coeff_ref`; `cas_label`, `num_qubits_jordan_wigner`, index remapping helpers |
+| `ASFSelectionConfig` | Everything needed to reproduce a selection — `entropy_threshold` (default `-0.1·ln(0.25)`), `cumulant_threshold`, bounds, SCF settings |
+| `ASFDMRGConfig` | The screening DMRG: `max_bond_dimension` 500 by default, low on purpose |
+| `ASFSelectionMode` | `entropy` (size is an output) \| `sized` (size is an input — the NISQ case) \| `many` (all candidates) |
+| `ASFPreselection` | How the *initial* subspace was chosen; the final space can only ever be a subset of it |
+| `ASFOrbitalEntropy` / `ASFCandidateSpace` | Per-orbital s₁(i); a candidate with `max_entropy_excluded` — the diagnostic for "is this space too small?" |
+| `ASFSelectionResult` | The run: chosen space, candidates it was chosen over, entropies, SCF convergence |
+
+---
+
+## `hqs_qoqo`
+
+Added 2026-07-29. Mirror of [qoqo / roqoqo](https://github.com/HQSquantumsimulations/qoqo)
+(HQS) — circuit representation and measurement post-processing, deliberately
+with no transpiler, optimiser or algorithm library.
+
+Two things it makes explicit that the core currently splits or drops:
+
+- **The measurement is part of the program.** `CircuitSpec.observables` says
+  what to measure; nothing says how counts become that number.
+  `QoqoPauliZProductInput` carries the basis-rotation circuits, a qubit mask
+  per Pauli product, and `QoqoExpectationRule` — the linear or symbolic
+  combination that produces each named expectation value. That rule is the
+  missing link between `ShotResult.counts` and `ExpectationResult.value`.
+- **PRAGMAs are positioned in the circuit.** `PragmaDamping` after gate 4 is
+  not expressible as an `ExecutionOptions` field. `QoqoPragma` enumerates all
+  27, grouped by what they do.
+
+`QoqoDeviceSpec` is also notable for being *time-based rather than
+error-rate-based*: gate durations plus a per-qubit 3×3 Lindblad rate matrix,
+with noise following from their product. `to_backend_spec()` projects onto
+`BackendSpec` (T1 = 1/M₀₀, T2 = 1/M₂₂) and says which off-diagonal
+information that projection drops.
+
+| Type | Purpose |
+|---|---|
+| `QoqoCircuitSpec` | Ordered operation list + classical registers; `num_qubits` is derived (qoqo circuits declare no width), `pragmas`, `gate_counts()`, `to_circuit_spec()` |
+| `QoqoOperation` / `QoqoOperationCategory` | One entry: hqslang name + gate/definition/measurement/pragma/input |
+| `QoqoParameter` | `CalculatorFloat` — a bound float **or** a free expression string |
+| `QoqoPragma` | All 27 PRAGMAs by group: readout, state prep, noise, control flow, scheduling |
+| `QoqoPauliZProductInput` | `number_qubits`, `use_flipped_measurement` (readout-asymmetry cancellation as measurement structure, not a mitigation pass), products and rules; `num_circuits_per_evaluation` |
+| `QoqoPauliProductMask` / `QoqoExpectationRule` | Which qubits a product spans; the linear/symbolic combination that reads it |
+| `QoqoCheatedInput` / `QoqoCheatedOperatorEntry` | Arbitrary observables as sparse matrices — the one non-Pauli-decomposed observable form here |
+| `QoqoMeasurementSpec` / `QoqoMeasurementType` | The four strategies; the real/cheated pairing isolates shot noise with everything else fixed |
+| `QoqoQuantumProgramSpec` | Measurement + **ordered** `input_parameter_names` — a callable unit of quantum work |
+| `QoqoDeviceSpec` / `QoqoDeviceTopology` | Connectivity, gate times, 3×3 decoherence matrices; `to_backend_spec()` |
+| `QoqoNoiseModelSpec` / `QoqoNoiseModelType` | The five models, distinguished by *when* noise applies: continuous / on-gate / on-idle / at-readout / overrotation |
+| `QoqoOverrotationDescription` | A miscalibrated rotation — a coherent error that accumulates, which no Lindblad rate expresses |
+
+---
+
+## `hqs_qoqo_qasm`
+
+Added 2026-07-29. Mirror of [qoqo_qasm](https://github.com/HQSquantumsimulations/qoqo_qasm)
+(HQS). One disproportionately useful idea: **"OpenQASM 3.0" is not one
+format.** `roqoqo_qasm::QasmVersion` is a version *and* a dialect, and the
+same circuit emits materially different text under each.
+
+`CircuitFormat` has `QASM2` and `QASM3` and stops there, so two records can
+both claim `format=QASM3` while one is portable and the other only loads
+under Braket. `QasmDialect` names the difference and maps back onto the core
+enum via `.circuit_format`.
+
+| Type | Purpose |
+|---|---|
+| `QasmDialect` | `2.0Vanilla` \| `2.0Qulacs` \| `3.0Vanilla` \| `3.0Roqoqo` \| `3.0Braket` — the exact strings upstream parses. `is_portable`, `supports_pragmas`, `circuit_format` |
+| `QoqoQasmConfig` | `qubit_register_name` (roqoqo has a flat qubit space; QASM needs a named register, default `q`) + dialect |
+| `QoqoQasmTranslationResult` | `untranslated_ops` (translation *refused*, not partial) vs `dropped_pragmas` (succeeded, but means something different) — `succeeded` and `is_faithful` are not the same predicate |
+
+---
+
+## `questkit_quest`
+
+Added 2026-07-29. Mirror of [QuEST v4](https://github.com/QuEST-Kit/QuEST)
+(EPCC, University of Edinburgh) — a C/C++ simulator with no circuit object:
+a program is a sequence of calls mutating a `Qureg` in place. **A QuEST run
+therefore has no serialisable circuit**; what this mirror records is the
+deployment and precision the numbers were produced at, which change both the
+runtime and the answer and have no `BackendSpec` fields today.
+
+| Type | Purpose |
+|---|---|
+| `QuESTDeployment` | OpenMP × CUDA/HIP × MPI × cuQuantum, independently combinable; `num_nodes`, `summary` (`"gpu+mpi(4)"`) |
+| `QuESTPrecision` | `FLOAT_PRECISION` 1/2/4 → float/double/long double, **compile-time**; `epsilon` bounds the accuracy a run can claim. Quad is CPU-only |
+| `QuESTQuregSpec` | `is_density_matrix` (4ⁿ vs 2ⁿ amplitudes, and the only mode `mix*` works in); derived `num_amplitudes`, `state_bytes`, `bytes_per_node`; `to_backend_spec()` |
+| `QuESTPauliStr` / `QuESTPauliStrSum` | QuEST's observable; `to_base4_masks()` packs into `lowPaulis`/`highPaulis` (I=0,X=1,Y=2,Z=3 — sequential, *unlike* `PauliLabel.to_qrack_int`). `is_approx_hermitian` mirrors QuEST's lazily-evaluated tri-state |
+| `QuESTChannelType` / `QuESTNoiseChannel` | The nine `mix*` channels with a `position` in the host program's call sequence — the only record of where a channel was applied |
+| `QuESTCalculation` / `QuESTCalculationResult` | The `calc*` family; recording *which* call produced a number is what makes it interpretable (`calcFidelity` and `calcPurity` are both "near 1") |
+| `QuESTRunRecord` | The whole run; attaches to `QuantumResult.vendor_results["quest_run"]`. Rejects noise channels on a state-vector `Qureg` |
+
+Backend factory: `BackendSpec.quest(num_qubits, density_matrix=…, gpu=…, distributed_nodes=…, precision=…)`.

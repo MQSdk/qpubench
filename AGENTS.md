@@ -105,6 +105,21 @@ setup and the intake convention (one bug per discrete point, labeled,
 closed with the resolution recorded). Run `git bug bug` to see current
 open/closed items.
 
+Planned work on the **core record format** lives in three places, and they
+don't overlap:
+
+- `docs/schema_review.md` — the evidence: what the core is missing, with the
+  upstream that revealed it. Findings A1–A10 (core) and B1–B6 (mirror-layer
+  patterns).
+- `docs/roadmap.md` — the plan: those findings in three phases, with what is
+  explicitly *not* being done and why.
+- `git bug bug --status open` — the status. Every finding is one bug labeled
+  `schema-review`.
+
+Before proposing a change to `schemas/` core modules, check whether it is
+already a finding. When you apply one, close its bug *and* mark it applied in
+`schema_review.md` — a review still listing a fixed gap is worse than none.
+
 ## What not to do
 
 - Don't create migration scripts or version-conversion code — the schema is append-only; add new optional fields instead of changing existing ones.

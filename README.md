@@ -2,7 +2,7 @@
 
 [![Python ≥ 3.11](https://img.shields.io/badge/python-≥3.11-blue)](https://python.org)
 [![License: LGPL v3](https://img.shields.io/badge/License-LGPL_v3-green)](LICENSE)
-[![Schema v6.0.0](https://img.shields.io/badge/schema-v6.0.0-orange)](docs/schemas.md)
+[![Schema v6.1.0](https://img.shields.io/badge/schema-v6.1.0-orange)](docs/schemas.md)
 
 **QPUBench is a framework for running quantum benchmarks and recording every
 result in one common format, so runs from different SDKs, machines, and even
@@ -167,7 +167,7 @@ Three layers, three responsibilities:
 Just typed Python classes (Pydantic models) that you **import and
 instantiate** — `CircuitSpec` in the quick start is one. You pick them from
 the library; there is nothing to design or register yourself. The library
-ships **43 schema modules** at the current schema version (see the badge
+ships **48 schema modules** at the current schema version (see the badge
 above), split into three groups — core record format, cross-cutting
 catalogues, and per-project mirrors.
 
@@ -219,6 +219,8 @@ else's machine. `.env.example` lists every variable, grouped by adapter.
 | [Installation](docs/installation.md) | pip · uv · Poetry 2 · conda |
 | [Developer guide](docs/developer_guide.md) | Why the code looks like it does: protocols, `super()`, `bind()`, decorators, naming |
 | [Schema reference](docs/schemas.md) | Every Pydantic model, field, and enum |
+| [Schema review](docs/schema_review.md) | Known gaps in the core record format, and what the mirror layer revealed about them |
+| [Roadmap](docs/roadmap.md) | Planned schema work, phased; tracked in git-bug under the `schema-review` label |
 | [Backends & adapters](docs/backends.md) | Available backends and their status; adapter protocols |
 | [Stores & persistence](docs/persistence.md) | NDJSON · Parquet · S3; querying results |
 | [VQA algorithms](docs/vqa.md) | VQE and ADAPT-VQE, including the interchangeable engines |
