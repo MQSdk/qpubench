@@ -3,7 +3,7 @@
 Self-contained example showing how to run QForte VQE algorithms via qpubench.
 QForte's pybind11 object model (Circuit, Gate, QubitOperator, ...) and its
 Algorithm/AnsatzAlgorithm/ADAPTVQE attribute surface are modeled as typed
-schemas in `schemas/evangelistalab_qforte.py` — no more ad hoc `getattr()`
+schemas in `schemas/mirrors/evangelistalab_qforte.py` — no more ad hoc `getattr()`
 scraping of private attributes with an untyped contract.
 
 > **See [docs/vqa.md](../../docs/vqa.md) for the overall VQA picture** — how

@@ -44,15 +44,13 @@ GSOptBenchmarkResult.chemical_accuracy_achieved → bool (<1 mHartree)
 """
 from __future__ import annotations
 
-from typing import Any
-
 import enum
+from typing import Any
 
 import pydantic
 
-from .primitives import ComputingModel, JobStatus
-from .result import ExpectationResult, QuantumResult
-
+from ..primitives import ComputingModel, JobStatus
+from ..result import ExpectationResult, QuantumResult
 
 # ---------------------------------------------------------------------------
 # Reference energies  (examples/vqe/reference_energies.py)

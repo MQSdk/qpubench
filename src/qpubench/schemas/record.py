@@ -7,12 +7,12 @@ from typing import Any
 import pydantic
 
 from .backend import BackendSpec
+from .catalogs.quantum_advantage_tracker import QuantumAdvantageRecord
 from .circuit import CircuitSpec
-from .advantage import QuantumAdvantageRecord
 from .execution import ExecutionOptions
 from .result import QuantumResult
 
-SCHEMA_VERSION = "5.1.0"
+SCHEMA_VERSION = "6.0.0"
 
 def _utcnow() -> datetime.datetime:
     return datetime.datetime.now(datetime.UTC)
@@ -153,8 +153,20 @@ class BenchmarkRecord(pydantic.BaseModel):
 
     One record = one circuit/problem × one backend × one options configuration.
     Use run_id to group records belonging to the same parameter sweep.
+
+    The version field is named ``qpubench_schema_version``, not a bare
+    ``schema_version``: this package mirrors the schemas of many upstream
+    projects, several of which carry their own ``schema_version`` (QCSchema's
+    ``QCAtomicInput.schema_version``, for instance), so an unqualified name in
+    a stored record would not say *whose* schema it versions. Records written
+    before the rename still load — the old key is accepted as an alias.
     """
-    schema_version: str               = SCHEMA_VERSION
+    qpubench_schema_version: str      = pydantic.Field(
+        default=SCHEMA_VERSION,
+        validation_alias=pydantic.AliasChoices(
+            "qpubench_schema_version", "schema_version"
+        ),
+    )
     experiment_id:  str               = pydantic.Field(
         default_factory=lambda: str(uuid.uuid4())
     )

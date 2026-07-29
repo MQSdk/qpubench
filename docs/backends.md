@@ -60,6 +60,42 @@ Implement this on a `BackendAdapter` to expose transpilation as a separate, call
 
 ## Built-in adapters
 
+### Adapter index
+
+This table is the **authoritative list** of every adapter that ships in `src/qpubench/backends/`. Code does not duplicate it — docstrings in `runner.py` and `base.py` point here instead, so there is one place to update when an adapter is added.
+
+| Class | File | Protocol | Kind | Estimator path | Status |
+|---|---|---|---|---|---|
+| `StubGateAdapter` | `stub.py` | `BackendAdapter` | stub | yes (synthetic) | complete |
+| `StubMBQCAdapter` | `stub.py` | `BackendAdapter` | stub | — (MBQC) | complete |
+| `AerAdapter` | `aer_adapter.py` | `BackendAdapter` + `TranspilableBackend` | simulator | **yes** | complete |
+| `PennyLaneLightningAdapter` | `pennylane_lightning_adapter.py` | `BackendAdapter` | simulator | **yes** | complete |
+| `QrackAdapter` | `qrack_adapter.py` | `BackendAdapter` | simulator | **yes** | complete |
+| `IBMAdapter` | `ibm_adapter.py` | `BackendAdapter` + `TranspilableBackend` | hardware (cloud) | **yes** | complete |
+| `BraketAdapter` | `braket_adapter.py` | `BackendAdapter` + `TranspilableBackend` | hardware (cloud) | **yes** | complete |
+| `IQMAdapter` | `iqm_adapter.py` | `BackendAdapter` + `TranspilableBackend` | hardware (cloud) | no — sampler only | complete |
+| `QuantinuumAdapter` | `quantinuum_adapter.py` | `BackendAdapter` + `TranspilableBackend` | hardware (cloud) | no — sampler only | complete |
+| `QiboAdapter` | `qibo_adapter.py` | `BackendAdapter` | simulator + hardware | no — sampler only | complete |
+| `MitiqZNEAdapter` | `unitaryfund_mitiq_adapter.py` | `ErrorMitigationAdapter` | wrapper | **yes** (required) | complete |
+
+`ibm_cost_estimator.py` is not in this table because it is not an adapter — it estimates resources and cost without executing anything. See [Resource / cost estimation](#resource--cost-estimation-before-you-submit-anything).
+
+Algorithm adapters (`AlgorithmAdapter`) ship as copyable examples under `integrations/`, not inside the package — see [Integration examples](#integration-examples-copy-into-your-project) and [Algorithm libraries](#algorithm-libraries-algorithmadapter).
+
+### Does a missing Estimator path matter?
+
+Four adapters implement both execution paths; three implement only the sampler path. The split is not an oversight, and it does have consequences worth knowing.
+
+**Why the split exists.** The Estimator path asks a backend for an *expectation value* ⟨ψ|O|ψ⟩ directly. A simulator can compute that exactly from the statevector, and IBM's and Braket's cloud services expose a server-side `EstimatorV2` primitive that does the observable grouping, twirling and error mitigation for you. IQM, Quantinuum and Qibo's hardware stacks return measurement samples and nothing else — there is no `EstimatorV2`-equivalent in their SDKs to delegate to. Those adapters raise a clear `ValueError` naming the limitation rather than silently doing something else.
+
+**What you lose on a sampler-only backend.**
+
+- `circuit.observables` is not usable directly. You must add basis-change gates yourself, sample, and reconstruct ⟨O⟩ from the counts — for a Hamiltonian with many non-commuting Pauli terms that means one circuit per commuting group.
+- Anything that consumes `QuantumResult.expectation_values` gets nothing: `MitiqZNEAdapter` cannot wrap the backend (ZNE extrapolates expectation values), and the runner's automatic `VQAResult.final_eigenvalue` derivation has no input. A circuit-driven VQE therefore does not run unmodified on these backends.
+- Error mitigation that lives inside a vendor's Estimator (IBM's TREX/ZNE/PEC resilience levels) has no counterpart.
+
+**What you do not lose.** The record format is unaffected — a sampler-only run produces the same `BenchmarkRecord`, so results stay comparable across backends on everything except expectation values. Nothing about the framework prevents a future Estimator path: it is a per-SDK capability question, not a design limit. The practical answer is that comparing a VQE across an IBM QPU and a Quantinuum QPU needs an explicit classical estimator layer on top, not a different framework.
+
 ### Stub adapters (no SDK required)
 
 | Class | Protocol | Description |
@@ -80,7 +116,8 @@ Shorthand: `runner.register(name="stub_gate", seed=42)` — when no adapter obje
 
 `aer_adapter.py`, `ibm_adapter.py`, `iqm_adapter.py`, `braket_adapter.py`,
 `quantinuum_adapter.py`, `qibo_adapter.py`, `pennylane_lightning_adapter.py`,
-and `unitaryfund_mitiq_adapter.py` in `src/qpubench/backends/` are real,
+`qrack_adapter.py` and `unitaryfund_mitiq_adapter.py` in
+`src/qpubench/backends/` are real,
 working implementations (no TODOs) — verified against the installed SDKs
 (`qiskit-aer` 0.17.x, `qiskit-ibm-runtime` 0.47.x, `iqm-client[qiskit]` 34.x,
 `amazon-braket-sdk` + `qiskit-braket-provider` 0.17.x, `pytket-quantinuum`
@@ -96,6 +133,7 @@ working implementations (no TODOs) — verified against the installed SDKs
 | `quantinuum_adapter.py` | Quantinuum H-Series (Sampler path only — no Estimator; see below) | `"quantinuum"` | Transpile compiled offline via `QuantinuumBackend(machine_debug=True)` (real native-gate compilation); sampler plumbing executed against a local pytket simulator; only the credential-fetching `QuantinuumBackend` login needs a real account |
 | `qibo_adapter.py` | Qibo — local simulator / Qibolab hardware / Qibo cloud (Sampler path only — no Estimator; see below) | `"qibo"` | Local `numpy` simulator fully executed (no credentials); only the Qibolab (`set_backend("qibolab", …)`) and cloud (`set_backend("qibo-cloud-backends", …)`) paths need a real lab / account |
 | `pennylane_lightning_adapter.py` | PennyLane `lightning.qubit` simulator (Estimator + Sampler) | `"pennylane"` | Fully executed — no credentials needed |
+| `qrack_adapter.py` | Qrack GPU/CPU statevector simulator via PyQrack (Estimator + Sampler) | `"qrack"` | Fully executed on the CPU simulator — no credentials, no GPU needed |
 | `unitaryfund_mitiq_adapter.py` | Mitiq ZNE error-mitigation wrapper around another adapter | — | Fully executed around `AerAdapter` |
 
 `qrack_adapter.py` remains a stub (`raise NotImplementedError`) — the
@@ -152,7 +190,7 @@ were verified to coexist in one environment (`qiskit>=2.2`, `qiskit-aer`
 IBM Quantum hardware *before* running it — real ALAP-scheduled
 transpilation against `qiskit_ibm_runtime.fake_provider` (no credentials
 needed) plus IBM's own documented usage formula, then a dollar breakdown
-across all four IBM access plans (`schemas/ibm_cost_estimator.py`). Full
+across all four IBM access plans (`schemas/mirrors/ibm_cost_estimator.py`). Full
 documentation → [docs/integrations/ibm_cost_estimator.md](integrations/ibm_cost_estimator.md).
 
 ### Integration examples (copy into your project)
@@ -281,11 +319,11 @@ Where a **Factory** is listed, it names a `BackendSpec` classmethod that pre-fil
 | CUDA-Q | `"cudaq"` | `GATE_BASED` | — (simulator) | Copy template | `BackendSpec.cudaq()` |
 | Cebule cloud | `"cebule"` | `GATE_BASED` | — (heterogeneous) | Copy template | `BackendSpec.cebule()` |
 | Quantum Motion CMOS spin-qubit | `"quantum_motion"` | `GATE_BASED` | `SILICON_SPIN` | Copy template | `BackendSpec.quantum_motion(device_name)` |
-| QDK statevector simulator | `"qdk_chemistry"` | `GATE_BASED` | — (simulator) | Copy template | `BackendSpec.qdk_chemistry_simulator(executor, num_qubits)` — sparse / full statevector; commonly paired with the QDK chemistry pipeline schemas (`schemas/microsoft_qdk.py`) |
+| QDK statevector simulator | `"qdk_chemistry"` | `GATE_BASED` | — (simulator) | Copy template | `BackendSpec.qdk_chemistry_simulator(executor, num_qubits)` — sparse / full statevector; commonly paired with the QDK chemistry pipeline schemas (`schemas/mirrors/microsoft_qdk.py`) |
 | Azure Quantum | `"azure_quantum"` | `GATE_BASED` | `TRAPPED_ION` (Quantinuum/IonQ hardware) or — (simulator/estimator) | Copy template | `BackendSpec.azure_quantum(target, *, resource_id_ref, location_ref, qubit_modality)` — hardware + resource estimator; QPU modality inferred from `target` or passed explicitly |
 | Stub gate simulator | — | `GATE_BASED` | — (simulator) | `StubGateAdapter` | Fully functional, no SDK |
 
-Note on algorithms vs. backends: the QDK simulator and Azure Quantum rows are ordinary gate-based backends. QPE is one algorithm frequently run on them (via the QDK chemistry pipeline, `schemas/microsoft_qdk.py`) — but the QDK is a general package, and these backends run any gate-based circuit. Likewise KQD/QSE (`schemas/mqsdk_qse.py`) runs on plain Aer, and VQE drives any backend in this table as its energy oracle.
+Note on algorithms vs. backends: the QDK simulator and Azure Quantum rows are ordinary gate-based backends. QPE is one algorithm frequently run on them (via the QDK chemistry pipeline, `schemas/mirrors/microsoft_qdk.py`) — but the QDK is a general package, and these backends run any gate-based circuit. Likewise KQD/QSE (`schemas/mirrors/mqsdk_qse.py`) runs on plain Aer, and VQE drives any backend in this table as its energy oracle.
 
 ### MBQC (measurement-based)
 
@@ -355,6 +393,25 @@ Plain VQE (fixed ansatz) is deliberately **not** in this table: it needs no `Alg
 | `QESEM` | — | Quantum error suppression and mitigation |
 
 When `error_mitigation=ZNE` is set and `zne_config=None`, a default `ZNEConfig(noise_factors=(1.0, 3.0, 5.0), extrapolator="linear")` is populated automatically.
+
+### Vendor coverage: which are executable, which are schema-only
+
+Two different things go by "error mitigation support" here, and it is worth being explicit about which each vendor has.
+
+- **Executable** — an `ErrorMitigationAdapter` you can register and run.
+- **Schema-only** — a Pydantic module that models the vendor's config and result formats, so a run performed *outside* qpubench can be recorded and compared. No code in this repo calls the vendor.
+
+| Vendor | Schema module | Adapter | Status |
+|---|---|---|---|
+| Mitiq (Unitary Fund) | `unitaryfund_mitiq.py` | `MitiqZNEAdapter` | **executable** — ZNE only; PEC/CDR/REM/DDD are modelled but not wrapped |
+| Qedma QESEM | `qedma_qesem.py` | — | schema-only; runs execute through Qedma's own Qiskit Function |
+| Q-CTRL Fire Opal | `qctrl_fire_opal.py` | — | schema-only |
+| Haiqu Rivet | `haiqu_rivet.py` | — | schema-only |
+| ParityQC | `parityqc_parityqc.py` | — | schema-only |
+| QMatter | `qmatter_qmatter.py` | — | schema-only |
+| IBM resilience levels | `ibm_runtime_v2.py` | via `IBMAdapter` | **executable** — set `ExecutionOptions.error_mitigation`; runs server-side |
+
+The gap between the two columns is tracked as an open issue in this repo's git-bug tracker (`Fire Opal / Haiqu Rivet / ParityQC / QMatter have schema modules but no ErrorMitigationAdapter`); several of these vendors are commercial products whose SDKs need a paid account, which is why the schema landed first.
 
 ---
 

@@ -21,32 +21,46 @@ class BenchmarkRunner:
     Supports two adapter protocols:
 
     BackendAdapter    — circuit-driven: qpubench provides the circuit, the
-                        backend executes it.  Used for simulators (Aer, Qrack),
-                        IBM Quantum Runtime, IQM, MBQC-FPGA.
+                        backend executes it. Used by every simulator and
+                        hardware QPU adapter.
 
     AlgorithmAdapter  — algorithm-driven: the library generates the circuit
                         from a problem spec and drives its own execution loop.
-                        Used for QForte (UCCNVQE, ADAPT-VQE), OpenFermion stacks.
-                        Detected automatically via isinstance() check.
+                        Used by algorithm libraries that will not accept a
+                        pre-written circuit. Detected automatically via an
+                        isinstance() check.
+
+    The authoritative list of which concrete adapters ship in this package,
+    which protocol each implements, and which are still stubs is maintained in
+    ``docs/backends.md`` — deliberately not duplicated here, so the two cannot
+    drift apart.
 
     Usage pattern:
-        runner = BenchmarkRunner(store="results.ndjson")   # str/Path → NDJSONStore
-        runner.register(name="stub", seed=42)      # auto-creates a StubGateAdapter
+
+        runner = BenchmarkRunner(store="results.ndjson")
+        runner.register(name="stub", seed=42)
         record = runner.run(circuit, "stub", shots=4096)
-        # Real adapters are registered explicitly:
+
         runner.register(AerAdapter(), name="aer")
         record = runner.run(circuit, "aer", ExecutionOptions(shots=4096, memory=True))
-        # Algorithm adapters (QForte etc.) are registered the same way;
-        # the runner dispatches to run_algorithm() automatically.
+
+    Passing ``store=`` a str or Path creates an NDJSONStore. Calling
+    ``register()`` with no adapter creates a StubGateAdapter; every other
+    adapter — both protocols alike — is constructed by the caller and passed
+    in explicitly, and the runner picks the right execution path itself.
 
     Hooks receive every completed BenchmarkRecord before persistence.
     """
 
     def __init__(self, store: Any | str | None = None) -> None:
-        # Convenience: a filesystem path (str or pathlib.Path) becomes an
-        # append-only NDJSONStore, so the common case needs neither an explicit
-        # store import nor pathlib — just store="results/bell.ndjson".  Pass a
-        # ParquetStore / S3Store instance for the other backends.
+        """Create a runner, optionally bound to a result store.
+
+        A filesystem path (str or pathlib.Path) becomes an append-only
+        NDJSONStore, so the common case needs neither an explicit store import
+        nor pathlib — just ``store="results/bell.ndjson"``. Pass a
+        ParquetStore / S3Store instance to use one of the other stores, or
+        nothing at all to keep results in memory only.
+        """
         import pathlib
 
         if isinstance(store, (str, pathlib.Path)):
@@ -71,12 +85,12 @@ class BenchmarkRunner:
         name="stub", seed=42)`` is shorthand for ``runner.register(
         StubGateAdapter(seed=42), name="stub")``.
         """
+        if adapter is None and name is None:
+            raise TypeError(
+                "register() without an adapter needs a name, e.g. "
+                'runner.register(name="stub", seed=42)'
+            )
         if adapter is None:
-            if name is None:
-                raise TypeError(
-                    "register() without an adapter needs a name, e.g. "
-                    'runner.register(name="stub", seed=42)'
-                )
             from .backends.stub import StubGateAdapter
 
             adapter = StubGateAdapter(seed=seed)
@@ -85,19 +99,22 @@ class BenchmarkRunner:
                 "seed= only applies to the auto-created stub; construct your "
                 "adapter with its own seed instead, e.g. StubGateAdapter(seed=...)"
             )
-        key = name or adapter.spec.name
+        key = name if name is not None else adapter.spec.name
         self._backends[key] = adapter
         logger.debug("Registered adapter %r", key)
 
     def add_hook(self, fn: Callable[[BenchmarkRecord], None]) -> None:
+        """Register a callback fired with every completed BenchmarkRecord.
+
+        Hooks run after the record is built and before it is persisted, in
+        registration order. A hook that raises is logged and skipped — it
+        never aborts the run or prevents persistence.
+        """
         self._hooks.append(fn)
 
     def list_backends(self) -> list[str]:
+        """Return the names every adapter is currently registered under."""
         return list(self._backends)
-
-    # ------------------------------------------------------------------
-    # Single execution
-    # ------------------------------------------------------------------
 
     def run(
         self,
@@ -123,6 +140,16 @@ class BenchmarkRunner:
         adapters return a ``VQAResult``, and for circuit-driven VQA runs the
         runner derives ``VQAResult.final_eigenvalue`` from the result's
         expectation values automatically.
+
+        Two execution paths follow, chosen by which protocol the registered
+        adapter satisfies. The algorithm-driven path calls
+        ``validate_problem()`` / ``run_algorithm()`` and receives the VQA
+        metadata back from the adapter, with any caller-supplied ``vqa``
+        taking precedence over what the adapter extracted. The circuit-driven
+        path calls ``validate()`` / ``run()`` and carries the caller's ``vqa``
+        through unchanged. Either way an adapter exception is caught and
+        recorded as a FAILED QuantumResult rather than propagating, so one bad
+        backend cannot abort a sweep.
         """
         if options is None:
             options = ExecutionOptions(shots=shots)
@@ -139,7 +166,6 @@ class BenchmarkRunner:
                 f"Registered backends: {registered}"
             ) from None
 
-        # --- Algorithm-driven path (QForte, etc.) ---
         if isinstance(adapter, AlgorithmAdapter):
             warnings = adapter.validate_problem(circuit)
             for w in warnings:
@@ -158,14 +184,12 @@ class BenchmarkRunner:
                     status=JobStatus.FAILED,
                     error_message=str(exc),
                 )
-                extracted_vqa = vqa or VQAConfig(problem_type="unknown")
+                extracted_vqa = vqa if vqa is not None else VQAConfig(problem_type="unknown")
                 vqa_result = None
             elapsed = time.perf_counter() - t0
 
-            # Caller-supplied vqa overrides extracted metadata if provided
             merged_vqa: VQAConfig | None = vqa if vqa is not None else extracted_vqa
 
-        # --- Circuit-driven path (Aer, IBM, Qrack, MBQC, stubs) ---
         else:
             warnings = adapter.validate(circuit)
             for w in warnings:
@@ -186,8 +210,6 @@ class BenchmarkRunner:
             merged_vqa = vqa
             vqa_result = None
 
-        # For VQA runs, the final eigenvalue is a computed output — derive it
-        # from the quantum result rather than expecting the caller to pass it.
         if merged_vqa is not None and vqa_result is None and result.expectation_values:
             vqa_result = VQAResult(
                 final_eigenvalue=result.expectation_values[0].value
@@ -205,7 +227,7 @@ class BenchmarkRunner:
             vqa_result=vqa_result,
             num_qubits=circuit.num_qubits,
             run_id=run_id,
-            tags=tags or [],
+            tags=tags if tags is not None else [],
             notes=notes,
         )
 
@@ -219,10 +241,6 @@ class BenchmarkRunner:
             self._store.save(record)
 
         return record
-
-    # ------------------------------------------------------------------
-    # Parameter sweep
-    # ------------------------------------------------------------------
 
     def sweep(
         self,

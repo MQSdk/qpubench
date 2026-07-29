@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from qpubench.schemas.circuit import CircuitSpec
-from qpubench.schemas.evangelistalab_qforte import (
+from qpubench.schemas.mirrors.evangelistalab_qforte import (
     QForteAlgorithmConfig,
     QForteCircuitSpec,
     QForteGateSpec,
@@ -87,7 +87,7 @@ def molecule_spec_from_geometry(
 
 
 # ---------------------------------------------------------------------------
-# QForte pybind11 objects → typed schemas (schemas/evangelistalab_qforte.py)
+# QForte pybind11 objects → typed schemas (schemas/mirrors/evangelistalab_qforte.py)
 # ---------------------------------------------------------------------------
 
 _QFORTE_PAULI_GATES = frozenset({"X", "Y", "Z"})

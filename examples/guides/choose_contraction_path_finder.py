@@ -26,7 +26,7 @@ import sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
 
 from qpubench.schemas.circuit import CircuitSpec
-from qpubench.schemas.contraction_path import ContractionPathConfig, ContractionPathStrategy
+from qpubench.schemas.catalogs.contraction_path import ContractionPathConfig, ContractionPathStrategy
 from qpubench.schemas.primitives import CircuitFormat
 
 _GHZ4_QASM2 = """OPENQASM 2.0;

@@ -176,7 +176,7 @@ Parse back: `MBQCExecutionResult.from_multi_qubit_csv(csv_text, num_logical_qubi
 
 ```python
 from qpubench import MBQCPattern, MBQCRound, MBQCProgramWord
-from qpubench.schemas.johnrscott_mbqc_fpga import AdaptiveSpec, ByproductUpdateSpec, CommutationSpec
+from qpubench.schemas.mirrors.johnrscott_mbqc_fpga import AdaptiveSpec, ByproductUpdateSpec, CommutationSpec
 import math
 
 # 4-round single-qubit Rx(π/3)

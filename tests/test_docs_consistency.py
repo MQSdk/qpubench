@@ -15,7 +15,12 @@ SCHEMAS_DIR = REPO / "src" / "qpubench" / "schemas"
 
 
 def _module_count() -> int:
-    return len([p for p in SCHEMAS_DIR.glob("*.py") if p.name != "__init__.py"])
+    """Count schema modules across all three groups.
+
+    rglob, not glob: the catalogues and project mirrors live in
+    schemas/catalogs/ and schemas/mirrors/ sub-packages.
+    """
+    return len([p for p in SCHEMAS_DIR.rglob("*.py") if p.name != "__init__.py"])
 
 
 def test_readme_schema_badge_matches_code():

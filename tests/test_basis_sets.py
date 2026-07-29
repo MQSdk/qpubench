@@ -1,4 +1,4 @@
-"""Tests for qpubench.schemas.basis_sets + hamiltonian_sources.basis_set_exchange.
+"""Tests for qpubench.schemas.catalogs.basis_sets + hamiltonian_sources.basis_set_exchange.
 
 Real, offline, fast — `basis_set_exchange` bundles its data locally (no
 network access, unlike `hamlib.py`/`pennylane_qchem.py`). Expected function
@@ -18,7 +18,7 @@ from qpubench.hamiltonian_sources.basis_set_exchange import (
     get_basis_set_entry,
     list_available_elements,
 )
-from qpubench.schemas.basis_sets import (
+from qpubench.schemas.catalogs.basis_sets import (
     BASIS_SET_CATALOG,
     BasisSetSource,
 )

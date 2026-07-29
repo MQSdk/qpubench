@@ -49,9 +49,9 @@ from typing import Any
 
 import pydantic
 
-from .circuit import CircuitSpec
-from .primitives import ComputingModel, JobStatus, QubitModality
-from .result import ExpectationResult, QuantumResult
+from ..circuit import CircuitSpec
+from ..primitives import ComputingModel, JobStatus, QubitModality
+from ..result import ExpectationResult, QuantumResult
 
 # Quasiprobability decomposition sizes.  A gate cut expands each cut into 6
 # terms and a wire cut into 8, so k cuts require base**k subcircuit

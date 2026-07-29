@@ -39,7 +39,6 @@ import enum
 
 import pydantic
 
-
 # ---------------------------------------------------------------------------
 # Molecule / periodic cell — real pyscf.gto.M() / pyscf.pbc.gto.Cell() shape
 # ---------------------------------------------------------------------------
@@ -309,8 +308,8 @@ class OrbitalOptimizerMethod(str, enum.Enum):
     to exact FCI on a test system); SIMPLE parametrizes orbital rotations by
     an antisymmetric kappa matrix (``scipy.linalg.expm(kappa)`` applied to
     ``mo_coeff``), re-evaluating ``mcscf.CASCI`` at the rotated orbitals as
-    a classical-minimizer objective — qrunch's own "estimator + classical
-    minimizer" framing, with CASCI-at-rotated-orbitals as the real
+    a classical-minimizer objective — the standard "estimator + classical
+    minimizer" split, with CASCI-at-rotated-orbitals as the real
     estimator."""
     NEWTON = "newton"
     SIMPLE = "simple"
@@ -319,8 +318,7 @@ class OrbitalOptimizerMethod(str, enum.Enum):
 class OrbitalOptimizerBasinHoppingConfig(pydantic.BaseModel):
     """Optional global search over kappa via ``scipy.optimize.
     basinhopping`` wrapping the SIMPLE method's objective — real scipy
-    mechanism, not hand-rolled. Field names mirror qrunch's own basin-
-    hopping guide fields.
+    mechanism, not hand-rolled.
 
     active               enable basin-hopping around the SIMPLE local
                          minimizer (ignored for NEWTON).

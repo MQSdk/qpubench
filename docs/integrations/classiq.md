@@ -4,7 +4,7 @@
 algorithm as a high-level functional model, hand it hard constraints (max width,
 max depth, an optimization objective), and its synthesis engine solves for an
 optimized circuit that satisfies them. This is modelled in
-`src/qpubench/schemas/classiq_classiq.py`.
+`src/qpubench/schemas/mirrors/classiq_classiq.py`.
 
 Classiq sits next to [Xenakis](xenakis.md) as a second circuit-optimization
 strategy: Xenakis *searches* (a GA evolves a population of genomes under soft

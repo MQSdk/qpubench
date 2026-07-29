@@ -84,8 +84,8 @@ from typing import Any
 
 import pydantic
 
-from .circuit import CircuitSpec
-from .record import BenchmarkRecord
+from ..circuit import CircuitSpec
+from ..record import BenchmarkRecord
 
 # CODATA 2018 values — matches scipy.constants.physical_constants["Hartree
 # energy"][0], .N_A, and .R (cross-checked in this repo's own sandbox).

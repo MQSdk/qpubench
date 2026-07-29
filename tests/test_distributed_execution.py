@@ -9,7 +9,7 @@ import json
 import pytest
 
 from qpubench.schemas.circuit import CircuitSpec
-from qpubench.schemas.distributed_execution import (
+from qpubench.schemas.catalogs.distributed_execution import (
     GATE_CUT_OVERHEAD_BASE,
     WIRE_CUT_OVERHEAD_BASE,
     CircuitCutSpec,
@@ -31,7 +31,7 @@ from qpubench.schemas.distributed_execution import (
     SubcircuitResult,
 )
 from qpubench.schemas.execution import ExecutionOptions
-from qpubench.schemas.felixburt_disqco import (
+from qpubench.schemas.mirrors.felixburt_disqco import (
     DisqcoCoarsener,
     DisqcoExtractedCircuit,
     DisqcoFMConfig,
@@ -40,7 +40,7 @@ from qpubench.schemas.felixburt_disqco import (
     DisqcoPartitionerType,
     DisqcoPartitionResult,
 )
-from qpubench.schemas.bscwdc_qdislib import (
+from qpubench.schemas.mirrors.bscwdc_qdislib import (
     QdislibCacheStats,
     QdislibCutCost,
     QdislibCutKind,

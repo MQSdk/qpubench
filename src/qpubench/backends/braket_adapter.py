@@ -208,7 +208,7 @@ class BraketAdapter:
         if not qc_meas.cregs:
             qc_meas.measure_all()
         sampler = BraketSampler(backend, **s3_options)
-        shots = options.shots or 1024
+        shots = options.require_shots("BraketAdapter")
         job = sampler.run([qc_meas], shots=shots)
         result = job.result()
 

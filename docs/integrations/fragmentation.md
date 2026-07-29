@@ -6,9 +6,9 @@ general schema plus two project mirrors:
 
 | Module | Upstream | Role |
 |---|---|---|
-| `qpubench.schemas.fragmentation` | — (framework-general) | The shared vocabulary every method reduces to |
-| `qpubench.schemas.fragmentqc_fragment` | [fragment-qc/fragment](https://gitlab.com/fragment-qc/fragment) | MBE / GMBE via PIE trees, multilevel layers, adaptive screening |
-| `qpubench.schemas.qiskitcommunity_fragment_methods` | [qiskit-community/quantum-fragment-methods](https://github.com/qiskit-community/quantum-fragment-methods) | EWF embedding with per-fragment quantum solvers |
+| `qpubench.schemas.catalogs.fragmentation` | — (framework-general) | The shared vocabulary every method reduces to |
+| `qpubench.schemas.mirrors.fragmentqc_fragment` | [fragment-qc/fragment](https://gitlab.com/fragment-qc/fragment) | MBE / GMBE via PIE trees, multilevel layers, adaptive screening |
+| `qpubench.schemas.mirrors.qiskitcommunity_fragment_methods` | [qiskit-community/quantum-fragment-methods](https://github.com/qiskit-community/quantum-fragment-methods) | EWF embedding with per-fragment quantum solvers |
 
 Neither upstream package is a dependency. These are Pydantic v2 mirrors —
 `pytest tests/` passes with `pip install .` alone.
@@ -31,7 +31,7 @@ overlapping fragments and an ONIOM subtractive scheme all fit without a
 method-specific schema.
 
 ```python
-from qpubench.schemas.fragmentation import (
+from qpubench.schemas.catalogs.fragmentation import (
     FragmentationScheme, FragmentationSpec, FragmentExpansionTerm, FragmentSpec,
 )
 
@@ -83,7 +83,7 @@ falls outside the threshold are never submitted. Thresholds are keyed by n-body
 order because screening almost always tightens with order.
 
 ```python
-from qpubench.schemas.fragmentation import FragmentScreeningRule, ScreeningMetric
+from qpubench.schemas.catalogs.fragmentation import FragmentScreeningRule, ScreeningMetric
 
 rule = FragmentScreeningRule(
     name="energy_trimming",
@@ -105,7 +105,7 @@ on a larger set, with `sign=-1.0` on the subtractive layer so the cheap
 contribution inside the accurate region cancels.
 
 ```python
-from qpubench.schemas.fragmentation import FragmentationLayer, SolverKind
+from qpubench.schemas.catalogs.fragmentation import FragmentationLayer, SolverKind
 
 layers = [
     FragmentationLayer(level=0, max_order=4, method="mp2",     basis="cc-pVDZ"),
@@ -121,7 +121,7 @@ solver claims the fragments that fit the QPU, a classical fallback catches the
 rest.
 
 ```python
-from qpubench.schemas.fragmentation import FragmentSolverAssignment, SolverKind
+from qpubench.schemas.catalogs.fragmentation import FragmentSolverAssignment, SolverKind
 
 spec.solver_rules = [
     FragmentSolverAssignment(
@@ -148,7 +148,7 @@ match it verbatim, so a real file round-trips:
 
 ```python
 import yaml
-from qpubench.schemas.fragmentqc_fragment import FragmentStrategy
+from qpubench.schemas.mirrors.fragmentqc_fragment import FragmentStrategy
 
 strategy = FragmentStrategy.model_validate(yaml.safe_load(open("strategy.yaml")))
 spec = strategy.to_fragmentation_spec("my_calculation")
@@ -160,7 +160,7 @@ of primary indices, each with an integer coefficient. Every expansion is the
 same object; only the coefficients differ.
 
 ```python
-from qpubench.schemas.fragmentqc_fragment import FragmentPIENode, FragmentPIETree
+from qpubench.schemas.mirrors.fragmentqc_fragment import FragmentPIENode, FragmentPIETree
 
 tree = FragmentPIETree(
     primaries=[[0, 1, 2], [3, 4, 5], [6, 7, 8]],
@@ -201,7 +201,7 @@ The mirror that connects fragmentation to a QPU. Load a real `config.yaml`:
 
 ```python
 import yaml
-from qpubench.schemas.qiskitcommunity_fragment_methods import QFMWorkflowConfig
+from qpubench.schemas.mirrors.qiskitcommunity_fragment_methods import QFMWorkflowConfig
 
 cfg = QFMWorkflowConfig.from_config_dict(yaml.safe_load(open("config.yaml")))
 cfg.sqd.total_samples            # n_batches * samples_per_batch
@@ -240,7 +240,7 @@ fragment too wide for one QPU is cut or partitioned like any other circuit.
 
 ```python
 from qpubench import CircuitSpec, QuantumResult
-from qpubench.schemas.fragmentation import FragmentationSpec
+from qpubench.schemas.catalogs.fragmentation import FragmentationSpec
 
 circuit = CircuitSpec(num_qubits=48, fragmentation=spec)     # model or dict
 result  = frag_result.to_quantum_result()                    # vendor_results key set

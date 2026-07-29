@@ -10,7 +10,7 @@ see src/qpubench/schemas/backend.py).
 
 Why this exists alongside microsoft_qdk.py
 --------------------------------------------
-schemas/microsoft_qdk.py models the Microsoft QDK chemistry-course pipeline
+schemas/mirrors/microsoft_qdk.py models the Microsoft QDK chemistry-course pipeline
 (SCF -> active-space selection -> QPE/IQPE resource estimation) — a
 phase-estimation workflow, not ADAPT-VQE. This adapter is the variational
 counterpart: QDK's Quantum Chemistry Library and Azure Quantum both support

@@ -72,10 +72,9 @@ from typing import Any
 
 import pydantic
 
-from .circuit import CircuitSpec
-from .primitives import CircuitFormat
-from .observable import SparsePauliObservable
-
+from ..circuit import CircuitSpec
+from ..observable import SparsePauliObservable
+from ..primitives import CircuitFormat
 
 # ---------------------------------------------------------------------------
 # Task types

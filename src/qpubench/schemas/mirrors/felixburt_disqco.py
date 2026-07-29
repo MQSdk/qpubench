@@ -47,8 +47,7 @@ from typing import Any
 
 import pydantic
 
-from .circuit import CircuitSpec
-from .distributed_execution import (
+from ..catalogs.distributed_execution import (
     CircuitPartitionSpec,
     CoarseningStrategy,
     DistributedRunResult,
@@ -63,8 +62,8 @@ from .distributed_execution import (
     ReconstructionMethod,
     ReconstructionResult,
 )
-from .primitives import CircuitFormat, ComputingModel, JobStatus
-
+from ..circuit import CircuitSpec
+from ..primitives import CircuitFormat, ComputingModel, JobStatus
 
 # ---------------------------------------------------------------------------
 # Enumerations

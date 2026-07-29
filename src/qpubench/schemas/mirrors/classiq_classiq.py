@@ -58,11 +58,10 @@ import enum
 
 import pydantic
 
-from .circuit import CircuitSpec
-from .primitives import CircuitFormat
-from .record import VQAConfig, VQAResult
+from ..circuit import CircuitSpec
+from ..primitives import CircuitFormat
+from ..record import VQAConfig, VQAResult
 from .mqsdk_xenakis import GARunResult, XenakisMolecule
-
 
 # ---------------------------------------------------------------------------
 # Shared enumerations

@@ -1,5 +1,20 @@
 """Backend adapter protocols.
 
+Every class in this module is a ``typing.Protocol``, so every method body is
+literally ``...`` — that is not an unfinished implementation, it is the whole
+point. A Protocol declares *the shape a class must have* to be usable here;
+it holds no behaviour to inherit, so there is nothing for a body to contain
+and ``...`` is Python's conventional "intentionally empty" placeholder.
+
+The practical consequence: your adapter does **not** subclass anything in this
+file, and does not import it. Write a plain class with the right methods and
+it satisfies the protocol structurally — which is what lets an adapter live in
+your own project, or in a third-party package, with no dependency edge back to
+qpubench. ``@runtime_checkable`` additionally lets ``BenchmarkRunner`` decide
+at runtime, with ``isinstance()``, which of the two execution paths to take.
+See ``docs/developer_guide.md`` for the Protocol-versus-ABC reasoning and the
+caveats of ``@runtime_checkable``.
+
 BackendAdapter        — minimal 3-method interface for backends that execute a
                         pre-written circuit (gate-based simulators, QPUs, MBQC FPGA).
 
@@ -135,9 +150,8 @@ class ErrorMitigationAdapter(Protocol):
     intercepts run() to apply pre/post processing (noise scaling, compilation,
     randomised compiling, readout correction, etc.).
 
-    Implementations: MitiqZNEAdapter (unitaryfund_mitiq_adapter.py, real
-    Mitiq zero-noise extrapolation). Fire Opal and Haiqu Rivet have schema
-    modules (qctrl_fire_opal.py, haiqu_rivet.py) but no adapter yet.
+    ``docs/backends.md`` lists which error-mitigation vendors have a working
+    adapter and which are represented by a schema module only.
 
     The inner BackendAdapter is not registered with the runner separately;
     it is composed inside the ErrorMitigationAdapter at construction time.

@@ -25,7 +25,7 @@ from qpubench import (
     NDJSONStore,
     StubMBQCAdapter,
 )
-from qpubench.schemas.johnrscott_mbqc_fpga import (
+from qpubench.schemas.mirrors.johnrscott_mbqc_fpga import (
     AdaptiveSpec,
     ByproductUpdateSpec,
     CommutationSpec,

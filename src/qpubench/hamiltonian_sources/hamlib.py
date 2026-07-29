@@ -37,7 +37,7 @@ import zipfile
 from pathlib import Path
 from typing import TypedDict
 
-from ..schemas.hamiltonian_library import HamiltonianLibraryRecord, HamiltonianSource
+from ..schemas.catalogs.hamiltonian_library import HamiltonianLibraryRecord, HamiltonianSource
 from ..schemas.observable import PauliTerm, SparsePauliObservable
 from ..schemas.primitives import ComplexNumber, PauliLabel
 

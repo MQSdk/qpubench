@@ -54,9 +54,8 @@ import enum
 
 import pydantic
 
-from .result import ExpectationResult, QuantumResult
-from .primitives import ComputingModel, JobStatus
-
+from ..primitives import ComputingModel, JobStatus
+from ..result import ExpectationResult, QuantumResult
 
 # ---------------------------------------------------------------------------
 # Optimizer configuration

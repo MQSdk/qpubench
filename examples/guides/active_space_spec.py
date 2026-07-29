@@ -28,13 +28,13 @@ import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
 
-from qpubench.schemas.bestquark_gsopt import ActiveSpaceSpec
-from qpubench.schemas.erikkjellgren_slowquant import UCCActiveSpaceConfig
-from qpubench.schemas.microsoft_qdk import (
+from qpubench.schemas.mirrors.bestquark_gsopt import ActiveSpaceSpec
+from qpubench.schemas.mirrors.erikkjellgren_slowquant import UCCActiveSpaceConfig
+from qpubench.schemas.mirrors.microsoft_qdk import (
     ActiveSpaceSelectionResult,
     ActiveSpaceSelectorType,
 )
-from qpubench.schemas.pyscf_pyscf import PySCFAtomSpec, PySCFMoleculeSpec
+from qpubench.schemas.mirrors.pyscf_pyscf import PySCFAtomSpec, PySCFMoleculeSpec
 
 from integrations.generic_adapt_vqe.pool import generate_singles_doubles_pool
 

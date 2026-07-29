@@ -1,11 +1,10 @@
 """Structured logging subsystem for BenchmarkRunner.
 
-Closes qrunch's "Using the Logger" guide gap: ``BenchmarkRunner.add_hook()``
-fires one callback per completed ``BenchmarkRecord`` — enough to build real
-structured logging on top of, but by itself just one hook, not "levels,
-handlers, formatters" the way qrunch's guide documents. ``BenchmarkLogger``
-is that subsystem, built directly on top of the existing hook mechanism (no
-runner changes needed):
+``BenchmarkRunner.add_hook()`` fires one callback per completed
+``BenchmarkRecord``. That is enough to build structured logging on top of,
+but by itself it is just a callback — no levels, no handlers, no
+formatters. ``BenchmarkLogger`` is that missing subsystem, built entirely on
+the existing hook mechanism (the runner needs no changes):
 
   - levels      SUCCEEDED -> INFO, FAILED -> ERROR (status-based, real
                 ``logging`` levels, not a single flat log line).
@@ -20,8 +19,13 @@ import json
 import logging
 from typing import Any
 
-from .schemas.primitives import JobStatus
+# Ordered by layer, not alphabetically: BenchmarkRecord is the higher-level
+# type this module exists to log; JobStatus is a primitive it happens to need
+# in order to pick a logging level. isort is told to leave the block alone.
+# isort: off
 from .schemas.record import BenchmarkRecord
+from .schemas.primitives import JobStatus
+# isort: on
 
 
 class JSONFormatter(logging.Formatter):
@@ -34,6 +38,14 @@ class JSONFormatter(logging.Formatter):
     """
 
     def format(self, record: logging.LogRecord) -> str:
+        """Render one log record as a JSON line, or defer to the base class.
+
+        ``super().format(record)`` calls ``logging.Formatter.format`` — the
+        implementation this class overrides. Deferring to it (rather than
+        reimplementing it) is what lets an unrelated library share this
+        handler and still get normal, human-readable log lines. See
+        ``docs/developer_guide.md`` for the general pattern.
+        """
         payload = getattr(record, "record_payload", None)
         if payload is None:
             return super().format(record)
@@ -75,6 +87,15 @@ class BenchmarkLogger:
         runner.add_hook(self._on_record)
 
     def _on_record(self, record: BenchmarkRecord) -> None:
+        """Emit one completed BenchmarkRecord as a structured log entry.
+
+        Both identifiers are logged because they answer different questions:
+        ``experiment_id`` is this single execution's auto-generated UUID and
+        is the key ``ResultStore.load()`` looks records up by, so a log line
+        can be traced back to the stored record. ``run_id`` is the
+        caller-supplied label shared by every record in one sweep, so a log
+        line can be traced back to the campaign that produced it.
+        """
         payload = {
             "experiment_id": record.experiment_id,
             "backend": record.backend.name,

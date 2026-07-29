@@ -1,6 +1,14 @@
 """IBM Quantum resource estimation — real ALAP-scheduled transpilation,
 no live credentials required.
 
+ALAP is Qiskit's "as late as possible" scheduling policy: every gate is
+pushed to the latest cycle it can occupy without violating a dependency, so
+idle time accumulates at the *start* of each qubit's timeline rather than the
+end. The alternative, ASAP ("as soon as possible"), does the opposite. Both
+produce the same circuit duration, but ALAP is what IBM's own runtime uses
+and what their usage-estimation guide prescribes, so the durations computed
+here match what IBM will bill.
+
 Install: pip install 'qpubench[qiskit]'
 
 Implements the estimation method IBM's own docs recommend for local usage
@@ -38,7 +46,7 @@ from __future__ import annotations
 from typing import Any
 
 from ..schemas.circuit import CircuitSpec
-from ..schemas.ibm_cost_estimator import CircuitResourceEstimate
+from ..schemas.mirrors.ibm_cost_estimator import CircuitResourceEstimate
 from ._qiskit_common import load_qiskit_circuit
 
 

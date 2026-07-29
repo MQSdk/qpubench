@@ -21,7 +21,7 @@ from qpubench import (
     CircuitSpec, ComplexNumber, PauliLabel, PauliTerm,
     SparsePauliObservable,
 )
-from qpubench.schemas.ibm_runtime_v2 import IBMEstimatorPUB, IBMSamplerPUB
+from qpubench.schemas.mirrors.ibm_runtime_v2 import IBMEstimatorPUB, IBMSamplerPUB
 
 from examples.common.toy_statevector_backend import ToyStatevectorAdapter
 

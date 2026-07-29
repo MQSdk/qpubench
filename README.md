@@ -2,7 +2,7 @@
 
 [![Python ≥ 3.11](https://img.shields.io/badge/python-≥3.11-blue)](https://python.org)
 [![License: LGPL v3](https://img.shields.io/badge/License-LGPL_v3-green)](LICENSE)
-[![Schema v5.1.0](https://img.shields.io/badge/schema-v5.1.0-orange)](docs/schemas.md)
+[![Schema v6.0.0](https://img.shields.io/badge/schema-v6.0.0-orange)](docs/schemas.md)
 
 **QPUBench is a framework for running quantum benchmarks and recording every
 result in one common format, so runs from different SDKs, machines, and even
@@ -183,12 +183,41 @@ catalogues, and per-project mirrors.
 
 Full model-by-model reference: [docs/schemas.md](docs/schemas.md)
 
+## Credentials
+
+**No credential is ever written in code.** Not in `src/`, not in an example,
+not in a notebook, not in a test. Put them in a `.env` file, which is
+gitignored:
+
+```sh
+cp .env.example .env     # then fill in your tokens
+```
+
+Adapters do not accept a token as an argument. They accept the **name of the
+environment variable** to read it from, and read it only at the moment they
+connect:
+
+```python
+IBMAdapter("ibm_torino")                        # reads $IBM_QUANTUM_TOKEN
+IBMAdapter("ibm_torino", token_ref="MY_TOKEN")  # reads $MY_TOKEN instead
+```
+
+That name is what `BackendSpec.auth` stores, so a saved `BenchmarkRecord`
+never contains a secret and can be shared as-is. `S3Store` goes further and
+raises if you pass `aws_secret_access_key=` at all.
+
+Settings that are account-specific but not secret (`IBM_QUANTUM_INSTANCE`,
+`AWS_REGION`) have no built-in default either — an adapter tells you which
+variable to set rather than guessing one that happens to work on someone
+else's machine. `.env.example` lists every variable, grouped by adapter.
+
 ## Documentation
 
 | | |
 |---|---|
 | [User guide](docs/index.md) | The three layers, first benchmark, sweeps, hooks, writing an adapter |
 | [Installation](docs/installation.md) | pip · uv · Poetry 2 · conda |
+| [Developer guide](docs/developer_guide.md) | Why the code looks like it does: protocols, `super()`, `bind()`, decorators, naming |
 | [Schema reference](docs/schemas.md) | Every Pydantic model, field, and enum |
 | [Backends & adapters](docs/backends.md) | Available backends and their status; adapter protocols |
 | [Stores & persistence](docs/persistence.md) | NDJSON · Parquet · S3; querying results |

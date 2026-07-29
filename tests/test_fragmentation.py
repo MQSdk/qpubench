@@ -10,7 +10,7 @@ import json
 import pytest
 
 from qpubench.schemas.circuit import CircuitSpec
-from qpubench.schemas.fragmentation import (
+from qpubench.schemas.catalogs.fragmentation import (
     FragmentationLayer,
     FragmentationResult,
     FragmentationScheme,
@@ -24,7 +24,7 @@ from qpubench.schemas.fragmentation import (
     ScreeningMetric,
     SolverKind,
 )
-from qpubench.schemas.fragmentqc_fragment import (
+from qpubench.schemas.mirrors.fragmentqc_fragment import (
     FragmentCombinator,
     FragmentJobRecord,
     FragmentModName,
@@ -35,7 +35,7 @@ from qpubench.schemas.fragmentqc_fragment import (
     FragmentStrategy,
 )
 from qpubench.schemas.primitives import ComputingModel, JobStatus
-from qpubench.schemas.qiskitcommunity_fragment_methods import (
+from qpubench.schemas.mirrors.qiskitcommunity_fragment_methods import (
     QFMBathType,
     QFMFragment,
     QFMFragmentationScheme,

@@ -202,7 +202,7 @@ class QiboAdapter:
         if not qc.measurements:
             qc.add(gates.M(*range(qc.nqubits)))
 
-        shots = options.shots or 1024
+        shots = options.require_shots("QiboAdapter")
         result = qc(nshots=shots)
 
         # Qibo is big-endian (qubit 0 leftmost); reverse to the Qiskit

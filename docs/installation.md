@@ -133,33 +133,11 @@ Copy `.env.example` to `.env` in the project root and fill in your tokens:
 cp .env.example .env
 ```
 
-```ini
-# IBM Quantum — qiskit-ibm-runtime requires channel "ibm_quantum_platform"
-# (the old "ibm_quantum" value is rejected since qiskit-ibm-runtime 0.40)
-ibm_channel="ibm_quantum_platform"
-ibm_api_token="YOUR_TOKEN"
-ibm_instance="ibm-q/open/main"
-
-# IQM
-iqm_api_token="YOUR_TOKEN"
-iqm_server_url="https://cocos.resonance.meetiqm.com/your-device"
-
-# Qibo cloud (planned — qpubench has no Qibo adapter yet)
-qibo_api_token="YOUR_TOKEN"
-qibo_platform="YOUR_PLATFORM"
-
-# Cebule (MQS SDK) — used by mqsdk.Cebule(EMAIL, PASSWORD)
-EMAIL="your@email.com"
-PASSWORD="your_password"
-
-# Qrack (GPU selection; -1 = auto-detect)
-qrack_device_id="-1"
-# QRACK_FPPOW=6 for double precision; 5 for float (default)
-QRACK_FPPOW="6"
-
-# MBQC-FPGA (path to compiled bitstream or simulator binary)
-mbqc_bitstream_path="/path/to/bitstream.bit"
-```
+`.env` is gitignored. `.env.example` lists every variable qpubench looks for,
+with the adapter each belongs to. The rules that govern all of them are in the
+root README's [Credentials](../README.md#credentials) section — in short:
+qpubench never takes a secret as a function argument, and no credential
+belongs anywhere in the codebase, examples, or notebooks.
 
 ---
 

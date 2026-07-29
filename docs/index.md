@@ -120,6 +120,7 @@ Every backend below is a **real, credential-free simulator** that swaps into tha
 | PennyLane `lightning.qubit` | `[pennylane]` | `runner.register(PennyLaneLightningAdapter(), name="pennylane")` |
 | AWS Braket local (`LocalSimulator`) | `[braket]` | `runner.register(BraketAdapter(device_arn="local"), name="braket")` |
 | Qibo local (`numpy` / `qibojit`) | `[qibo]` | `runner.register(QiboAdapter(platform="numpy"), name="qibo")` |
+| Qrack (GPU/CPU statevector) | `[qrack]` | `runner.register(QrackAdapter(2, gpu=False), name="qrack")` |
 | Mitiq ZNE (wraps another simulator) | `[mitiq]` | `runner.register(MitiqZNEAdapter(AerAdapter()), name="mitiq")` |
 
 All adapter classes import from `qpubench.backends`. Fake-noise hardware backends (IBM `FakeManilaV2`, IQM `IQMFakeAdonis`, Quantinuum `machine_debug=True`) also run without credentials — see [Backends & adapters](backends.md) for those and for real-hardware access.
@@ -180,6 +181,7 @@ runner.add_hook(lambda r: print(r.backend.name, r.result.status.value))
 | If you want to… | Read |
 |---|---|
 | Install with uv / Poetry / conda, set up credentials | [Installation](installation.md) |
+| Understand why the code is written the way it is | [Developer guide](developer_guide.md) |
 | Look up any model, field, or enum | [Schema reference](schemas.md) |
 | See every backend and its status (real vs. stub) | [Backends & adapters](backends.md) |
 | Store, query, and analyze results (incl. S3 / Hugging Face) | [Stores & persistence](persistence.md) |
@@ -187,6 +189,7 @@ runner.add_hook(lambda r: print(r.backend.name, r.result.status.value))
 | Understand algorithm identity, families, and configs | [Algorithms & `AlgorithmSpec`](algorithm_spec.md) |
 | Run simulators on CPU / GPU, or MBQC programs on FPGA | [Compute architectures](compute_architectures.md) |
 | Bridge an external framework's data (QForte, PySCF, QCSchema, GBS, …) | [Integrations](integrations.md) |
+| Load pre-defined QUBO Hamiltonians (OR-Library, MQLib, BQPJSON) | [`hamiltonian_sources/qubo.py`](../src/qpubench/hamiltonian_sources/qubo.py) and the [generator roadmap](qubo_generator_roadmap.md) |
 | Avoid cross-SDK convention traps (Pauli encodings, bit orders) | [Compatibility](compatibility.md) |
 | Write your own adapter, step by step | [Backends & adapters](backends.md) and the [integrations directory](https://github.com/mqsdk/qpubench/tree/main/integrations) |
 | Learn from runnable code | [examples/](https://github.com/mqsdk/qpubench/tree/main/examples) — guides, demos, and full tutorials |
@@ -233,7 +236,7 @@ Two rules keep the ecosystem healthy: SDK imports live **inside** methods (so im
 
 The same record format covers paradigms that most benchmark tools can't express side by side. `ComputingModel` (how a program is expressed: `GATE_BASED`, `MBQC`, `FUSION_BASED`, `ADIABATIC`, `ANNEALING`, `GBS`, `SAMPLING`) and `QubitModality` (what hardware realizes it: superconducting, trapped-ion, neutral-atom, photonic, silicon-spin) are independent axes on every circuit, backend, and result — so a gate-based run on photonic hardware and a Gaussian boson sampling run land in the same store and can be queried together.
 
-Vendor- and framework-specific schemas (37 modules, from QForte and PySCF to QuEra's analog Hamiltonian simulation and Qedma's QESEM error mitigation) live in [`qpubench.schemas`](schemas.md). Modules that mirror a single external project are named `<maintainer>_<package>.py` so the filename tells you the upstream source; core record types and multi-source catalogues (basis sets, Hamiltonian metadata, the advantage tracker) stay unprefixed.
+Vendor- and framework-specific schemas (37 modules, from QForte and PySCF to QuEra's analog Hamiltonian simulation and Qedma's QESEM error mitigation) live in [`qpubench.schemas`](schemas.md). They are split three ways by directory: `schemas/` holds the core record types, `schemas/mirrors/` one module per external project (named `<maintainer>_<package>.py`, so the filename tells you the upstream source), and `schemas/catalogs/` the cross-cutting catalogues that draw on several upstreams at once (basis sets, Hamiltonian metadata, the advantage tracker).
 
 ---
 

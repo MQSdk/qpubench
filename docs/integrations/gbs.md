@@ -1,6 +1,6 @@
 # GBS (Gaussian Boson Sampling) integration
 
-qpubench models Gaussian Boson Sampling in `src/qpubench/schemas/mqsdk_photoq.py` (the GBS section). This covers the Gaussian-state / hafnian-based formalism — **distinct from the LOQC section of the same module**, which uses the permanent-based / Fock-state formalism for linear-optics chips.
+qpubench models Gaussian Boson Sampling in `src/qpubench/schemas/mirrors/mqsdk_photoq.py` (the GBS section). This covers the Gaussian-state / hafnian-based formalism — **distinct from the LOQC section of the same module**, which uses the permanent-based / Fock-state formalism for linear-optics chips.
 
 | | LOQC (permanent) | GBS (hafnian) |
 |---|---|---|
@@ -16,7 +16,7 @@ Computing model: `ComputingModel.GBS`. Qubit modality: `QubitModality.PHOTONIC`
 ## Direct GBS sampling
 
 ```python
-from qpubench.schemas.mqsdk_photoq import (
+from qpubench.schemas.mirrors.mqsdk_photoq import (
     SqueezingGateSpec, S2GateSpec, RotationGateSpec,
     InterferometerSpec, GBSProgramSpec, GBSMeasurementType,
     GBSSamplingConfig, GBSSamplingResult, GBSSample,
@@ -61,7 +61,7 @@ Store results in `QuantumResult.vendor_results["gbs_sampling"]`.
 ## Hafnian computation
 
 ```python
-from qpubench.schemas.mqsdk_photoq import (
+from qpubench.schemas.mirrors.mqsdk_photoq import (
     GaussianStateSpec, HafnianMatrixSpec,
     HafnianComputationSpec, HafnianResult,
     QuadratureOrdering,
@@ -99,7 +99,7 @@ haf_result = HafnianResult(
 Encode a graph adjacency matrix into a GBS device via Takagi decomposition, then use the photon-number samples to find dense subgraphs (cliques).
 
 ```python
-from qpubench.schemas.mqsdk_photoq import (
+from qpubench.schemas.mirrors.mqsdk_photoq import (
     GBSGraphConfig, GraphScalingMethod,
     TakagiDecompositionSpec, GBSCliqueFindingResult,
 )
@@ -145,7 +145,7 @@ Store in `QuantumResult.gbs_clique_finding`.
 Xanadu Borealis uses a time-domain multiplexed (TDM) architecture with three fibre-loop delays [1, 6, 36] to realise 216 effective modes:
 
 ```python
-from qpubench.schemas.mqsdk_photoq import (
+from qpubench.schemas.mirrors.mqsdk_photoq import (
     TDMDelaySpec, TDMGBSConfig, TDMGBSResult, TDMSqueezingLevel,
 )
 
@@ -180,7 +180,7 @@ backend = BackendSpec.xanadu_borealis(via_braket=True)
 ## CV cluster states
 
 ```python
-from qpubench.schemas.mqsdk_photoq import ClusterStateSpec, GaussianStateType
+from qpubench.schemas.mirrors.mqsdk_photoq import ClusterStateSpec, GaussianStateType
 import math
 
 cluster = ClusterStateSpec(
@@ -199,7 +199,7 @@ cluster = ClusterStateSpec(
 The photoq paper *"Classical simulation of Gaussian boson sampling with click-counting detectors"* studies GBS devices read out by **pseudo photon-number-resolving detectors** (pPNRD): a mode is demultiplexed across `N` on/off (click) detectors, and the detector reports the number `k ∈ {0, …, N}` of branches that clicked. This is the `GBSMeasurementType.PSEUDO_PNR` detector model.
 
 ```python
-from qpubench.schemas.mqsdk_photoq import (
+from qpubench.schemas.mirrors.mqsdk_photoq import (
     PseudoPNRDSpec, SimulationMethod, ClickPatternProbabilityResult,
     KensingtonianResult, MethodComparison, MPSSimulationConfig,
 )
@@ -273,7 +273,7 @@ Store a comparison in `QuantumResult.vendor_results["method_comparison"]`.
 ORCA's PT-1/PT-2 are **time-bin interferometers**: one physical beamsplitter plus one or more fibre delay loops, applied across `num_modes` time bins. Each loop couples every adjacent pair of bins, so a loop needs `num_modes - 1` beamsplitter angles.
 
 ```python
-from qpubench.schemas.mqsdk_photoq import (
+from qpubench.schemas.mirrors.mqsdk_photoq import (
     TimeBinInterferometerSpec, PTSeriesSamplingConfig,
     PTSeriesSamplingResult, PTSeriesInputType,
 )
@@ -304,7 +304,7 @@ Store in `QuantumResult.vendor_results["pt_series_sampling"]`.
 `qcloud.dtu.dk` exposes a Bearer-token REST API with two GBS job types: `tn-covariance` (build a covariance matrix server-side) and `tn-sampling` (tensor-network GBS sampling — the successor of the DASQ Kensingtonian sampler, aligned with the paper's MPS method).
 
 ```python
-from qpubench.schemas.mqsdk_photoq import (
+from qpubench.schemas.mirrors.mqsdk_photoq import (
     QCloudJobType, QCloudJobSpec, QCloudJobResult,
     TNCovarianceParams, TNSamplingParams,
 )
@@ -334,7 +334,7 @@ Store in `QuantumResult.vendor_results["qcloud_job"]`.
 Aurora is the modular photonic quantum computer of *"Scaling and networking a modular photonic quantum computer"* (Nature 638, 2025): 35 chips, 84 squeezers, 36 PNRDs, 12 qubit modes per clock cycle. It is a published **dataset** (public S3 bucket `xanadu-aurora-data`), not a programmable device — two experiment sets: cluster-state acquisition and the decoder demo.
 
 ```python
-from qpubench.schemas.mqsdk_photoq import AuroraDatasetSpec, AuroraExperiment
+from qpubench.schemas.mirrors.mqsdk_photoq import AuroraDatasetSpec, AuroraExperiment
 from qpubench.schemas.backend import BackendSpec
 
 spec = AuroraDatasetSpec(

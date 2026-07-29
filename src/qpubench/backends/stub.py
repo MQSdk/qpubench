@@ -2,6 +2,17 @@
 
 These adapters return synthetic results without touching any real hardware.
 Use them to verify your runner / store pipeline before wiring up a real backend.
+
+There are two of them rather than one because the two paradigms this framework
+spans produce structurally different results, and a single gate-based stub
+would only exercise half the record format. ``StubGateAdapter`` fills
+``QuantumResult.expectation_values``; ``StubMBQCAdapter`` fills
+``mbqc_rounds``, ``fidelity`` and ``shots``, and is the only adapter in the
+package that exercises the measurement-pattern input path, the per-round
+byproduct-operator bookkeeping, and the reversed MBQC bit order (bit 0 = Z,
+bit 1 = X) documented in ``schemas/mirrors/johnrscott_mbqc_fpga.py``. MBQC hardware is
+an FPGA on someone's bench, not a pip-installable simulator, so without this
+stub none of that would be reachable in CI or in an example.
 """
 from __future__ import annotations
 
@@ -89,15 +100,19 @@ class StubMBQCAdapter:
         circuit: CircuitSpec,
         options: ExecutionOptions,
     ) -> QuantumResult:
+        """Replay the measurement pattern with random outcomes.
+
+        The core stores the pattern as a vendor-neutral dict, so the typed
+        schema is rehydrated here in the adapter layer — that is what keeps
+        ``schemas/circuit.py`` free of any MBQC-specific import.
+        """
         if circuit.measurement_pattern is None:
             return QuantumResult(
                 computing_model=ComputingModel.MBQC,
                 status=JobStatus.FAILED,
                 error_message="No measurement_pattern in CircuitSpec",
             )
-        # Core stores the pattern as a vendor-neutral dict; rehydrate the
-        # typed schema here in the adapter layer.
-        from ..schemas.johnrscott_mbqc_fpga import MBQCPattern
+        from ..schemas.mirrors.johnrscott_mbqc_fpga import MBQCPattern
 
         pattern = MBQCPattern.model_validate(circuit.measurement_pattern)
 
@@ -120,6 +135,7 @@ class StubMBQCAdapter:
             for q in range(N)
         ]
         bitstring = "".join(str(corrected[q]) for q in reversed(range(N)))
+        num_shots = options.shots if options.shots is not None else 1
 
         return QuantumResult(
             computing_model=ComputingModel.MBQC,
@@ -130,8 +146,8 @@ class StubMBQCAdapter:
             ),
             shots=ShotResult(
                 num_qubits=N,
-                num_shots=options.shots or 1,
-                counts={bitstring: options.shots or 1},
+                num_shots=num_shots,
+                counts={bitstring: num_shots},
             ),
             status=JobStatus.SUCCEEDED,
             qpu_time_s=self._rng.uniform(0.001, 0.01),

@@ -35,7 +35,7 @@ import sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
 
 from qpubench.backends.ibm_cost_estimator import estimate_circuit_resources
-from qpubench.schemas.ibm_cost_estimator import (
+from qpubench.schemas.mirrors.ibm_cost_estimator import (
     CircuitResourceEstimate,
     IBMPricingRates,
     aggregate_benchmark_cost,
@@ -117,7 +117,7 @@ def estimate_full_csv_study() -> list[CircuitResourceEstimate]:
 
 
 def _print_plan_breakdown(total_seconds: float, rates: IBMPricingRates) -> None:
-    from qpubench.schemas.ibm_cost_estimator import estimate_all_plans
+    from qpubench.schemas.mirrors.ibm_cost_estimator import estimate_all_plans
 
     for plan, breakdown in estimate_all_plans(total_seconds, rates).items():
         cost = f"${breakdown.cost_usd:,.2f}" if breakdown.cost_usd is not None else "n/a"

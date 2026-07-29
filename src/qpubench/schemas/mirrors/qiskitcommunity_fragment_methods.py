@@ -40,7 +40,7 @@ from typing import Any
 
 import pydantic
 
-from .fragmentation import (
+from ..catalogs.fragmentation import (
     FragmentationResult,
     FragmentationScheme,
     FragmentationSpec,
@@ -52,8 +52,7 @@ from .fragmentation import (
     ScreeningMetric,
     SolverKind,
 )
-from .primitives import JobStatus
-
+from ..primitives import JobStatus
 
 # ---------------------------------------------------------------------------
 # Enumerations

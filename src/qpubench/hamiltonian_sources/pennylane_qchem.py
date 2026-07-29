@@ -34,7 +34,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..schemas.hamiltonian_library import HamiltonianLibraryRecord, HamiltonianSource
+from ..schemas.catalogs.hamiltonian_library import HamiltonianLibraryRecord, HamiltonianSource
 from ..schemas.observable import PauliTerm, SparsePauliObservable
 from ..schemas.primitives import ComplexNumber, PauliLabel
 

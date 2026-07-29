@@ -174,7 +174,7 @@ def tn_qc_opt_component(
 ) -> None:
     """Cebule TN_QC_OPT: hybrid tensor-network + circuit VQE, run as a
     documented follow-up to MOL_MAP or a plain JW mapping (see
-    MolMapResult.to_sparse_pauli_observable in schemas/mqsdk_cebule.py).
+    MolMapResult.to_sparse_pauli_observable in schemas/mirrors/mqsdk_cebule.py).
 
     The entire n_iterations optimizer loop executes inside this one
     component/pod — it is not decomposed into per-iteration DAG nodes.

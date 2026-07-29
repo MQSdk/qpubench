@@ -137,10 +137,24 @@ class QuantinuumAdapter:
         return qiskit_to_tk(load_qiskit_circuit(circuit))
 
     def _compile(self, circuit: CircuitSpec, options: ExecutionOptions, backend: Any) -> Any:
+        """Compile to Quantinuum native gates at the requested optimisation level.
+
+        ``ExecutionOptions.optimization_level`` spans Qiskit's 0-3 range, but
+        pytket only defines levels 0-2. Level 3 is rejected rather than
+        silently clamped to 2: quietly running a different optimisation level
+        than the one a benchmark asked for would make its results
+        incomparable with the same level on another backend.
+        """
+        if options.optimization_level > 2:
+            raise ValueError(
+                f"Quantinuum (pytket) supports optimisation levels 0-2; got "
+                f"{options.optimization_level}. Choose a level in that range "
+                "explicitly — see docs/backends.md for the per-backend ranges."
+            )
         tkc = self._load_tket(circuit)
-        # pytket optimisation levels are 0-2; clamp Qiskit's 0-3 range.
-        opt = min(options.optimization_level, 2)
-        return backend.get_compiled_circuit(tkc, optimisation_level=opt)
+        return backend.get_compiled_circuit(
+            tkc, optimisation_level=options.optimization_level
+        )
 
     def transpile(
         self,
@@ -190,7 +204,7 @@ class QuantinuumAdapter:
         if compiled.n_bits == 0:
             compiled.measure_all()
 
-        shots = options.shots or 1024
+        shots = options.require_shots("QuantinuumAdapter")
         handle = backend.process_circuit(compiled, n_shots=shots, seed=options.seed)
         result = backend.get_result(handle)
 

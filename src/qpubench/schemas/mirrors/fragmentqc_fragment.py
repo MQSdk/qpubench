@@ -37,7 +37,7 @@ from typing import Any
 
 import pydantic
 
-from .fragmentation import (
+from ..catalogs.fragmentation import (
     FragmentationLayer,
     FragmentationResult,
     FragmentationScheme,
@@ -50,8 +50,7 @@ from .fragmentation import (
     ScreeningMetric,
     SolverKind,
 )
-from .primitives import JobStatus
-
+from ..primitives import JobStatus
 
 # ---------------------------------------------------------------------------
 # Enumerations — mirror the Literal discriminators in fragment/schemas/strategy.py

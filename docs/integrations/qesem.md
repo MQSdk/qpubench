@@ -1,6 +1,6 @@
 # QESEM integration
 
-qpubench models the [Qedma QESEM](https://docs.qedma.io/) quantum error suppression and mitigation service in `src/qpubench/schemas/qedma_qesem.py`.
+qpubench models the [Qedma QESEM](https://docs.qedma.io/) quantum error suppression and mitigation service in `src/qpubench/schemas/mirrors/qedma_qesem.py`.
 
 QESEM is available through two interfaces:
 - **Native client**: `pip install qedma-api` → `qedma_api.Client`
@@ -22,7 +22,7 @@ Error mitigation strategy in qpubench: `ErrorMitigationStrategy.QESEM`
 from qpubench.schemas.backend import BackendSpec
 from qpubench.schemas.execution import ExecutionOptions
 from qpubench.schemas.primitives import ComputingModel, ErrorMitigationStrategy, QubitModality
-from qpubench.schemas.qedma_qesem import (
+from qpubench.schemas.mirrors.qedma_qesem import (
     QESEMJobSpec, QESEMObservableSpec, QESEMCircuitOptions,
     QESEMJobOptions, QESEMExecutionMode,
 )
@@ -44,7 +44,7 @@ options = ExecutionOptions(
 QESEM uses Qedma's Pauli string dict format: comma-separated qubit-indexed Pauli operators mapped to real coefficients.
 
 ```python
-from qpubench.schemas.qedma_qesem import QESEMObservableSpec
+from qpubench.schemas.mirrors.qedma_qesem import QESEMObservableSpec
 
 # Average magnetization over 5 qubits
 avg_mag = QESEMObservableSpec(
@@ -70,7 +70,7 @@ ham_obs = QESEMObservableSpec(
 ## Job specification
 
 ```python
-from qpubench.schemas.qedma_qesem import (
+from qpubench.schemas.mirrors.qedma_qesem import (
     QESEMJobSpec, QESEMObservableSpec, QESEMCircuitOptions,
     QESEMTranspilationLevel, QESEMPrecisionMode,
 )
@@ -128,7 +128,7 @@ spec_estimate = QESEMJobSpec(
 QET runs the circuit at multiple noise scale factors and extrapolates to the zero-noise limit.
 
 ```python
-from qpubench.schemas.qedma_qesem import QESEMPrecisionPerFactor
+from qpubench.schemas.mirrors.qedma_qesem import QESEMPrecisionPerFactor
 
 spec_qet = QESEMJobSpec(
     circuit_qasm='...',
@@ -152,7 +152,7 @@ spec_qet = QESEMJobSpec(
 ### Mitigated expectation values
 
 ```python
-from qpubench.schemas.qedma_qesem import (
+from qpubench.schemas.mirrors.qedma_qesem import (
     QESEMJobRecord, QESEMCircuitResult, QESEMObservableResult,
     QESEMExpectationValue, QESEMScaleExpectationValue, QESEMNoiseScalingResult,
     QESEMHeuristicResult,
@@ -189,7 +189,7 @@ print(f"Best mitigated: {obs_result.mitigated.value}")  # -0.80 (uses heuristic)
 ### Circuit result — accessing mitigated values
 
 ```python
-from qpubench.schemas.qedma_qesem import QESEMCircuitResult, QESEMCircuitObservableResult
+from qpubench.schemas.mirrors.qedma_qesem import QESEMCircuitResult, QESEMCircuitObservableResult
 
 circuit_result = QESEMCircuitResult(
     parameter_index=0,
@@ -209,7 +209,7 @@ print(circuit_result.noisy_evs)       # [-0.42, -0.22]
 ## Execution details
 
 ```python
-from qpubench.schemas.qedma_qesem import (
+from qpubench.schemas.mirrors.qedma_qesem import (
     QESEMExecutionDetails, QESEMTranspiledCircuit,
 )
 
@@ -235,7 +235,7 @@ details = QESEMExecutionDetails(
 ## Device characterization
 
 ```python
-from qpubench.schemas.qedma_qesem import (
+from qpubench.schemas.mirrors.qedma_qesem import (
     QESEMCharacterizationResult, QESEMGateInfidelity,
 )
 
@@ -262,7 +262,7 @@ char = QESEMCharacterizationResult(
 ## Full job record
 
 ```python
-from qpubench.schemas.qedma_qesem import QESEMJobRecord, QESEMJobStatus, QESEMExecutionMode
+from qpubench.schemas.mirrors.qedma_qesem import QESEMJobRecord, QESEMJobStatus, QESEMExecutionMode
 from qpubench.schemas.result import QuantumResult
 from qpubench.schemas.primitives import ComputingModel, QubitModality
 

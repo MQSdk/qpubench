@@ -1,6 +1,6 @@
 # Cebule SDK integration
 
-[Cebule SDK](https://docs.mqs.dk/sections/section_014_quantum_computing/) (MQS) provides cloud quantum-chemistry and materials-property task types. qpubench models each task's input and output as typed Pydantic schemas in `src/qpubench/schemas/mqsdk_cebule.py`.
+[Cebule SDK](https://docs.mqs.dk/sections/section_014_quantum_computing/) (MQS) provides cloud quantum-chemistry and materials-property task types. qpubench models each task's input and output as typed Pydantic schemas in `src/qpubench/schemas/mirrors/mqsdk_cebule.py`.
 
 **Revised 2026-07-08.** This module was checked directly against the real
 SDK source — [gitlab.com/mqsdk/python-sdk](https://gitlab.com/mqsdk/python-sdk),

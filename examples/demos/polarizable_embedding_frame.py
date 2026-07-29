@@ -3,7 +3,7 @@
 CPPE (github.com/maxscheurer/cppe) and PyFraME
 (github.com/FraME-projects/PyFraME) are both pip-installable and run for
 real here, bridged through PySCF's own ``pyscf.solvent.PE``
-(``pyscf.solvent.pol_embed``). See ``qpubench.schemas.polarizable_embedding``
+(``pyscf.solvent.pol_embed``). See ``qpubench.schemas.catalogs.polarizable_embedding``
 for the schema.
 
 Mechanism: a real PE-embedded Hartree-Fock calculation on water, with one
@@ -39,7 +39,7 @@ import tempfile
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
 
-from qpubench.schemas.polarizable_embedding import (
+from qpubench.schemas.catalogs.polarizable_embedding import (
     PolarizableEmbeddingConfig,
     PolarizableEmbeddingResult,
     PolarizableEmbeddingSite,

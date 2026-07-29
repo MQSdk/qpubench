@@ -1,6 +1,6 @@
 """Demo: performing a reaction-path potential energy surface (PES) study.
 
-This exercises schemas/reactions.py: a sweep of point calculations tied
+This exercises schemas/catalogs/reactions.py: a sweep of point calculations tied
 together as one ReactionCoordinateSpec / ReactionPathResult, rather than a
 bare list of unrelated BenchmarkRecords.
 
@@ -25,7 +25,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
 from qpubench import AlgorithmSpec, BenchmarkRunner, CircuitSpec, ExecutionOptions
 from qpubench.schemas.execution import AdaptVQERunConfig
 from qpubench.schemas.primitives import AlgorithmFamily, CircuitFormat
-from qpubench.schemas.reactions import ReactionCoordinateSpec, ReactionPathResult
+from qpubench.schemas.catalogs.reactions import ReactionCoordinateSpec, ReactionPathResult
 
 from examples.common.toy_hamiltonians import NUM_ELECTRONS, NUM_QUBITS, toy_bond_hamiltonian
 from examples.common.toy_statevector_backend import ToyStatevectorAdapter

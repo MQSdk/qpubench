@@ -2,15 +2,14 @@
 
 Install: pip install 'qpubench[tensor_network]'
 
-Closes qrunch's "Choose a Contraction Path Finder" guide. Real, verified
+Contraction-path selection for tensor-network simulation. Real, verified
 pipeline: `quimb.tensor.Circuit.from_openqasm2_str()` builds a real tensor
 network from a circuit's QASM2 text; `.amplitude(bitstring, optimize=...)`
 and `.psi.contraction_info(optimize=...)` execute/cost a chosen
 contraction path. `optimize=` accepts either a string strategy name
 (quimb/opt_einsum's own `"auto"`, `"greedy"`, `False`) or a real
 `cotengra.HyperOptimizer` instance for randomized/multi-method search —
-confirmed by running all four qrunch-equivalent strategies below on a
-real Bell circuit.
+confirmed by running all four strategies below on a real Bell circuit.
 
 quimb has no QASM3 loader (only QASM2 — confirmed by inspecting its
 `Circuit` class) — QASM3 `CircuitSpec`s are bridged via
@@ -23,7 +22,7 @@ from __future__ import annotations
 from typing import Any
 
 from ..schemas.circuit import CircuitSpec
-from ..schemas.contraction_path import (
+from ..schemas.catalogs.contraction_path import (
     ContractionPathConfig,
     ContractionPathResult,
     ContractionPathStrategy,
@@ -50,7 +49,7 @@ def build_quimb_circuit(circuit: CircuitSpec) -> Any:
 
 
 def _resolve_optimize(config: ContractionPathConfig) -> Any:
-    """Map qrunch's non-NONE strategies onto real quimb/cotengra `optimize=`
+    """Map the non-NONE strategies onto real quimb/cotengra `optimize=`
     values (NONE is handled separately in choose_contraction_path — see
     there for why)."""
     if config.strategy == ContractionPathStrategy.SEQUENTIAL:

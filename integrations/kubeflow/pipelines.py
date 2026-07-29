@@ -94,7 +94,7 @@ def _with_cebule_credentials(task: Any) -> Any:
     name="cebule-molecular-vqe",
     description=(
         "MOL_MAP -> TN_QC_OPT -> QASM_GEN -> circuit execution, following the "
-        "Cebule SDK task chain documented in schemas/mqsdk_cebule.py. Mapper "
+        "Cebule SDK task chain documented in schemas/mirrors/mqsdk_cebule.py. Mapper "
         "category `tn_qc_opt+mol_map` in data/IBM_VQE_Test_Benchmark.csv."
     ),
 )

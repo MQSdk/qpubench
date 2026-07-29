@@ -154,7 +154,7 @@ Here `ExecutionOptions` is built explicitly because the run needs more than a sh
 
 ### QForte engine
 
-QForte's pybind11 object model (Circuit, Gate, QubitOperator, …) and its Algorithm/AnsatzAlgorithm/ADAPTVQE attribute surface are modeled as typed schemas in `schemas/evangelistalab_qforte.py` — no ad-hoc `getattr()` scraping of private attributes. `QForteAlgorithmConfig` wraps the shared `AdaptVQERunConfig` plus QForte-only extras (`diis_max_dim`, `use_cumulative_thresh`, `add_equiv_ops`). The adapter also ships an `ExternalEvalAlgorithmAdapter` that routes every energy evaluation through any qpubench `BackendAdapter` (Aer, IBM, …) instead of QForte's own simulator. See `integrations/qforte/README.md` for the file-by-file layout.
+QForte's pybind11 object model (Circuit, Gate, QubitOperator, …) and its Algorithm/AnsatzAlgorithm/ADAPTVQE attribute surface are modeled as typed schemas in `schemas/mirrors/evangelistalab_qforte.py` — no ad-hoc `getattr()` scraping of private attributes. `QForteAlgorithmConfig` wraps the shared `AdaptVQERunConfig` plus QForte-only extras (`diis_max_dim`, `use_cumulative_thresh`, `add_equiv_ops`). The adapter also ships an `ExternalEvalAlgorithmAdapter` that routes every energy evaluation through any qpubench `BackendAdapter` (Aer, IBM, …) instead of QForte's own simulator. See `integrations/qforte/README.md` for the file-by-file layout.
 
 ### Generic engine (Qiskit / QDK adapters)
 
@@ -170,7 +170,7 @@ Two design choices worth knowing:
 
 - **Gradient screening uses central finite differences**, not an analytic commutator — it reuses the already-verified circuit-exponential construction directly rather than adding a second from-scratch Pauli-algebra routine. Use `shots=None` (statevector) in the energy options; shot noise makes finite differences unreliable at small epsilon.
 - **Spin-orbital convention**: qubit index == spin-orbital index; occupied = `[0, num_electrons)`, virtual = `[num_electrons, num_qubits)`. Map your own orbital ordering onto this before calling in.
-- **It is not a chemistry pipeline**: the engine takes an already-built qubit Hamiltonian (`SparsePauliObservable`). Build it with whichever pipeline you like — `schemas/microsoft_qdk.py`'s `QChemPipelineSpec`, or `qpubench.hamiltonian_sources` (HamLib / PennyLane / ab initio) — before handing it over.
+- **It is not a chemistry pipeline**: the engine takes an already-built qubit Hamiltonian (`SparsePauliObservable`). Build it with whichever pipeline you like — `schemas/mirrors/microsoft_qdk.py`'s `QChemPipelineSpec`, or `qpubench.hamiltonian_sources` (HamLib / PennyLane / ab initio) — before handing it over.
 
 Direct use of the engine (bypassing the adapters):
 

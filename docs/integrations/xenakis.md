@@ -1,6 +1,6 @@
 # Xenakis integration
 
-[Xenakis](https://github.com/mqsdk/xenakis) is an automated quantum circuit composer using genetic algorithms. Three sub-project variants are modelled in `src/qpubench/schemas/mqsdk_xenakis.py`.
+[Xenakis](https://github.com/mqsdk/xenakis) is an automated quantum circuit composer using genetic algorithms. Three sub-project variants are modelled in `src/qpubench/schemas/mirrors/mqsdk_xenakis.py`.
 
 ---
 

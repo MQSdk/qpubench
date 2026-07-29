@@ -6,9 +6,9 @@ see `src/qpubench/schemas/backend.py`) — a thin `AlgorithmAdapter` wrapper
 over `integrations/generic_adapt_vqe/`, identical in every respect to
 `integrations/ibm_qiskit_adapt_vqe/` except its `BackendSpec` defaults.
 
-## Why this exists alongside `schemas/microsoft_qdk.py`
+## Why this exists alongside `schemas/mirrors/microsoft_qdk.py`
 
-`schemas/microsoft_qdk.py` models the Microsoft QDK chemistry-course
+`schemas/mirrors/microsoft_qdk.py` models the Microsoft QDK chemistry-course
 pipeline (SCF → active-space selection → QPE/IQPE resource estimation) — a
 phase-estimation workflow, not ADAPT-VQE. QDK's Quantum Chemistry Library
 and Azure Quantum both support UCC-style variational algorithms too, so

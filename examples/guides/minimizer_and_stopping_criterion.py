@@ -1,6 +1,6 @@
 """Guide: choose a minimizer and a stopping criterion.
 
-``qpubench.schemas.optimizer_catalog`` provides ``MINIMIZER_CATALOG`` /
+``qpubench.schemas.catalogs.optimizer_catalog`` provides ``MINIMIZER_CATALOG`` /
 ``STOPPING_CRITERION_CATALOG``: a catalogue/registry object to "choose"
 from, so ``AdaptVQERunConfig.optimizer`` isn't just free text. The catalogue
 is a lookup table over the same
@@ -21,7 +21,7 @@ import sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
 
 from qpubench.schemas.execution import AdaptVQERunConfig
-from qpubench.schemas.optimizer_catalog import MINIMIZER_CATALOG, STOPPING_CRITERION_CATALOG
+from qpubench.schemas.catalogs.optimizer_catalog import MINIMIZER_CATALOG, STOPPING_CRITERION_CATALOG
 
 from examples.common.toy_hamiltonians import (
     NUM_ELECTRONS,

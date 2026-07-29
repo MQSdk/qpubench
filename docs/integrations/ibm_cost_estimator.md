@@ -7,7 +7,7 @@ needing an IBM Quantum account. Two modules:
 - `src/qpubench/backends/ibm_cost_estimator.py` — real, Qiskit-dependent:
   transpiles + ALAP-schedules a `CircuitSpec` against a real IBM
   calibration snapshot, giving real depth/gate-count/duration numbers.
-- `src/qpubench/schemas/ibm_cost_estimator.py` — pure Pydantic: turns
+- `src/qpubench/schemas/mirrors/ibm_cost_estimator.py` — pure Pydantic: turns
   QPU-seconds into a dollar breakdown across IBM's four access plans. No
   Qiskit import, usable standalone (e.g. if you already know your QPU-time
   budget from elsewhere).
@@ -64,7 +64,7 @@ of QPU time — see `tests/test_ibm_cost_estimator.py`.
 ## Cost breakdown — sourced, but verify before budgeting
 
 ```python
-from qpubench.schemas.ibm_cost_estimator import estimate_all_plans
+from qpubench.schemas.mirrors.ibm_cost_estimator import estimate_all_plans
 
 for plan, breakdown in estimate_all_plans(total_qpu_seconds=180.0).items():
     print(plan.value, breakdown.cost_usd, breakdown.notes)
@@ -73,7 +73,7 @@ for plan, breakdown in estimate_all_plans(total_qpu_seconds=180.0).items():
 Or aggregate a whole study's worth of `CircuitResourceEstimate`s at once:
 
 ```python
-from qpubench.schemas.ibm_cost_estimator import aggregate_benchmark_cost
+from qpubench.schemas.mirrors.ibm_cost_estimator import aggregate_benchmark_cost
 
 agg = aggregate_benchmark_cost(list_of_circuit_resource_estimates)
 print(agg.total_qpu_seconds, agg.plan_breakdowns)
@@ -109,7 +109,7 @@ Every rate is a field on `IBMPricingRates`, not a hardcoded constant —
 override with your own confirmed numbers:
 
 ```python
-from qpubench.schemas.ibm_cost_estimator import IBMPricingRates, estimate_all_plans
+from qpubench.schemas.mirrors.ibm_cost_estimator import IBMPricingRates, estimate_all_plans
 
 my_rates = IBMPricingRates(pay_as_you_go_usd_per_minute=100.0)   # if IBM's rate changed
 estimate_all_plans(total_qpu_seconds=180.0, rates=my_rates)

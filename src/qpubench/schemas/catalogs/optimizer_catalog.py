@@ -1,13 +1,12 @@
 """Minimizer / stopping-criterion catalogue.
 
-Closes qrunch's "Choose a Minimizer" / "Choose a Stopping Criterion" guides'
-missing piece: ``AdaptVQERunConfig.optimizer`` (``execution.py``) is a
-free-text field each adapter maps onto its own supported set (e.g.
+``AdaptVQERunConfig.optimizer`` (``execution.py``) is a free-text field each
+adapter maps onto its own supported set (e.g.
 ``integrations/generic_adapt_vqe`` maps it directly onto a
-``scipy.optimize.minimize`` method name) — there was no catalogue/registry
-object to "choose" from the way qrunch documents it. ``MINIMIZER_CATALOG``
-and ``STOPPING_CRITERION_CATALOG`` are that catalogue: a lookup table over
-the same free-text values, not a new execution mechanism.
+``scipy.optimize.minimize`` method name), which leaves nothing to choose
+*from*. ``MINIMIZER_CATALOG`` and ``STOPPING_CRITERION_CATALOG`` are that
+missing catalogue: a lookup table over the same free-text values, not a new
+execution mechanism.
 
 Schema version: 2.4.0
 """
@@ -79,8 +78,8 @@ MINIMIZER_CATALOG: dict[str, MinimizerCatalogEntry] = {
 class StoppingCriterionCatalogEntry(pydantic.BaseModel):
     """One convergence criterion, mapped to the ``AdaptVQERunConfig`` field it
     actually controls (``execution.py`` — no separate stopping-criterion
-    object exists; this catalogue documents the mapping qrunch's guide
-    treats as a distinct concept).
+    object exists; this catalogue documents the mapping for a concept that is
+    otherwise only implicit in the config fields).
 
     name         catalogue key.
     field_name   the AdaptVQERunConfig field this criterion configures.

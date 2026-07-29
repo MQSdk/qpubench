@@ -57,8 +57,8 @@ from typing import Any
 
 import pydantic
 
-from .primitives import ComputingModel, JobStatus
-from .result import ExpectationResult, QuantumResult
+from ..primitives import ComputingModel, JobStatus
+from ..result import ExpectationResult, QuantumResult
 
 CHEMICAL_ACCURACY_HARTREE = 1.6e-3
 

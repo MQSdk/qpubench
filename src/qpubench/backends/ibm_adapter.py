@@ -35,8 +35,13 @@ CUDA-Q compatibility:
   BackendSpec.cudaq(target=...) is available for CUDA-Q targets
   ("nvidia", "qpp-cpu", "tensornet", etc.).
 
-Credentials: set via BackendSpec.auth or environment variables —
-  IBM_QUANTUM_TOKEN, IBM_QUANTUM_INSTANCE, IBM_QUANTUM_CHANNEL
+Credentials: never passed to this adapter as a literal string. The API token
+is read at call time from the environment variable named by ``token_ref``
+(default ``IBM_QUANTUM_TOKEN``); channel and instance likewise default to
+``IBM_QUANTUM_CHANNEL`` / ``IBM_QUANTUM_INSTANCE``. Populate them from a
+``.env`` file — see ``.env.example`` and the credentials section of the root
+README. ``BackendSpec.auth`` records only these *variable names*, so a stored
+BenchmarkRecord never contains a secret.
 
 Implementation notes verified against the installed qiskit-ibm-runtime
 (0.47.0) using qiskit_ibm_runtime.fake_provider local backends (no cloud
@@ -73,7 +78,7 @@ from contextlib import nullcontext
 
 from ..schemas.backend import BackendSpec
 from ..schemas.circuit import CircuitSpec
-from ..schemas.ibm_runtime_v2 import (
+from ..schemas.mirrors.ibm_runtime_v2 import (
     IBMBitArrayMeta,
     IBMEstimatorPUB,
     IBMExecutionMode,
@@ -105,6 +110,26 @@ _MITIGATION_TO_RESILIENCE = {
 }
 
 
+def _env_or(value: str | None, env_var: str, fallback: str | None) -> str:
+    """Resolve a setting from the argument, then the environment, then a fallback.
+
+    A ``fallback`` of ``None`` means the setting is account-specific and has no
+    sensible built-in value, so a missing environment variable is an error
+    rather than a silent guess.
+    """
+    if value is not None:
+        return value
+    from_env = os.environ.get(env_var)
+    if from_env:
+        return from_env
+    if fallback is None:
+        raise ValueError(
+            f"No value for {env_var}. Set it in your .env / environment "
+            f"(see .env.example), or pass it to the adapter explicitly."
+        )
+    return fallback
+
+
 def _extract_execution_spans(result: object) -> list[IBMExecutionSpan]:
     spans: list[IBMExecutionSpan] = []
     for span in getattr(result, "execution_spans", []) or []:
@@ -127,38 +152,54 @@ class IBMAdapter:
     backend_name:
         IBM backend name, e.g. ``"ibm_brisbane"``, ``"ibm_torino"``.
     channel:
-        ``"ibm_quantum_platform"`` or ``"ibm_cloud"``. The legacy
-        ``"ibm_quantum"`` (IQP) channel is gone — confirmed against the
-        installed qiskit-ibm-runtime (0.47.x): ``QiskitRuntimeService``
-        raises ``ValueError`` for it now.
-    token:
-        API token.  Falls back to ``IBM_QUANTUM_TOKEN`` env var.
+        ``"ibm_quantum_platform"`` or ``"ibm_cloud"``. Left unset, it is read
+        from ``$IBM_QUANTUM_CHANNEL``, falling back to
+        ``"ibm_quantum_platform"`` — the only value the current SDK accepts
+        for the public platform, so the fallback names a fact about the API
+        rather than a choice about your account. The legacy ``"ibm_quantum"``
+        (IQP) channel is gone — confirmed against the installed
+        qiskit-ibm-runtime (0.47.x): ``QiskitRuntimeService`` raises
+        ``ValueError`` for it now.
     instance:
-        Hub/group/project string, e.g. ``"ibm-q/open/main"`` — may need to
-        become a Cloud Resource Name (CRN) under the new channel; not
-        verified here.
+        Hub/group/project string, e.g. ``"ibm-q/open/main"``, or a Cloud
+        Resource Name (CRN) under the newer channel. Account-specific, so
+        there is no built-in default: left unset it is read from
+        ``$IBM_QUANTUM_INSTANCE``, and it is an error for that to be missing.
+    token_ref:
+        *Name of the environment variable* holding the API token — not the
+        token. Defaults to ``"IBM_QUANTUM_TOKEN"``. There is deliberately no
+        way to pass the token itself as an argument; see the credentials
+        section of the root README.
     execution_mode:
         ``SESSION`` — exclusive QPU hold; use for VQE / adaptive algorithms.
         ``BATCH``   — parallel independent jobs (sweeps, hyperparameter search).
         ``SINGLE``  — single job without session/batch context (default).
+
+    All three settings have a matching entry in ``.env.example``. Nothing in
+    this class stores a credential; the token is read from the environment at
+    the moment a service connection is opened.
     """
 
     def __init__(
         self,
         backend_name: str,
         *,
-        channel: str = "ibm_quantum_platform",
-        token: str | None = None,
-        instance: str = "ibm-q/open/main",
+        channel: str | None = None,
+        instance: str | None = None,
+        token_ref: str = "IBM_QUANTUM_TOKEN",
         execution_mode: IBMExecutionMode = IBMExecutionMode.SINGLE,
     ) -> None:
+        """Configure the adapter; no network call and no credential read yet."""
         self._backend_name = backend_name
-        self._channel = channel
-        self._token = token
-        self._instance = instance
+        self._channel = _env_or(channel, "IBM_QUANTUM_CHANNEL", "ibm_quantum_platform")
+        self._instance = _env_or(instance, "IBM_QUANTUM_INSTANCE", None)
+        self._token_ref = token_ref
         self._execution_mode = execution_mode
         self._spec = BackendSpec.ibm(
-            backend_name, channel=channel, instance=instance, token_ref=token or ""
+            backend_name,
+            channel=self._channel,
+            instance=self._instance,
+            token_ref=token_ref,
         )
 
     @property
@@ -178,11 +219,24 @@ class IBMAdapter:
     # ------------------------------------------------------------------
 
     def _get_backend(self) -> Any:
+        """Open a credentialed service connection and return the live backend.
+
+        The token is read from the environment here, at the point of use, so
+        it is never held on the adapter or serialised into a BenchmarkRecord.
+        """
         from qiskit_ibm_runtime import QiskitRuntimeService
 
+        token = os.environ.get(self._token_ref)
+        if not token:
+            raise RuntimeError(
+                f"No IBM Quantum token found in ${self._token_ref}. Set it in "
+                "your .env / environment (see .env.example), or point the "
+                "adapter at a different variable with "
+                f'IBMAdapter(..., token_ref="MY_VAR").'
+            )
         service = QiskitRuntimeService(
             channel=self._channel,
-            token=self._token or os.environ.get("IBM_QUANTUM_TOKEN"),
+            token=token,
             instance=self._instance,
         )
         return service.backend(self._backend_name)
@@ -320,7 +374,7 @@ class IBMAdapter:
 
             # ---- SamplerV2 path ----
             samp_opts = SamplerOptions()
-            shots = options.shots or 4096
+            shots = options.require_shots("IBMAdapter (SamplerV2)")
             samp_opts.default_shots = shots
             if options.rep_delay_s is not None:
                 samp_opts.execution.rep_delay = options.rep_delay_s

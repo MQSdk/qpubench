@@ -5,10 +5,7 @@ Install: pip install 'qpubench[mitiq]'   (mitiq + ply — see note below)
 Wraps any inner `BackendAdapter` with Mitiq's real ZNE
 (`mitiq.zne.inference` factories): fold gates to scale up circuit noise,
 execute each noise-scaled circuit through the wrapped adapter, and
-extrapolate back to the zero-noise limit. This is the first real
-`ErrorMitigationAdapter` implementation in this repo — `base.py`'s
-protocol docstring previously listed `FireOpalAdapter`/`MitiqAdapter`/
-`HaiquAdapter` as "Implementations"; none of the three existed.
+extrapolate back to the zero-noise limit.
 
 Verified in this repo's own sandbox: wrapping a depolarizing-noise Aer
 simulator (2% single-qubit / 5% two-qubit error on H/CX) recovers
@@ -39,7 +36,7 @@ from ..schemas.circuit import CircuitSpec
 from ..schemas.execution import ExecutionOptions
 from ..schemas.primitives import JobStatus
 from ..schemas.result import ExpectationResult, QuantumResult
-from ..schemas.unitaryfund_mitiq import MitiqNoiseScalingMethod, MitiqZNEConfig, MitiqZNEFactory
+from ..schemas.mirrors.unitaryfund_mitiq import MitiqNoiseScalingMethod, MitiqZNEConfig, MitiqZNEFactory
 from ._qiskit_common import load_qiskit_circuit as _load_qiskit_circuit
 
 if TYPE_CHECKING:

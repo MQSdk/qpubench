@@ -28,9 +28,9 @@ from __future__ import annotations
 
 import pydantic
 
-from .execution import AdaptVQERunConfig
-from .observable import PauliTerm, SparsePauliObservable
-from .primitives import ComplexNumber, PauliLabel
+from ..execution import AdaptVQERunConfig
+from ..observable import PauliTerm, SparsePauliObservable
+from ..primitives import ComplexNumber, PauliLabel
 
 # ---------------------------------------------------------------------------
 # pybind11 object layer — mirrors src/qforte/bindings.cc

@@ -55,8 +55,7 @@ from typing import Any
 
 import pydantic
 
-from .primitives import ComplexNumber
-
+from ..primitives import ComplexNumber
 
 # ===========================================================================
 # SECTION A — Linear-optics photonic chips + fusion-based QC

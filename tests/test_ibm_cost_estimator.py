@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import pytest
 
-from qpubench.schemas.ibm_cost_estimator import (
+from qpubench.schemas.mirrors.ibm_cost_estimator import (
     IBMAccessPlan,
     IBMPricingRates,
     aggregate_benchmark_cost,
@@ -92,7 +92,7 @@ class TestPlanCostArithmetic:
 
 class TestAggregateBenchmarkCost:
     def test_aggregates_multiple_jobs(self) -> None:
-        from qpubench.schemas.ibm_cost_estimator import CircuitResourceEstimate
+        from qpubench.schemas.mirrors.ibm_cost_estimator import CircuitResourceEstimate
 
         estimates = [
             CircuitResourceEstimate(
@@ -142,7 +142,7 @@ class TestEstimateCircuitResourcesReal:
 
     def test_qpu_time_matches_ibm_formula(self) -> None:
         from qpubench.backends.ibm_cost_estimator import estimate_circuit_resources
-        from qpubench.schemas.ibm_cost_estimator import CircuitResourceEstimate
+        from qpubench.schemas.mirrors.ibm_cost_estimator import CircuitResourceEstimate
 
         spec = self._bell_like_circuit()
         est = estimate_circuit_resources(spec, backend_name="ibm_brisbane", shots=1000)

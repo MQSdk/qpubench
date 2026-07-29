@@ -6,7 +6,7 @@ this file calls SlowQuant's real, documented public API — verified directly
 against its GitHub source (``SlowQuant.py``, ``hartreefock/hartreefockclass.py``,
 ``unitary_coupled_cluster/ucc_wavefunction.py``), not guessed — but is not
 executed in this sandbox. Field names match
-``qpubench.schemas.erikkjellgren_slowquant`` exactly (``cas``,
+``qpubench.schemas.mirrors.erikkjellgren_slowquant`` exactly (``cas``,
 ``excitations``, ``include_active_kappa`` are SlowQuant's own real
 constructor argument names, which that schema module already mirrors).
 
@@ -37,7 +37,7 @@ from typing import Any
 
 from qpubench.schemas.backend import BackendSpec
 from qpubench.schemas.circuit import CircuitSpec
-from qpubench.schemas.erikkjellgren_slowquant import (
+from qpubench.schemas.mirrors.erikkjellgren_slowquant import (
     SlowQuantRecord,
     UCCActiveSpaceConfig,
     UCCAnsatzType,

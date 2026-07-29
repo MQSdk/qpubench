@@ -165,7 +165,7 @@ class AerAdapter:
                 "backend_options": {"noise_model": noise_model} if noise_model else {},
             },
         )
-        shots = options.shots or 1024
+        shots = options.require_shots("AerAdapter")
         job = sampler.run([qc], shots=shots)
         result = job.result()
 

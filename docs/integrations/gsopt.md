@@ -2,7 +2,7 @@
 
 [GSOpt](https://github.com/bestquark/gsopt) is a fixed-budget ground-state optimisation benchmark harness. It drives agent-based mutation loops across five benchmark categories and records structured JSON results from each run.
 
-Schemas: `src/qpubench/schemas/bestquark_gsopt.py`
+Schemas: `src/qpubench/schemas/mirrors/bestquark_gsopt.py`
 
 ---
 

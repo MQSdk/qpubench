@@ -39,7 +39,7 @@ from typing import Any
 
 import pydantic
 
-from .distributed_execution import (
+from ..catalogs.distributed_execution import (
     GATE_CUT_OVERHEAD_BASE,
     WIRE_CUT_OVERHEAD_BASE,
     CircuitCutSpec,
@@ -51,9 +51,8 @@ from .distributed_execution import (
     SubcircuitResult,
     SubcircuitSpec,
 )
-from .primitives import ComputingModel, JobStatus
-from .result import ExpectationResult, QuantumResult
-
+from ..primitives import ComputingModel, JobStatus
+from ..result import ExpectationResult, QuantumResult
 
 # ---------------------------------------------------------------------------
 # Enumerations

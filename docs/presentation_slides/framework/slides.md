@@ -139,8 +139,8 @@ Every schema module is a set of typed Pydantic models for one vendor/technique's
 The schema library splits into **three groups** (same split as `docs/schemas.md`):
 
 1. **Core record format** — the unprefixed modules defining the types every benchmark shares: `primitives` · `circuit` · `observable` · `backend` · `execution` · `result` · `record`.
-2. **Cross-cutting catalogues & registries** — unprefixed modules that aggregate *multiple* external sources or define framework-own catalogues: `advantage` (IBM Quantum Advantage Tracker) · `optimizer_catalog` · `hamiltonian_library` · `basis_sets` · `contraction_path` · `reactions` · `polarizable_embedding`.
-3. **Project mirrors** — one module per external project, named `<org_or_maintainer>_<package>.py` so the filename alone names the upstream source.
+2. **Cross-cutting catalogues & registries** (`schemas/catalogs/`) — modules that aggregate *multiple* external sources or define framework-own catalogues: `quantum_advantage_tracker` · `optimizer_catalog` · `hamiltonian_library` · `basis_sets` · `contraction_path` · `reactions` · `polarizable_embedding` · `fragmentation` · `distributed_execution`.
+3. **Project mirrors** (`schemas/mirrors/`) — one module per external project, named `<org_or_maintainer>_<package>.py` so the filename alone names the upstream source.
 
 \vspace{0.3em}
 Two orthogonal axes — **computing model** (paradigm) and **qubit modality** (QPU) — are stamped on every circuit, backend, and result, independently of the group.
@@ -161,7 +161,7 @@ All rows are computing-model/qubit-modality **all / all** — these are the fram
 | Module | Key types |
 |--------|-----------|
 | `execution` | `ExecutionOptions`, `AlgorithmSpec`, `ZNEConfig` |
-| `advantage` | `QuantumAdvantageRecord` — multi-org registry, unprefixed |
+| `catalogs/quantum_advantage_tracker` | `QuantumAdvantageRecord` — multi-org community registry |
 | `result` | `QuantumResult` (+ `vendor_results` dict), `ExpectationResult`, `ShotResult` |
 | `record` | `BenchmarkRecord`, `VQAConfig` (inputs), `VQAResult` (computed outputs) |
 
@@ -589,8 +589,8 @@ Estimator/Sampler auto-chosen.
 **IQM Resonance cloud**
 
 ```python
-adapter = IQMAdapter("garnet",
-    token=os.environ["IQM_TOKEN"])
+adapter = IQMAdapter("garnet")
+# token read from $IQM_TOKEN
 runner.register(adapter, "iqm")
 runner.run(circuit, "iqm", opts)
 ```

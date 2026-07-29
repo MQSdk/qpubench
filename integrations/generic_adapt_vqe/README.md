@@ -44,7 +44,7 @@ run it with `pip install 'qpubench[adapt_vqe]'`.
   calling in.
 - **Not molecular electronic structure**: this engine takes an
   already-built qubit Hamiltonian (`SparsePauliObservable`). Build it with
-  whichever chemistry pipeline you like (e.g. `schemas/microsoft_qdk.py`'s
+  whichever chemistry pipeline you like (e.g. `schemas/mirrors/microsoft_qdk.py`'s
   `QChemPipelineSpec`) before handing it to `GenericAdaptVQEEngine` or the
   two adapters built on it.
 

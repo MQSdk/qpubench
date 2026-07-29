@@ -7,7 +7,7 @@ from __future__ import annotations
 import pytest
 
 from qpubench.schemas.circuit import CircuitSpec
-from qpubench.schemas.contraction_path import (
+from qpubench.schemas.catalogs.contraction_path import (
     ContractionPathConfig,
     ContractionPathStrategy,
 )

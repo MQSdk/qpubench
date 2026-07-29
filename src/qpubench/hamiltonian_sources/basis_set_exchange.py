@@ -16,12 +16,12 @@ def2-tzvp on H2/Li2/H2O) — exact match in every case, e.g. O/cc-pVDZ:
 matching PySCF's own `nao` for that atom exactly.
 
 q-vSZP is NOT covered here — it has no PyPI package/Python API at all
-(see `schemas/basis_sets.QvSZPRunConfig` for the real, schema-only CLI
+(see `schemas/catalogs/basis_sets.QvSZPRunConfig` for the real, schema-only CLI
 shape). Calling `get_basis_set_entry("qvszp")` here raises.
 """
 from __future__ import annotations
 
-from ..schemas.basis_sets import BASIS_SET_CATALOG, BasisSetCatalogEntry, BasisSetSource
+from ..schemas.catalogs.basis_sets import BASIS_SET_CATALOG, BasisSetCatalogEntry, BasisSetSource
 
 
 def _require_bse_backed(name: str) -> BasisSetCatalogEntry:

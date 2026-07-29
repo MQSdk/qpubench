@@ -34,9 +34,8 @@ from typing import Any
 
 import pydantic
 
-from .circuit import CircuitSpec
-from .primitives import CircuitFormat
-
+from ..circuit import CircuitSpec
+from ..primitives import CircuitFormat
 
 # ---------------------------------------------------------------------------
 # Layer-based genome  (qarchga — QST-HACK-GA-simplified)

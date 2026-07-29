@@ -1,6 +1,6 @@
 # Neutral atom / AHS integration (Bloqade · Aquila)
 
-qpubench models neutral-atom Analog Hamiltonian Simulation (AHS) in `src/qpubench/schemas/quera_bloqade.py`.
+qpubench models neutral-atom Analog Hamiltonian Simulation (AHS) in `src/qpubench/schemas/mirrors/quera_bloqade.py`.
 
 | Component | Details |
 |---|---|
@@ -24,7 +24,7 @@ Measurement collapses each atom to ground (1) or Rydberg (0) state.
 ## Quick start
 
 ```python
-from qpubench.schemas.quera_bloqade import (
+from qpubench.schemas.mirrors.quera_bloqade import (
     AtomicSite, AtomArrangement, LatticeGeometryType,
     AHSDrivingField, AHSTimeSeries, AHSProgramSpec,
     AHSShotResult, AHSShotStatus, AHSTaskResult,
@@ -78,7 +78,7 @@ print(f"Effective qubits: {program.num_qubits}")   # 5
 ### Pre-defined lattices
 
 ```python
-from qpubench.schemas.quera_bloqade import AtomicSite, AtomArrangement, LatticeGeometryType
+from qpubench.schemas.mirrors.quera_bloqade import AtomicSite, AtomArrangement, LatticeGeometryType
 
 # Square lattice 4×4
 sites_sq = [
@@ -117,7 +117,7 @@ print(chain.num_filled_sites)  # 5
 ### AHSTimeSeries (hardware format)
 
 ```python
-from qpubench.schemas.quera_bloqade import AHSTimeSeries
+from qpubench.schemas.mirrors.quera_bloqade import AHSTimeSeries
 
 # Rabi amplitude: trapezoidal π-pulse over 1 µs
 rabi = AHSTimeSeries(
@@ -139,7 +139,7 @@ det = AHSTimeSeries(
 The compact form stores segment durations + boundary values before discretization.
 
 ```python
-from qpubench.schemas.quera_bloqade import AHSWaveform, AHSWaveformType
+from qpubench.schemas.mirrors.quera_bloqade import AHSWaveform, AHSWaveformType
 
 # Piecewise linear Rabi (required for Ω on hardware)
 wf_rabi = AHSWaveform(
@@ -181,7 +181,7 @@ wf_poly = AHSWaveform(
 ## Driving fields and programs
 
 ```python
-from qpubench.schemas.quera_bloqade import (
+from qpubench.schemas.mirrors.quera_bloqade import (
     AHSDrivingField, AHSProgramSpec, AHSLocalDetuning,
     NeutralAtomCoupling, SpatialModulationType,
 )
@@ -213,7 +213,7 @@ program = AHSProgramSpec(
 ### Parametric sweeps
 
 ```python
-from qpubench.schemas.quera_bloqade import AHSBatchSpec
+from qpubench.schemas.mirrors.quera_bloqade import AHSBatchSpec
 
 # Sweep detuning endpoint and Rabi max across 4 parameter sets
 batch = AHSBatchSpec(
@@ -232,7 +232,7 @@ print(batch.batch_size)   # 4
 ## Hardware specification
 
 ```python
-from qpubench.schemas.quera_bloqade import AquilaDeviceSpec
+from qpubench.schemas.mirrors.quera_bloqade import AquilaDeviceSpec
 
 hw = AquilaDeviceSpec()   # all Aquila defaults
 print(hw.max_qubits)               # 256
@@ -250,7 +250,7 @@ custom = AquilaDeviceSpec(max_qubits=512, max_pulse_duration_us=8.0)
 ### Shot structure
 
 ```python
-from qpubench.schemas.quera_bloqade import AHSShotResult, AHSShotStatus
+from qpubench.schemas.mirrors.quera_bloqade import AHSShotResult, AHSShotStatus
 
 shot = AHSShotResult(
     status=AHSShotStatus.SUCCESS,
@@ -271,7 +271,7 @@ print(bad.is_perfect_fill)   # False — excluded from default analysis
 ### Task result analysis
 
 ```python
-from qpubench.schemas.quera_bloqade import AHSTaskResult, AHSExecutionMetadata
+from qpubench.schemas.mirrors.quera_bloqade import AHSTaskResult, AHSExecutionMetadata
 
 task = AHSTaskResult(
     metadata=AHSExecutionMetadata(

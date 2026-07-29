@@ -130,6 +130,24 @@ class QuantumResult(pydantic.BaseModel):
 
     Populate only the fields relevant to the execution.
 
+    On the name
+    -----------
+    "Quantum" is not decoration and there is no sibling ``ClassicalResult``.
+    A ``BenchmarkRecord`` holds two kinds of number, and they must not be
+    confused: what the quantum execution *measured*, and what a classical
+    method *computed* about the same problem. This model is strictly the
+    first — everything here came back from a QPU or a simulator of one.
+    The classical counterparts live elsewhere in the record:
+    ``VQAResult.ground_truth`` (an FCI or exact-diagonalisation reference),
+    ``schemas.bestquark_gsopt.REFERENCE_ENERGIES``, and the mean-field and
+    post-HF quantities in the chemistry mirror modules. Naming this type
+    ``ExecutionResult`` would blur exactly the distinction a benchmark exists
+    to make — measured versus known-correct.
+
+    The name is also the reason ``status``/``error_message`` live here rather
+    than on the record: a failed quantum execution is still a result about the
+    quantum run, and a benchmark sweep needs to store it rather than drop it.
+
     Gate-based typical output
     -------------------------
     expectation_values  — Estimator path (VQE, QAOA objective)

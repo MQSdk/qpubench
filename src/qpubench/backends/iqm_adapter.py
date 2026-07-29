@@ -84,9 +84,11 @@ class IQMAdapter:
     url:
         IQM Resonance endpoint URL.
         Default: ``"https://cocos.resonance.meetiqm.com/v1"``.
-    token:
-        Bearer token for IQM Resonance.
-        Falls back to ``IQM_TOKEN`` environment variable.
+    token_ref:
+        *Name of the environment variable* holding the IQM Resonance bearer
+        token — not the token itself. Defaults to ``"IQM_TOKEN"``. There is
+        deliberately no way to pass the token as a literal argument; see the
+        credentials section of the root README.
     num_qubits:
         Expected qubit count; used for validation only.
     """
@@ -97,15 +99,16 @@ class IQMAdapter:
         self,
         device_name: str,
         *,
-        url: str = _RESONANCE_URL,
-        token: str | None = None,
+        url: str | None = None,
+        token_ref: str = "IQM_TOKEN",
         num_qubits: int | None = None,
     ) -> None:
+        """Configure the adapter; no network call and no credential read yet."""
         self._device_name = device_name
-        self._url = url
-        self._token = token
+        self._url = url if url is not None else os.environ.get("IQM_SERVER_URL", self._RESONANCE_URL)
+        self._token_ref = token_ref
         self._spec = BackendSpec.iqm_resonance(
-            device_name, num_qubits=num_qubits, api_token_ref=token or ""
+            device_name, num_qubits=num_qubits, api_token_ref=token_ref
         )
 
     @property
@@ -127,9 +130,21 @@ class IQMAdapter:
     # ------------------------------------------------------------------
 
     def _get_backend(self) -> Any:
+        """Open a credentialed provider and return the live backend.
+
+        The token is read from the environment here, at the point of use, so
+        it is never held on the adapter or serialised into a BenchmarkRecord.
+        """
         from iqm.qiskit_iqm import IQMProvider  # type: ignore[attr-defined]
 
-        provider = IQMProvider(self._url, token=self._token or os.environ.get("IQM_TOKEN"))
+        token = os.environ.get(self._token_ref)
+        if not token:
+            raise RuntimeError(
+                f"No IQM token found in ${self._token_ref}. Set it in your "
+                ".env / environment (see .env.example), or point the adapter "
+                'at a different variable with IQMAdapter(..., token_ref="MY_VAR").'
+            )
+        provider = IQMProvider(self._url, token=token)
         return provider.get_backend(self._device_name)
 
     def _transpile_qc(self, circuit: CircuitSpec, options: ExecutionOptions, backend: Any) -> Any:
@@ -187,7 +202,7 @@ class IQMAdapter:
         if not tqc.cregs:
             tqc.measure_all()
 
-        shots = options.shots or 1024
+        shots = options.require_shots("IQMAdapter")
         job = backend.run(tqc, shots=shots, memory=options.memory)
         result = job.result()
         counts = dict(result.get_counts())
@@ -214,8 +229,13 @@ class IQMAdapter:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def fetch_calibration(device_name: str, url: str, token: str) -> dict[str, object]:
+    def fetch_calibration(
+        device_name: str, url: str, *, token_ref: str = "IQM_TOKEN"
+    ) -> dict[str, object]:
         """Fetch per-qubit and per-gate calibration data from IQM Client.
+
+        ``token_ref`` names the environment variable holding the bearer token;
+        the token itself is never taken as an argument.
 
         Typical values (device-dependent):
           T1      ~28 us
@@ -226,6 +246,12 @@ class IQMAdapter:
         """
         from iqm.iqm_client import IQMClient
 
+        token = os.environ.get(token_ref)
+        if not token:
+            raise RuntimeError(
+                f"No IQM token found in ${token_ref}. Set it in your .env / "
+                "environment (see .env.example)."
+            )
         client = IQMClient(url, token=token)
         calibration_set = client.get_calibration_set()
 

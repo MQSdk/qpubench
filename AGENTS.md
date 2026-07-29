@@ -31,7 +31,9 @@ Run `ruff check` and `mypy src/` before committing. Tests must pass without any 
 
 ```
 src/qpubench/
-├── schemas/       ← 19 Pydantic v2 modules — the stable core
+├── schemas/       ← core record format (7 modules) — the stable core
+│   ├── catalogs/  ← cross-cutting catalogues & registries
+│   └── mirrors/   ← one module per mirrored external project
 ├── backends/      ← BackendAdapter + AlgorithmAdapter protocols + stubs
 ├── runner.py      ← BenchmarkRunner (run, sweep, hooks, dual-protocol dispatch)
 └── store.py       ← NDJSONStore, ParquetStore, ResultStore protocol
@@ -44,17 +46,22 @@ tests/             ← Schema-only unit tests
 `BackendAdapter` — caller provides a `CircuitSpec`, adapter executes it, returns `QuantumResult`.
 `AlgorithmAdapter` — adapter generates its own circuit from a problem spec, returns `(QuantumResult, VQAConfig, VQAResult)` — inputs in `VQAConfig`, computed outputs in `VQAResult`. Detected by the runner via `isinstance()`.
 
+Why the code uses Protocols, deferred SDK imports, `_`-prefixed modules and
+the `<maintainer>_<package>.py` schema naming: [docs/developer_guide.md](docs/developer_guide.md).
+
 ## Critical constraints — never violate these
 
 - **No quantum SDK imports inside `src/qpubench/`**. Only adapters (in your project or `integrations/`) import external SDKs. The test suite must pass with `pip install .` alone.
 - **Never change a schema field name or type without bumping `schema_version`** in `src/qpubench/schemas/record.py`. Existing stored records break silently otherwise.
 - **Pauli encoding is non-standard for Qrack**: I=0, X=1, **Z=2, Y=3** (Q# convention). Always use `PauliLabel.to_qrack_int()`, never raw integers.
-- **MBQC byproduct register bit order**: bit 0 = Z, bit 1 = X — reversed from gate-based convention. See `schemas/johnrscott_mbqc_fpga.py`.
+- **MBQC byproduct register bit order**: bit 0 = Z, bit 1 = X — reversed from gate-based convention. See `schemas/mirrors/johnrscott_mbqc_fpga.py`.
 - **`AlgorithmAdapter` detection is duck-typed**: your class must have both `validate_problem` and `run_algorithm` methods, or the runner silently falls through to the `BackendAdapter` path.
 
 ## Adding a new schema module
 
-1. Create `src/qpubench/schemas/<name>.py` with Pydantic v2 models.
+1. Create the module in the right group: `schemas/` for a core record type,
+   `schemas/catalogs/` for a catalogue over several upstreams, or
+   `schemas/mirrors/<org>_<package>.py` to mirror one external project.
 2. Export new public types from `src/qpubench/__init__.py`.
 3. Add tests in `tests/test_schemas.py` — no mocking of quantum SDKs.
 4. Update the schema version string and the table in `docs/schemas.md`.

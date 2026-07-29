@@ -84,7 +84,7 @@ needs its service account granted RBAC on `trainjobs.trainer.kubeflow.org`
 
 [`integrations/kubeflow/`](../../integrations/kubeflow/) implements the
 Cebule SDK's documented task chain — `MolMapResult.to_sparse_pauli_observable`
-in `schemas/mqsdk_cebule.py` explicitly notes TN_QC_OPT is "a follow-up" to
+in `schemas/mirrors/mqsdk_cebule.py` explicitly notes TN_QC_OPT is "a follow-up" to
 MOL_MAP — as `kfp` DAG nodes:
 
 ```

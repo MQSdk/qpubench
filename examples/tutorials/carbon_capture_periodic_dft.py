@@ -30,7 +30,7 @@ What's still missing for a full treatment: COF-999's actual (much larger)
 periodic unit cell and a real embedded/DMET treatment combining both
 halves (see ``examples/demos/dmet_embedding_demo.py`` — DMET schema
 exists, libDMET isn't on PyPI). Cebule's Quantum-ESPRESSO-backed
-``PERIODIC_GEOMETRY_OPT`` task (``schemas/mqsdk_cebule.py``) is a
+``PERIODIC_GEOMETRY_OPT`` task (``schemas/mirrors/mqsdk_cebule.py``) is a
 plane-wave alternative that likely scales better for a COF-999-sized cell
 than PySCF's Gaussian-basis PBC approach — a performance tradeoff between
 two free options, not a "need InQuanto" situation.
@@ -52,7 +52,7 @@ import time
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
 
 from qpubench.schemas.execution import AdaptVQERunConfig
-from qpubench.schemas.pyscf_pyscf import PySCFAtomSpec, PySCFCellSpec, PySCFMeanFieldConfig, PySCFMeanFieldMethod
+from qpubench.schemas.mirrors.pyscf_pyscf import PySCFAtomSpec, PySCFCellSpec, PySCFMeanFieldConfig, PySCFMeanFieldMethod
 
 from examples.common.real_molecules import (
     BOUND_CN_DISTANCE,

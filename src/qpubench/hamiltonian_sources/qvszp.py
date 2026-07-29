@@ -41,7 +41,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from ..schemas.basis_sets import QvSZPVariant
+from ..schemas.catalogs.basis_sets import QvSZPVariant
 
 _BASE_URL = "https://raw.githubusercontent.com/grimme-lab/qvSZP/main/q-vSZP_basis"
 _DEFAULT_CACHE_DIR = Path.home() / ".cache" / "qpubench" / "hamiltonian_sources" / "qvszp"

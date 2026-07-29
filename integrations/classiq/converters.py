@@ -9,7 +9,7 @@ import json
 from typing import Any
 
 from qpubench.schemas.circuit import CircuitSpec
-from qpubench.schemas.classiq_classiq import (
+from qpubench.schemas.mirrors.classiq_classiq import (
     ClassiqChemistryModel,
     ClassiqCombinatorialOptimizationSpec,
     ClassiqConstraints,

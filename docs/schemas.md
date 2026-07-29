@@ -1,16 +1,24 @@
 # Schema reference
 
-Every schema module lives in `src/qpubench/schemas/` and imports from the
-package root: `from qpubench.schemas import CircuitSpec, QuantumResult, …`.
+Every schema type imports from the package root — `from qpubench.schemas
+import CircuitSpec, QuantumResult, …` — whichever file it lives in. That is
+the stable import path; the directory layout below is an organisational
+detail and may change.
 The current schema version and module count are tracked in the
 [README](../README.md) (see its badge) — those metrics are not duplicated here,
 so this reference never drifts out of date against them.
 
-The modules fall into three groups:
+The modules fall into three groups, and each group is its own directory:
 
-1. **Core record format** — the seven unprefixed modules that define the types every benchmark shares (`primitives` through `record`).
-2. **Cross-cutting catalogues & registries** — unprefixed modules that aggregate *multiple* external sources or define framework-own catalogues (basis sets, Hamiltonian metadata, the community advantage tracker, …). They are neither core record types nor mirrors of a single upstream project.
-3. **Project mirrors** — one module per external project, named `<org_or_maintainer>_<package>.py` so the filename alone tells you who maintains the upstream project and what it's called.
+| Group | Directory | What belongs there |
+|---|---|---|
+| **1. Core record format** | `schemas/` | The seven modules defining the types every benchmark shares (`primitives` through `record`). |
+| **2. Cross-cutting catalogues & registries** | `schemas/catalogs/` | Modules that aggregate *multiple* external sources, or define a catalogue qpubench itself owns (basis sets, Hamiltonian metadata, the community advantage tracker, …). Neither core record types nor a mirror of one upstream project. |
+| **3. Project mirrors** | `schemas/mirrors/` | One module per external project, named `<org_or_maintainer>_<package>.py` so the filename alone tells you who maintains the upstream project and what it's called. |
+
+A module in group 2 or 3 is reached as `qpubench.schemas.catalogs.<name>` /
+`qpubench.schemas.mirrors.<name>` if you need the file directly, but every
+public type is re-exported from `qpubench.schemas`, so you rarely should.
 
 ---
 
@@ -54,13 +62,18 @@ Computing model (paradigm) and qubit modality are separate, independent axes on 
 ### Cross-cutting catalogues & registries (unprefixed)
 
 The **Origin / source** column names where each catalogue's contents come
-from, so a reader knows (for example) that the advantage tracker follows IBM's
-Quantum Advantage Tracker. The same attribution is noted in each module's
-own docstring/class comments.
+from. The same attribution is noted in each module's own docstring/class
+comments.
+
+A catalogue is named for *what it catalogues*, not by the mirrors'
+`<org>_<package>` convention — that form has nothing sensible to say when a
+catalogue draws on several upstreams, or when the upstream is a GitHub Pages
+community registry whose organisation and project share a name (which would
+give `quantum_advantage_tracker_quantum_advantage_tracker`).
 
 | Module | Origin / source | Purpose | Computing model · qubit modality | Key types |
 |---|---|---|---|---|
-| [`advantage`](#advantage) | **IBM** Quantum Advantage Tracker (community-curated registry) | Quantum-advantage experiment metadata | all · all | `QuantumAdvantageRecord`, `AdvantageExperimentType`, `ClassicalComparisonMethod` |
+| [`quantum_advantage_tracker`](#quantum_advantage_tracker) | Quantum Advantage Tracker — community registry co-initiated by IBM, Flatiron Institute, BlueQubit, Algorithmiq | Quantum-advantage experiment metadata | all · all | `QuantumAdvantageRecord`, `AdvantageExperimentType`, `ClassicalComparisonMethod` |
 | [`optimizer_catalog`](#optimizer_catalog) | qpubench's own, over `scipy.optimize.minimize` | Minimizer / stopping-criterion catalogue over `AdaptVQERunConfig` fields | all · all | `MINIMIZER_CATALOG`, `STOPPING_CRITERION_CATALOG`, `MinimizerCatalogEntry`, `StoppingCriterionCatalogEntry` |
 | [`hamiltonian_library`](#hamiltonian_library) | PennyLane qchem · HamLib Chemistry · ab initio (PySCF + OpenFermion) | Metadata for Hamiltonians loaded from those sources | all · all | `HamiltonianSource`, `HamiltonianLibraryRecord` |
 | [`basis_sets`](#basis_sets) | Basis Set Exchange · q-vSZP (Grimme group) | Basis-set catalogue: BSE (real, verified counts) + q-vSZP (schema-only) | classical (chemistry) · — | `BasisSetCatalogEntry`, `BASIS_SET_CATALOG`, `QvSZPRunConfig`, `QvSZPBasisResult` |
@@ -1715,7 +1728,7 @@ quantum.cloud.ibm.com/docs/en/guides/estimate-job-run-time. Verified: a
 4-qubit test circuit against `FakeBrisbane` gives real `depth=14`, 3 `ecr`
 gates, `3.52` microsecond circuit duration (`tests/test_ibm_cost_estimator.py`).
 
-`schemas/ibm_cost_estimator.py` (pure Pydantic, no Qiskit import): turns
+`schemas/mirrors/ibm_cost_estimator.py` (pure Pydantic, no Qiskit import): turns
 total QPU-seconds into a `PlanCostBreakdown` per plan — Open Plan's free
 10-min/28-day quota, Pay-As-You-Go's per-second billing, Flex's prepaid
 $30k-minimum lump sum, Premium's $249,600/year minimum annual

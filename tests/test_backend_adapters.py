@@ -163,7 +163,7 @@ class TestMitiqZNEAdapter:
 
     def test_linear_factory_reports_extrapolation_error(self) -> None:
         from qpubench.backends.unitaryfund_mitiq_adapter import MitiqZNEAdapter
-        from qpubench.schemas.unitaryfund_mitiq import MitiqZNEConfig, MitiqZNEFactory
+        from qpubench.schemas.mirrors.unitaryfund_mitiq import MitiqZNEConfig, MitiqZNEFactory
 
         adapter = MitiqZNEAdapter(
             _noisy_aer_adapter(), MitiqZNEConfig(factory=MitiqZNEFactory.LINEAR)
@@ -240,7 +240,7 @@ class TestIBMAdapter:
     def test_sampler(self) -> None:
         from qpubench.backends.ibm_adapter import IBMAdapter
 
-        adapter = IBMAdapter("ibm_test", token="dummy")
+        adapter = IBMAdapter("ibm_test", instance="test/test/test")
         with patch.object(IBMAdapter, "_get_backend", return_value=self._fake_backend()):
             result = adapter.run(_bell_circuit(), ExecutionOptions(shots=1000))
         assert result.status == JobStatus.SUCCEEDED
@@ -250,7 +250,7 @@ class TestIBMAdapter:
     def test_estimator(self) -> None:
         from qpubench.backends.ibm_adapter import IBMAdapter
 
-        adapter = IBMAdapter("ibm_test", token="dummy")
+        adapter = IBMAdapter("ibm_test", instance="test/test/test")
         with patch.object(IBMAdapter, "_get_backend", return_value=self._fake_backend()):
             result = adapter.run(_bell_circuit(with_observable=True), ExecutionOptions(shots=4000))
         assert result.status == JobStatus.SUCCEEDED
@@ -260,7 +260,7 @@ class TestIBMAdapter:
     def test_transpile(self) -> None:
         from qpubench.backends.ibm_adapter import IBMAdapter
 
-        adapter = IBMAdapter("ibm_test", token="dummy")
+        adapter = IBMAdapter("ibm_test", instance="test/test/test")
         with patch.object(IBMAdapter, "_get_backend", return_value=self._fake_backend()):
             tqc, layout = adapter.transpile(_bell_circuit(), ExecutionOptions())
         assert tqc.format == CircuitFormat.QASM3
@@ -283,7 +283,7 @@ class TestIQMAdapter:
     def test_sampler(self) -> None:
         from qpubench.backends.iqm_adapter import IQMAdapter
 
-        adapter = IQMAdapter("adonis", token="dummy")
+        adapter = IQMAdapter("adonis")
         with patch.object(IQMAdapter, "_get_backend", return_value=self._fake_backend()):
             result = adapter.run(_bell_circuit(), ExecutionOptions(shots=1000))
         assert result.status == JobStatus.SUCCEEDED
@@ -293,7 +293,7 @@ class TestIQMAdapter:
         """Real, documented upstream limitation — not a stub."""
         from qpubench.backends.iqm_adapter import IQMAdapter
 
-        adapter = IQMAdapter("adonis", token="dummy")
+        adapter = IQMAdapter("adonis")
         with patch.object(IQMAdapter, "_get_backend", return_value=self._fake_backend()):
             with pytest.raises(NotImplementedError):
                 adapter.run(_bell_circuit(with_observable=True), ExecutionOptions())
@@ -301,7 +301,7 @@ class TestIQMAdapter:
     def test_transpile(self) -> None:
         from qpubench.backends.iqm_adapter import IQMAdapter
 
-        adapter = IQMAdapter("adonis", token="dummy")
+        adapter = IQMAdapter("adonis")
         with patch.object(IQMAdapter, "_get_backend", return_value=self._fake_backend()):
             tqc, layout = adapter.transpile(_bell_circuit(), ExecutionOptions())
         assert tqc.format == CircuitFormat.QASM3
@@ -425,3 +425,4 @@ class TestQiboAdapter:
         assert QiboAdapter("my_lab", execution="qibolab").spec.simulator is False
         with pytest.raises(ValueError):
             QiboAdapter(execution="bogus")
+

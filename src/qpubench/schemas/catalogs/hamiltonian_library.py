@@ -34,6 +34,8 @@ class HamiltonianSource(str, enum.Enum):
     PENNYLANE_QCHEM = "pennylane_qchem"
     HAMLIB_CHEMISTRY = "hamlib_chemistry"
     AB_INITIO_PYSCF = "ab_initio_pyscf"
+    QUBO_ORLIB = "qubo_orlib"       # OR-Library (Beasley) bqp* files
+    QUBO_MQLIB = "qubo_mqlib"       # MQLib instance library
 
 
 class HamiltonianLibraryRecord(pydantic.BaseModel):

@@ -6,9 +6,9 @@ project mirrors:
 
 | Module | Upstream | Role |
 |---|---|---|
-| `qpubench.schemas.distributed_execution` | — (framework-general) | Shared vocabulary: networks, partitions, cuts, reconstruction |
-| `qpubench.schemas.felixburt_disqco` | [felix-burt/DISQCO](https://github.com/felix-burt/DISQCO) | Multilevel hypergraph partitioning over a QPU network |
-| `qpubench.schemas.bscwdc_qdislib` | [bsc-wdc/qdislib](https://github.com/bsc-wdc/qdislib) | Gate/wire cutting with quasiprobability reconstruction |
+| `qpubench.schemas.catalogs.distributed_execution` | — (framework-general) | Shared vocabulary: networks, partitions, cuts, reconstruction |
+| `qpubench.schemas.mirrors.felixburt_disqco` | [felix-burt/DISQCO](https://github.com/felix-burt/DISQCO) | Multilevel hypergraph partitioning over a QPU network |
+| `qpubench.schemas.mirrors.bscwdc_qdislib` | [bsc-wdc/qdislib](https://github.com/bsc-wdc/qdislib) | Gate/wire cutting with quasiprobability reconstruction |
 
 Neither upstream package is a dependency.
 
@@ -46,7 +46,7 @@ run.communication_cost    # whichever one applies
 ## Describing the network
 
 ```python
-from qpubench.schemas.distributed_execution import NetworkTopology, QPUNetworkSpec
+from qpubench.schemas.catalogs.distributed_execution import NetworkTopology, QPUNetworkSpec
 
 net = QPUNetworkSpec.from_sizes([8, 8, 8, 8], topology=NetworkTopology.LINEAR)
 net.total_data_qubits     # 32
@@ -70,7 +70,7 @@ The sampling overhead — not subcircuit size — dominates the cost of a cut ru
 Check it first:
 
 ```python
-from qpubench.schemas.bscwdc_qdislib import max_cuts_for_budget, sampling_overhead
+from qpubench.schemas.mirrors.bscwdc_qdislib import max_cuts_for_budget, sampling_overhead
 
 sampling_overhead(num_gate_cuts=3)                   # 216
 sampling_overhead(num_gate_cuts=2, num_wire_cuts=1)  # 288
@@ -89,7 +89,7 @@ time-resolved, a qubit may live on different QPUs at different depths. The
 partitioner is choosing *when to teleport*.
 
 ```python
-from qpubench.schemas.felixburt_disqco import (
+from qpubench.schemas.mirrors.felixburt_disqco import (
     DisqcoCoarsener, DisqcoFMConfig, DisqcoNetworkSpec, DisqcoPartitionResult,
 )
 
@@ -160,7 +160,7 @@ a gate cut is `["CZ_2"]`, a wire cut a pair `[("H_1", "CZ_2")]`.
 explicitly, so a stored record never re-infers it:
 
 ```python
-from qpubench.schemas.bscwdc_qdislib import QdislibCutCost, QdislibCutRecord
+from qpubench.schemas.mirrors.bscwdc_qdislib import QdislibCutCost, QdislibCutRecord
 
 cut = QdislibCutRecord.from_find_cut(["CZ_2", "CZ_5"])
 cut.kind        # QdislibCutKind.GATE
@@ -209,7 +209,7 @@ Inputs go on `ExecutionOptions`, choices on `CircuitSpec`, outcomes in
 
 ```python
 from qpubench import CircuitSpec, ExecutionOptions
-from qpubench.schemas.distributed_execution import (
+from qpubench.schemas.catalogs.distributed_execution import (
     CircuitCutSpec, DistributedRunConfig, DistributionStrategy,
 )
 

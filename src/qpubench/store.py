@@ -25,6 +25,38 @@ from .schemas.record import BenchmarkRecord
 
 @runtime_checkable
 class ResultStore(Protocol):
+    """The three-method contract every result store satisfies.
+
+    This is a ``typing.Protocol``, not a base class: the concrete stores
+    below (``NDJSONStore``, ``ParquetStore``, ``S3Store``) do not inherit
+    from it and never import it. Anything with these three methods and these
+    signatures — including a store you write yourself, or a test double —
+    counts as a ``ResultStore`` and can be handed to
+    ``BenchmarkRunner(store=...)``. That is the whole point of using a
+    Protocol here: qpubench must not dictate where your results live.
+
+    ``@runtime_checkable`` additionally allows ``isinstance(obj, ResultStore)``
+    at runtime. Note the standard caveat — that check tests only that the
+    three *method names* exist, not their signatures or types; mypy checks the
+    signatures statically.
+
+    Methods
+    -------
+    save(record)
+        Persist one BenchmarkRecord. Must be safe to call repeatedly during a
+        sweep.
+    load(experiment_id)
+        Return the single record with that ``experiment_id``, or raise
+        ``KeyError`` if there is none.
+    query(**filters)
+        Return every record matching the filters. Filter keys are
+        double-underscore-separated field paths, e.g.
+        ``query(backend__name="aer_statevector")``.
+
+    See ``docs/developer_guide.md`` for why several classes in this package
+    are Protocols rather than abstract base classes.
+    """
+
     def save(self, record: BenchmarkRecord) -> None: ...
     def load(self, experiment_id: str) -> BenchmarkRecord: ...
     def query(self, **filters: Any) -> list[BenchmarkRecord]: ...
@@ -182,11 +214,19 @@ class S3Store:
     S3-compatible gateways such as MinIO or Hugging Face Storage Buckets
     (see S3Store.huggingface()).
 
-    Pass an already-constructed boto3 client via `client=` (e.g. one built
-    from an AWS CLI profile) or pass boto3.client("s3", ...) kwargs
-    directly — endpoint_url, region_name, aws_access_key_id,
-    aws_secret_access_key, config=botocore.config.Config(...), etc.
+    Credentials are never passed to qpubench as literal strings. Either hand
+    in an already-authenticated boto3 client via ``client=`` (built from an
+    AWS CLI profile, an instance role, or a web-identity token), or let boto3
+    pick the credentials up from the environment itself — which is what a
+    ``.env`` file populates. Any other ``boto3.client("s3", ...)`` keyword
+    (``endpoint_url``, ``region_name``, ``config=botocore.config.Config(...)``,
+    ...) may still be passed through; the two ``aws_*_key`` keywords are
+    rejected on purpose. See the credentials section of the root README.
     """
+
+    _SECRET_KWARGS = frozenset(
+        {"aws_access_key_id", "aws_secret_access_key", "aws_session_token"}
+    )
 
     def __init__(
         self,
@@ -196,6 +236,19 @@ class S3Store:
         client: Any | None = None,
         **client_kwargs: Any,
     ) -> None:
+        """Bind a store to ``bucket`` (optionally under a key ``prefix``).
+
+        Raises ``TypeError`` if a literal AWS key is passed, so a secret
+        cannot be hardcoded into a benchmark script by accident.
+        """
+        leaked = self._SECRET_KWARGS & set(client_kwargs)
+        if leaked:
+            raise TypeError(
+                f"Refusing literal credentials passed as {sorted(leaked)}. "
+                "Set them in your .env / environment instead (AWS_ACCESS_KEY_ID, "
+                "AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN) and boto3 will pick "
+                "them up, or pass an already-authenticated client=boto3.client(...)."
+            )
         self._bucket = bucket
         self._prefix = prefix.strip("/")
         self._client = client if client is not None else _s3_client(**client_kwargs)
@@ -206,21 +259,28 @@ class S3Store:
         bucket: str,
         namespace: str,
         *,
-        access_key_id: str,
-        secret_access_key: str,
+        region: str | None = None,
         prefix: str = "",
     ) -> S3Store:
         """Construct an S3Store backed by a Hugging Face Storage Bucket.
 
         namespace   your HF username or organization — scopes the gateway
                     endpoint (https://s3.hf.co/<namespace>).
-        access_key_id / secret_access_key
-                    S3 credentials generated from a HF User Access Token:
-                    Settings -> Access Tokens -> (token) -> Generate S3
-                    credentials. access_key_id is prefixed "HFAK...".
+        region      the region to sign requests for. Left unset, it is read
+                    from ``AWS_REGION`` (then ``AWS_DEFAULT_REGION``) and it is
+                    an error for neither to be set — there is no built-in
+                    default, so the region is always something you chose. The
+                    HF gateway is single-region and expects ``us-east-1``;
+                    put ``AWS_REGION="us-east-1"`` in your .env for it.
 
-        The HF S3 gateway is single-region and path-style addressed, and
-        only supports ListObjectsV2; the botocore Config below matches
+        Credentials come from the environment, never from an argument. Set
+        ``AWS_ACCESS_KEY_ID`` and ``AWS_SECRET_ACCESS_KEY`` in your .env to
+        the S3 credentials generated from a HF User Access Token (Settings ->
+        Access Tokens -> (token) -> Generate S3 credentials; the access key id
+        is prefixed ``HFAK...``).
+
+        The HF S3 gateway is path-style addressed and only supports
+        ListObjectsV2; the botocore Config below matches
         https://huggingface.co/docs/hub/en/storage-buckets-s3
         """
         try:
@@ -234,10 +294,8 @@ class S3Store:
             bucket=bucket,
             prefix=prefix,
             endpoint_url=f"https://s3.hf.co/{namespace}",
-            aws_access_key_id=access_key_id,
-            aws_secret_access_key=secret_access_key,
             config=Config(
-                region_name="us-east-1",
+                region_name=_resolve_region(region),
                 s3={"addressing_style": "path"},
                 request_checksum_calculation="when_required",
                 response_checksum_validation="when_required",
@@ -285,6 +343,28 @@ class S3Store:
                 yield BenchmarkRecord.model_validate_json(_read_body(response))
 
 
+def _resolve_region(region: str | None) -> str:
+    """Return the caller's region, or the one named in the environment.
+
+    There is deliberately no fallback default: a silently assumed region is
+    the kind of setting that works on the author's machine and fails on
+    everyone else's.
+    """
+    import os
+
+    if region is not None:
+        return region
+    for var in ("AWS_REGION", "AWS_DEFAULT_REGION"):
+        value = os.environ.get(var)
+        if value:
+            return value
+    raise ValueError(
+        "No region configured. Pass region=... or set AWS_REGION in your "
+        "environment / .env file (the Hugging Face S3 gateway expects "
+        '"us-east-1").'
+    )
+
+
 def _s3_client(**kwargs: Any) -> Any:
     try:
         import boto3
@@ -326,7 +406,7 @@ def _flatten_record(record: BenchmarkRecord) -> dict[str, Any]:
     import json
 
     flat: dict[str, Any] = {
-        "schema_version":  record.schema_version,
+        "qpubench_schema_version": record.qpubench_schema_version,
         "experiment_id":   record.experiment_id,
         "run_id":          record.run_id,
         "timestamp":       record.timestamp.isoformat(),

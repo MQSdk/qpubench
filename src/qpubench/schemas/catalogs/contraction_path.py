@@ -1,18 +1,16 @@
 """Tensor-network contraction path configuration/result.
 
-Closes qrunch's "Choose a Contraction Path Finder" guide — configures how
-a tensor-network circuit simulator orders its pairwise contractions,
-which drives runtime and peak memory. The real implementation
+Configures how a tensor-network circuit simulator orders its pairwise
+contractions, which drives runtime and peak memory. The real implementation
 (`qpubench.tensor_network.contraction_path`, lazy `quimb`/`cotengra`
 imports) stays out of this module — matching the core-never-imports-a-
-quantum-library invariant. The real guide (checked directly against
-qrunch's own docs page) offers four strategies, modeled here as
+quantum-library invariant. Four strategies are modeled, as
 `ContractionPathStrategy`:
 
   SEQUENTIAL          default — fast greedy first, escalates to a fuller
                       search if resource thresholds are exceeded.
   RANDOM_GREEDY_128   quick heuristic, randomized greedy across many trials
-                      (128 by default, matching qrunch's own default name).
+                      (128 by default, hence the name).
   MULTI_STRATEGY      evaluates several approaches, picks the best by
                       cost while respecting a memory constraint.
   NONE                delegates path-finding to the contraction engine
@@ -35,15 +33,13 @@ class ContractionPathStrategy(str, enum.Enum):
 
 
 class ContractionPathConfig(pydantic.BaseModel):
-    """Real strategy selection — mirrors qrunch's own 4-way choice.
+    """Real strategy selection across the four supported approaches.
 
-    num_repeats           trials for RANDOM_GREEDY_128 (qrunch's own
-                           default name implies 128).
+    num_repeats           trials for RANDOM_GREEDY_128 (128 by default).
     max_memory_fraction    for MULTI_STRATEGY: fraction of a configured
                            memory budget the path search may target
                            (mapped onto cotengra's real slicing mechanism
-                           — an approximation of qrunch's exact formula,
-                           not a verified 1:1 replica).
+                           — an approximation, not an exact budget).
     memory_budget_elements  the "100%" reference for max_memory_fraction,
                            in tensor elements (default 2**28 ~ 1GB of
                            complex128 — adjust for your machine).

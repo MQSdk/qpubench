@@ -6,7 +6,7 @@ the real [Basis Set Exchange](https://www.basissetexchange.org/) (BSE) for
 the six standard fixed bases, and Grimme group's
 [q-vSZP](https://github.com/grimme-lab/qvSZP) for the charge-adaptive one
 — **both real and independently usable without ORCA**. Typed Pydantic
-schemas live in `src/qpubench/schemas/basis_sets.py`; the loaders live in
+schemas live in `src/qpubench/schemas/catalogs/basis_sets.py`; the loaders live in
 `src/qpubench/hamiltonian_sources/basis_set_exchange.py` and
 `src/qpubench/hamiltonian_sources/qvszp.py` — same
 core-never-imports-a-quantum-library boundary as `hamiltonian_library.py`
@@ -103,7 +103,7 @@ i.e. CP2K's own maintainers already treat q-vSZP this way — a static,
 from qpubench.hamiltonian_sources.qvszp import (
     count_basis_functions, ecp_core_electrons, get_cp2k_format_text,
 )
-from qpubench.schemas.basis_sets import QvSZPVariant
+from qpubench.schemas.catalogs.basis_sets import QvSZPVariant
 
 count_basis_functions("Li")                      # 9  (1s + 1p + 1d)
 count_basis_functions("H", QvSZPVariant.GXTB)      # 1  (s only)
@@ -146,7 +146,7 @@ boundary as `pyscf.ProjectionEmbeddingConfig`/`DMETConfig`
 (PsiEmbed/libDMET):
 
 ```python
-from qpubench.schemas.basis_sets import QvSZPRunConfig, QvSZPVariant
+from qpubench.schemas.catalogs.basis_sets import QvSZPRunConfig, QvSZPVariant
 
 config = QvSZPRunConfig(
     structure_file="h2o.xyz",

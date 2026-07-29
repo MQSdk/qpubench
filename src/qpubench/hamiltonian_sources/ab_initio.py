@@ -43,7 +43,7 @@ from __future__ import annotations
 
 from typing import Any, Callable, Literal
 
-from ..schemas.hamiltonian_library import HamiltonianLibraryRecord, HamiltonianSource
+from ..schemas.catalogs.hamiltonian_library import HamiltonianLibraryRecord, HamiltonianSource
 from ..schemas.observable import SparsePauliObservable
 from .hamlib import parse_hamlib_qubit_operator
 

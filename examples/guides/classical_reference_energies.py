@@ -3,7 +3,7 @@
 molssi_qcschema.QCEnergyComponents is a real container for
 HF/MP2/CCSD/CCSD(T)/FCI numbers; qpubench itself has no CI/CC solver, but
 PySCF (free, pip-installable, no compiler required — see
-schemas/pyscf_pyscf.py) does, and this example calls it for real rather than
+schemas/mirrors/pyscf_pyscf.py) does, and this example calls it for real rather than
 approximating FCI via toy-Hamiltonian diagonalization.
 
 Requires: pip install 'qpubench[pyscf]'
@@ -24,8 +24,8 @@ import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
 
-from qpubench.schemas.molssi_qcschema import QCEnergyComponents
-from qpubench.schemas.pyscf_pyscf import PySCFAtomSpec, PySCFMoleculeSpec
+from qpubench.schemas.mirrors.molssi_qcschema import QCEnergyComponents
+from qpubench.schemas.mirrors.pyscf_pyscf import PySCFAtomSpec, PySCFMoleculeSpec
 
 
 def main() -> None:

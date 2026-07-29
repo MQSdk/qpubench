@@ -38,7 +38,7 @@ import sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
 
 from qpubench.backends.ibm_cost_estimator import estimate_circuit_resources
-from qpubench.schemas.ibm_cost_estimator import CircuitResourceEstimate
+from qpubench.schemas.mirrors.ibm_cost_estimator import CircuitResourceEstimate
 
 _CSV_PATH = pathlib.Path(__file__).resolve().parents[2] / "data" / "IBM_VQE_Test_Benchmark.csv"
 _OUT_DIR = pathlib.Path(__file__).resolve().parents[2] / "data" / "batches"

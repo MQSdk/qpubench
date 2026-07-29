@@ -11,7 +11,7 @@ import math
 import pydantic
 import pytest
 
-from qpubench.schemas.johnrscott_mbqc_fpga import (
+from qpubench.schemas.mirrors.johnrscott_mbqc_fpga import (
     AdaptiveSpec,
     ByproductUpdateSpec,
     CommutationSpec,
@@ -24,7 +24,7 @@ from qpubench.schemas.johnrscott_mbqc_fpga import (
 from qpubench.schemas.observable import PauliTerm, SparsePauliObservable
 from qpubench.schemas.primitives import ComplexNumber, PauliLabel
 from qpubench.schemas.record import SCHEMA_VERSION, BenchmarkRecord, VQAConfig, VQAResult
-from qpubench.schemas.reactions import (
+from qpubench.schemas.catalogs.reactions import (
     ArrheniusRateConstant,
     KineticsReactionSpec,
     KineticsSpeciesSpec,
@@ -443,7 +443,7 @@ def test_benchmark_record_json_roundtrip():
     record  = _minimal_record()
     json_str = record.model_dump_json()
     data     = json.loads(json_str)
-    assert data["schema_version"] == SCHEMA_VERSION
+    assert data["qpubench_schema_version"] == SCHEMA_VERSION
     restored = BenchmarkRecord.model_validate_json(json_str)
     assert restored.experiment_id == record.experiment_id
     assert restored.result.expectation_values[0].value == -1.137
@@ -1399,7 +1399,7 @@ def test_benchmark_record_algorithm_json_roundtrip():
 # ---------------------------------------------------------------------------
 
 def test_molecule_structure_spec():
-    from qpubench.schemas.microsoft_qdk import AtomSpec, CoordinateUnit, MoleculeStructureSpec
+    from qpubench.schemas.mirrors.microsoft_qdk import AtomSpec, CoordinateUnit, MoleculeStructureSpec
     mol = MoleculeStructureSpec(
         atoms=[
             AtomSpec(symbol="N", x=0.0, y=0.0, z=-0.55),
@@ -1417,7 +1417,7 @@ def test_molecule_structure_spec():
 
 
 def test_scf_run_config_and_result():
-    from qpubench.schemas.microsoft_qdk import SCFMethod, SCFRunConfig, SCFResult
+    from qpubench.schemas.mirrors.microsoft_qdk import SCFMethod, SCFRunConfig, SCFResult
     cfg = SCFRunConfig(method=SCFMethod.HF, basis_or_guess="cc-pvdz")
     res = SCFResult(
         hf_energy=-108.954_000,
@@ -1431,7 +1431,7 @@ def test_scf_run_config_and_result():
 
 
 def test_active_space_selection_config():
-    from qpubench.schemas.microsoft_qdk import (
+    from qpubench.schemas.mirrors.microsoft_qdk import (
         ActiveSpaceSelectorType,
         ActiveSpaceSelectionConfig,
         ActiveSpaceSelectionResult,
@@ -1453,7 +1453,7 @@ def test_active_space_selection_config():
 
 
 def test_qubit_hamiltonian_spec():
-    from qpubench.schemas.microsoft_qdk import (
+    from qpubench.schemas.mirrors.microsoft_qdk import (
         PauliStringTerm,
         QubitEncodingType,
         QubitHamiltonianSpec,
@@ -1473,7 +1473,7 @@ def test_qubit_hamiltonian_spec():
 
 
 def test_model_hamiltonian_ising():
-    from qpubench.schemas.microsoft_qdk import (
+    from qpubench.schemas.mirrors.microsoft_qdk import (
         BoundaryCondition,
         IsingParams,
         LatticeGraphSpec,
@@ -1495,7 +1495,7 @@ def test_model_hamiltonian_ising():
 
 
 def test_model_hamiltonian_only_one_param_block():
-    from qpubench.schemas.microsoft_qdk import (
+    from qpubench.schemas.mirrors.microsoft_qdk import (
         HeisenbergParams,
         IsingParams,
         LatticeGraphSpec,
@@ -1514,7 +1514,7 @@ def test_model_hamiltonian_only_one_param_block():
 
 
 def test_qpe_config_and_result():
-    from qpubench.schemas.microsoft_qdk import (
+    from qpubench.schemas.mirrors.microsoft_qdk import (
         QPEConfig,
         QPEMethod,
         QPEResult,
@@ -1549,7 +1549,7 @@ def test_qpe_config_and_result():
 
 
 def test_resource_estimator_config():
-    from qpubench.schemas.microsoft_qdk import (
+    from qpubench.schemas.mirrors.microsoft_qdk import (
         ErrorBudgetPartition,
         QECScheme,
         QubitParamsType,
@@ -1578,7 +1578,7 @@ def test_resource_estimator_config():
 
 
 def test_qchem_pipeline_spec_roundtrip():
-    from qpubench.schemas.microsoft_qdk import (
+    from qpubench.schemas.mirrors.microsoft_qdk import (
         AtomSpec,
         FermionicHamiltonianSpec,
         MoleculeStructureSpec,
@@ -1654,7 +1654,7 @@ def test_backend_spec_azure_quantum():
 # ---------------------------------------------------------------------------
 
 def test_gbs_program_spec_fock_path():
-    from qpubench.schemas.mqsdk_photoq import (
+    from qpubench.schemas.mirrors.mqsdk_photoq import (
         GBSMeasurementType,
         GBSProgramSpec,
         InterferometerSpec,
@@ -1683,7 +1683,7 @@ def test_gbs_program_spec_fock_path():
 
 
 def test_gbs_program_spec_s2gate_path():
-    from qpubench.schemas.mqsdk_photoq import GBSMeasurementType, GBSProgramSpec, S2GateSpec
+    from qpubench.schemas.mirrors.mqsdk_photoq import GBSMeasurementType, GBSProgramSpec, S2GateSpec
     prog = GBSProgramSpec(
         num_modes=4,
         s2_gates=[S2GateSpec(mode_a=i, mode_b=i + 4, r=1.0) for i in range(4)],
@@ -1694,7 +1694,7 @@ def test_gbs_program_spec_s2gate_path():
 
 
 def test_gbs_sample_properties():
-    from qpubench.schemas.mqsdk_photoq import GBSSample
+    from qpubench.schemas.mirrors.mqsdk_photoq import GBSSample
     s = GBSSample(photon_numbers=[0, 1, 2, 0, 1])
     assert s.total_photons == 4
     assert s.num_clicks == 0   # no click_pattern set
@@ -1705,7 +1705,7 @@ def test_gbs_sample_properties():
 
 def test_gbs_sampling_result_roundtrip():
     import json
-    from qpubench.schemas.mqsdk_photoq import (
+    from qpubench.schemas.mirrors.mqsdk_photoq import (
         GBSBackendType,
         GBSMeasurementType,
         GBSProgramSpec,
@@ -1740,7 +1740,7 @@ def test_gbs_sampling_result_roundtrip():
 
 
 def test_gaussian_state_spec():
-    from qpubench.schemas.mqsdk_photoq import GaussianStateSpec, GaussianStateType, QuadratureOrdering
+    from qpubench.schemas.mirrors.mqsdk_photoq import GaussianStateSpec, GaussianStateType, QuadratureOrdering
     # 2-mode squeezed vacuum: 4×4 covariance matrix (trivial identity for vacuum)
     V = [1.0] * 16   # placeholder 4×4 flattened
     state = GaussianStateSpec(
@@ -1754,7 +1754,7 @@ def test_gaussian_state_spec():
 
 
 def test_hafnian_matrix_spec():
-    from qpubench.schemas.mqsdk_photoq import HafnianMatrixSpec, QuadratureOrdering
+    from qpubench.schemas.mirrors.mqsdk_photoq import HafnianMatrixSpec, QuadratureOrdering
     # 4×4 A matrix for 2 modes
     spec = HafnianMatrixSpec(
         num_modes=2,
@@ -1767,7 +1767,7 @@ def test_hafnian_matrix_spec():
 
 
 def test_takagi_decomposition_spec():
-    from qpubench.schemas.mqsdk_photoq import TakagiDecompositionSpec
+    from qpubench.schemas.mirrors.mqsdk_photoq import TakagiDecompositionSpec
     import math
     spec = TakagiDecompositionSpec(
         singular_values=[0.8, 0.6, 0.4, 0.2],
@@ -1783,7 +1783,7 @@ def test_takagi_decomposition_spec():
 
 
 def test_gbs_clique_finding_result():
-    from qpubench.schemas.mqsdk_photoq import GBSCliqueFindingResult, GBSGraphConfig, GraphScalingMethod
+    from qpubench.schemas.mirrors.mqsdk_photoq import GBSCliqueFindingResult, GBSGraphConfig, GraphScalingMethod
     A = [0, 1, 1, 0,
          1, 0, 1, 1,
          1, 1, 0, 1,
@@ -1812,7 +1812,7 @@ def test_gbs_clique_finding_result():
 
 
 def test_tdm_gbs_config():
-    from qpubench.schemas.mqsdk_photoq import TDMDelaySpec, TDMGBSConfig, TDMSqueezingLevel
+    from qpubench.schemas.mirrors.mqsdk_photoq import TDMDelaySpec, TDMGBSConfig, TDMSqueezingLevel
     delays = TDMDelaySpec(delays=[1, 6, 36], effective_modes=216)
     cfg = TDMGBSConfig(
         delays=delays,
@@ -1827,7 +1827,7 @@ def test_tdm_gbs_config():
 
 
 def test_cluster_state_spec():
-    from qpubench.schemas.mqsdk_photoq import ClusterStateSpec, GaussianStateType
+    from qpubench.schemas.mirrors.mqsdk_photoq import ClusterStateSpec, GaussianStateType
     import math
     spec = ClusterStateSpec(
         state_type=GaussianStateType.CLUSTER_1D,
@@ -1869,7 +1869,7 @@ def test_backend_spec_strawberry_fields_gaussian():
 # ---------------------------------------------------------------------------
 
 def test_pseudo_pnrd_collision_error():
-    from qpubench.schemas.mqsdk_photoq import PseudoPNRDSpec
+    from qpubench.schemas.mirrors.mqsdk_photoq import PseudoPNRDSpec
     det = PseudoPNRDSpec(num_branches=4, multiplexing="spatial")
     # 1 photon into 4 branches can never collide.
     assert det.collision_error(1) == 0.0
@@ -1882,7 +1882,7 @@ def test_pseudo_pnrd_collision_error():
 
 
 def test_click_pattern_probability_result():
-    from qpubench.schemas.mqsdk_photoq import (
+    from qpubench.schemas.mirrors.mqsdk_photoq import (
         ClickPatternProbabilityResult, SimulationMethod,
     )
     res = ClickPatternProbabilityResult(
@@ -1904,7 +1904,7 @@ def test_click_pattern_probability_result():
 
 
 def test_method_comparison_roundtrip():
-    from qpubench.schemas.mqsdk_photoq import MethodComparison, SimulationMethod
+    from qpubench.schemas.mirrors.mqsdk_photoq import MethodComparison, SimulationMethod
     mc = MethodComparison(
         num_modes=4, num_branches=4,
         reference_method=SimulationMethod.BRUTE_FORCE_POVM,
@@ -1918,7 +1918,7 @@ def test_method_comparison_roundtrip():
 
 
 def test_time_bin_interferometer_and_pt_series():
-    from qpubench.schemas.mqsdk_photoq import (
+    from qpubench.schemas.mirrors.mqsdk_photoq import (
         TimeBinInterferometerSpec, PTSeriesSamplingConfig, PTSeriesSamplingResult,
         PTSeriesInputType,
     )
@@ -1937,7 +1937,7 @@ def test_time_bin_interferometer_and_pt_series():
 
 
 def test_qcloud_job_spec_and_params():
-    from qpubench.schemas.mqsdk_photoq import (
+    from qpubench.schemas.mirrors.mqsdk_photoq import (
         QCloudJobSpec, QCloudJobType, QCloudJobResult, TNSamplingParams,
         TNCovarianceParams,
     )
@@ -1952,7 +1952,7 @@ def test_qcloud_job_spec_and_params():
 
 
 def test_aurora_dataset_spec():
-    from qpubench.schemas.mqsdk_photoq import AuroraDatasetSpec, AuroraExperiment
+    from qpubench.schemas.mirrors.mqsdk_photoq import AuroraDatasetSpec, AuroraExperiment
     spec = AuroraDatasetSpec(
         experiment=AuroraExperiment.DECODER_DEMO, condition="signal",
         batch_index=3, s3_key="decoder_demo/signal/batch_3/quadratures.npy",
@@ -1988,14 +1988,14 @@ def test_backend_spec_xanadu_aurora():
 # ---------------------------------------------------------------------------
 
 def test_neel_state_spec():
-    from qpubench.schemas.mqsdk_qse import NeelStateSpec
+    from qpubench.schemas.mirrors.mqsdk_qse import NeelStateSpec
     s = NeelStateSpec(num_spins=8, shift=0)
     assert s.num_spins == 8
     assert s.shift == 0
 
 
 def test_slater_determinant_ref():
-    from qpubench.schemas.mqsdk_qse import SlaterDeterminantRef
+    from qpubench.schemas.mirrors.mqsdk_qse import SlaterDeterminantRef
     ref = SlaterDeterminantRef(ncas=4, occ_alpha=[0, 1], occ_beta=[0, 1])
     assert ref.num_qubits == 8
     assert ref.num_electrons == 4
@@ -2006,7 +2006,7 @@ def test_slater_determinant_ref():
 
 
 def test_kqd_reference_spec_neel():
-    from qpubench.schemas.mqsdk_qse import KQDReferenceSpec, KQDReferenceStateType, NeelStateSpec
+    from qpubench.schemas.mirrors.mqsdk_qse import KQDReferenceSpec, KQDReferenceStateType, NeelStateSpec
     neel = NeelStateSpec(num_spins=6, shift=0)
     ref = KQDReferenceSpec(
         state_type=KQDReferenceStateType.NEEL,
@@ -2019,7 +2019,7 @@ def test_kqd_reference_spec_neel():
 
 
 def test_kqd_time_evolution_spec():
-    from qpubench.schemas.mqsdk_qse import KQDTimeEvolutionSpec, KrylovTimeEvolutionVariant
+    from qpubench.schemas.mirrors.mqsdk_qse import KQDTimeEvolutionSpec, KrylovTimeEvolutionVariant
     import math
     dt = math.pi / 3.0
     spec = KQDTimeEvolutionSpec(dt=dt, num_trotter_steps=6)
@@ -2028,7 +2028,7 @@ def test_kqd_time_evolution_spec():
 
 
 def test_krylov_circuit_family_spec():
-    from qpubench.schemas.mqsdk_qse import KrylovCircuitFamilySpec, KQDMethod
+    from qpubench.schemas.mirrors.mqsdk_qse import KrylovCircuitFamilySpec, KQDMethod
     fam = KrylovCircuitFamilySpec(
         method=KQDMethod.HADAMARD_TEST,
         num_qubits_system=10,
@@ -2045,7 +2045,7 @@ def test_krylov_circuit_family_spec():
 
 
 def test_krylov_subspace_matrices():
-    from qpubench.schemas.mqsdk_qse import KrylovMatrixSpec, KrylovSubspaceMatrices
+    from qpubench.schemas.mirrors.mqsdk_qse import KrylovMatrixSpec, KrylovSubspaceMatrices
     dim = 4
     identity_flat = [1.0, 0.0, 0.0, 0.0,
                      0.0, 1.0, 0.0, 0.0,
@@ -2059,7 +2059,7 @@ def test_krylov_subspace_matrices():
 
 
 def test_krylov_eigen_result():
-    from qpubench.schemas.mqsdk_qse import KrylovEigenResult
+    from qpubench.schemas.mirrors.mqsdk_qse import KrylovEigenResult
     res = KrylovEigenResult(
         eigenvalues=[-2.81, -1.23, 0.45, 1.87],
         ground_state_energy=-2.81,
@@ -2072,7 +2072,7 @@ def test_krylov_eigen_result():
 
 
 def test_sqd_convergence_result():
-    from qpubench.schemas.mqsdk_qse import SQDStep, SQDConvergenceResult
+    from qpubench.schemas.mirrors.mqsdk_qse import SQDStep, SQDConvergenceResult
     steps = [
         SQDStep(krylov_step=0, num_bitstrings=10, subspace_dim=10, energy_hartree=-1.1),
         SQDStep(krylov_step=1, num_bitstrings=18, subspace_dim=18, energy_hartree=-1.136),
@@ -2088,7 +2088,7 @@ def test_sqd_convergence_result():
 
 
 def test_cumulative_krylov_counts():
-    from qpubench.schemas.mqsdk_qse import CumulativeKrylovCounts, SQDPostselectionConfig
+    from qpubench.schemas.mirrors.mqsdk_qse import CumulativeKrylovCounts, SQDPostselectionConfig
     postsel = SQDPostselectionConfig(num_ones=2, min_unique=1)
     counts_obj = CumulativeKrylovCounts(
         cumulative_counts=[{"01": 10, "10": 8}, {"01": 15, "10": 12, "11": 0}],
@@ -2100,7 +2100,7 @@ def test_cumulative_krylov_counts():
 
 
 def test_cholesky_decomposition_spec():
-    from qpubench.schemas.mqsdk_qse import CholeskyDecompositionSpec
+    from qpubench.schemas.mirrors.mqsdk_qse import CholeskyDecompositionSpec
     spec = CholeskyDecompositionSpec(
         num_orbitals=4,
         eps=1.0e-6,
@@ -2115,7 +2115,7 @@ def test_cholesky_decomposition_spec():
 def test_kqd_pipeline_spec_roundtrip():
     import json
     import math
-    from qpubench.schemas.mqsdk_qse import (
+    from qpubench.schemas.mirrors.mqsdk_qse import (
         CholeskyDecompositionSpec,
         KQDConfig,
         KQDMethod,
@@ -2174,7 +2174,7 @@ def test_kqd_pipeline_spec_roundtrip():
 
 def test_quantum_result_kqd_field():
     import json
-    from qpubench.schemas.mqsdk_qse import KQDConfig, KQDMethod, KQDPipelineSpec
+    from qpubench.schemas.mirrors.mqsdk_qse import KQDConfig, KQDMethod, KQDPipelineSpec
     pipeline = KQDPipelineSpec(
         num_qubits=6,
         hamiltonian_label="ising_chain_6",
@@ -2205,7 +2205,7 @@ def test_backend_spec_qiskit_aer():
 # ---------------------------------------------------------------------------
 
 def test_qesem_observable_spec():
-    from qpubench.schemas.qedma_qesem import QESEMObservableSpec
+    from qpubench.schemas.mirrors.qedma_qesem import QESEMObservableSpec
     obs = QESEMObservableSpec(
         pauli_terms={"Z1": 1.0, "Z0,Z3": 0.3},
         description="ZZ correlation",
@@ -2215,7 +2215,7 @@ def test_qesem_observable_spec():
 
 
 def test_qesem_circuit_options():
-    from qpubench.schemas.qedma_qesem import QESEMCircuitOptions, QESEMTranspilationLevel
+    from qpubench.schemas.mirrors.qedma_qesem import QESEMCircuitOptions, QESEMTranspilationLevel
     opts = QESEMCircuitOptions(
         error_suppression_only=False,
         twirl=True,
@@ -2227,7 +2227,7 @@ def test_qesem_circuit_options():
 
 
 def test_qesem_precision_per_factor():
-    from qpubench.schemas.qedma_qesem import QESEMPrecisionPerFactor
+    from qpubench.schemas.mirrors.qedma_qesem import QESEMPrecisionPerFactor
     pf = QESEMPrecisionPerFactor(
         scale_precision_map={"0.0": 0.1, "1.0": 0.15, "2.0": 0.2}
     )
@@ -2235,7 +2235,7 @@ def test_qesem_precision_per_factor():
 
 
 def test_qesem_job_spec():
-    from qpubench.schemas.qedma_qesem import (
+    from qpubench.schemas.mirrors.qedma_qesem import (
         QESEMJobSpec, QESEMObservableSpec, QESEMCircuitOptions,
         QESEMTranspilationLevel, QESEMPrecisionMode,
     )
@@ -2258,7 +2258,7 @@ def test_qesem_job_spec():
 
 
 def test_qesem_expectation_values():
-    from qpubench.schemas.qedma_qesem import (
+    from qpubench.schemas.mirrors.qedma_qesem import (
         QESEMExpectationValue, QESEMScaleExpectationValue,
         QESEMHeuristicResult, QESEMNoiseScalingResult,
     )
@@ -2284,7 +2284,7 @@ def test_qesem_expectation_values():
 
 
 def test_qesem_observable_result_mitigated_property():
-    from qpubench.schemas.qedma_qesem import (
+    from qpubench.schemas.mirrors.qedma_qesem import (
         QESEMExpectationValue, QESEMScaleExpectationValue,
         QESEMNoiseScalingResult, QESEMHeuristicResult, QESEMObservableResult,
     )
@@ -2303,7 +2303,7 @@ def test_qesem_observable_result_mitigated_property():
 
 
 def test_qesem_circuit_result_properties():
-    from qpubench.schemas.qedma_qesem import (
+    from qpubench.schemas.mirrors.qedma_qesem import (
         QESEMObservableSpec, QESEMObservableResult, QESEMCircuitObservableResult,
         QESEMCircuitResult, QESEMExpectationValue, QESEMScaleExpectationValue,
         QESEMNoiseScalingResult,
@@ -2334,7 +2334,7 @@ def test_qesem_circuit_result_properties():
 
 
 def test_qesem_execution_details():
-    from qpubench.schemas.qedma_qesem import QESEMExecutionDetails, QESEMTranspiledCircuit
+    from qpubench.schemas.mirrors.qedma_qesem import QESEMExecutionDetails, QESEMTranspiledCircuit
     tc = QESEMTranspiledCircuit(
         circuit_qasm="OPENQASM 2.0; ...",
         qubit_maps=[{"0": 12, "1": 13, "2": 14}],
@@ -2351,7 +2351,7 @@ def test_qesem_execution_details():
 
 
 def test_qesem_characterization_result():
-    from qpubench.schemas.qedma_qesem import QESEMCharacterizationResult, QESEMGateInfidelity
+    from qpubench.schemas.mirrors.qedma_qesem import QESEMCharacterizationResult, QESEMGateInfidelity
     char = QESEMCharacterizationResult(
         qpu_name="ibm_fez",
         measurement_errors={0: 0.012, 1: 0.009, 2: 0.015},
@@ -2367,7 +2367,7 @@ def test_qesem_characterization_result():
 
 def test_qesem_job_record_roundtrip():
     import json
-    from qpubench.schemas.qedma_qesem import (
+    from qpubench.schemas.mirrors.qedma_qesem import (
         QESEMJobRecord, QESEMJobSpec, QESEMJobStatus, QESEMObservableSpec,
         QESEMCircuitResult, QESEMCircuitObservableResult, QESEMObservableResult,
         QESEMExpectationValue, QESEMScaleExpectationValue, QESEMNoiseScalingResult,
@@ -2427,7 +2427,7 @@ def test_qesem_job_record_roundtrip():
 
 def test_quantum_result_qesem_field():
     import json
-    from qpubench.schemas.qedma_qesem import QESEMJobRecord, QESEMJobStatus, QESEMJobSpec
+    from qpubench.schemas.mirrors.qedma_qesem import QESEMJobRecord, QESEMJobStatus, QESEMJobSpec
     qesem_record = QESEMJobRecord(
         job_id="qesem-xyz",
         status=QESEMJobStatus.SUCCEEDED,
@@ -2451,7 +2451,7 @@ def test_backend_spec_qesem():
 
 
 def test_execution_options_qesem_mitigation_options():
-    from qpubench.schemas.qedma_qesem import (
+    from qpubench.schemas.mirrors.qedma_qesem import (
         QESEMCircuitOptions,
         QESEMExecutionMode,
         QESEMJobOptions,
@@ -2485,7 +2485,7 @@ def test_execution_options_qesem_mitigation_options():
 # ---------------------------------------------------------------------------
 
 def test_qcmolecule_h2():
-    from qpubench.schemas.molssi_qcschema import QCMolecule
+    from qpubench.schemas.mirrors.molssi_qcschema import QCMolecule
     # H2 at equilibrium bond length 0.742 Å = 1.4011 Bohr
     mol = QCMolecule(
         symbols=["H", "H"],
@@ -2500,14 +2500,14 @@ def test_qcmolecule_h2():
 
 
 def test_qcmolecule_geometry_validation():
-    from qpubench.schemas.molssi_qcschema import QCMolecule
+    from qpubench.schemas.mirrors.molssi_qcschema import QCMolecule
     import pytest
     with pytest.raises(Exception):
         QCMolecule(symbols=["H", "H"], geometry=[0.0, 0.0])  # wrong length
 
 
 def test_qcmolecule_water_fragments():
-    from qpubench.schemas.molssi_qcschema import QCMolecule
+    from qpubench.schemas.mirrors.molssi_qcschema import QCMolecule
     mol = QCMolecule(
         symbols=["O", "H", "H"],
         geometry=[0.0, 0.0, 0.0, 0.0, 1.43, -1.11, 0.0, 1.43, 1.11],
@@ -2523,7 +2523,7 @@ def test_qcmolecule_water_fragments():
 
 
 def test_qc_model_and_driver():
-    from qpubench.schemas.molssi_qcschema import QCModel, QCDriver
+    from qpubench.schemas.mirrors.molssi_qcschema import QCModel, QCDriver
     m = QCModel(method="ccsd(t)", basis="cc-pVDZ")
     assert m.method == "ccsd(t)"
     assert m.basis == "cc-pVDZ"
@@ -2534,7 +2534,7 @@ def test_qc_model_and_driver():
 
 
 def test_qc_energy_components():
-    from qpubench.schemas.molssi_qcschema import QCEnergyComponents
+    from qpubench.schemas.mirrors.molssi_qcschema import QCEnergyComponents
     ec = QCEnergyComponents(
         nuclear_repulsion_energy=0.7137,
         scf_one_electron_energy=-3.5692,
@@ -2550,7 +2550,7 @@ def test_qc_energy_components():
 
 
 def test_qc_atomic_result_properties():
-    from qpubench.schemas.molssi_qcschema import QCAtomicResultProperties, QCCalcInfo, QCEnergyComponents
+    from qpubench.schemas.mirrors.molssi_qcschema import QCAtomicResultProperties, QCCalcInfo, QCEnergyComponents
     props = QCAtomicResultProperties(
         calcinfo=QCCalcInfo(nbasis=4, nmo=4, nalpha=1, nbeta=1, natom=2),
         return_energy=-1.1173,
@@ -2567,7 +2567,7 @@ def test_qc_atomic_result_properties():
 
 
 def test_qc_wavefunction_data():
-    from qpubench.schemas.molssi_qcschema import QCWavefunctionData
+    from qpubench.schemas.mirrors.molssi_qcschema import QCWavefunctionData
     wfn = QCWavefunctionData(
         basis_name="sto-3g",
         nao=2,
@@ -2584,7 +2584,7 @@ def test_qc_wavefunction_data():
 
 
 def test_qc_atomic_input():
-    from qpubench.schemas.molssi_qcschema import QCAtomicInput, QCMolecule, QCModel, QCDriver
+    from qpubench.schemas.mirrors.molssi_qcschema import QCAtomicInput, QCMolecule, QCModel, QCDriver
     mol = QCMolecule(symbols=["H", "H"], geometry=[0.0, 0.0, -0.7, 0.0, 0.0, 0.7])
     inp = QCAtomicInput(
         molecule=mol,
@@ -2600,7 +2600,7 @@ def test_qc_atomic_input():
 
 
 def test_qc_atomic_result_roundtrip():
-    from qpubench.schemas.molssi_qcschema import (
+    from qpubench.schemas.mirrors.molssi_qcschema import (
         QCAtomicResult, QCAtomicResultProperties, QCMolecule, QCModel,
         QCDriver, QCProvenance, QCWavefunctionData, QCEnergyComponents,
     )
@@ -2632,7 +2632,7 @@ def test_qc_atomic_result_roundtrip():
 
 
 def test_qc_optimization_result():
-    from qpubench.schemas.molssi_qcschema import (
+    from qpubench.schemas.mirrors.molssi_qcschema import (
         QCOptimizationResult, QCAtomicInput,
         QCMolecule, QCModel, QCDriver,
     )
@@ -2656,7 +2656,7 @@ def test_qc_optimization_result():
 
 
 def test_pennylane_mol_dataset():
-    from qpubench.schemas.molssi_qcschema import PennyLaneMolDataset
+    from qpubench.schemas.mirrors.molssi_qcschema import PennyLaneMolDataset
     ds = PennyLaneMolDataset(
         molname="H2",
         basis="STO-3G",
@@ -2674,13 +2674,13 @@ def test_pennylane_mol_dataset():
 
 
 def test_pennylane_mol_dataset_correlation_energy_none():
-    from qpubench.schemas.molssi_qcschema import PennyLaneMolDataset
+    from qpubench.schemas.mirrors.molssi_qcschema import PennyLaneMolDataset
     ds = PennyLaneMolDataset(molname="LiH", basis="cc-pVDZ")
     assert ds.correlation_energy is None
 
 
 def test_qcschema_record_reference_energy():
-    from qpubench.schemas.molssi_qcschema import (
+    from qpubench.schemas.mirrors.molssi_qcschema import (
         QCSchemaRecord, QCAtomicResult, QCAtomicResultProperties,
         QCMolecule, QCModel, QCDriver, PennyLaneMolDataset,
     )
@@ -2709,7 +2709,7 @@ def test_qcschema_record_reference_energy():
 
 
 def test_quantum_result_qcschema_field():
-    from qpubench.schemas.molssi_qcschema import (
+    from qpubench.schemas.mirrors.molssi_qcschema import (
         QCSchemaRecord, QCAtomicResult, QCAtomicResultProperties,
         QCMolecule, QCModel, QCDriver,
     )
@@ -2735,7 +2735,7 @@ def test_quantum_result_qcschema_field():
 # ---------------------------------------------------------------------------
 
 def test_atom_arrangement_square_lattice():
-    from qpubench.schemas.quera_bloqade import AtomicSite, AtomArrangement, LatticeGeometryType
+    from qpubench.schemas.mirrors.quera_bloqade import AtomicSite, AtomArrangement, LatticeGeometryType
     # 3×3 square lattice at 6 µm spacing, all filled
     sites = [AtomicSite(x=i * 6.0, y=j * 6.0) for i in range(3) for j in range(3)]
     arr = AtomArrangement(
@@ -2749,7 +2749,7 @@ def test_atom_arrangement_square_lattice():
 
 
 def test_atom_arrangement_chain_with_defect():
-    from qpubench.schemas.quera_bloqade import AtomicSite, AtomArrangement, LatticeGeometryType
+    from qpubench.schemas.mirrors.quera_bloqade import AtomicSite, AtomArrangement, LatticeGeometryType
     sites = [AtomicSite(x=i * 5.0, y=0.0) for i in range(5)]
     arr = AtomArrangement(
         sites=sites,
@@ -2763,7 +2763,7 @@ def test_atom_arrangement_chain_with_defect():
 
 
 def test_atom_arrangement_default_filling():
-    from qpubench.schemas.quera_bloqade import AtomicSite, AtomArrangement
+    from qpubench.schemas.mirrors.quera_bloqade import AtomicSite, AtomArrangement
     sites = [AtomicSite(x=float(i), y=0.0) for i in range(4)]
     arr = AtomArrangement(sites=sites)
     assert arr.filling == [1, 1, 1, 1]   # defaults to all-filled
@@ -2771,7 +2771,7 @@ def test_atom_arrangement_default_filling():
 
 
 def test_ahs_time_series():
-    from qpubench.schemas.quera_bloqade import AHSTimeSeries
+    from qpubench.schemas.mirrors.quera_bloqade import AHSTimeSeries
     # π-pulse: ramp up to Ω_max, hold, ramp down
     ts = AHSTimeSeries(
         times_us=[0.0, 0.1, 0.9, 1.0],
@@ -2782,7 +2782,7 @@ def test_ahs_time_series():
 
 
 def test_ahs_waveform_piecewise_linear():
-    from qpubench.schemas.quera_bloqade import AHSWaveform, AHSWaveformType
+    from qpubench.schemas.mirrors.quera_bloqade import AHSWaveform, AHSWaveformType
     wf = AHSWaveform(
         waveform_type=AHSWaveformType.PIECEWISE_LINEAR,
         durations_us=[0.3, 0.4, 0.3],
@@ -2793,7 +2793,7 @@ def test_ahs_waveform_piecewise_linear():
 
 
 def test_ahs_waveform_constant():
-    from qpubench.schemas.quera_bloqade import AHSWaveform, AHSWaveformType
+    from qpubench.schemas.mirrors.quera_bloqade import AHSWaveform, AHSWaveformType
     wf = AHSWaveform(
         waveform_type=AHSWaveformType.CONSTANT,
         duration_us=2.0,
@@ -2803,7 +2803,7 @@ def test_ahs_waveform_constant():
 
 
 def test_ahs_driving_field():
-    from qpubench.schemas.quera_bloqade import (
+    from qpubench.schemas.mirrors.quera_bloqade import (
         AHSDrivingField, AHSTimeSeries, NeutralAtomCoupling, SpatialModulationType,
     )
     times = [0.0, 0.5, 1.0, 1.5, 2.0]
@@ -2823,7 +2823,7 @@ def test_ahs_driving_field():
 
 
 def test_ahs_local_detuning():
-    from qpubench.schemas.quera_bloqade import AHSLocalDetuning, AHSTimeSeries
+    from qpubench.schemas.mirrors.quera_bloqade import AHSLocalDetuning, AHSTimeSeries
     ts = AHSTimeSeries(times_us=[0.0, 1.0, 2.0], values=[0.0, 50.0, 0.0])
     ld = AHSLocalDetuning(
         time_series=ts,
@@ -2834,7 +2834,7 @@ def test_ahs_local_detuning():
 
 
 def test_ahs_program_spec():
-    from qpubench.schemas.quera_bloqade import (
+    from qpubench.schemas.mirrors.quera_bloqade import (
         AHSProgramSpec, AtomArrangement, AtomicSite, AHSDrivingField,
         AHSTimeSeries, NeutralAtomCoupling, LatticeGeometryType,
     )
@@ -2857,7 +2857,7 @@ def test_ahs_program_spec():
 
 
 def test_ahs_batch_spec():
-    from qpubench.schemas.quera_bloqade import AHSBatchSpec
+    from qpubench.schemas.mirrors.quera_bloqade import AHSBatchSpec
     batch = AHSBatchSpec(
         variable_names=["detuning_end", "rabi_max"],
         parameter_values=[
@@ -2871,7 +2871,7 @@ def test_ahs_batch_spec():
 
 
 def test_aquila_device_spec_defaults():
-    from qpubench.schemas.quera_bloqade import AquilaDeviceSpec
+    from qpubench.schemas.mirrors.quera_bloqade import AquilaDeviceSpec
     hw = AquilaDeviceSpec()
     assert hw.max_qubits == 256
     assert hw.area_width_um == pytest.approx(75.0)
@@ -2883,7 +2883,7 @@ def test_aquila_device_spec_defaults():
 
 
 def test_ahs_shot_result_properties():
-    from qpubench.schemas.quera_bloqade import AHSShotResult, AHSShotStatus
+    from qpubench.schemas.mirrors.quera_bloqade import AHSShotResult, AHSShotStatus
     good = AHSShotResult(
         status=AHSShotStatus.SUCCESS,
         pre_sequence=[1, 1, 1, 1],
@@ -2903,7 +2903,7 @@ def test_ahs_shot_result_properties():
 
 
 def test_ahs_task_result_analysis():
-    from qpubench.schemas.quera_bloqade import AHSTaskResult, AHSShotResult, AHSShotStatus
+    from qpubench.schemas.mirrors.quera_bloqade import AHSTaskResult, AHSShotResult, AHSShotStatus
     shots = [
         AHSShotResult(status=AHSShotStatus.SUCCESS,
                       pre_sequence=[1, 1, 1], post_sequence=[1, 0, 1]),
@@ -2933,7 +2933,7 @@ def test_ahs_task_result_analysis():
 
 
 def test_ahs_task_result_roundtrip():
-    from qpubench.schemas.quera_bloqade import (
+    from qpubench.schemas.mirrors.quera_bloqade import (
         AHSTaskResult, AHSShotResult, AHSShotStatus, AHSExecutionMetadata,
     )
     task = AHSTaskResult(
@@ -2958,7 +2958,7 @@ def test_ahs_task_result_roundtrip():
 
 
 def test_quantum_result_ahs_field():
-    from qpubench.schemas.quera_bloqade import (
+    from qpubench.schemas.mirrors.quera_bloqade import (
         AHSTaskResult, AHSShotResult, AHSShotStatus,
     )
     from qpubench.schemas.result import QuantumResult
@@ -3005,7 +3005,7 @@ def test_backend_spec_bloqade_emulator():
 # ---------------------------------------------------------------------------
 
 def test_ucc_active_space_config():
-    from qpubench.schemas.erikkjellgren_slowquant import UCCActiveSpaceConfig
+    from qpubench.schemas.mirrors.erikkjellgren_slowquant import UCCActiveSpaceConfig
     cas = UCCActiveSpaceConfig(
         num_active_electrons=2,
         num_active_orbitals=2,
@@ -3018,7 +3018,7 @@ def test_ucc_active_space_config():
 
 
 def test_ucc_wavefunction_config():
-    from qpubench.schemas.erikkjellgren_slowquant import (
+    from qpubench.schemas.mirrors.erikkjellgren_slowquant import (
         UCCWavefunctionConfig, UCCActiveSpaceConfig, UCCAnsatzType, UCCExcitationLevel,
     )
     cas = UCCActiveSpaceConfig(num_active_electrons=2, num_active_orbitals=2)
@@ -3034,7 +3034,7 @@ def test_ucc_wavefunction_config():
 
 
 def test_ucc_scf_result_homo_lumo_gap():
-    from qpubench.schemas.erikkjellgren_slowquant import UCCSCFResult
+    from qpubench.schemas.mirrors.erikkjellgren_slowquant import UCCSCFResult
     scf = UCCSCFResult(
         hf_energy=-1.1175,
         nuclear_repulsion=0.7137,
@@ -3050,13 +3050,13 @@ def test_ucc_scf_result_homo_lumo_gap():
 
 
 def test_ucc_scf_result_no_gap():
-    from qpubench.schemas.erikkjellgren_slowquant import UCCSCFResult
+    from qpubench.schemas.mirrors.erikkjellgren_slowquant import UCCSCFResult
     scf = UCCSCFResult(hf_energy=-1.1175)
     assert scf.homo_lumo_gap is None
 
 
 def test_ucc_integral_data():
-    from qpubench.schemas.erikkjellgren_slowquant import UCCIntegralData
+    from qpubench.schemas.mirrors.erikkjellgren_slowquant import UCCIntegralData
     # Minimal H2/STO-3G: 2 AOs → 4-entry h_ao, 16-entry g_ao
     nao = 2
     data = UCCIntegralData(
@@ -3071,7 +3071,7 @@ def test_ucc_integral_data():
 
 
 def test_ucc_optimization_result():
-    from qpubench.schemas.erikkjellgren_slowquant import (
+    from qpubench.schemas.mirrors.erikkjellgren_slowquant import (
         UCCOptimizationResult, UCCOptimizationMethod, UCCIterationRecord,
     )
     history = [
@@ -3096,7 +3096,7 @@ def test_ucc_optimization_result():
 
 
 def test_ucc_rdm_data():
-    from qpubench.schemas.erikkjellgren_slowquant import UCCRDMData
+    from qpubench.schemas.mirrors.erikkjellgren_slowquant import UCCRDMData
     # 2 active orbitals: rdm1 is 2×2=4 entries
     rdm = UCCRDMData(
         num_active_orbitals=2,
@@ -3110,7 +3110,7 @@ def test_ucc_rdm_data():
 
 
 def test_ucc_excited_state_ev_auto():
-    from qpubench.schemas.erikkjellgren_slowquant import UCCExcitedStateResult
+    from qpubench.schemas.mirrors.erikkjellgren_slowquant import UCCExcitedStateResult
     # eV should be auto-filled from au value
     state = UCCExcitedStateResult(
         state_index=1,
@@ -3123,7 +3123,7 @@ def test_ucc_excited_state_ev_auto():
 
 
 def test_ucc_linear_response_result():
-    from qpubench.schemas.erikkjellgren_slowquant import (
+    from qpubench.schemas.mirrors.erikkjellgren_slowquant import (
         UCCLinearResponseResult, UCCLinearResponseType, UCCExcitationLevel,
         UCCExcitedStateResult,
     )
@@ -3145,7 +3145,7 @@ def test_ucc_linear_response_result():
 
 
 def test_ucc_circuit_spec():
-    from qpubench.schemas.erikkjellgren_slowquant import UCCCircuitSpec, UCCAnsatzType, UCCExcitationLevel
+    from qpubench.schemas.mirrors.erikkjellgren_slowquant import UCCCircuitSpec, UCCAnsatzType, UCCExcitationLevel
     circ = UCCCircuitSpec(
         ansatz_type=UCCAnsatzType.FUCC,
         excitation_level=UCCExcitationLevel.SD,
@@ -3161,7 +3161,7 @@ def test_ucc_circuit_spec():
 
 
 def test_slowquant_record_correlation_energy():
-    from qpubench.schemas.erikkjellgren_slowquant import (
+    from qpubench.schemas.mirrors.erikkjellgren_slowquant import (
         SlowQuantRecord, UCCSCFResult, UCCOptimizationResult, UCCOptimizationMethod,
         UCCActiveSpaceConfig, UCCWavefunctionConfig, UCCAnsatzType, UCCExcitationLevel,
     )
@@ -3191,7 +3191,7 @@ def test_slowquant_record_correlation_energy():
 
 
 def test_slowquant_record_roundtrip():
-    from qpubench.schemas.erikkjellgren_slowquant import (
+    from qpubench.schemas.mirrors.erikkjellgren_slowquant import (
         SlowQuantRecord, UCCSCFResult, UCCOptimizationResult, UCCOptimizationMethod,
         UCCActiveSpaceConfig, UCCWavefunctionConfig, UCCAnsatzType, UCCExcitationLevel,
         UCCLinearResponseResult, UCCLinearResponseType, UCCExcitedStateResult,
@@ -3242,7 +3242,7 @@ def test_slowquant_record_roundtrip():
 
 
 def test_quantum_result_slowquant_field():
-    from qpubench.schemas.erikkjellgren_slowquant import (
+    from qpubench.schemas.mirrors.erikkjellgren_slowquant import (
         SlowQuantRecord, UCCSCFResult, UCCOptimizationResult, UCCOptimizationMethod,
     )
     from qpubench.schemas.result import QuantumResult
@@ -3272,7 +3272,7 @@ def test_quantum_result_slowquant_field():
 # Classiq schemas + Xenakis harmonization
 # ---------------------------------------------------------------------------
 
-from qpubench.schemas.classiq_classiq import (
+from qpubench.schemas.mirrors.classiq_classiq import (
     CircuitOptimizationComparison,
     ClassiqAnsatzType,
     ClassiqChemistryModel,
@@ -3284,7 +3284,7 @@ from qpubench.schemas.classiq_classiq import (
     ClassiqSynthesisResult,
     ClassiqVQEResult,
 )
-from qpubench.schemas.mqsdk_xenakis import (
+from qpubench.schemas.mirrors.mqsdk_xenakis import (
     GAGenerationRecord,
     GARunResult,
     GateSpec,
@@ -3402,7 +3402,7 @@ def test_circuit_optimization_comparison_missing_side():
 # TaskType enum (gitlab.com/mqsdk/python-sdk), revised 2026-07-08
 # ---------------------------------------------------------------------------
 
-from qpubench.schemas.mqsdk_cebule import (
+from qpubench.schemas.mirrors.mqsdk_cebule import (
     AbInitioMDInput,
     AbInitioMDMethod,
     ActivityCoefficientInput,
@@ -3436,7 +3436,7 @@ from qpubench.schemas.mqsdk_cebule import (
     WulffConstructionInput,
     WulffFacet,
 )
-from qpubench.schemas.mqsdk_cebule import CebuleTaskType
+from qpubench.schemas.mirrors.mqsdk_cebule import CebuleTaskType
 
 
 def test_cebule_task_type_confirmed_members_present():
@@ -3689,7 +3689,7 @@ def test_gnn_train_and_predict_inputs():
 # (PsiEmbed/libDMET aren't on PyPI).
 # ---------------------------------------------------------------------------
 
-from qpubench.schemas.pyscf_pyscf import (
+from qpubench.schemas.mirrors.pyscf_pyscf import (
     DMETConfig,
     EmbeddedHamiltonianResult,
     ERIBuilderConfig,
@@ -3906,7 +3906,7 @@ def test_orbital_optimizer_simple_kappa_rotation_matches_newton():
 # GSOpt per-lane run configurations
 # ---------------------------------------------------------------------------
 
-from qpubench.schemas.bestquark_gsopt import (  # noqa: E402
+from qpubench.schemas.mirrors.bestquark_gsopt import (  # noqa: E402
     GSOptAFQMCRunConfig,
     GSOptBenchmarkResult,
     GSOptGibbsRunConfig,

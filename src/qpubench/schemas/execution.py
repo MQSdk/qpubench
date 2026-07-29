@@ -268,6 +268,27 @@ class ExecutionOptions(pydantic.BaseModel):
     mitigation_options:   dict[str, Any]          = {}
     distributed_run_config: dict[str, Any] | None = None
 
+    def require_shots(self, backend_name: str) -> int:
+        """Return ``shots``, raising if the caller never chose a value.
+
+        ``shots=None`` means "statevector, exact" — a deliberate choice, not a
+        blank to be filled in. Adapters on a sampling-only execution path
+        therefore call this instead of substituting a house default: an
+        implicit ``shots or 1024`` would silently turn a request for exact
+        results into 1024 sampled ones, and would make two benchmarks that
+        never named a shot count look comparable when they are not.
+        """
+        if self.shots is None:
+            raise ValueError(
+                f"{backend_name} needs an explicit shot count on this path: set "
+                "ExecutionOptions(shots=...) (or pass shots= to runner.run). "
+                "shots=None means exact statevector, which this path cannot "
+                "provide."
+            )
+        if self.shots <= 0:
+            raise ValueError(f"shots must be positive; got {self.shots}")
+        return self.shots
+
     @pydantic.field_validator("distributed_run_config", mode="before")
     @classmethod
     def _dump_distributed_run_config(cls, v: Any) -> Any:

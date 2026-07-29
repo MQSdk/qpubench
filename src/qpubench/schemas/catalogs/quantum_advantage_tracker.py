@@ -1,9 +1,17 @@
 """Quantum Advantage Tracker schemas.
 
 Cross-cutting experiment metadata for the Quantum Advantage Tracker
-(quantum-advantage-tracker.github.io), a community-governed registry
-co-initiated by IBM, Flatiron Institute, BlueQubit, and Algorithmiq —
-not a single vendor's SDK, so this stays a core (unprefixed) module.
+(https://github.com/quantum-advantage-tracker/quantum-advantage-tracker.github.io),
+a community-governed registry co-initiated by IBM, Flatiron Institute,
+BlueQubit and Algorithmiq.
+
+Filed under ``catalogs/`` rather than ``mirrors/`` because there is no single
+vendor SDK behind it: it is a registry several organisations publish into. The
+module is named for what it catalogues, not by the ``<org>_<package>``
+convention the mirrors use — that convention degenerates for a GitHub Pages
+registry whose organisation and project share a name (it would read
+``quantum_advantage_tracker_quantum_advantage_tracker``). See
+docs/developer_guide.md.
 """
 
 from __future__ import annotations

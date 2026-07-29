@@ -5,10 +5,9 @@ Install: pip install 'qpubench[pennylane]'   (pennylane + pennylane-qiskit)
 `lightning.qubit` is PennyLane's C++/BLAS statevector simulator — in
 practice noticeably faster than Qiskit Aer for pure statevector work on the
 same circuit (no shot-noise sampling overhead needed for the estimator
-path), and it's already `BackendSpec.lightning_qubit()`'s namesake backend
-(used as Cebule TN_QC_OPT's default). This adapter is the missing piece:
-`BackendSpec.lightning_qubit()` described the backend, nothing executed on
-it.
+path), and it's already `BackendSpec.lightning_qubit()`'s namesake backend.
+This adapter is the missing piece: `BackendSpec.lightning_qubit()` described
+the backend, nothing executed on it.
 
 Supports:
   - Statevector expectation values  (circuit.observables populated)
@@ -109,7 +108,7 @@ class PennyLaneLightningAdapter:
             )
 
         # ---- Sampler path ----
-        shots = options.shots or 1024
+        shots = options.require_shots("LightningQubitAdapter")
         dev = qml.device("lightning.qubit", wires=num_qubits)
 
         @qml.qnode(dev)  # type: ignore[untyped-decorator]  # qml.qnode is untyped

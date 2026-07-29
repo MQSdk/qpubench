@@ -1,6 +1,6 @@
 # SlowQuant integration
 
-qpubench models the full [SlowQuant](https://github.com/erikkjellgren/SlowQuant) quantum chemistry workflow in `src/qpubench/schemas/erikkjellgren_slowquant.py`.
+qpubench models the full [SlowQuant](https://github.com/erikkjellgren/SlowQuant) quantum chemistry workflow in `src/qpubench/schemas/mirrors/erikkjellgren_slowquant.py`.
 
 | Component | Details |
 |---|---|
@@ -16,7 +16,7 @@ SlowQuant specializes in **unitary parameterized wave functions** — UCC, facto
 ## Quick start
 
 ```python
-from qpubench.schemas.erikkjellgren_slowquant import (
+from qpubench.schemas.mirrors.erikkjellgren_slowquant import (
     UCCAnsatzType, UCCExcitationLevel, UCCOptimizationMethod,
     UCCActiveSpaceConfig, UCCWavefunctionConfig,
     UCCSCFResult, UCCOptimizationResult,
@@ -79,7 +79,7 @@ result = QuantumResult(
 `UCCActiveSpaceConfig` maps directly to SlowQuant's `cas=[n_active_elec, n_active_orb]` argument and the `include_active_kappa` orbital optimization flag.
 
 ```python
-from qpubench.schemas.erikkjellgren_slowquant import UCCActiveSpaceConfig
+from qpubench.schemas.mirrors.erikkjellgren_slowquant import UCCActiveSpaceConfig
 
 # Full-valence active space for LiH
 active = UCCActiveSpaceConfig(
@@ -117,7 +117,7 @@ print(active.num_qubits)   # 10  (= 2 × 5 orbitals)
 | `saups` | `WaveFunctionUPS` (state-averaged) | Simultaneous ground + excited state optimization |
 
 ```python
-from qpubench.schemas.erikkjellgren_slowquant import UCCAnsatzType, UCCExcitationLevel, UCCWavefunctionConfig
+from qpubench.schemas.mirrors.erikkjellgren_slowquant import UCCAnsatzType, UCCExcitationLevel, UCCWavefunctionConfig
 
 # Hardware-efficient tUPS ansatz with active orbital rotation
 wf = UCCWavefunctionConfig(
@@ -137,7 +137,7 @@ A key SlowQuant feature: **the θ vector is parameter-compatible** between the c
 ## SCF → UCC workflow
 
 ```python
-from qpubench.schemas.erikkjellgren_slowquant import (
+from qpubench.schemas.mirrors.erikkjellgren_slowquant import (
     UCCIntegralData, UCCSCFResult,
     UCCOptimizationResult, UCCOptimizationMethod,
     UCCIterationRecord, UCCRDMData,
@@ -197,7 +197,7 @@ rdm = UCCRDMData(
 SlowQuant computes excitation energies and transition properties via linear response theory at four levels. The excitation level string controls how many excitation operators enter the response matrix.
 
 ```python
-from qpubench.schemas.erikkjellgren_slowquant import (
+from qpubench.schemas.mirrors.erikkjellgren_slowquant import (
     UCCLinearResponseType, UCCLinearResponseResult, UCCExcitedStateResult,
     UCCExcitationLevel,
 )
@@ -241,7 +241,7 @@ print(lr.oscillator_strengths)      # [0.1321, None, ...]
 ## Quantum circuit metadata
 
 ```python
-from qpubench.schemas.erikkjellgren_slowquant import (
+from qpubench.schemas.mirrors.erikkjellgren_slowquant import (
     UCCCircuitSpec, UCCMeasurementConfig, UCCAnsatzType, UCCExcitationLevel,
 )
 
@@ -298,7 +298,7 @@ SlowQuant groups the qubit Hamiltonian Pauli strings by **qubit-wise commutativi
 ## Complete H2 example
 
 ```python
-from qpubench.schemas.erikkjellgren_slowquant import (
+from qpubench.schemas.mirrors.erikkjellgren_slowquant import (
     UCCAnsatzType, UCCExcitationLevel, UCCOptimizationMethod,
     UCCActiveSpaceConfig, UCCWavefunctionConfig,
     UCCSCFResult, UCCOptimizationResult,

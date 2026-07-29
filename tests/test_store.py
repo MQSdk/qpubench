@@ -195,7 +195,56 @@ def test_s3store_requires_boto3_without_injected_client():
 @pytest.mark.skipif(_boto3_available(), reason="boto3 installed; ImportError guard not exercised")
 def test_s3store_huggingface_requires_boto3():
     with pytest.raises(ImportError, match="boto3"):
-        S3Store.huggingface(
-            "my-bucket", "my-namespace",
-            access_key_id="HFAK...", secret_access_key="secret",
-        )
+        S3Store.huggingface("my-bucket", "my-namespace", region="us-east-1")
+
+
+# ---------------------------------------------------------------------------
+# Credential and region handling (reviewer feedback round 6)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize(
+    "secret_kwarg",
+    ["aws_access_key_id", "aws_secret_access_key", "aws_session_token"],
+)
+def test_s3store_rejects_literal_credentials(secret_kwarg):
+    """Literal AWS keys must never be accepted as constructor arguments."""
+    with pytest.raises(TypeError, match="Refusing literal credentials"):
+        S3Store("my-bucket", **{secret_kwarg: "AKIA-hardcoded-secret"})
+
+
+def test_s3store_huggingface_has_no_credential_parameters():
+    """The HF helper takes no credential arguments at all."""
+    import inspect
+
+    params = inspect.signature(S3Store.huggingface).parameters
+    assert not [p for p in params if "key" in p or "token" in p or "secret" in p]
+
+
+def test_resolve_region_requires_an_explicit_choice(monkeypatch):
+    """No built-in region default: caller or environment must name one."""
+    from qpubench.store import _resolve_region
+
+    monkeypatch.delenv("AWS_REGION", raising=False)
+    monkeypatch.delenv("AWS_DEFAULT_REGION", raising=False)
+    with pytest.raises(ValueError, match="No region configured"):
+        _resolve_region(None)
+
+    monkeypatch.setenv("AWS_REGION", "eu-north-1")
+    assert _resolve_region(None) == "eu-north-1"
+    assert _resolve_region("us-west-2") == "us-west-2"
+
+
+def test_records_written_before_the_rename_still_load(tmp_path):
+    """Old NDJSON records carrying a bare `schema_version` key still validate."""
+    record = _minimal_record()
+    payload = record.model_dump(mode="json")
+    payload["schema_version"] = payload.pop("qpubench_schema_version")
+
+    import json
+
+    path = tmp_path / "legacy.ndjson"
+    path.write_text(json.dumps(payload) + "\n", encoding="utf-8")
+
+    restored = NDJSONStore(path).all()
+    assert len(restored) == 1
+    assert restored[0].qpubench_schema_version == record.qpubench_schema_version

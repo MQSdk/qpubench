@@ -1,6 +1,6 @@
 # Photonic integration
 
-qpubench models linear-optics photonic chips and Fusion-Based QC (FBQC) in `src/qpubench/schemas/mqsdk_photoq.py` (the LOQC/FBQC section). This is **permanent-based simulation** using Fock states — distinct from the Gaussian-state / hafnian-based GBS section of the same module.
+qpubench models linear-optics photonic chips and Fusion-Based QC (FBQC) in `src/qpubench/schemas/mirrors/mqsdk_photoq.py` (the LOQC/FBQC section). This is **permanent-based simulation** using Fock states — distinct from the Gaussian-state / hafnian-based GBS section of the same module.
 
 Computing model: `ComputingModel.GATE_BASED` (MZI chips, boson sampling — LOQC circuits) and `ComputingModel.FUSION_BASED` (FBQC with resource states + fusion gates). Qubit modality: `QubitModality.PHOTONIC` in both cases.
 
@@ -11,7 +11,7 @@ Computing model: `ComputingModel.GATE_BASED` (MZI chips, boson sampling — LOQC
 ## Photonic circuit simulation
 
 ```python
-from qpubench.schemas.mqsdk_photoq import (
+from qpubench.schemas.mirrors.mqsdk_photoq import (
     BeamsplitterSpec, MZISpec, PhaseShifterSpec,
     FockState, PhotonicCircuitSpec, PhotonicSimulationResult,
     PICPlatform, PhotonicChipArchitecture,
@@ -47,7 +47,7 @@ backend = BackendSpec.photochipsim(num_modes=4)
 ## Single-photon sources
 
 ```python
-from qpubench.schemas.mqsdk_photoq import SinglePhotonSourceSpec, PhotonSourceType
+from qpubench.schemas.mirrors.mqsdk_photoq import SinglePhotonSourceSpec, PhotonSourceType
 
 source = SinglePhotonSourceSpec(
     platform=PhotonSourceType.QUANTUM_DOT,
@@ -64,7 +64,7 @@ source = SinglePhotonSourceSpec(
 ## Hong-Ou-Mandel interference
 
 ```python
-from qpubench.schemas.mqsdk_photoq import (
+from qpubench.schemas.mirrors.mqsdk_photoq import (
     HOMSpec, HOMResult, BeamsplitterSpec, SinglePhotonSourceSpec,
 )
 
@@ -90,7 +90,7 @@ Store in `QuantumResult.hom_result`.
 ## Photon indistinguishability purification
 
 ```python
-from qpubench.schemas.mqsdk_photoq import (
+from qpubench.schemas.mirrors.mqsdk_photoq import (
     IndistinguishabilityPurificationSpec,
     IndistinguishabilityPurificationResult,
 )
@@ -117,7 +117,7 @@ Store in `QuantumResult.indist_purification`.
 Variational optimization over a photonic linear-optics ansatz:
 
 ```python
-from qpubench.schemas.mqsdk_photoq import PhotonicVQEConfig, PhotonicVQEStep, PhotonicVQEResult
+from qpubench.schemas.mirrors.mqsdk_photoq import PhotonicVQEConfig, PhotonicVQEStep, PhotonicVQEResult
 
 config = PhotonicVQEConfig(
     num_modes=6,
@@ -147,7 +147,7 @@ Store in `QuantumResult.photonic_vqe`.
 ## Sobol sensitivity analysis
 
 ```python
-from qpubench.schemas.mqsdk_photoq import PhotonicSensitivityAnalysis, SobolParameterResult
+from qpubench.schemas.mirrors.mqsdk_photoq import PhotonicSensitivityAnalysis, SobolParameterResult
 
 analysis = PhotonicSensitivityAnalysis(
     num_modes=6,
@@ -168,7 +168,7 @@ Store in `QuantumResult.photonic_sensitivity`.
 ## FBQC (Fusion-Based QC)
 
 ```python
-from qpubench.schemas.mqsdk_photoq import (
+from qpubench.schemas.mirrors.mqsdk_photoq import (
     ResourceStateSpec, ResourceStateType,
     FusionGateSpec, FusionType, FBQCRunConfig,
 )
@@ -199,7 +199,7 @@ fbqc_config = FBQCRunConfig(
 Simulates tight-binding propagation on a photonic waveguide array:
 
 ```python
-from qpubench.schemas.mqsdk_photoq import (
+from qpubench.schemas.mirrors.mqsdk_photoq import (
     PhotonicAnalogHamiltonian, PhotonicAnalogSimConfig, PhotonicAnalogSimResult,
     FockState,
 )

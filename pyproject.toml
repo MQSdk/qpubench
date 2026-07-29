@@ -45,7 +45,7 @@ Repository    = "https://github.com/mqsdk/qpubench"
 #   poetry add "qpubench[qiskit]"
 [project.optional-dependencies]
 qiskit  = ["qiskit>=2.0", "qiskit-aer", "qiskit-ibm-runtime", "qiskit-nature>=0.7", "qiskit_qasm3_import"]
-qrack   = ["pyqrack"]
+qrack   = ["pyqrack", "qiskit>=2.0", "qiskit_qasm3_import"]   # Qrack simulator adapter (backends/qrack_adapter.py) — PyQrack has no QASM parser, so qiskit loads the CircuitSpec and QrackCircuit.in_from_qiskit_circuit() lowers it
 braket  = ["amazon-braket-sdk", "qiskit-braket-provider"]   # generic gate-based AWS Braket adapter (backends/braket_adapter.py)
 iqm     = ["iqm-client[qiskit]"]   # IQM hardware adapter (backends/iqm_adapter.py) — standalone qiskit-iqm is obsolete, bundled here instead
 quantinuum = ["pytket-quantinuum", "pytket-qiskit"]   # Quantinuum H-Series adapter (backends/quantinuum_adapter.py) — pytket-qiskit converts the CircuitSpec QASM to a pytket Circuit
@@ -55,6 +55,7 @@ mitiq   = ["mitiq", "ply"]   # Mitiq ZNE error-mitigation adapter (backends/unit
 pyscf   = ["pyscf"]   # mean-field/DFT, PCM/COSMO solvation, periodic pbc — schemas/pyscf_pyscf.py
 hamlib  = ["h5py", "requests"]   # HamLib Chemistry loader (hamiltonian_sources/hamlib.py)
 bse     = ["basis_set_exchange"]   # Basis Set Exchange basis-function-count loader (hamiltonian_sources/basis_set_exchange.py)
+qubo    = ["requests"]   # QUBO Hamiltonian loaders (hamiltonian_sources/qubo.py) — OR-Library + MQLib downloads
 qvszp   = ["requests"]   # q-vSZP basis-set downloader/parser, no ORCA needed (hamiltonian_sources/qvszp.py)
 pennylane = ["pennylane", "pennylane-qiskit", "aiohttp", "fsspec", "h5py"]   # PennyLane qchem dataset loader (hamiltonian_sources/pennylane_qchem.py) + lightning.qubit BackendAdapter (backends/pennylane_lightning_adapter.py, ships with pennylane; pennylane-qiskit loads the CircuitSpec's QASM)
 openfermion = ["openfermion", "openfermionpyscf", "pyscf"]   # ab initio Hamiltonian construction (hamiltonian_sources/ab_initio.py)
@@ -74,6 +75,7 @@ adapt_vqe = ["scipy", "numpy"]
 kubeflow = ["kfp>=2.0", "kfp-kubernetes"]
 all     = [
     "qiskit>=2.0", "qiskit-aer", "qiskit-ibm-runtime", "qiskit-nature>=0.7", "qiskit_qasm3_import",
+    "pyqrack",
     "amazon-braket-sdk", "qiskit-braket-provider",
     "iqm-client[qiskit]",
     "pytket-quantinuum", "pytket-qiskit",
@@ -83,6 +85,7 @@ all     = [
     "pyscf",
     "h5py", "requests",
     "basis_set_exchange",
+    "requests",
     "pennylane", "pennylane-qiskit", "aiohttp", "fsspec",
     "openfermion", "openfermionpyscf",
     "quimb", "cotengra",
@@ -160,6 +163,7 @@ module = [
     "pandas.*",
     "pennylane.*",
     "pyarrow.*",
+    "pyqrack.*",
     "pyscf.*",
     "pytket.*",
     "qibo.*",
