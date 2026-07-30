@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="{{ site.lang | default: 'en' }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#22043B">
+{% seo %}
+<link rel="icon" type="image/svg+xml" href="{{ '/assets/mark.svg' | relative_url }}">
+<link rel="preload" href="{{ '/assets/fonts/IBMPlexSans-Regular.woff2' | relative_url }}" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="{{ '/assets/fonts/IBMPlexMono-SemiBold.woff2' | relative_url }}" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="{{ '/assets/style.css' | relative_url }}">
+<script>
+/* Set the theme before first paint: stored choice → OS preference → dark. */
+(function () {
+  try {
+    var stored = localStorage.getItem("qpubench-theme-mode");
+    document.documentElement.setAttribute("data-theme",
+      stored === "light" || stored === "dark" ? stored
+        : (window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark"));
+  } catch (e) {
+    document.documentElement.setAttribute("data-theme", "dark");
+  }
+})();
+</script>
+<script src="{{ '/assets/theme.js' | relative_url }}" defer></script>
+</head>
+<body>
+
+<a class="skip" href="#content">Skip to content</a>
+
+{%- comment -%}
+  The header and footer mirror docs/site/index.html by hand. That page is
+  deliberately outside Jekyll — it has to render straight off the filesystem —
+  so the two cannot share an include. Change one, change the other.
+
+  Jekyll renders docs/index.md to index.html and the Pages workflow then moves it
+  to /guide.html, so the Guide entry is current whenever page.url is the root.
+{%- endcomment -%}
+{%- assign current = page.url -%}
+{%- if current == '/' or current == '/index.html' -%}{%- assign current = '/guide.html' -%}{%- endif -%}
+{%- assign nav = 'guide.html,Guide|installation.html,Install|backends.html,Backends|integrations.html,Integrations|schemas.html,Schemas' | split: '|' -%}
+
+<header class="topbar">
+  <div class="wrap topbar-inner">
+    <a class="brand" href="{{ '/' | relative_url }}">
+      <img src="{{ '/assets/mark.svg' | relative_url }}" alt="" width="30" height="30">
+      <span>QPUBench</span>
+    </a>
+    <nav aria-label="Main">
+      {%- for item in nav -%}
+        {%- assign parts = item | split: ',' -%}
+        {%- assign target = parts[0] | prepend: '/' -%}
+        <a href="{{ target | relative_url }}"{% if current == target %} aria-current="page"{% endif %}>{{ parts[1] }}</a>
+      {%- endfor -%}
+    </nav>
+    <div class="bar-right">
+      <button class="theme-toggle" type="button" aria-label="Switch to day view" title="Switch to day view">
+        <svg class="i-moon" viewBox="0 0 32 32" aria-hidden="true"><path d="M13.5 5A11 11 0 0 0 27 18.5 11 11 0 1 1 13.5 5Zm-2.2 3.2a9 9 0 1 0 12.5 12.5A13 13 0 0 1 11.3 8.2Z"/></svg>
+        <svg class="i-sun" viewBox="0 0 32 32" aria-hidden="true"><path d="M16 9a7 7 0 1 0 0 14 7 7 0 0 0 0-14Zm0 2a5 5 0 1 1 0 10 5 5 0 0 1 0-10Zm-1-9h2v5h-2V2Zm0 25h2v5h-2v-5ZM2 15h5v2H2v-2Zm23 0h5v2h-5v-2ZM5.6 7l1.4-1.4 3.5 3.5L9.1 10.5 5.6 7Zm15.9 15.9 1.4-1.4 3.5 3.5-1.4 1.4-3.5-3.5Zm3.5-17.3L26.4 7l-3.5 3.5-1.4-1.4 3.5-3.5ZM7 26.4 5.6 25l3.5-3.5 1.4 1.4L7 26.4Z"/></svg>
+      </button>
+      <a class="btn ghost" href="https://github.com/mqsdk/qpubench" rel="noopener">GitHub&nbsp;↗</a>
+    </div>
+  </div>
+</header>
+
+<main id="content">
+  <article class="prose wrap">
+    {{ content }}
+  </article>
+</main>
+
+<footer class="footer">
+  <div class="wrap footer-inner">
+    <div>
+      <p class="footer-brand"><img src="{{ '/assets/mark.svg' | relative_url }}" alt="" width="22" height="22"> QPUBench</p>
+      <p>Free software under the <a href="https://www.gnu.org/licenses/lgpl-3.0.html" rel="noopener">GNU LGPL v3.0 or later</a>.
+      Not dual-licensed. Use it in proprietary applications; changes to QPUBench itself must be
+      published under the LGPL.</p>
+      <a class="by-mqs" href="https://mqs.dk/" rel="noopener">
+        <img src="{{ '/assets/mqs-mark.png' | relative_url }}" alt="" width="80" height="24">
+        <span>An MQS open-source project</span>
+      </a>
+    </div>
+    <nav aria-label="Footer">
+      <a href="https://github.com/mqsdk/qpubench" rel="noopener">Source</a>
+      <a href="https://github.com/mqsdk/qpubench/issues" rel="noopener">Issues</a>
+      <a href="{{ '/guide.html' | relative_url }}">Guide</a>
+      <a href="{{ '/schemas.html' | relative_url }}">Schemas</a>
+      <a href="https://mqs.dk/" rel="noopener">mqs.dk&nbsp;↗</a>
+    </nav>
+  </div>
+</footer>
+
+</body>
+</html>

@@ -1,44 +1,167 @@
-/* QPUBench landing page — hand-written, no build step, no external requests. */
+/* QPUBench site styles — hand-written, no build step, no external requests.
+ *
+ * The design system is MQS's (see the `webpage` repository, src/themes/):
+ * IBM Plex Mono for headings and data, IBM Plex Sans for prose, deep purple
+ * surfaces, a single orange accent, square edges.
+ *
+ * Themes: light and dark are both explicit. The palette below is selected by
+ * `data-theme` on <html>, which the inline bootstrap script in every page sets
+ * before first paint (stored choice → OS preference → dark). The
+ * prefers-color-scheme blocks are the no-JavaScript fallback.
+ *
+ * This one stylesheet serves the hand-written landing page (docs/site/index.html)
+ * and the Jekyll-rendered Markdown docs (docs/_layouts/default.html). Landing-page
+ * blocks come first; the `.prose` section at the end styles rendered Markdown.
+ */
 
-:root {
-  --bg:        #ffffff;
-  --bg-alt:    #f6f8fb;
-  --bg-sunken: #eef2f8;
-  --fg:        #1c2333;
-  --fg-muted:  #5a6478;
-  --rule:      #dde3ed;
-  --accent:    #2f6fd0;
-  --accent-2:  #1a9a7a;
-  --code-bg:   #10151f;
-  --code-fg:   #d7dEEB;
-  --yes:       #17795e;
-  --no:        #a1443a;
-  --radius:    12px;
-  --wrap:      1120px;
-  --sans: ui-sans-serif, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+/* ---------- fonts (self-hosted, OFL-1.1 — see fonts/LICENSE-IBM-Plex.txt) ---------- */
+
+@font-face {
+  font-family: "IBM Plex Sans";
+  src: url("fonts/IBMPlexSans-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "IBM Plex Sans";
+  src: url("fonts/IBMPlexSans-SemiBold.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  src: url("fonts/IBMPlexMono-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "IBM Plex Mono";
+  src: url("fonts/IBMPlexMono-SemiBold.woff2") format("woff2");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
 }
 
+/* ---------- palette ---------- */
+
+:root {
+  /* MQS ramps, verbatim from src/themes/colors.ts */
+  --purple-950: #22043B;
+  --purple-900: #310754;
+  --purple-800: #4B0D65;
+  --purple-700: #5A116E;
+  --purple-100: #DAB6D6;
+  --purple-50:  #EDE2EE;
+  --orange-900: #A9512F;
+  --orange-700: #D36135;
+  --orange-400: #ED8259;
+  --bluegray-900: #282E38;
+  --bluegray-700: #465161;
+  --bluegray-500: #64748B;
+  --bluegray-200: #BCC3CD;
+  --bluegray-100: #DADEE3;
+  --bluegray-80:  #EFF0F2;
+  --surface-0: #FFFFFF;
+  --surface-300: #E0E0E0;
+
+  --sans: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+
+  --wrap: 1120px;
+  --bar-h: 77px;      /* MQS Toolbar height */
+  --accent: var(--orange-700);
+}
+
+/* Light theme — MQS lightTheme */
+:root,
+:root[data-theme="light"] {
+  --bg:        #F9F9F9;
+  --surface:   var(--surface-0);
+  --surface-2: var(--bluegray-80);
+  --fg:        #1D0038;
+  --fg-muted:  var(--bluegray-700);
+  --rule:      var(--surface-300);
+  --rule-soft: var(--bluegray-80);
+  --link:      var(--orange-900);
+  --overline:  var(--purple-900);
+  --on-accent: var(--surface-0);
+  --btn-solid:     var(--purple-900);
+  --btn-solid-fg:  var(--surface-0);
+  --btn-solid-hover: var(--purple-950);
+  --code-bg:  var(--purple-950);
+  --code-fg:  var(--purple-50);
+  --code-chrome: var(--bluegray-80);
+  --strip:       var(--bluegray-80);
+  --yes: #007B3D;
+  --no:  #C62828;
+  --shadow: none;
+}
+
+/* Dark theme — MQS darkTheme */
+:root[data-theme="dark"] {
+  --bg:        var(--purple-950);
+  --surface:   var(--purple-900);
+  --surface-2: var(--purple-800);
+  --fg:        var(--surface-0);
+  --fg-muted:  var(--bluegray-200);
+  --rule:      var(--purple-900);
+  --rule-soft: var(--purple-900);
+  --link:      var(--orange-400);
+  --overline:  var(--bluegray-200);
+  --on-accent: var(--surface-0);
+  --btn-solid:     var(--surface-0);
+  --btn-solid-fg:  var(--purple-950);
+  --btn-solid-hover: var(--bluegray-100);
+  --code-bg:  #180229;
+  --code-fg:  var(--purple-50);
+  --code-chrome: var(--purple-900);
+  --strip:       var(--purple-950);
+  --yes: #6CC68E;
+  --no:  #E57373;
+  --shadow: 12px 25px 25px rgba(0, 0, 0, 0.25);
+}
+
+/* No-JavaScript fallback: follow the OS. A stored or toggled choice always wins,
+ * because [data-theme] above is more specific than this. */
 @media (prefers-color-scheme: dark) {
-  :root {
-    --bg:        #0e131c;
-    --bg-alt:    #141b27;
-    --bg-sunken: #182131;
-    --fg:        #e6ebf5;
-    --fg-muted:  #98a3b8;
-    --rule:      #263143;
-    --accent:    #79aaf2;
-    --accent-2:  #4fc7a4;
-    --code-bg:   #0a0e16;
-    --code-fg:   #d7deeb;
-    --yes:       #4fc7a4;
-    --no:        #e08a7f;
+  :root:not([data-theme]) {
+    --bg:        var(--purple-950);
+    --surface:   var(--purple-900);
+    --surface-2: var(--purple-800);
+    --fg:        var(--surface-0);
+    --fg-muted:  var(--bluegray-200);
+    --rule:      var(--purple-900);
+    --rule-soft: var(--purple-900);
+    --link:      var(--orange-400);
+    --overline:  var(--bluegray-200);
+    --btn-solid:     var(--surface-0);
+    --btn-solid-fg:  var(--purple-950);
+    --btn-solid-hover: var(--bluegray-100);
+    --code-bg:  #180229;
+    --code-chrome: var(--purple-900);
+    --strip:       var(--purple-950);
+    --yes: #6CC68E;
+    --no:  #E57373;
+    --shadow: 12px 25px 25px rgba(0, 0, 0, 0.25);
   }
 }
 
+/* Dark tiles / form controls / scrollbars follow the active theme, not the OS. */
+:root[data-theme="dark"] { color-scheme: dark; }
+:root[data-theme="light"] { color-scheme: light; }
+
+/* ---------- base ---------- */
+
 * { box-sizing: border-box; }
 
-html { scroll-behavior: smooth; }
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: calc(var(--bar-h) + 12px);
+  -webkit-text-size-adjust: 100%;
+}
 
 body {
   margin: 0;
@@ -46,160 +169,286 @@ body {
   color: var(--fg);
   font-family: var(--sans);
   font-size: 16px;
-  line-height: 1.65;
-  -webkit-text-size-adjust: 100%;
+  line-height: 1.6;
+  overflow-x: hidden;
 }
 
 .wrap { max-width: var(--wrap); margin-inline: auto; padding-inline: 24px; }
 
-a { color: var(--accent); text-decoration: none; }
-a:hover { text-decoration: underline; }
+a { color: var(--link); text-decoration: none; }
+a:hover {
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 4px;
+}
+
+:where(a, button, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--mono);
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  margin: 0 0 0.5em;
+}
+h1 { font-weight: 400; }
+h2 { font-size: 1.75rem; }
+h3 { font-size: 1.1rem; }
 
 code {
   font-family: var(--mono);
   font-size: 0.875em;
-  background: var(--bg-sunken);
-  border-radius: 5px;
+  background: var(--surface-2);
   padding: 0.1em 0.36em;
 }
 
-h1, h2, h3 { line-height: 1.25; letter-spacing: -0.015em; margin: 0 0 0.5em; }
-h2 { font-size: 1.55rem; }
-h3 { font-size: 1.05rem; }
+hr { border: 0; border-top: 1px solid var(--rule); margin: 40px 0; }
 
 .skip {
   position: absolute; left: -9999px;
-  background: var(--accent); color: #fff; padding: 10px 16px; border-radius: 0 0 8px 0;
+  background: var(--accent); color: var(--on-accent);
+  padding: 10px 16px; font-family: var(--mono); font-size: 0.9rem;
 }
 .skip:focus { left: 0; top: 0; z-index: 100; }
+
+/* An MQS signature: headline word in a contrast → orange gradient. */
+.grad {
+  font-weight: 600;
+  background: linear-gradient(to right, var(--fg), var(--accent));
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+
+/* Uppercase mono overline, used above section titles. */
+.eyebrow, .overline {
+  margin: 0 0 12px;
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  font-weight: 400;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--overline);
+}
 
 /* ---------- top bar ---------- */
 
 .topbar {
   position: sticky; top: 0; z-index: 50;
-  background: color-mix(in srgb, var(--bg) 88%, transparent);
-  backdrop-filter: blur(10px);
-  border-bottom: 1px solid var(--rule);
+  background: var(--bg);
+  border-bottom: 1px solid var(--rule-soft);
 }
 .topbar-inner {
   display: flex; align-items: center; justify-content: space-between;
-  gap: 20px; min-height: 58px; flex-wrap: wrap;
+  gap: 20px; min-height: var(--bar-h); flex-wrap: wrap;
 }
 .brand {
-  display: inline-flex; align-items: center; gap: 9px;
-  font-weight: 700; font-size: 1.05rem; color: var(--fg);
+  display: inline-flex; align-items: center; gap: 10px;
+  font-family: var(--mono); font-weight: 600; font-size: 1.05rem;
+  letter-spacing: -0.02em; color: var(--fg);
 }
 .brand:hover { text-decoration: none; }
-.topbar nav { display: flex; gap: 4px; flex-wrap: wrap; }
+
+.topbar nav { display: flex; align-items: center; gap: 26px; flex-wrap: wrap; }
 .topbar nav a {
-  padding: 6px 11px; border-radius: 8px;
-  color: var(--fg-muted); font-size: 0.92rem; font-weight: 500;
+  font-size: 0.95rem; font-weight: 400; color: var(--fg);
 }
-.topbar nav a:hover { background: var(--bg-sunken); color: var(--fg); text-decoration: none; }
-.topbar nav a.ghost { border: 1px solid var(--rule); }
+.topbar nav a[aria-current="page"] {
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 6px;
+}
+.topbar nav a:hover, .topbar nav a:focus {
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 6px;
+}
+
+.bar-right { display: flex; align-items: center; gap: 12px; }
+
+.theme-toggle {
+  display: inline-grid; place-items: center;
+  width: 40px; height: 40px; padding: 0;
+  background: none; border: 0; border-radius: 50%;
+  color: var(--fg); cursor: pointer;
+}
+.theme-toggle:hover { background: var(--surface-2); }
+.theme-toggle svg { width: 20px; height: 20px; fill: currentColor; }
+/* Show the theme you would switch *to* — moon while light, sun while dark. */
+.theme-toggle .i-sun { display: none; }
+:root[data-theme="dark"] .theme-toggle .i-sun  { display: block; }
+:root[data-theme="dark"] .theme-toggle .i-moon { display: none; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .theme-toggle .i-sun  { display: block; }
+  :root:not([data-theme]) .theme-toggle .i-moon { display: none; }
+}
+
+/* ---------- buttons (MQS: square, mono-adjacent, one orange accent) ---------- */
+
+.btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 10px 22px;
+  border: 1px solid var(--fg); border-radius: 0;
+  font-family: var(--sans); font-size: 0.95rem; font-weight: 500;
+  letter-spacing: 0.03em;
+  color: var(--fg); background: transparent;
+  cursor: pointer;
+  transition: background-color .14s ease, border-color .14s ease, color .14s ease;
+}
+.btn:hover { text-decoration: none; border-color: var(--accent); color: var(--accent); }
+
+.btn.primary {
+  background: var(--accent); border-color: var(--accent); color: var(--on-accent);
+}
+.btn.primary:hover {
+  background: var(--orange-900); border-color: var(--orange-900); color: var(--on-accent);
+}
+
+.btn.solid {
+  background: var(--btn-solid); border-color: var(--btn-solid); color: var(--btn-solid-fg);
+}
+.btn.solid:hover {
+  background: var(--btn-solid-hover); border-color: var(--btn-solid-hover); color: var(--btn-solid-fg);
+}
+
+.btn.ghost { border-color: var(--rule); }
 
 /* ---------- hero ---------- */
 
-.hero {
-  background: linear-gradient(180deg, var(--bg-alt), var(--bg));
-  border-bottom: 1px solid var(--rule);
-  padding: 56px 0 60px;
-}
+.hero { padding: 72px 0 76px; border-bottom: 1px solid var(--rule-soft); }
 .hero-inner {
   display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
-  gap: 48px; align-items: start;
+  gap: 48px; align-items: center;
 }
-.eyebrow {
-  margin: 0 0 12px; font-size: 0.78rem; font-weight: 600;
-  letter-spacing: 0.09em; text-transform: uppercase; color: var(--accent-2);
-}
+/* Without this the column's automatic minimum is the code block's min-content —
+ * a long source line then pushes the whole page wider than a phone screen, and
+ * `overflow-x: hidden` on body quietly clips the text instead of scrolling it. */
+.hero-inner > * { min-width: 0; }
 .hero h1 {
-  font-size: clamp(1.8rem, 3.2vw, 2.45rem);
-  margin-bottom: 18px; text-wrap: balance;
+  font-size: clamp(1.9rem, 3.4vw, 2.6rem);
+  line-height: 1.2;
+  margin-bottom: 20px;
+  text-wrap: balance;
 }
-.lede { font-size: 1.05rem; color: var(--fg-muted); margin: 0 0 24px; max-width: 60ch; }
-.lede strong { color: var(--fg); }
+.lede {
+  font-size: 1.05rem; line-height: 1.5;
+  color: var(--fg-muted); margin: 0 0 28px; max-width: 62ch;
+}
+.lede strong { color: var(--fg); font-weight: 600; }
 
-.hero-actions { display: flex; gap: 10px; flex-wrap: wrap; margin: 0 0 24px; }
-.btn {
-  display: inline-block; padding: 9px 18px; border-radius: 9px;
-  border: 1px solid var(--rule); font-weight: 600; font-size: 0.94rem;
-  color: var(--fg); background: var(--bg);
-}
-.btn:hover { border-color: var(--accent); text-decoration: none; }
-.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-.btn.primary:hover { filter: brightness(1.08); }
-@media (prefers-color-scheme: dark) { .btn.primary { color: #0e131c; } }
+.hero-actions { display: flex; gap: 16px; flex-wrap: wrap; margin: 0 0 36px; }
 
-.badges { list-style: none; display: flex; flex-wrap: wrap; gap: 8px; padding: 0; margin: 0; }
-.badges li {
-  font-size: 0.78rem; color: var(--fg-muted);
-  border: 1px solid var(--rule); border-radius: 999px; padding: 3px 11px;
+/* MQS hero stat blocks: mono value over an uppercase label. */
+.stats {
+  list-style: none; margin: 0; padding: 0;
+  display: grid; gap: 20px 28px;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
 }
-.badges code { background: none; padding: 0; font-size: 0.95em; }
+.stats li {
+  font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--fg-muted);
+}
+.stats b {
+  display: block; margin-bottom: 4px;
+  font-size: 1.35rem; font-weight: 500; letter-spacing: -0.01em;
+  text-transform: none; color: var(--fg);
+}
 
 /* ---------- code ---------- */
 
-.hero-code { border-radius: var(--radius); overflow: hidden; border: 1px solid var(--rule); }
+.hero-code { border: 1px solid var(--rule); box-shadow: var(--shadow); }
 .code-head {
   display: flex; align-items: center; gap: 7px;
-  background: var(--bg-sunken); padding: 9px 14px; border-bottom: 1px solid var(--rule);
+  background: var(--code-chrome); padding: 10px 14px; border-bottom: 1px solid var(--rule);
 }
-.dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
-.dot.r { background: #e0705f; } .dot.y { background: #dfb04b; } .dot.g { background: #56ac72; }
-.code-title { margin-left: 6px; font-family: var(--mono); font-size: 0.78rem; color: var(--fg-muted); }
+.dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+.dot.r { background: var(--orange-700); }
+.dot.y { background: var(--purple-100); }
+.dot.g { background: var(--bluegray-500); }
+.code-title {
+  margin-left: 6px; font-family: var(--mono); font-size: 0.78rem;
+  color: var(--fg-muted);
+}
 
 pre {
   margin: 0; background: var(--code-bg); color: var(--code-fg);
-  padding: 18px 20px; overflow-x: auto;
+  padding: 20px 22px; overflow-x: auto;
   font-family: var(--mono); font-size: 0.83rem; line-height: 1.7;
+  tab-size: 4;
 }
 pre code { background: none; padding: 0; font-size: inherit; color: inherit; }
-pre .k { color: #c98bdc; }   /* keyword */
-pre .t { color: #6cc4f5; }   /* type / class */
-pre .s { color: #97d68a; }   /* string */
-pre .n { color: #e8b473; }   /* number */
-pre .c { color: #7b8699; font-style: italic; }
-pre .d { color: #e0c25c; }   /* decorator */
+
+/* One syntax palette for the whole site. The short class names are the ones the
+ * landing page marks up by hand; the rest are Rouge's, which is what Jekyll emits
+ * for fenced blocks in the Markdown docs. */
+pre .k, pre .kc, pre .kd, pre .kn, pre .kp, pre .kr, pre .kt, pre .ow {
+  color: #C58BE0;            /* keyword */
+}
+pre .t, pre .nc, pre .nb, pre .nf, pre .nn, pre .no, pre .nt, pre .ne, pre .bp {
+  color: #7FD3F5;            /* type, class, builtin, tag */
+}
+pre .s, pre .s1, pre .s2, pre .sb, pre .sc, pre .sd, pre .se, pre .sh,
+pre .si, pre .sr, pre .ss, pre .sx, pre .dl {
+  color: #8FD6A5;            /* string */
+}
+pre .m, pre .mb, pre .mf, pre .mh, pre .mi, pre .mo, pre .il {
+  color: #F0A87E;            /* number */
+}
+pre .c, pre .c1, pre .cd, pre .ch, pre .cm, pre .cp, pre .cpf, pre .cs {
+  color: #A995C0; font-style: italic;
+}
+pre .d, pre .nd, pre .na { color: #E8C86A; }   /* decorator, attribute */
+pre .gd, pre .err { color: #E57373; }
+pre .gi { color: #8FD6A5; }
+pre .gh, pre .gu, pre .gs { color: var(--code-fg); font-weight: 600; }
+pre .ge { font-style: italic; }
+pre .gp { color: #A995C0; }
 
 .code-foot {
-  margin: 0; padding: 12px 16px; font-size: 0.84rem; color: var(--fg-muted);
-  background: var(--bg-sunken); border-top: 1px solid var(--rule);
+  margin: 0; padding: 14px 16px; font-size: 0.88rem; color: var(--fg-muted);
+  background: var(--code-chrome); border-top: 1px solid var(--rule);
 }
-.wide-code { border-radius: var(--radius); border: 1px solid var(--rule); }
+.wide-code { border: 1px solid var(--rule); }
 
 /* ---------- generic sections ---------- */
 
-section.wrap { padding: 56px 24px; }
-.section-lede { color: var(--fg-muted); max-width: 78ch; margin: 0 0 28px; }
+/* mqs.dk keeps one flat background throughout and separates sections with hairline
+ * rules rather than alternating bands — so do we. */
+section.wrap { padding: 72px 24px; }
+section.wrap + section.wrap { border-top: 1px solid var(--rule-soft); }
+.section-lede { color: var(--fg-muted); max-width: 78ch; margin: 0 0 32px; }
 
 /* ---------- three ideas ---------- */
 
-.card-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
+.card-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; }
 .card {
-  position: relative; padding: 22px 22px 20px;
-  border: 1px solid var(--rule); border-radius: var(--radius); background: var(--bg-alt);
+  display: flex; flex-direction: column;
+  padding: 26px 24px 22px;
+  border: 1px solid var(--rule); background: var(--surface);
 }
 .card-num {
-  display: inline-grid; place-items: center; width: 26px; height: 26px;
-  border-radius: 8px; background: var(--accent); color: #fff;
-  font-size: 0.8rem; font-weight: 700; margin-bottom: 10px;
+  display: inline-grid; place-items: center; width: 28px; height: 28px;
+  background: var(--accent); color: var(--on-accent);
+  font-family: var(--mono); font-size: 0.85rem; font-weight: 600;
+  margin-bottom: 14px;
 }
-@media (prefers-color-scheme: dark) { .card-num { color: #0e131c; } }
-.card p { color: var(--fg-muted); font-size: 0.93rem; margin: 0 0 14px; }
-.card h3 em { font-style: italic; color: var(--accent-2); }
-.card > a { font-size: 0.9rem; font-weight: 600; }
+.card p { color: var(--fg-muted); font-size: 0.95rem; margin: 0 0 18px; }
+.card h3 em { font-style: normal; color: var(--accent); }
+.card > a { margin-top: auto; font-family: var(--mono); font-size: 0.85rem; font-weight: 600; }
 
 /* ---------- logo grid ---------- */
 
-.packages { background: var(--bg-alt); max-width: none; }
-.packages > * { max-width: var(--wrap); margin-inline: auto; }
-.logo-band { margin: 0 0 40px; max-width: var(--wrap); }
+.logo-band { margin: 0 0 48px; }
 .logo-band h3 {
-  font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.09em;
-  color: var(--accent-2); margin-bottom: 6px;
+  font-family: var(--mono); font-size: 0.78rem; font-weight: 400;
+  text-transform: uppercase; letter-spacing: 0.1em;
+  color: var(--overline); margin-bottom: 8px;
 }
-.band-blurb { color: var(--fg-muted); font-size: 0.9rem; margin: 0 0 18px; max-width: 82ch; }
+.band-blurb { color: var(--fg-muted); font-size: 0.93rem; margin: 0 0 20px; max-width: 82ch; }
 
 .logo-grid {
   list-style: none; padding: 0; margin: 0;
@@ -208,85 +457,239 @@ section.wrap { padding: 56px 24px; }
 }
 .logo-cell {
   position: relative;
-  border: 1px solid var(--rule); border-radius: var(--radius);
-  background: var(--bg); overflow: hidden;
+  border: 1px solid var(--rule); background: var(--surface);
+  overflow: hidden;
   transition: border-color .14s ease, transform .14s ease;
 }
 .logo-cell:hover { border-color: var(--accent); transform: translateY(-2px); }
-.logo-link { display: block; padding: 10px 12px 12px; color: inherit; }
+.logo-link { display: block; padding: 14px 16px 14px; color: inherit; }
 .logo-link:hover { text-decoration: none; }
-.logo-link img { display: block; width: 100%; height: auto; max-width: 232px; }
+
+/* Generated tiles are single-ink silhouettes tinted through a CSS mask, so they
+ * follow the active theme (an <img> could not — it cannot see [data-theme]) and
+ * pick up the accent on hover.
+ *
+ * `mask-image` itself is declared inline on each cell by tools/make_logos.py, not
+ * here: routing the URL through a custom property makes Chrome resolve it against
+ * *this stylesheet* (/assets/) instead of the document, which silently 404s every
+ * tile. Declared in the element's style attribute it resolves against the document
+ * in every engine, which keeps the paths relative. */
+.logo-mark {
+  display: block; width: 100%; max-width: 232px;
+  aspect-ratio: 232 / 64;
+  -webkit-mask-position: left center;
+          mask-position: left center;
+  -webkit-mask-size: contain;
+          mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+          mask-repeat: no-repeat;
+  transition: background-color .14s ease;
+}
+
+/* The ink only appears where masking works; without it the cell stays empty
+ * rather than showing a solid block. Muted at rest and accented on hover, which
+ * is how mqs.dk treats the partner logos it greyscales. */
+@supports ((mask-image: url("t.svg")) or (-webkit-mask-image: url("t.svg"))) {
+  .logo-mark { background-color: var(--fg-muted); }
+  .logo-cell:hover .logo-mark { background-color: var(--accent); }
+}
+
+/* Hand-supplied artwork is a real logo — never tinted. Greyscale it in dark mode
+ * and darken it in light mode, the way mqs.dk treats partner logos. */
+.logo-art { display: block; width: 100%; height: auto; max-width: 232px; }
+:root[data-theme="light"] .logo-art { filter: brightness(0%); }
+:root[data-theme="dark"] .logo-art { filter: grayscale(100%) brightness(150%) contrast(90%); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .logo-art { filter: grayscale(100%) brightness(150%) contrast(90%); }
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) .logo-art { filter: brightness(0%); }
+}
+
 .logo-note {
-  display: block; margin-top: 2px; padding-left: 4px;
-  font-size: 0.775rem; color: var(--fg-muted); line-height: 1.45;
+  display: block; margin-top: 8px;
+  font-size: 0.8rem; color: var(--fg-muted); line-height: 1.45;
 }
 .logo-up {
-  display: block; padding: 6px 16px; font-size: 0.72rem;
-  color: var(--fg-muted); border-top: 1px solid var(--rule); background: var(--bg-sunken);
+  display: block; padding: 7px 16px;
+  font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.04em;
+  color: var(--fg-muted); border-top: 1px solid var(--rule-soft); background: var(--strip);
 }
 .logo-up:hover { color: var(--accent); text-decoration: none; }
-.grid-note { font-size: 0.82rem; color: var(--fg-muted); margin: 0; }
+.grid-note { font-size: 0.85rem; color: var(--fg-muted); margin: 0; }
 
 /* ---------- scope ---------- */
 
-.scope-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 32px; }
-.scope-grid h3 { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.09em; }
+.scope-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 40px; }
+.scope-grid h3 {
+  font-family: var(--mono); font-size: 0.78rem; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.1em;
+}
 .scope-grid h3.yes { color: var(--yes); }
 .scope-grid h3.no { color: var(--no); }
 .scope-grid ul { margin: 0; padding-left: 1.1em; }
-.scope-grid li { margin-bottom: 10px; color: var(--fg-muted); font-size: 0.93rem; }
-.scope-grid li strong { color: var(--fg); }
+.scope-grid li { margin-bottom: 12px; color: var(--fg-muted); font-size: 0.95rem; }
+.scope-grid li strong { color: var(--fg); font-weight: 600; }
+
+/* Light mode borrows the dashed-orange emphasis panel from the mqs.dk hero. */
 .caveat {
-  margin: 28px 0 0; padding: 16px 20px;
-  border-left: 3px solid var(--accent-2); background: var(--bg-alt);
-  border-radius: 0 var(--radius) var(--radius) 0;
-  font-size: 0.9rem; color: var(--fg-muted);
+  margin: 36px 0 0; padding: 20px 24px;
+  background: var(--surface); border: 2px dashed var(--accent);
+  font-size: 0.93rem; color: var(--fg-muted);
 }
-.caveat strong { color: var(--fg); }
+:root[data-theme="dark"] .caveat {
+  border: 1px solid var(--rule); border-left: 3px solid var(--accent);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .caveat {
+    border: 1px solid var(--rule); border-left: 3px solid var(--accent);
+  }
+}
+.caveat strong { color: var(--fg); font-weight: 600; }
 
 /* ---------- contents ---------- */
 
-.contents { background: var(--bg-alt); max-width: none; }
-.contents > * { max-width: var(--wrap); margin-inline: auto; }
-.toc-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 26px; }
+.toc-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 28px; }
 .toc-col h3 {
-  font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.09em;
-  color: var(--accent-2); margin-bottom: 10px;
+  font-family: var(--mono); font-size: 0.78rem; font-weight: 400;
+  text-transform: uppercase; letter-spacing: 0.1em;
+  color: var(--overline); margin-bottom: 12px;
 }
 .toc-col ul { list-style: none; margin: 0; padding: 0; }
-.toc-col li { margin-bottom: 9px; font-size: 0.9rem; color: var(--fg-muted); line-height: 1.5; }
+.toc-col li { margin-bottom: 10px; font-size: 0.92rem; color: var(--fg-muted); line-height: 1.5; }
+/* A column of links needs no colour to be recognisable — mqs.dk keeps these in
+ * the text colour and saves the accent for hover. */
+.toc-col a, .footer nav a { color: var(--fg); }
+.toc-col a:hover, .footer nav a:hover { color: var(--accent); }
 
 /* ---------- footer ---------- */
 
-.footer { border-top: 1px solid var(--rule); padding: 34px 0; background: var(--bg); }
+.footer { border-top: 1px solid var(--rule-soft); padding: 48px 0 40px; background: var(--bg); }
 .footer-inner {
-  display: flex; justify-content: space-between; gap: 32px; flex-wrap: wrap;
+  display: flex; justify-content: space-between; gap: 40px; flex-wrap: wrap;
   align-items: flex-start;
 }
-.footer p { margin: 0 0 8px; font-size: 0.85rem; color: var(--fg-muted); max-width: 62ch; }
+.footer p { margin: 0 0 10px; font-size: 0.87rem; color: var(--fg-muted); max-width: 62ch; }
 .footer-brand {
-  display: flex; align-items: center; gap: 8px;
-  font-weight: 700; color: var(--fg) !important; font-size: 0.95rem !important;
+  display: flex; align-items: center; gap: 9px;
+  font-family: var(--mono); font-weight: 600;
+  color: var(--fg) !important; font-size: 0.98rem !important;
 }
-.footer nav { display: flex; flex-direction: column; gap: 7px; font-size: 0.87rem; }
+.footer nav { display: flex; flex-direction: column; gap: 9px; font-size: 0.9rem; }
+
+.by-mqs {
+  display: inline-flex; align-items: center; gap: 10px;
+  margin-top: 18px;
+  font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--fg-muted);
+}
+.by-mqs:hover { text-decoration: none; color: var(--accent); }
+.by-mqs img { height: 24px; width: auto; }
+:root[data-theme="dark"] .by-mqs img { filter: invert(1); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .by-mqs img { filter: invert(1); }
+}
+
+/* ---------- rendered Markdown (Jekyll docs pages) ---------- */
+
+/* jekyll-titles-from-headings lifts each page's first heading into page.title but
+ * leaves it in the body, so the layout renders no separate title band — the h1
+ * below *is* the page heading. */
+.prose { max-width: 82ch; padding: 48px 24px 80px; }
+.prose > :first-child { margin-top: 0; }
+
+.prose h1 { font-size: clamp(1.7rem, 3vw, 2.2rem); font-weight: 400; margin: 0 0 24px; }
+.prose h2 {
+  font-size: 1.5rem; margin: 56px 0 16px;
+  padding-top: 20px; border-top: 1px solid var(--rule-soft);
+}
+/* Several docs already put a `---` above each `##`; don't rule the section twice. */
+.prose hr + h2 { margin-top: 0; padding-top: 0; border-top: 0; }
+.prose h3 { font-size: 1.15rem; margin: 36px 0 12px; }
+.prose h4 {
+  font-size: 0.82rem; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.1em; color: var(--overline); margin: 28px 0 10px;
+}
+.prose p, .prose li { color: var(--fg-muted); }
+.prose p { margin: 0 0 18px; }
+.prose strong { color: var(--fg); font-weight: 600; }
+.prose ul, .prose ol { margin: 0 0 20px; padding-left: 1.3em; }
+.prose li { margin-bottom: 8px; }
+.prose li > ul, .prose li > ol { margin: 8px 0 0; }
+
+.prose pre {
+  margin: 0 0 22px; border: 1px solid var(--rule);
+  font-size: 0.82rem;
+}
+/* Jekyll wraps a fenced block as
+ * div.language-x.highlighter-rouge > div.highlight > pre.highlight > code —
+ * so the frame belongs on the outer div, not on the pre. */
+.prose div.highlighter-rouge, .prose figure.highlight {
+  margin: 0 0 22px; border: 1px solid var(--rule); background: var(--code-bg);
+  overflow: hidden;
+}
+.prose div.highlighter-rouge .highlight,
+.prose figure.highlight .highlight { margin: 0; background: none; }
+.prose div.highlighter-rouge pre, .prose figure.highlight pre {
+  margin: 0; border: 0;
+}
+.prose blockquote {
+  margin: 0 0 22px; padding: 16px 20px;
+  background: var(--surface); border-left: 3px solid var(--accent);
+  color: var(--fg-muted);
+}
+.prose blockquote > :last-child { margin-bottom: 0; }
+
+.prose table {
+  width: 100%; margin: 0 0 24px;
+  border-collapse: collapse; font-size: 0.9rem;
+  display: block; overflow-x: auto;
+}
+.prose th, .prose td {
+  border: 1px solid var(--rule); padding: 9px 13px;
+  text-align: left; vertical-align: top; color: var(--fg-muted);
+}
+.prose th {
+  background: var(--surface-2); color: var(--fg);
+  font-family: var(--mono); font-weight: 600;
+  font-size: 0.82rem; letter-spacing: -0.01em; white-space: nowrap;
+}
+
+.prose img { max-width: 100%; height: auto; }
+.prose hr { margin: 44px 0; }
+.prose code { word-break: break-word; }
 
 /* ---------- responsive ---------- */
 
+@media (max-width: 1040px) {
+  .topbar-inner { min-height: 0; padding-block: 12px; }
+  .topbar nav { gap: 18px; order: 3; width: 100%; }
+}
 @media (max-width: 940px) {
-  .hero-inner { grid-template-columns: 1fr; gap: 34px; }
+  .hero { padding: 48px 0 52px; }
+  .hero-inner { grid-template-columns: minmax(0, 1fr); gap: 36px; }
   .card-row { grid-template-columns: 1fr; }
   .toc-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .scope-grid { grid-template-columns: 1fr; gap: 24px; }
+  .scope-grid { grid-template-columns: 1fr; gap: 28px; }
+  section.wrap { padding: 56px 24px; }
 }
 @media (max-width: 560px) {
   .toc-grid { grid-template-columns: 1fr; }
   .logo-grid { grid-template-columns: 1fr; }
-  section.wrap { padding: 40px 20px; }
-  .hero { padding: 38px 0 42px; }
+  section.wrap { padding: 44px 20px; }
+  .hero { padding: 32px 0 40px; }
+  .hero-actions { gap: 12px; }
+  .stats { gap: 16px 28px; }
+  .prose { padding: 32px 20px 64px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
-  .logo-cell { transition: none; }
+  .logo-cell, .logo-mark, .btn { transition: none; }
   .logo-cell:hover { transform: none; }
+}
+
+@media print {
+  .topbar, .theme-toggle, .skip { display: none; }
+  body { background: #fff; color: #000; }
 }

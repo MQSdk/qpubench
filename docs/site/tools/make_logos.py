@@ -12,6 +12,16 @@ carries no third-party trademarks. To use a real logo instead, drop your own
 in place of the generated file; this script only overwrites files it generated,
 which it marks with a ``data-generated="qpubench"`` attribute on the root.
 
+Each tile is a single-ink silhouette. The page does not render it as an image but
+as a CSS mask tinted with the current text colour (``.logo-mark`` in style.css),
+because an ``<img>`` cannot see the page's ``data-theme`` — the day/night switch
+would leave the tiles behind. Two consequences for anything drawn here:
+
+* every shape must be opaque where ink belongs and absent elsewhere, so the
+  monogram badge is a stroked outline rather than a filled block; and
+* colour inside the tile carries no meaning — the stylesheet supplies it, which
+  is also what turns a tile MQS orange on hover.
+
 Usage:
     python docs/site/tools/make_logos.py            # regenerate everything
     python docs/site/tools/make_logos.py --check    # fail if output is stale
@@ -34,20 +44,23 @@ INVENTORY = SITE / "packages.json"
 
 GENERATED_MARKER = 'data-generated="qpubench"'
 
-# Curated accent palette. Every hue is legible as a solid fill behind white
-# monogram text in both light and dark page backgrounds (contrast >= 4.5:1
-# against #ffffff for the darker end, and the tile never sits on white alone).
-PALETTE = [
-    "#2f6fd0", "#1a9a7a", "#c0562e", "#7048c4", "#0f8ab5",
-    "#a8382f", "#4a7a1e", "#b0722a", "#3d5aa8", "#8a3d86",
-    "#177a94", "#96541f", "#5a6b1f", "#a03a63", "#2a6e5e",
-]
+# The mask is tinted by CSS, so this only has to be opaque. Black keeps the file
+# sensible when opened on its own.
+INK = "#000000"
+
+# IBM Plex Mono is the MQS display face. A tile used as a CSS mask is loaded as an
+# isolated image: it cannot reach the page's @font-face rules, so the stack falls
+# back to whatever monospace the viewer has. Every advance in a monospace face is
+# 0.6em, which is also what MONO_ADVANCE below assumes.
+FONT_STACK = '"IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace'
+MONO_ADVANCE = 0.6
 
 TILE_W = 232
 TILE_H = 64
 BADGE = 44
 BADGE_X = 4
 BADGE_Y = (TILE_H - BADGE) / 2
+BADGE_STROKE = 2
 TEXT_X = BADGE_X + BADGE + 12
 TEXT_MAX = TILE_W - TEXT_X - 6
 
@@ -67,17 +80,10 @@ def monogram(name: str) -> str:
     return name[:2].capitalize()
 
 
-def accent(slug: str, index: int) -> str:
-    """Deterministic colour — stable across runs, spread across the palette."""
-    return PALETTE[(index * 7 + sum(slug.encode())) % len(PALETTE)]
-
-
 def text_width(text: str, size: float) -> float:
-    """Rough advance width for the sans stack. Wide enough to avoid overflow."""
-    narrow = sum(1 for c in text if c in "iljtfrI.,:;'|()[]-")
-    wide = sum(1 for c in text if c in "mwMW@")
-    other = len(text) - narrow - wide
-    return size * (0.30 * narrow + 0.90 * wide + 0.58 * other)
+    """Advance width in a monospace face — exact for the stack in FONT_STACK, and
+    an over-estimate for any proportional fallback, so the text never overflows."""
+    return size * MONO_ADVANCE * len(text)
 
 
 def wrap(name: str, size: float) -> list[str]:
@@ -99,21 +105,22 @@ def wrap(name: str, size: float) -> list[str]:
 
 def fit(name: str) -> tuple[list[str], float]:
     """Largest size in the ladder whose wrapped lines fit the tile."""
-    for size in (15.0, 14.0, 13.0, 12.0, 11.0, 10.0):
+    for size in (14.0, 13.0, 12.0, 11.0, 10.0):
         lines = wrap(name, size)
         if all(text_width(line, size) <= TEXT_MAX for line in lines):
             return lines, size
     return wrap(name, 10.0), 10.0
 
 
-def render_tile(name: str, mono: str, colour: str) -> str:
+def render_tile(name: str, mono: str) -> str:
     lines, size = fit(name)
     leading = size * 1.25
     first_y = TILE_H / 2 + size * 0.35 - (leading * (len(lines) - 1)) / 2
-    mono_size = 19.0 if len(mono) <= 2 else 15.0
+    mono_size = 18.0 if len(mono) <= 2 else 14.0
+    inset = BADGE_STROKE / 2
 
     spans = "\n".join(
-        f'    <text class="wm" x="{TEXT_X}" y="{first_y + i * leading:.1f}" '
+        f'  <text class="wm" x="{TEXT_X}" y="{first_y + i * leading:.1f}" '
         f'font-size="{size:g}">{html.escape(line)}</text>'
         for i, line in enumerate(lines)
     )
@@ -123,19 +130,32 @@ def render_tile(name: str, mono: str, colour: str) -> str:
      role="img" aria-label="{html.escape(name)}">
   <title>{html.escape(name)}</title>
   <style>
-    .wm {{ font-family: ui-sans-serif, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-           font-weight: 600; fill: #1c2333; letter-spacing: -0.01em; }}
-    .mg {{ font-family: ui-sans-serif, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-           font-weight: 700; fill: #ffffff; letter-spacing: -0.02em; }}
-    @media (prefers-color-scheme: dark) {{ .wm {{ fill: #e6ebf5; }} }}
+    text {{ font-family: {FONT_STACK}; fill: {INK}; letter-spacing: -0.02em; }}
+    .wm {{ font-weight: 600; }}
+    .mg {{ font-weight: 600; }}
   </style>
-  <rect x="{BADGE_X}" y="{BADGE_Y:g}" width="{BADGE}" height="{BADGE}" rx="13"
-        fill="{colour}"/>
+  <rect x="{BADGE_X + inset:g}" y="{BADGE_Y + inset:g}"
+        width="{BADGE - BADGE_STROKE:g}" height="{BADGE - BADGE_STROKE:g}"
+        fill="none" stroke="{INK}" stroke-width="{BADGE_STROKE}"/>
   <text class="mg" x="{BADGE_X + BADGE / 2:g}" y="{TILE_H / 2 + mono_size * 0.35:.1f}"
         font-size="{mono_size:g}" text-anchor="middle">{html.escape(mono)}</text>
 {spans}
 </svg>
 """
+
+
+def is_generated(path: Path) -> bool:
+    """Did we write this tile? Anything else is the caller's own artwork.
+
+    A file that does not exist yet counts as ours: the generator is about to
+    write it. Binary and unreadable files are not.
+    """
+    try:
+        return GENERATED_MARKER in path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return True
+    except (OSError, UnicodeDecodeError):
+        return False
 
 
 def render_grid(groups: list[dict]) -> str:
@@ -147,15 +167,27 @@ def render_grid(groups: list[dict]) -> str:
         out.append('  <ul class="logo-grid">')
         for pkg in group["packages"]:
             slug = pkg.get("slug") or slugify(pkg["name"])
-            file = pkg.get("file") or f"{slug}.svg"
+            supplied = pkg.get("file")
+            file = supplied or f"{slug}.svg"
             name = html.escape(pkg["name"])
             note = html.escape(pkg.get("note", ""))
+            if supplied or not is_generated(LOGO_DIR / file):
+                # Real artwork, whether pointed at by "file" or dropped in place of
+                # a generated tile: render it as an image, never masked or tinted.
+                mark = (f'<img class="logo-art" src="assets/logos/{file}" alt="{name}"'
+                        f' loading="lazy" width="{TILE_W}" height="{TILE_H}">')
+            else:
+                # Generated silhouette: tinted by CSS, so it follows the theme.
+                # mask-image has to live here rather than in style.css behind a
+                # custom property — see the .logo-mark comment in style.css.
+                url = f"url(assets/logos/{file})"
+                mark = (f'<span class="logo-mark" role="img" aria-label="{name}"'
+                        f' style="-webkit-mask-image:{url};mask-image:{url}"></span>')
             out.append(
                 f'    <li class="logo-cell">'
                 f'<a class="logo-link" href="{pkg["doc"]}" '
                 f'title="{name} — {note}">'
-                f'<img src="assets/logos/{file}" alt="{name}" loading="lazy" '
-                f'width="{TILE_W}" height="{TILE_H}">'
+                f'{mark}'
                 f'<span class="logo-note">{note}</span></a>'
                 f'<a class="logo-up" href="{pkg["url"]}" rel="noopener"'
                 f' title="{name} upstream project">upstream ↗</a></li>'
@@ -177,7 +209,6 @@ def main() -> int:
 
     stale: list[str] = []
     wanted: set[str] = set()
-    index = 0
     for group in groups:
         for pkg in group["packages"]:
             slug = pkg.get("slug") or slugify(pkg["name"])
@@ -185,12 +216,10 @@ def main() -> int:
                 continue  # caller supplied their own artwork; never touch it
             path = LOGO_DIR / f"{slug}.svg"
             wanted.add(path.name)
-            svg = render_tile(pkg["name"], pkg.get("mono") or monogram(pkg["name"]),
-                              pkg.get("color") or accent(slug, index))
-            index += 1
-            existing = path.read_text(encoding="utf-8") if path.exists() else None
-            if existing is not None and GENERATED_MARKER not in existing:
+            if not is_generated(path):
                 continue  # hand-replaced artwork — leave it alone
+            svg = render_tile(pkg["name"], pkg.get("mono") or monogram(pkg["name"]))
+            existing = path.read_text(encoding="utf-8") if path.exists() else None
             if existing == svg:
                 continue
             if args.check:

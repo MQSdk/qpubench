@@ -1,5 +1,10 @@
 title: QPUBench
 description: Modality-agnostic quantum benchmark framework with a typed Pydantic schema layer
+
+# docs/_layouts/default.html overrides the theme's layout, so what the Markdown
+# docs actually render with is that file plus docs/site/assets/style.css — the
+# same stylesheet as the landing page. The theme stays declared only as a
+# fallback: delete the layout and the pages still build, in Cayman's look.
 theme: jekyll-theme-cayman
 
 # Served from the custom domain (docs/site/CNAME). Apex domain, so no baseurl.

@@ -2,16 +2,17 @@
      role="img" aria-label="QPUBench">
   <title>QPUBench</title>
   <defs>
+    <!-- MQS palette: purple 700 → orange 700 -->
     <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#3d7ee0"/>
-      <stop offset="1" stop-color="#1a9a7a"/>
+      <stop offset="0" stop-color="#5A116E"/>
+      <stop offset="1" stop-color="#D36135"/>
     </linearGradient>
   </defs>
-  <rect width="64" height="64" rx="16" fill="url(#g)"/>
+  <rect width="64" height="64" fill="url(#g)"/>
   <!-- benchmark bars: three runs of increasing quality -->
-  <rect x="15" y="34" width="7" height="15" rx="2.5" fill="#ffffff" opacity="0.55"/>
-  <rect x="28.5" y="26" width="7" height="23" rx="2.5" fill="#ffffff" opacity="0.78"/>
-  <rect x="42" y="18" width="7" height="31" rx="2.5" fill="#ffffff"/>
+  <rect x="15" y="34" width="7" height="15" fill="#ffffff" opacity="0.55"/>
+  <rect x="28.5" y="26" width="7" height="23" fill="#ffffff" opacity="0.78"/>
+  <rect x="42" y="18" width="7" height="31" fill="#ffffff"/>
   <!-- the qubit the bars measure -->
   <circle cx="32" cy="15" r="4.5" fill="none" stroke="#ffffff" stroke-width="2.4"/>
 </svg>
