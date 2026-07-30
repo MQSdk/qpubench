@@ -1,0 +1,363 @@
+{
+  "_comment": "Inventory behind the front-page logo grid. Edit this file, then run tools/make_logos.py to regenerate assets/logos/*.svg and the grid markup inside index.html. 'mono' overrides the auto-derived monogram; 'color' overrides the auto-assigned accent.",
+  "groups": [
+    {
+      "id": "backends",
+      "title": "Execution backends",
+      "blurb": "Simulators and QPUs with a runnable adapter in <code>qpubench.backends</code>. Register one with a <code>BenchmarkRunner</code> and every run lands in the same record format.",
+      "packages": [
+        {
+          "name": "Qiskit Aer",
+          "mono": "Aer",
+          "url": "https://github.com/Qiskit/qiskit-aer",
+          "doc": "backends.html",
+          "note": "state-vector simulator, Estimator path"
+        },
+        {
+          "name": "PennyLane Lightning",
+          "mono": "PL",
+          "url": "https://github.com/PennyLaneAI/pennylane-lightning",
+          "doc": "backends.html",
+          "note": "C++ state-vector simulator"
+        },
+        {
+          "name": "Qrack",
+          "mono": "Qr",
+          "url": "https://github.com/unitaryfund/qrack",
+          "doc": "backends.html",
+          "note": "GPU / OpenCL simulator"
+        },
+        {
+          "name": "QuEST",
+          "mono": "QE",
+          "url": "https://github.com/QuEST-Kit/QuEST",
+          "doc": "integrations/quest.html",
+          "note": "OpenMP × GPU × MPI simulator"
+        },
+        {
+          "name": "IBM Quantum",
+          "mono": "IBM",
+          "url": "https://quantum.cloud.ibm.com/",
+          "doc": "backends.html",
+          "note": "Qiskit Runtime V2, superconducting"
+        },
+        {
+          "name": "AWS Braket",
+          "mono": "AWS",
+          "url": "https://aws.amazon.com/braket/",
+          "doc": "backends.html",
+          "note": "multi-vendor cloud QPUs"
+        },
+        {
+          "name": "IQM",
+          "mono": "IQM",
+          "url": "https://www.meetiqm.com/",
+          "doc": "backends.html",
+          "note": "superconducting, sampler-only"
+        },
+        {
+          "name": "Quantinuum",
+          "mono": "QTM",
+          "url": "https://www.quantinuum.com/",
+          "doc": "backends.html",
+          "note": "trapped-ion H-series"
+        },
+        {
+          "name": "Qibo",
+          "mono": "Qb",
+          "url": "https://qibo.science/",
+          "doc": "backends.html",
+          "note": "simulator + self-hosted hardware"
+        },
+        {
+          "name": "MBQC-FPGA",
+          "mono": "FPG",
+          "url": "https://github.com/johnrscott",
+          "doc": "compute_architectures.html",
+          "note": "measurement-based, FPGA control"
+        }
+      ]
+    },
+    {
+      "id": "chemistry",
+      "title": "Algorithms & quantum chemistry",
+      "blurb": "Packages whose run configurations, wavefunctions and results are mirrored as typed schemas, so their output is directly comparable with everything else in the store.",
+      "packages": [
+        {
+          "name": "QForte",
+          "mono": "QF",
+          "url": "https://github.com/evangelistalab/qforte",
+          "doc": "vqa.html",
+          "note": "ADAPT-VQE · UCCN-VQE · SPQE"
+        },
+        {
+          "name": "SlowQuant",
+          "mono": "SQ",
+          "url": "https://github.com/erikkjellgren/SlowQuant",
+          "doc": "integrations/slowquant.html",
+          "note": "UCC · fUCC/tUPS · linear response"
+        },
+        {
+          "name": "PySCF",
+          "mono": "Py",
+          "url": "https://pyscf.org/",
+          "doc": "integrations/pyscf.html",
+          "note": "mean-field · DFT · solvation · PBC"
+        },
+        {
+          "name": "Microsoft QDK",
+          "mono": "QDK",
+          "url": "https://github.com/microsoft/qsharp",
+          "doc": "integrations/qdk_chemistry.html",
+          "note": "SCF → MACIS → QPE → resources"
+        },
+        {
+          "name": "ExcitationSolve",
+          "mono": "ES",
+          "url": "https://github.com/dlr-wf/ExcitationSolve",
+          "doc": "integrations/excitation_solve.html",
+          "note": "Fourier-series VQE optimizer"
+        },
+        {
+          "name": "GSOpt",
+          "mono": "GS",
+          "url": "https://github.com/bestquark/gsopt",
+          "doc": "integrations/gsopt.html",
+          "note": "VQE · TN · DMRG · AFQMC lanes"
+        },
+        {
+          "name": "MQSdk qse",
+          "mono": "QSE",
+          "url": "https://github.com/MQSdk/qse",
+          "doc": "integrations/qse.html",
+          "note": "Krylov quantum diagonalization"
+        },
+        {
+          "name": "ActiveSpaceFinder",
+          "mono": "ASF",
+          "url": "https://github.com/HQSquantumsimulations/ActiveSpaceFinder",
+          "doc": "integrations/hqs.html",
+          "note": "entropy-based active spaces"
+        },
+        {
+          "name": "struqture",
+          "mono": "st",
+          "url": "https://github.com/HQSquantumsimulations/struqture",
+          "doc": "integrations/hqs.html",
+          "note": "spin/boson/fermion operator algebra"
+        },
+        {
+          "name": "qoqo",
+          "mono": "qo",
+          "url": "https://github.com/HQSquantumsimulations/qoqo",
+          "doc": "integrations/hqs.html",
+          "note": "circuits with in-line PRAGMAs"
+        },
+        {
+          "name": "qoqo_qasm",
+          "mono": "qq",
+          "url": "https://github.com/HQSquantumsimulations/qoqo_qasm",
+          "doc": "integrations/hqs.html",
+          "note": "OpenQASM dialect translation"
+        },
+        {
+          "name": "QCSchema",
+          "mono": "QCS",
+          "url": "https://github.com/MolSSI/QCSchema",
+          "doc": "integrations/qcschema.html",
+          "note": "MolSSI chemistry interop"
+        },
+        {
+          "name": "QCElemental",
+          "mono": "QCE",
+          "url": "https://github.com/MolSSI/QCElemental",
+          "doc": "integrations/qcschema.html",
+          "note": "physical constants & molecules"
+        },
+        {
+          "name": "PennyLane Datasets",
+          "mono": "PLD",
+          "url": "https://pennylane.ai/datasets/collection/qchem",
+          "doc": "integrations/qcschema.html",
+          "note": "qchem reference datasets"
+        },
+        {
+          "name": "Basis Set Exchange",
+          "mono": "BSE",
+          "url": "https://www.basissetexchange.org/",
+          "doc": "integrations/basis_sets.html",
+          "note": "basis-set provenance catalogue"
+        },
+        {
+          "name": "Classiq",
+          "mono": "Cq",
+          "url": "https://docs.classiq.io/",
+          "doc": "integrations/classiq.html",
+          "note": "constraint-driven synthesis"
+        }
+      ]
+    },
+    {
+      "id": "modalities",
+      "title": "Modalities & hardware vendors",
+      "blurb": "Beyond gate-based superconducting qubits. <code>ComputingModel</code> and <code>QubitModality</code> are independent axes on every record, so these runs share one store with everything above.",
+      "packages": [
+        {
+          "name": "MQSdk photoq",
+          "mono": "phq",
+          "url": "https://gitlab.com/mqsdk",
+          "doc": "integrations/photonic.html",
+          "note": "LOQC · FBQC · GBS · pseudo-PNRD"
+        },
+        {
+          "name": "Bloqade",
+          "mono": "Bl",
+          "url": "https://github.com/QuEraComputing/bloqade",
+          "doc": "integrations/neutral_atom.html",
+          "note": "analog Hamiltonian simulation"
+        },
+        {
+          "name": "QuEra Aquila",
+          "mono": "QuE",
+          "url": "https://www.quera.com/aquila",
+          "doc": "integrations/neutral_atom.html",
+          "note": "256-atom Rydberg array"
+        },
+        {
+          "name": "ORCA Computing",
+          "mono": "ORC",
+          "url": "https://orcacomputing.com/",
+          "doc": "integrations/photonic.html",
+          "note": "PT Series time-bin photonics"
+        },
+        {
+          "name": "Xanadu Aurora",
+          "mono": "Xa",
+          "url": "https://www.xanadu.ai/",
+          "doc": "integrations/gbs.html",
+          "note": "Gaussian boson sampling"
+        },
+        {
+          "name": "DTU QCloud",
+          "mono": "DTU",
+          "url": "https://qcloud.dtu.dk",
+          "doc": "integrations/photonic.html",
+          "note": "photonic cloud access"
+        },
+        {
+          "name": "Quantum Motion",
+          "mono": "QM",
+          "url": "https://quantummotion.tech/",
+          "doc": "integrations.html",
+          "note": "silicon CMOS spin qubits"
+        },
+        {
+          "name": "Cebule SDK",
+          "mono": "Ce",
+          "url": "https://docs.mqs.dk/sections/section_014_quantum_computing/",
+          "doc": "integrations/cebule.html",
+          "note": "chemistry tasks → QASM 3.0"
+        },
+        {
+          "name": "Xenakis",
+          "mono": "Xk",
+          "url": "https://github.com/mqsdk/xenakis",
+          "doc": "integrations/xenakis.html",
+          "note": "genetic-algorithm ansatz search"
+        }
+      ]
+    },
+    {
+      "id": "tooling",
+      "title": "Mitigation, compilation, decomposition & orchestration",
+      "blurb": "The layers around execution: making a noisy run usable, making a large circuit fit, and running the whole campaign as scheduled compute.",
+      "packages": [
+        {
+          "name": "Mitiq",
+          "mono": "Mi",
+          "url": "https://github.com/unitaryfund/mitiq",
+          "doc": "backends.html",
+          "note": "ZNE · PEC · CDR · REM · DDD"
+        },
+        {
+          "name": "Qedma QESEM",
+          "mono": "Qed",
+          "url": "https://docs.qedma.io/",
+          "doc": "integrations/qesem.html",
+          "note": "QET noise-scaled mitigation"
+        },
+        {
+          "name": "Q-CTRL Fire Opal",
+          "mono": "QC",
+          "url": "https://q-ctrl.com/fire-opal",
+          "doc": "integrations.html",
+          "note": "noise-robust compilation"
+        },
+        {
+          "name": "Haiqu Rivet",
+          "mono": "Hq",
+          "url": "https://haiqu.ai/",
+          "doc": "integrations.html",
+          "note": "hardware-aware transpilation"
+        },
+        {
+          "name": "ParityQC",
+          "mono": "Pa",
+          "url": "https://parityqc.com/",
+          "doc": "integrations.html",
+          "note": "parity encoding for optimisation"
+        },
+        {
+          "name": "QMatter",
+          "mono": "QMa",
+          "url": "https://qmatter.io/",
+          "doc": "integrations.html",
+          "note": "quantum problem compression"
+        },
+        {
+          "name": "Fragme∩t",
+          "mono": "Fr",
+          "url": "https://gitlab.com/fragment-qc/fragment",
+          "doc": "integrations/fragmentation.html",
+          "note": "MBE · GMBE via PIE trees",
+          "slug": "fragment"
+        },
+        {
+          "name": "quantum-fragment-methods",
+          "mono": "qfm",
+          "url": "https://github.com/qiskit-community/quantum-fragment-methods",
+          "doc": "integrations/fragmentation.html",
+          "note": "EWF / DMET + SQD solvers"
+        },
+        {
+          "name": "DISQCO",
+          "mono": "DIS",
+          "url": "https://github.com/felix-burt/DISQCO",
+          "doc": "integrations/distributed_qc.html",
+          "note": "hypergraph QPU-network partitioning"
+        },
+        {
+          "name": "Qdislib",
+          "mono": "Qd",
+          "url": "https://github.com/bsc-wdc/qdislib",
+          "doc": "integrations/distributed_qc.html",
+          "note": "gate / wire / Hadamard cutting"
+        },
+        {
+          "name": "Kubeflow Pipelines",
+          "mono": "kfp",
+          "url": "https://github.com/kubeflow/pipelines",
+          "doc": "integrations/kubeflow.html",
+          "note": "benchmark campaigns as a DAG"
+        },
+        {
+          "name": "Quantum Advantage Tracker",
+          "mono": "QAT",
+          "url": "https://github.com/qiskit-community",
+          "doc": "integrations.html",
+          "note": "community claim registry"
+        }
+      ]
+    }
+  ]
+}

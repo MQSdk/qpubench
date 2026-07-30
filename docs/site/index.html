@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QPUBench — modality-agnostic quantum benchmark framework</title>
+<meta name="description" content="QPUBench runs quantum benchmarks and records every result in one common format, so runs from different SDKs, machines and quantum computing paradigms can be compared side by side.">
+<link rel="canonical" href="https://qpubench.org/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="QPUBench">
+<meta property="og:url" content="https://qpubench.org/">
+<meta property="og:title" content="QPUBench — modality-agnostic quantum benchmark framework">
+<meta property="og:description" content="Describe a benchmark as typed data, run it on any backend, and store every result in one self-describing record format — readable years later without a quantum SDK.">
+<meta name="twitter:card" content="summary">
+<link rel="icon" type="image/svg+xml" href="assets/mark.svg">
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="topbar">
+  <div class="wrap topbar-inner">
+    <a class="brand" href="index.html">
+      <img src="assets/mark.svg" alt="" width="30" height="30">
+      <span>QPUBench</span>
+    </a>
+    <nav aria-label="Main">
+      <a href="guide.html">Guide</a>
+      <a href="installation.html">Install</a>
+      <a href="backends.html">Backends</a>
+      <a href="integrations.html">Integrations</a>
+      <a href="schemas.html">Schemas</a>
+      <a class="ghost" href="https://github.com/mqsdk/qpubench" rel="noopener">GitHub&nbsp;↗</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+
+<section class="hero">
+  <div class="wrap hero-inner">
+    <div class="hero-copy">
+      <p class="eyebrow">Quantum benchmarking · one record format</p>
+      <h1>Benchmark any quantum computer, compare the results years later.</h1>
+      <p class="lede">
+        QPUBench runs quantum benchmarks and records every result in <strong>one common
+        format</strong>, so runs from different SDKs, machines and even different quantum
+        computing paradigms can be compared side by side. You describe what to run as
+        plain typed data, execute it through a pluggable backend adapter, and every run
+        is stored as the same self-describing <code>BenchmarkRecord</code> — readable
+        without any quantum SDK installed.
+      </p>
+      <p class="hero-actions">
+        <a class="btn primary" href="guide.html">Read the guide</a>
+        <a class="btn" href="installation.html">Install</a>
+        <a class="btn" href="#packages">Supported packages</a>
+      </p>
+      <ul class="badges">
+        <li>Python ≥ 3.11</li>
+        <li>LGPL-3.0-or-later</li>
+        <li>Schema v6.1.0</li>
+        <li><code>pydantic</code> is the only required dependency</li>
+      </ul>
+    </div>
+
+    <div class="hero-code">
+      <div class="code-head"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="code-title">bell.py</span></div>
+<pre><code><span class="k">from</span> qpubench <span class="k">import</span> BenchmarkRunner, CircuitSpec
+
+circuit = <span class="t">CircuitSpec</span>(
+    num_qubits=<span class="n">2</span>,
+    serialized=bell_qasm,
+    observables=[zz],
+)
+
+runner = <span class="t">BenchmarkRunner</span>(store=<span class="s">"results/bell.ndjson"</span>)
+runner.register(<span class="t">AerAdapter</span>(), name=<span class="s">"aer"</span>)
+record = runner.run(circuit, <span class="s">"aer"</span>, shots=<span class="n">4096</span>)
+
+ev = record.result.expectation_values[<span class="n">0</span>]
+<span class="c"># &lt;ZZ&gt; = 1.0000 ± 0.0000</span></code></pre>
+      <p class="code-foot">Swap <code>"aer"</code> for <code>"ibm"</code>, <code>"iqm"</code>,
+      <code>"braket"</code> or a stub — the rest of the script, and the record it produces,
+      do not change.</p>
+    </div>
+  </div>
+</section>
+
+<section class="wrap ideas">
+  <h2>Three layers, and that is the whole framework</h2>
+  <div class="card-row">
+    <article class="card">
+      <span class="card-num">1</span>
+      <h3>Schemas — <em>what</em> you benchmark</h3>
+      <p><code>CircuitSpec</code>, <code>BackendSpec</code>, <code>ExecutionOptions</code>
+      and <code>QuantumResult</code> are plain Pydantic v2 models. They serialize to JSON,
+      validate on construction, and never import a quantum SDK.</p>
+      <a href="schemas.html">Schema reference →</a>
+    </article>
+    <article class="card">
+      <span class="card-num">2</span>
+      <h3>Adapters — <em>how</em> it runs</h3>
+      <p>Any object with <code>spec</code>, <code>validate()</code> and <code>run()</code>
+      is a backend. Libraries that build their own circuits implement the sibling
+      <code>AlgorithmAdapter</code> protocol instead. No base class to inherit.</p>
+      <a href="backends.html">Backends &amp; adapters →</a>
+    </article>
+    <article class="card">
+      <span class="card-num">3</span>
+      <h3>Stores — <em>where</em> results go</h3>
+      <p><code>NDJSONStore</code> (append-only, zero-dependency), <code>ParquetStore</code>
+      (columnar, for pandas) and <code>S3Store</code> (one object per record, safe for
+      distributed sweeps) share one interface.</p>
+      <a href="persistence.html">Persistence →</a>
+    </article>
+  </div>
+</section>
+
+<section class="wrap packages" id="packages">
+  <h2>Supported packages, backends and integrations</h2>
+  <p class="section-lede">
+    Every project below is reachable from QPUBench — either as a <strong>runnable adapter</strong>
+    that executes circuits, or as a <strong>typed schema bridge</strong> that captures its run
+    configuration and results in the shared record format. Schema bridges never import the
+    external library, so installing QPUBench pulls in none of them.
+    Follow a tile for the QPUBench documentation, or “upstream” for the project itself.
+  </p>
+
+<!-- GRID:BEGIN -->
+<section class="logo-band" id="pkg-backends">
+  <h3>Execution backends</h3>
+  <p class="band-blurb">Simulators and QPUs with a runnable adapter in <code>qpubench.backends</code>. Register one with a <code>BenchmarkRunner</code> and every run lands in the same record format.</p>
+  <ul class="logo-grid">
+    <li class="logo-cell"><a class="logo-link" href="backends.html" title="Qiskit Aer — state-vector simulator, Estimator path"><img src="assets/logos/qiskit-aer.svg" alt="Qiskit Aer" loading="lazy" width="232" height="64"><span class="logo-note">state-vector simulator, Estimator path</span></a><a class="logo-up" href="https://github.com/Qiskit/qiskit-aer" rel="noopener" title="Qiskit Aer upstream project">upstream ↗</a></li>
+    <li class="logo-cell"><a class="logo-link" href="backends.html" title="PennyLane Lightning — C++ state-vector simulator"><img src="assets/logos/pennylane-lightning.svg" alt="PennyLane Lightning" loading="lazy" width="232" height="64"><span class="logo-note">C++ state-vector simulator</span></a><a class="logo-up" href="https://github.com/PennyLaneAI/pennylane-lightning" rel="noopener" title="PennyLane Lightning upstream project">upstream ↗</a></li>
+    <li class="logo-cell"><a class="logo-link" href="backends.html" title="Qrack — GPU / OpenCL simulator"><img src="assets/logos/qrack.svg" alt="Qrack" loading="lazy" width="232" height="64"><span class="logo-note">GPU / OpenCL simulator</span></a><a class="logo-up" href="https://github.com/unitaryfund/qrack" rel="noopener" title="Qrack upstream project">upstream ↗</a></li>
+    <li class="logo-cell"><a class="logo-link" href="integrations/quest.html" title="QuEST — OpenMP × GPU × MPI simulator"><img src="assets/logos/quest.svg" alt="QuEST" loading="lazy" width="232" height="64"><span class="logo-note">OpenMP × GPU × MPI simulator</span></a><a class="logo-up" href="https://github.com/QuEST-Kit/QuEST" rel="noopener" title="QuEST upstream project">upstream ↗</a></li>
+    <li class="logo-cell"><a class="logo-link" href="backends.html" title="IBM Quantum — Qiskit Runtime V2, superconducting"><img src="assets/logos/ibm-quantum.svg" alt="IBM Quantum" loading="lazy" width="232" height="64"><span class="logo-note">Qiskit Runtime V2, superconducting</span></a><a class="logo-up" href="https://quantum.cloud.ibm.com/" rel="noopener" title="IBM Quantum upstream project">upstream ↗</a></li>
+    <li class="logo-cell"><a class="logo-link" href="backends.html" title="AWS Braket — multi-vendor cloud QPUs"><img src="assets/logos/aws-braket.svg" alt="AWS Braket" loading="lazy" width="232" height="64"><span class="logo-note">multi-vendor cloud QPUs</span></a><a class="logo-up" href="https://aws.amazon.com/braket/" rel="noopener" title="AWS Braket upstream project">upstream ↗</a></li>
+    <li class="logo-cell"><a class="logo-link" href="backends.html" title="IQM — superconducting, sampler-only"><img src="assets/logos/iqm.svg" alt="IQM" loading="lazy" width="232" height="64"><span class="logo-note">superconducting, sampler-only</span></a><a class="logo-up" href="https://www.meetiqm.com/" rel="noopener" title="IQM upstream project">upstream ↗</a></li>
+    <li class="logo-cell"><a class="logo-link" href="backends.html" title="Quantinuum — trapped-ion H-series"><img src="assets/logos/quantinuum.svg" alt="Quantinuum" loading="lazy" width="232" height="64"><span class="logo-note">trapped-ion H-series</span></a><a class="logo-up" href="https://www.quantinuum.com/" rel="noopener" title="Quantinuum upstream project">upstream ↗</a></li>
+    <li class="logo-cell"><a class="logo-link" href="backends.html" title="Qibo — simulator + self-hosted hardware"><img src="assets/logos/qibo.svg" alt="Qibo" loading="lazy" width="232" height="64"><span class="logo-note">simulator + self-hosted hardware</span></a><a class="logo-up" href="https://qibo.science/" rel="noopener" title="Qibo upstream project">upstream ↗</a></li>
+    <li class="logo-cell"><a class="logo-link" href="compute_architectures.html" title="MBQC-FPGA — measurement-based, FPGA control"><img src="assets/logos/mbqc-fpga.svg" alt="MBQC-FPGA" loading="lazy" width="232" height="64"><span class="logo-note">measurement-based, FPGA control</span></a><a class="logo-up" href="https://github.com/johnrscott" rel="noopener" title="MBQC-FPGA upstream project">upstream ↗</a></li>
+  </ul>
+</section>
+<section class="logo-band" id="pkg-chemistry">
+  <h3>Algorithms & quantum chemistry</h3>
+  <p class="band-blurb">Packages whose run configurations, wavefunctions and results are mirrored as typed schemas, so their output is directly comparable with everything else in the store.</p>
+  <ul class="logo-grid">
+    <li class="logo-cell"><a class="logo-link" href="vqa.html" title="QForte — ADAPT-VQE · UCCN-VQE · SPQE"><img src="assets/logos/qforte.svg" alt="QForte" loading="lazy" width="232" height="64"><span class="logo-note">ADAPT-VQE · UCCN-VQE · SPQE</span></a><a class="logo-up" href="https://github.com/evangelistalab/qforte" rel="noopener" title="QForte upstream project">upstream ↗</a></li>
+    <li class="logo-cell"><a class="logo-link" href="integrations/slowquant.html" title="SlowQuant — UCC · fUCC/tUPS · linear response"><img src="assets/logos/slowquant.svg" alt="SlowQuant" loading="lazy" width="232" height="64"><span class="logo-note">UCC · fUCC/tUPS · linear response</span></a><a class="logo-up" href="https://github.com/erikkjellgren/SlowQuant" rel="noopener" title="SlowQuant upstream project">upstream ↗</a></li>
+    <li class="logo-cell"><a class="logo-link" href="integrations/pyscf.html" title="PySCF — mean-field · DFT · solvation · PBC"><img src="assets/logos/pyscf.svg" alt="PySCF" loading="lazy" width="232" height="64"><span class="logo-note">mean-field · DFT · solvation · PBC</span></a><a class="logo-up" href="https://pyscf.org/" rel="noopener" title="PySCF upstream project">upstream ↗</a></li>
+    <li class="logo-cell"><a class="logo-link" href="integrations/qdk_chemistry.html" title="Microsoft QDK — SCF → MACIS → QPE → resources"><img src="assets/logos/microsoft-qdk.svg" alt="Microsoft QDK" loading="lazy" width="232" height="64"><span class="logo-note">SCF → MACIS → QPE → resources</span></a><a class="logo-up" href="https://github.com/microsoft/qsharp" rel="noopener" title="Microsoft QDK upstream project">upstream ↗</a></li>
+    <li class="logo-cell"><a class="logo-link" href="integrations/excitation_solve.html" title="ExcitationSolve — Fourier-series VQE optimizer"><img src="assets/logos/excitationsolve.svg" alt="ExcitationSolve" loading="lazy" width="232" height="64"><span class="logo-note">Fourier-series VQE optimizer</span></a><a class="logo-up" href="https://github.com/dlr-wf/ExcitationSolve" rel="noopener" title="ExcitationSolve upstream project">upstream ↗</a></li>
+    <li class="logo-cell"><a class="logo-link" href="integrations/gsopt.html" title="GSOpt — VQE · TN · DMRG · AFQMC lanes"><img src="assets/logos/gsopt.svg" alt="GSOpt" loading="lazy" width="232" height="64"><span class="logo-note">VQE · TN · DMRG · AFQMC lanes</span></a><a class="logo-up" href="https://github.com/bestquark/gsopt" rel="noopener" title="GSOpt upstream project">upstream ↗</a></li>
+    <li class="logo-cell"><a class="logo-link" href="integrations/qse.html" title="MQSdk qse — Krylov quantum diagonalization"><img src="assets/logos/mqsdk-qse.svg" alt="MQSdk qse" loading="lazy" width="232" height="64"><span class="logo-note">Krylov quantum diagonalization</span></a><a class="logo-up" href="https://github.com/MQSdk/qse" rel="noopener" title="MQSdk qse upstream project">upstream ↗</a></li>
+    <li class="logo-cell"><a class="logo-link" href="integrations/hqs.html" title="ActiveSpaceFinder — entropy-based active spaces"><img src="assets/logos/activespacefinder.svg" alt="ActiveSpaceFinder" loading="lazy" width="232" height="64"><span class="logo-note">entropy-based active spaces</span></a><a class="logo-up" href="https://github.com/HQSquantumsimulations/ActiveSpaceFinder" rel="noopener" title="ActiveSpaceFinder upstream project">upstream ↗</a></li>
+    <li class="logo-cell"><a class="logo-link" href="integrations/hqs.html" title="struqture — spin/boson/fermion operator algebra"><img src="assets/logos/struqture.svg" alt="struqture" loading="lazy" width="232" height="64"><span class="logo-note">spin/boson/fermion operator algebra</span></a><a class="logo-up" href="https://github.com/HQSquantumsimulations/struqture" rel="noopener" title="struqture upstream project">upstream ↗</a></li>
+    <li class="logo-cell"><a class="logo-link" href="integrations/hqs.html" title="qoqo — circuits with in-line PRAGMAs"><img src="assets/logos/qoqo.svg" alt="qoqo" loading="lazy" width="232" height="64"><span class="logo-note">circuits with in-line PRAGMAs</span></a><a class="logo-up" href="https://github.com/HQSquantumsimulations/qoqo" rel="noopener" title="qoqo upstream project">upstream ↗</a></li>
+    <li class="logo-cell"><a class="logo-link" href="integrations/hqs.html" title="qoqo_qasm — OpenQASM dialect translation"><img src="assets/logos/qoqo-qasm.svg" alt="qoqo_qasm" loading="lazy" width="232" height="64"><span class="logo-note">OpenQASM dialect translation</span></a><a class="logo-up" href="https://github.com/HQSquantumsimulations/qoqo_qasm" rel="noopener" title="qoqo_qasm upstream project">upstream ↗</a></li>
+    <li class="logo-cell"><a class="logo-link" href="integrations/qcschema.html" title="QCSchema — MolSSI chemistry interop"><img src="assets/logos/qcschema.svg" alt="QCSchema" loading="lazy" width="232" height="64"><span class="logo-note">MolSSI chemistry interop</span></a><a class="logo-up" href="https://github.com/MolSSI/QCSchema" rel="noopener" title="QCSchema upstream project">upstream ↗</a></li>
+    <li class="logo-cell"><a class="logo-link" href="integrations/qcschema.html" title="QCElemental — physical constants &amp; molecules"><img src="assets/logos/qcelemental.svg" alt="QCElemental" loading="lazy" width="232" height="64"><span class="logo-note">physical constants &amp; molecules</span></a><a class="logo-up" href="https://github.com/MolSSI/QCElemental" rel="noopener" title="QCElemental upstream project">upstream ↗</a></li>
+    <li class="logo-cell"><a class="logo-link" href="integrations/qcschema.html" title="PennyLane Datasets — qchem reference datasets"><img src="assets/logos/pennylane-datasets.svg" alt="PennyLane Datasets" loading="lazy" width="232" height="64"><span class="logo-note">qchem reference datasets</span></a><a class="logo-up" href="https://pennylane.ai/datasets/collection/qchem" rel="noopener" title="PennyLane Datasets upstream project">upstream ↗</a></li>
+    <li class="logo-cell"><a class="logo-link" href="integrations/basis_sets.html" title="Basis Set Exchange — basis-set provenance catalogue"><img src="assets/logos/basis-set-exchange.svg" alt="Basis Set Exchange" loading="lazy" width="232" height="64"><span class="logo-note">basis-set provenance catalogue</span></a><a class="logo-up" href="https://www.basissetexchange.org/" rel="noopener" title="Basis Set Exchange upstream project">upstream ↗</a></li>
+    <li class="logo-cell"><a class="logo-link" href="integrations/classiq.html" title="Classiq — constraint-driven synthesis"><img src="assets/logos/classiq.svg" alt="Classiq" loading="lazy" width="232" height="64"><span class="logo-note">constraint-driven synthesis</span></a><a class="logo-up" href="https://docs.classiq.io/" rel="noopener" title="Classiq upstream project">upstream ↗</a></li>
+  </ul>
+</section>
+<section class="logo-band" id="pkg-modalities">
+  <h3>Modalities & hardware vendors</h3>
+  <p class="band-blurb">Beyond gate-based superconducting qubits. <code>ComputingModel</code> and <code>QubitModality</code> are independent axes on every record, so these runs share one store with everything above.</p>
+  <ul class="logo-grid">
+    <li class="logo-cell"><a class="logo-link" href="integrations/photonic.html" title="MQSdk photoq — LOQC · FBQC · GBS · pseudo-PNRD"><img src="assets/logos/mqsdk-photoq.svg" alt="MQSdk photoq" loading="lazy" width="232" height="64"><span class="logo-note">LOQC · FBQC · GBS · pseudo-PNRD</span></a><a class="logo-up" href="https://gitlab.com/mqsdk" rel="noopener" title="MQSdk photoq upstream project">upstream ↗</a></li>
+    <li class="logo-cell"><a class="logo-link" href="integrations/neutral_atom.html" title="Bloqade — analog Hamiltonian simulation"><img src="assets/logos/bloqade.svg" alt="Bloqade" loading="lazy" width="232" height="64"><span class="logo-note">analog Hamiltonian simulation</span></a><a class="logo-up" href="https://github.com/QuEraComputing/bloqade" rel="noopener" title="Bloqade upstream project">upstream ↗</a></li>
+    <li class="logo-cell"><a class="logo-link" href="integrations/neutral_atom.html" title="QuEra Aquila — 256-atom Rydberg array"><img src="assets/logos/quera-aquila.svg" alt="QuEra Aquila" loading="lazy" width="232" height="64"><span class="logo-note">256-atom Rydberg array</span></a><a class="logo-up" href="https://www.quera.com/aquila" rel="noopener" title="QuEra Aquila upstream project">upstream ↗</a></li>
+    <li class="logo-cell"><a class="logo-link" href="integrations/photonic.html" title="ORCA Computing — PT Series time-bin photonics"><img src="assets/logos/orca-computing.svg" alt="ORCA Computing" loading="lazy" width="232" height="64"><span class="logo-note">PT Series time-bin photonics</span></a><a class="logo-up" href="https://orcacomputing.com/" rel="noopener" title="ORCA Computing upstream project">upstream ↗</a></li>
+    <li class="logo-cell"><a class="logo-link" href="integrations/gbs.html" title="Xanadu Aurora — Gaussian boson sampling"><img src="assets/logos/xanadu-aurora.svg" alt="Xanadu Aurora" loading="lazy" width="232" height="64"><span class="logo-note">Gaussian boson sampling</span></a><a class="logo-up" href="https://www.xanadu.ai/" rel="noopener" title="Xanadu Aurora upstream project">upstream ↗</a></li>
+    <li class="logo-cell"><a class="logo-link" href="integrations/photonic.html" title="DTU QCloud — photonic cloud access"><img src="assets/logos/dtu-qcloud.svg" alt="DTU QCloud" loading="lazy" width="232" height="64"><span class="logo-note">photonic cloud access</span></a><a class="logo-up" href="https://qcloud.dtu.dk" rel="noopener" title="DTU QCloud upstream project">upstream ↗</a></li>
+    <li class="logo-cell"><a class="logo-link" href="integrations.html" title="Quantum Motion — silicon CMOS spin qubits"><img src="assets/logos/quantum-motion.svg" alt="Quantum Motion" loading="lazy" width="232" height="64"><span class="logo-note">silicon CMOS spin qubits</span></a><a class="logo-up" href="https://quantummotion.tech/" rel="noopener" title="Quantum Motion upstream project">upstream ↗</a></li>
+    <li class="logo-cell"><a class="logo-link" href="integrations/cebule.html" title="Cebule SDK — chemistry tasks → QASM 3.0"><img src="assets/logos/cebule-sdk.svg" alt="Cebule SDK" loading="lazy" width="232" height="64"><span class="logo-note">chemistry tasks → QASM 3.0</span></a><a class="logo-up" href="https://docs.mqs.dk/sections/section_014_quantum_computing/" rel="noopener" title="Cebule SDK upstream project">upstream ↗</a></li>
+    <li class="logo-cell"><a class="logo-link" href="integrations/xenakis.html" title="Xenakis — genetic-algorithm ansatz search"><img src="assets/logos/xenakis.svg" alt="Xenakis" loading="lazy" width="232" height="64"><span class="logo-note">genetic-algorithm ansatz search</span></a><a class="logo-up" href="https://github.com/mqsdk/xenakis" rel="noopener" title="Xenakis upstream project">upstream ↗</a></li>
+  </ul>
+</section>
+<section class="logo-band" id="pkg-tooling">
+  <h3>Mitigation, compilation, decomposition & orchestration</h3>
+  <p class="band-blurb">The layers around execution: making a noisy run usable, making a large circuit fit, and running the whole campaign as scheduled compute.</p>
+  <ul class="logo-grid">
+    <li class="logo-cell"><a class="logo-link" href="backends.html" title="Mitiq — ZNE · PEC · CDR · REM · DDD"><img src="assets/logos/mitiq.svg" alt="Mitiq" loading="lazy" width="232" height="64"><span class="logo-note">ZNE · PEC · CDR · REM · DDD</span></a><a class="logo-up" href="https://github.com/unitaryfund/mitiq" rel="noopener" title="Mitiq upstream project">upstream ↗</a></li>
+    <li class="logo-cell"><a class="logo-link" href="integrations/qesem.html" title="Qedma QESEM — QET noise-scaled mitigation"><img src="assets/logos/qedma-qesem.svg" alt="Qedma QESEM" loading="lazy" width="232" height="64"><span class="logo-note">QET noise-scaled mitigation</span></a><a class="logo-up" href="https://docs.qedma.io/" rel="noopener" title="Qedma QESEM upstream project">upstream ↗</a></li>
+    <li class="logo-cell"><a class="logo-link" href="integrations.html" title="Q-CTRL Fire Opal — noise-robust compilation"><img src="assets/logos/q-ctrl-fire-opal.svg" alt="Q-CTRL Fire Opal" loading="lazy" width="232" height="64"><span class="logo-note">noise-robust compilation</span></a><a class="logo-up" href="https://q-ctrl.com/fire-opal" rel="noopener" title="Q-CTRL Fire Opal upstream project">upstream ↗</a></li>
+    <li class="logo-cell"><a class="logo-link" href="integrations.html" title="Haiqu Rivet — hardware-aware transpilation"><img src="assets/logos/haiqu-rivet.svg" alt="Haiqu Rivet" loading="lazy" width="232" height="64"><span class="logo-note">hardware-aware transpilation</span></a><a class="logo-up" href="https://haiqu.ai/" rel="noopener" title="Haiqu Rivet upstream project">upstream ↗</a></li>
+    <li class="logo-cell"><a class="logo-link" href="integrations.html" title="ParityQC — parity encoding for optimisation"><img src="assets/logos/parityqc.svg" alt="ParityQC" loading="lazy" width="232" height="64"><span class="logo-note">parity encoding for optimisation</span></a><a class="logo-up" href="https://parityqc.com/" rel="noopener" title="ParityQC upstream project">upstream ↗</a></li>
+    <li class="logo-cell"><a class="logo-link" href="integrations.html" title="QMatter — quantum problem compression"><img src="assets/logos/qmatter.svg" alt="QMatter" loading="lazy" width="232" height="64"><span class="logo-note">quantum problem compression</span></a><a class="logo-up" href="https://qmatter.io/" rel="noopener" title="QMatter upstream project">upstream ↗</a></li>
+    <li class="logo-cell"><a class="logo-link" href="integrations/fragmentation.html" title="Fragme∩t — MBE · GMBE via PIE trees"><img src="assets/logos/fragment.svg" alt="Fragme∩t" loading="lazy" width="232" height="64"><span class="logo-note">MBE · GMBE via PIE trees</span></a><a class="logo-up" href="https://gitlab.com/fragment-qc/fragment" rel="noopener" title="Fragme∩t upstream project">upstream ↗</a></li>
+    <li class="logo-cell"><a class="logo-link" href="integrations/fragmentation.html" title="quantum-fragment-methods — EWF / DMET + SQD solvers"><img src="assets/logos/quantum-fragment-methods.svg" alt="quantum-fragment-methods" loading="lazy" width="232" height="64"><span class="logo-note">EWF / DMET + SQD solvers</span></a><a class="logo-up" href="https://github.com/qiskit-community/quantum-fragment-methods" rel="noopener" title="quantum-fragment-methods upstream project">upstream ↗</a></li>
+    <li class="logo-cell"><a class="logo-link" href="integrations/distributed_qc.html" title="DISQCO — hypergraph QPU-network partitioning"><img src="assets/logos/disqco.svg" alt="DISQCO" loading="lazy" width="232" height="64"><span class="logo-note">hypergraph QPU-network partitioning</span></a><a class="logo-up" href="https://github.com/felix-burt/DISQCO" rel="noopener" title="DISQCO upstream project">upstream ↗</a></li>
+    <li class="logo-cell"><a class="logo-link" href="integrations/distributed_qc.html" title="Qdislib — gate / wire / Hadamard cutting"><img src="assets/logos/qdislib.svg" alt="Qdislib" loading="lazy" width="232" height="64"><span class="logo-note">gate / wire / Hadamard cutting</span></a><a class="logo-up" href="https://github.com/bsc-wdc/qdislib" rel="noopener" title="Qdislib upstream project">upstream ↗</a></li>
+    <li class="logo-cell"><a class="logo-link" href="integrations/kubeflow.html" title="Kubeflow Pipelines — benchmark campaigns as a DAG"><img src="assets/logos/kubeflow-pipelines.svg" alt="Kubeflow Pipelines" loading="lazy" width="232" height="64"><span class="logo-note">benchmark campaigns as a DAG</span></a><a class="logo-up" href="https://github.com/kubeflow/pipelines" rel="noopener" title="Kubeflow Pipelines upstream project">upstream ↗</a></li>
+    <li class="logo-cell"><a class="logo-link" href="integrations.html" title="Quantum Advantage Tracker — community claim registry"><img src="assets/logos/quantum-advantage-tracker.svg" alt="Quantum Advantage Tracker" loading="lazy" width="232" height="64"><span class="logo-note">community claim registry</span></a><a class="logo-up" href="https://github.com/qiskit-community" rel="noopener" title="Quantum Advantage Tracker upstream project">upstream ↗</a></li>
+  </ul>
+</section>
+<!-- GRID:END -->
+
+  <p class="grid-note">
+    Marks shown here are generated placeholder wordmarks, not vendor artwork — see
+    <a href="https://github.com/mqsdk/qpubench/tree/main/docs/site#logos">docs/site/README</a>
+    for how to drop in a real logo.
+  </p>
+</section>
+
+<section class="wrap scope">
+  <h2>What QPUBench does and does not do</h2>
+  <div class="scope-grid">
+    <div>
+      <h3 class="yes">Yes</h3>
+      <ul>
+        <li><strong>Absolute performance of an algorithm.</strong> Expectation values with
+          error bars, energy error against a stored classical reference, timings and
+          QPU-cost estimates.</li>
+        <li><strong>Comparing implementations of the same algorithm.</strong> One ADAPT-VQE
+          configuration runs unchanged against three different engines.</li>
+        <li><strong>Comparing different algorithms.</strong> Records carry a package-agnostic
+          algorithm family, so different algorithms on the same problem stay comparable.</li>
+        <li><strong>Comparing hardware.</strong> Register several backends and sweep the same
+          circuits across all of them.</li>
+        <li><strong>Comparing modalities.</strong> The record format spans gate-based, MBQC,
+          boson sampling and neutral-atom analog runs.</li>
+      </ul>
+    </div>
+    <div>
+      <h3 class="no">No</h3>
+      <ul>
+        <li><strong>Modelling noise.</strong> Backends bring their own noise models; QPUBench
+          records what ran, it does not define noise.</li>
+        <li><strong>Measuring noise.</strong> It can store device-characterization results from
+          external tools, but performs no characterization itself.</li>
+        <li><strong>Benchmarking classical algorithms as first-class runs.</strong> Classical
+          references (FCI, exact diagonalization) are computed and stored for comparison only.</li>
+        <li><strong>Shipping a fixed benchmark suite.</strong> This is a framework for running
+          <em>your own</em> campaigns, not a leaderboard.</li>
+      </ul>
+    </div>
+  </div>
+  <p class="caveat">
+    <strong>A note on “chemical accuracy”.</strong> QPUBench reports an energy error — the gap
+    between a run and a <em>classically computed</em> reference — and flags whether it is below
+    1.6&nbsp;mHartree. That is a numerical-convergence check against a computed value, not
+    agreement with an experimentally measured quantity. Treat the stored reference as a computed
+    baseline, not as ground truth.
+  </p>
+</section>
+
+<section class="wrap contents">
+  <h2>Documentation</h2>
+  <div class="toc-grid">
+    <div class="toc-col">
+      <h3>Start here</h3>
+      <ul>
+        <li><a href="guide.html">User guide</a> — the three ideas, first benchmark, sweeps</li>
+        <li><a href="installation.html">Installation</a> — pip, uv, Poetry 2, conda</li>
+        <li><a href="backends.html">Backends &amp; adapters</a> — protocols and the adapter index</li>
+        <li><a href="persistence.html">Persistence</a> — NDJSON, Parquet, S3</li>
+      </ul>
+    </div>
+    <div class="toc-col">
+      <h3>Reference</h3>
+      <ul>
+        <li><a href="schemas.html">Schema reference</a> — every model, field by field</li>
+        <li><a href="algorithm_spec.html">Algorithm specification</a></li>
+        <li><a href="vqa.html">Variational algorithms</a> — VQE, ADAPT-VQE</li>
+        <li><a href="compute_architectures.html">Compute architectures</a></li>
+        <li><a href="compatibility.html">Cross-framework compatibility</a> — endianness, Pauli encodings</li>
+      </ul>
+    </div>
+    <div class="toc-col">
+      <h3>Integrations</h3>
+      <ul>
+        <li><a href="integrations.html">All integrations</a> — the full table</li>
+        <li><a href="integrations/pyscf.html">PySCF</a> · <a href="integrations/slowquant.html">SlowQuant</a> · <a href="integrations/qdk_chemistry.html">QDK</a></li>
+        <li><a href="integrations/photonic.html">Photonics</a> · <a href="integrations/gbs.html">GBS</a> · <a href="integrations/neutral_atom.html">Neutral atoms</a></li>
+        <li><a href="integrations/fragmentation.html">Fragmentation</a> · <a href="integrations/distributed_qc.html">Distributed QC</a></li>
+        <li><a href="integrations/hqs.html">HQS stack</a> · <a href="integrations/quest.html">QuEST</a> · <a href="integrations/qesem.html">QESEM</a></li>
+      </ul>
+    </div>
+    <div class="toc-col">
+      <h3>Development</h3>
+      <ul>
+        <li><a href="developer_guide.html">Developer guide</a></li>
+        <li><a href="feedback_workflow.html">Feedback workflow</a></li>
+        <li><a href="schema_review.html">Schema review</a></li>
+        <li><a href="roadmap.html">Roadmap</a> · <a href="qubo_generator_roadmap.html">QUBO roadmap</a></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section class="wrap extend">
+  <h2>Plugging in your own backend</h2>
+  <p class="section-lede">
+    An adapter is a plain class. Two rules keep the ecosystem healthy: SDK imports live
+    <em>inside</em> methods, so importing your adapter never requires the SDK; and recoverable
+    failures return <code>status=FAILED</code> rather than raising, so one bad point does not
+    kill a sweep.
+  </p>
+<pre class="wide-code"><code><span class="k">class</span> <span class="t">MySimulatorAdapter</span>:
+    <span class="d">@property</span>
+    <span class="k">def</span> spec(self) -&gt; <span class="t">BackendSpec</span>:
+        <span class="k">return</span> <span class="t">BackendSpec</span>(name=<span class="s">"my_sim"</span>, provider=<span class="s">"me"</span>, simulator=<span class="k">True</span>)
+
+    <span class="k">def</span> validate(self, circuit: <span class="t">CircuitSpec</span>) -&gt; list[str]:
+        <span class="k">return</span> [] <span class="k">if</span> circuit.num_qubits &lt;= <span class="n">30</span> <span class="k">else</span> [<span class="s">"max 30 qubits"</span>]
+
+    <span class="k">def</span> run(self, circuit: <span class="t">CircuitSpec</span>, options: <span class="t">ExecutionOptions</span>) -&gt; <span class="t">QuantumResult</span>:
+        <span class="k">import</span> my_sdk                    <span class="c"># SDK imports stay inside methods</span>
+        counts = my_sdk.sample(circuit.serialized, shots=options.shots)
+        <span class="k">return</span> <span class="t">QuantumResult</span>(
+            computing_model=circuit.computing_model,
+            shots=<span class="t">ShotResult</span>(num_qubits=circuit.num_qubits,
+                             num_shots=options.shots, counts=counts),
+            status=<span class="t">JobStatus</span>.SUCCEEDED,
+        )</code></pre>
+  <p>
+    Templates for both protocols live in
+    <a href="https://github.com/mqsdk/qpubench/tree/main/integrations/template" rel="noopener">integrations/template/</a>,
+    and <a href="backends.html">Backends &amp; adapters</a> walks through testing an adapter
+    with the SDK mocked out.
+  </p>
+</section>
+
+</main>
+
+<footer class="footer">
+  <div class="wrap footer-inner">
+    <div>
+      <p class="footer-brand"><img src="assets/mark.svg" alt="" width="22" height="22"> QPUBench</p>
+      <p>Free software under the <a href="https://www.gnu.org/licenses/lgpl-3.0.html" rel="noopener">GNU LGPL v3.0 or later</a>.
+      Not dual-licensed. Use it in proprietary applications; changes to QPUBench itself must be
+      published under the LGPL.</p>
+    </div>
+    <nav aria-label="Footer">
+      <a href="https://github.com/mqsdk/qpubench" rel="noopener">Source</a>
+      <a href="https://github.com/mqsdk/qpubench/issues" rel="noopener">Issues</a>
+      <a href="guide.html">Guide</a>
+      <a href="schemas.html">Schemas</a>
+    </nav>
+  </div>
+</footer>
+
+</body>
+</html>

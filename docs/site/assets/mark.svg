@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64"
+     role="img" aria-label="QPUBench">
+  <title>QPUBench</title>
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3d7ee0"/>
+      <stop offset="1" stop-color="#1a9a7a"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="16" fill="url(#g)"/>
+  <!-- benchmark bars: three runs of increasing quality -->
+  <rect x="15" y="34" width="7" height="15" rx="2.5" fill="#ffffff" opacity="0.55"/>
+  <rect x="28.5" y="26" width="7" height="23" rx="2.5" fill="#ffffff" opacity="0.78"/>
+  <rect x="42" y="18" width="7" height="31" rx="2.5" fill="#ffffff"/>
+  <!-- the qubit the bars measure -->
+  <circle cx="32" cy="15" r="4.5" fill="none" stroke="#ffffff" stroke-width="2.4"/>
+</svg>

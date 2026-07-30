@@ -50,7 +50,9 @@ test:
     - pytest tests/ -q
 
 about:
-  home: https://github.com/mqsdk/qpubench
+  home: https://qpubench.org
+  doc_url: https://qpubench.org
+  dev_url: https://github.com/mqsdk/qpubench
   license: LGPL-3.0-or-later
   license_file:
     - LICENSE

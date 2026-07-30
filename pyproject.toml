@@ -34,9 +34,10 @@ classifiers = [
 dependencies = ["pydantic>=2.0"]
 
 [project.urls]
-Homepage      = "https://github.com/mqsdk/qpubench"
-Repository    = "https://github.com/mqsdk/qpubench"
-"Bug Tracker" = "https://github.com/mqsdk/qpubench/issues"
+Homepage        = "https://qpubench.org"
+Documentation   = "https://qpubench.org"
+Repository      = "https://github.com/mqsdk/qpubench"
+"Bug Tracker"   = "https://github.com/mqsdk/qpubench/issues"
 
 # ── Optional extras ───────────────────────────────────────────────────────────
 # Install with:

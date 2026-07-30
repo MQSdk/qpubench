@@ -2,9 +2,20 @@ title: QPUBench
 description: Modality-agnostic quantum benchmark framework with a typed Pydantic schema layer
 theme: jekyll-theme-cayman
 
+# Served from the custom domain (docs/site/CNAME). Apex domain, so no baseurl.
+url: https://qpubench.org
+baseurl: ""
+
 # Serve the existing Markdown docs as pages and keep relative .md links working.
 plugins:
   - jekyll-relative-links
 relative_links:
   enabled: true
   collections: true
+
+# site/ is the hand-written landing page. It is not Jekyll input — the Pages
+# workflow overlays it on top of this render, so exclude it here to avoid
+# publishing a second copy at /site/.  See .github/workflows/pages.yml.
+exclude:
+  - site/
+  - presentation_slides/

@@ -257,4 +257,6 @@ Contributions follow two hard constraints: no quantum SDK imports inside `src/qp
 
 ## License
 
-QPUBench is free software, released under the **GNU Lesser General Public License v3.0 or later** ([LGPL-3.0-or-later](https://www.gnu.org/licenses/lgpl-3.0.html)). You may use it in proprietary or differently-licensed applications; changes to QPUBench itself must be published under the LGPL. See [LICENSE](https://github.com/mqsdk/qpubench/blob/main/LICENSE) and [COPYING](https://github.com/mqsdk/qpubench/blob/main/COPYING) in the repository.
+QPUBench is free software under a single license: the **GNU Lesser General Public License v3.0 or later** ([LGPL-3.0-or-later](https://www.gnu.org/licenses/lgpl-3.0.html)). It is not dual-licensed. You may use it in proprietary or differently-licensed applications; changes to QPUBench itself must be published under the LGPL.
+
+Following the FSF's naming convention, the repository ships the LGPLv3 text as [`COPYING.LESSER`](https://github.com/mqsdk/qpubench/blob/main/COPYING.LESSER) (duplicated as [`LICENSE`](https://github.com/mqsdk/qpubench/blob/main/LICENSE) so GitHub detects it) and the GPLv3 text as [`COPYING`](https://github.com/mqsdk/qpubench/blob/main/COPYING). The GPLv3 file is the base that the LGPLv3 incorporates by reference, not a second license offer.
