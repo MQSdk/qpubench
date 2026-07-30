@@ -38,7 +38,7 @@ from scipy.optimize import minimize
 from qpubench import BenchmarkRunner, ExecutionOptions, QAOARunConfig, VQAConfig
 from qpubench.schemas.circuit import CircuitSpec
 from qpubench.schemas.observable import PauliTerm, SparsePauliObservable
-from qpubench.schemas.primitives import CircuitFormat, ComplexNumber, PauliLabel
+from qpubench.schemas.primitives import ComplexNumber, PauliLabel
 
 from examples.common.toy_hamiltonians import exact_ground_state_energy
 from examples.common.toy_statevector_backend import ToyStatevectorAdapter

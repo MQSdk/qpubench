@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install package and dev tools
+        run: |
+          pip install -e .
+          pip install pytest pytest-cov ruff mypy
+      - name: Ruff lint
+        run: ruff check
+      - name: Mypy (strict)
+        run: mypy src/qpubench
+      - name: Tests (no quantum SDK required)
+        run: pytest tests/ -q
+      - name: Landing-page logo tiles and grid are in sync
+        run: python docs/site/tools/make_logos.py --check
