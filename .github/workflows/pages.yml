@@ -52,6 +52,9 @@ jobs:
       - name: Overlay the landing page
         run: |
           set -euo pipefail
+          # jekyll-build-pages is a container action running as root, so it leaves
+          # _site owned by root:root — take it back before rearranging files.
+          sudo chown -R "$(id -u):$(id -g)" _site
           # Keep the Markdown user guide reachable at /guide.html …
           mv _site/index.html _site/guide.html
           # … and put the hand-written landing page at the site root.
