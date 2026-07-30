@@ -136,6 +136,16 @@ dev-dependencies = [
 line-length    = 100
 target-version = "py311"
 
+[tool.ruff.lint]
+# Select rules explicitly rather than inheriting ruff's default set: the default
+# set grows between ruff releases, which silently turns a green CI red on an
+# unrelated push. CI pins the ruff version (see .github/workflows/ci.yml); this
+# list is what that pin is expected to enforce.
+#   E4/E7/E9, F  ruff's historical default (pycodestyle subset + pyflakes)
+#   I            import sorting (isort)
+#   EXE          shebang / executable-bit consistency
+select = ["E4", "E7", "E9", "F", "I", "EXE"]
+
 [tool.ruff.lint.per-file-ignores]
 # Deliberate lazy-import pattern: pytest.importorskip / sys.path setup / SDK
 # availability checks must run before the imports they guard.

@@ -19,7 +19,10 @@ jobs:
       - name: Install package and dev tools
         run: |
           pip install -e .
-          pip install pytest pytest-cov ruff mypy
+          # Pinned: unpinned linters change their default rule set between
+          # releases, which turns CI red on pushes that changed nothing.
+          # Bump these deliberately, with the fixes in the same commit.
+          pip install pytest pytest-cov 'ruff==0.15.13' 'mypy==2.1.0'
       - name: Ruff lint
         run: ruff check
       - name: Mypy (strict)
