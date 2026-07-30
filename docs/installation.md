@@ -51,7 +51,7 @@ uv lock
 uv sync          # installs from lock
 ```
 
-The `[tool.uv]` section in `pyproject.toml` declares dev tools (pytest, ruff, mypy) as `dev-dependencies`; `uv sync` includes them automatically.
+Dev tools (pytest, ruff, mypy) are declared in the standard PEP 735 `[dependency-groups]` table in `pyproject.toml`, which uv reads natively; `uv sync` includes the `dev` group automatically.
 
 ---
 

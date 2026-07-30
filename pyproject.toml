@@ -124,14 +124,10 @@ packages = ["src/qpubench"]
 #   uv sync --all-extras      include all optional extras too
 #   uv pip install .          bare pip-style install (no lockfile)
 #   uv add qpubench           add as a dependency from another project
-[tool.uv]
-dev-dependencies = [
-    "pytest>=8.0",
-    "pytest-cov",
-    "ruff",
-    "mypy",
-    "types-requests",
-]
+#
+# Dev tools live in the PEP 735 [dependency-groups] table above, which uv reads
+# natively — the older, uv-specific [tool.uv] dev-dependencies field is
+# deprecated and deliberately not used here.
 
 # ── Ruff ──────────────────────────────────────────────────────────────────────
 [tool.ruff]
