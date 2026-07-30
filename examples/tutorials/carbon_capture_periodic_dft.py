@@ -51,9 +51,6 @@ import time
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
 
-from qpubench.schemas.execution import AdaptVQERunConfig
-from qpubench.schemas.mirrors.pyscf_pyscf import PySCFAtomSpec, PySCFCellSpec, PySCFMeanFieldConfig, PySCFMeanFieldMethod
-
 from examples.common.real_molecules import (
     BOUND_CN_DISTANCE,
     CARBON_CAPTURE_ACTIVE_ELECTRONS,
@@ -65,6 +62,13 @@ from examples.common.real_molecules import (
 from examples.common.toy_hamiltonians import exact_ground_state_energy
 from examples.common.toy_statevector_backend import ToyStatevectorAdapter
 from integrations.generic_adapt_vqe.engine import GenericAdaptVQEEngine
+from qpubench.schemas.execution import AdaptVQERunConfig
+from qpubench.schemas.mirrors.pyscf_pyscf import (
+    PySCFAtomSpec,
+    PySCFCellSpec,
+    PySCFMeanFieldConfig,
+    PySCFMeanFieldMethod,
+)
 
 
 def _diamond_cell_spec() -> PySCFCellSpec:

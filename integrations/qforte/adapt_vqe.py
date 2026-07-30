@@ -13,12 +13,12 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
+from qpubench import BenchmarkRunner
 from qpubench.schemas.circuit import CircuitSpec
 from qpubench.schemas.execution import AdaptVQERunConfig, AlgorithmSpec, ExecutionOptions
 from qpubench.schemas.primitives import AlgorithmFamily
 from qpubench.schemas.record import BenchmarkRecord
 from qpubench.schemas.result import AdaptIteration
-from qpubench import BenchmarkRunner
 
 # QForte algorithm name → package-agnostic family. UCCNVQE is a fixed-ansatz
 # VQE (UCC is the ansatz choice); UCCNPQE/SPQE are projective eigensolvers.

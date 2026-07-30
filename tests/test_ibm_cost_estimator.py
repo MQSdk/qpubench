@@ -115,7 +115,7 @@ class TestEstimateCircuitResourcesReal:
         pytest.importorskip("qiskit_ibm_runtime")
 
     def _bell_like_circuit(self):
-        from qiskit import qasm3, QuantumCircuit
+        from qiskit import QuantumCircuit, qasm3
 
         from qpubench.schemas.circuit import CircuitSpec
         from qpubench.schemas.primitives import CircuitFormat

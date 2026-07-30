@@ -58,9 +58,8 @@ via an environment variable named by ``BackendSpec.auth["user_ref"]``.
 
 from __future__ import annotations
 
-from typing import Any
-
 from collections import Counter
+from typing import Any
 
 from ..schemas.backend import BackendSpec
 from ..schemas.circuit import CircuitSpec
@@ -162,8 +161,8 @@ class QuantinuumAdapter:
         options: ExecutionOptions,
     ) -> tuple[CircuitSpec, TranspileLayout | None]:
         """Compile to Quantinuum native gates (Rz / PhasedX / ZZPhase)."""
-        from qiskit import qasm3
         from pytket.extensions.qiskit import tk_to_qiskit
+        from qiskit import qasm3
 
         backend = self._get_backend()
         compiled = self._compile(circuit, options, backend)

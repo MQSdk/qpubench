@@ -6,11 +6,11 @@ from __future__ import annotations
 
 import pytest
 
-from qpubench.schemas.circuit import CircuitSpec
 from qpubench.schemas.catalogs.contraction_path import (
     ContractionPathConfig,
     ContractionPathStrategy,
 )
+from qpubench.schemas.circuit import CircuitSpec
 from qpubench.schemas.primitives import CircuitFormat
 
 pytest.importorskip("quimb")

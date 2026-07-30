@@ -8,7 +8,6 @@ import json
 
 import pytest
 
-from qpubench.schemas.circuit import CircuitSpec
 from qpubench.schemas.catalogs.distributed_execution import (
     GATE_CUT_OVERHEAD_BASE,
     WIRE_CUT_OVERHEAD_BASE,
@@ -30,16 +29,8 @@ from qpubench.schemas.catalogs.distributed_execution import (
     ReconstructionResult,
     SubcircuitResult,
 )
+from qpubench.schemas.circuit import CircuitSpec
 from qpubench.schemas.execution import ExecutionOptions
-from qpubench.schemas.mirrors.felixburt_disqco import (
-    DisqcoCoarsener,
-    DisqcoExtractedCircuit,
-    DisqcoFMConfig,
-    DisqcoNetworkCoupling,
-    DisqcoNetworkSpec,
-    DisqcoPartitionerType,
-    DisqcoPartitionResult,
-)
 from qpubench.schemas.mirrors.bscwdc_qdislib import (
     QdislibCacheStats,
     QdislibCutCost,
@@ -53,8 +44,16 @@ from qpubench.schemas.mirrors.bscwdc_qdislib import (
     max_cuts_for_budget,
     sampling_overhead,
 )
+from qpubench.schemas.mirrors.felixburt_disqco import (
+    DisqcoCoarsener,
+    DisqcoExtractedCircuit,
+    DisqcoFMConfig,
+    DisqcoNetworkCoupling,
+    DisqcoNetworkSpec,
+    DisqcoPartitionerType,
+    DisqcoPartitionResult,
+)
 from qpubench.schemas.primitives import JobStatus
-
 
 # ---------------------------------------------------------------------------
 # Networks

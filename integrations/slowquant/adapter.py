@@ -37,6 +37,7 @@ from typing import Any
 
 from qpubench.schemas.backend import BackendSpec
 from qpubench.schemas.circuit import CircuitSpec
+from qpubench.schemas.execution import ExecutionOptions
 from qpubench.schemas.mirrors.erikkjellgren_slowquant import (
     SlowQuantRecord,
     UCCActiveSpaceConfig,
@@ -46,7 +47,6 @@ from qpubench.schemas.mirrors.erikkjellgren_slowquant import (
     UCCSCFResult,
     UCCWavefunctionConfig,
 )
-from qpubench.schemas.execution import ExecutionOptions
 from qpubench.schemas.primitives import ComputingModel, JobStatus
 from qpubench.schemas.record import VQAConfig, VQAResult
 from qpubench.schemas.result import ExpectationResult, QuantumResult

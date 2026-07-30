@@ -88,7 +88,6 @@ from qpubench.schemas.primitives import CircuitFormat
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 from integrations.qforte.adapter import QForteAlgorithmAdapter
 
-
 ALGORITHMS: list[tuple[AlgorithmSpec, AdaptVQERunConfig]] = [
     (
         AlgorithmSpec(name="UCCNVQE", family=AlgorithmFamily.VQE),

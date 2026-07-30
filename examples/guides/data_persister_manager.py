@@ -16,8 +16,15 @@ import tempfile
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
 
 from qpubench import (
-    BackendSpec, BenchmarkRecord, CircuitSpec, ComputingModel,
-    ExecutionOptions, ExpectationResult, NDJSONStore, ParquetStore, QuantumResult,
+    BackendSpec,
+    BenchmarkRecord,
+    CircuitSpec,
+    ComputingModel,
+    ExecutionOptions,
+    ExpectationResult,
+    NDJSONStore,
+    ParquetStore,
+    QuantumResult,
 )
 
 BELL_QASM = """\

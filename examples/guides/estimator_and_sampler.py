@@ -17,13 +17,15 @@ import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
 
+from examples.common.toy_statevector_backend import ToyStatevectorAdapter
 from qpubench import (
-    CircuitSpec, ComplexNumber, PauliLabel, PauliTerm,
+    CircuitSpec,
+    ComplexNumber,
+    PauliLabel,
+    PauliTerm,
     SparsePauliObservable,
 )
 from qpubench.schemas.mirrors.ibm_runtime_v2 import IBMEstimatorPUB, IBMSamplerPUB
-
-from examples.common.toy_statevector_backend import ToyStatevectorAdapter
 
 # QASM3 (not QASM2) — ToyStatevectorAdapter only speaks the fixed gate
 # vocabulary integrations/generic_adapt_vqe emits (see that module's

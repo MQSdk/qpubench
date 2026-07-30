@@ -54,9 +54,8 @@ Credentials: set via BackendSpec.auth or environment variable —
 
 from __future__ import annotations
 
-from typing import Any
-
 import os
+from typing import Any
 
 from ..schemas.backend import BackendSpec
 from ..schemas.circuit import CircuitSpec

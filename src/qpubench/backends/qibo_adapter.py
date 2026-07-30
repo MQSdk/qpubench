@@ -55,9 +55,8 @@ The env-var name is taken from ``BackendSpec.auth["token_ref"]``.
 
 from __future__ import annotations
 
-from typing import Any
-
 import os
+from typing import Any
 
 from ..schemas.backend import BackendSpec
 from ..schemas.circuit import CircuitSpec

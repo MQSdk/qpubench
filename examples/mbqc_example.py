@@ -30,7 +30,7 @@ from qpubench.schemas.mirrors.johnrscott_mbqc_fpga import (
     ByproductUpdateSpec,
     CommutationSpec,
 )
-from qpubench.schemas.primitives import ComputingModel, CircuitFormat
+from qpubench.schemas.primitives import CircuitFormat, ComputingModel
 
 
 def rx_pattern(xi: float, eta: float, zeta: float) -> MBQCPattern:

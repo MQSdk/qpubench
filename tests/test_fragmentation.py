@@ -9,7 +9,6 @@ import json
 
 import pytest
 
-from qpubench.schemas.circuit import CircuitSpec
 from qpubench.schemas.catalogs.fragmentation import (
     FragmentationLayer,
     FragmentationResult,
@@ -24,6 +23,7 @@ from qpubench.schemas.catalogs.fragmentation import (
     ScreeningMetric,
     SolverKind,
 )
+from qpubench.schemas.circuit import CircuitSpec
 from qpubench.schemas.mirrors.fragmentqc_fragment import (
     FragmentCombinator,
     FragmentJobRecord,
@@ -34,7 +34,6 @@ from qpubench.schemas.mirrors.fragmentqc_fragment import (
     FragmentRunRecord,
     FragmentStrategy,
 )
-from qpubench.schemas.primitives import ComputingModel, JobStatus
 from qpubench.schemas.mirrors.qiskitcommunity_fragment_methods import (
     QFMBathType,
     QFMFragment,
@@ -45,7 +44,7 @@ from qpubench.schemas.mirrors.qiskitcommunity_fragment_methods import (
     QFMWorkflowConfig,
     QFMWorkflowResult,
 )
-
+from qpubench.schemas.primitives import ComputingModel, JobStatus
 
 # ---------------------------------------------------------------------------
 # General expansion semantics

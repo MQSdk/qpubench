@@ -26,7 +26,7 @@ from __future__ import annotations
 from qpubench.schemas.backend import BackendSpec
 from qpubench.schemas.circuit import CircuitSpec
 from qpubench.schemas.execution import ExecutionOptions
-from qpubench.schemas.primitives import CircuitFormat, JobStatus, ComputingModel
+from qpubench.schemas.primitives import CircuitFormat, ComputingModel, JobStatus
 from qpubench.schemas.record import VQAConfig, VQAResult
 from qpubench.schemas.result import (
     ExpectationResult,

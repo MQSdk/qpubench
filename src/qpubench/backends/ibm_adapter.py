@@ -71,13 +71,13 @@ account needed to confirm correctness):
 
 from __future__ import annotations
 
-from typing import Any
-
 import os
 from contextlib import nullcontext
+from typing import Any
 
 from ..schemas.backend import BackendSpec
 from ..schemas.circuit import CircuitSpec
+from ..schemas.execution import ExecutionOptions
 from ..schemas.mirrors.ibm_runtime_v2 import (
     IBMBitArrayMeta,
     IBMEstimatorPUB,
@@ -87,7 +87,6 @@ from ..schemas.mirrors.ibm_runtime_v2 import (
     IBMRuntimeRecord,
     IBMSamplerPUB,
 )
-from ..schemas.execution import ExecutionOptions
 from ..schemas.primitives import (
     CircuitFormat,
     ComputingModel,

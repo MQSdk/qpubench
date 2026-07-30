@@ -41,21 +41,19 @@ def _find_molecule_json(name: str) -> pathlib.Path:
 # qpubench imports (no qforte here)
 # ---------------------------------------------------------------------------
 
-from qpubench import (
-    BenchmarkRunner,
-    NDJSONStore,
-)
-
 # ---------------------------------------------------------------------------
 # Bridge imports (knows about both)
 # ---------------------------------------------------------------------------
-
 from qpubench_qforte import (
     AdaptVQERunner,
     QForteAlgorithmAdapter,
 )
 from qpubench_qforte.converters import molecule_spec_from_file
 
+from qpubench import (
+    BenchmarkRunner,
+    NDJSONStore,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers

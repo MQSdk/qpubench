@@ -35,13 +35,12 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
 import numpy as np
 from scipy.optimize import minimize
 
+from examples.common.toy_hamiltonians import exact_ground_state_energy
+from examples.common.toy_statevector_backend import ToyStatevectorAdapter
 from qpubench import BenchmarkRunner, ExecutionOptions, QAOARunConfig, VQAConfig
 from qpubench.schemas.circuit import CircuitSpec
 from qpubench.schemas.observable import PauliTerm, SparsePauliObservable
 from qpubench.schemas.primitives import ComplexNumber, PauliLabel
-
-from examples.common.toy_hamiltonians import exact_ground_state_energy
-from examples.common.toy_statevector_backend import ToyStatevectorAdapter
 
 # A small non-bipartite graph: the 5-cycle C5. MaxCut = 4 (one edge must stay
 # uncut in any 2-colouring of an odd cycle), so the optimum is non-trivial.

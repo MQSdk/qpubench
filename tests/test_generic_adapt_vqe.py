@@ -25,22 +25,20 @@ pytest.importorskip("scipy")
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
-from qpubench import BenchmarkRunner, ExecutionOptions, StubGateAdapter
-from qpubench.schemas.circuit import CircuitSpec
-from qpubench.schemas.execution import AdaptVQERunConfig, AlgorithmSpec
-from qpubench.schemas.observable import PauliTerm, SparsePauliObservable
-from qpubench.schemas.primitives import AlgorithmFamily, CircuitFormat, ComplexNumber, PauliLabel
-
+from integrations.generic_adapt_vqe.circuit_synthesis import pauli_exponential_qasm3_lines
+from integrations.generic_adapt_vqe.engine import GenericAdaptVQEEngine
 from integrations.generic_adapt_vqe.pool import (
     double_excitation_observable,
     generate_singles_doubles_pool,
     single_excitation_observable,
 )
-from integrations.generic_adapt_vqe.circuit_synthesis import pauli_exponential_qasm3_lines
-from integrations.generic_adapt_vqe.engine import GenericAdaptVQEEngine
 from integrations.ibm_qiskit_adapt_vqe.adapter import IBMQiskitAdaptVQEAdapter
 from integrations.microsoft_qdk_adapt_vqe.adapter import MicrosoftQDKAdaptVQEAdapter
-
+from qpubench import BenchmarkRunner, ExecutionOptions, StubGateAdapter
+from qpubench.schemas.circuit import CircuitSpec
+from qpubench.schemas.execution import AdaptVQERunConfig, AlgorithmSpec
+from qpubench.schemas.observable import PauliTerm, SparsePauliObservable
+from qpubench.schemas.primitives import AlgorithmFamily, CircuitFormat, ComplexNumber, PauliLabel
 
 # ---------------------------------------------------------------------------
 # Ground-truth Jordan-Wigner matrix construction (independent of pool.py)

@@ -19,7 +19,6 @@ from qpubench.schemas.mirrors.classiq_classiq import (
 )
 from qpubench.schemas.primitives import CircuitFormat
 
-
 # ---------------------------------------------------------------------------
 # Problem-spec builders: qmod_source + build metadata -> CircuitSpec(QMOD)
 #

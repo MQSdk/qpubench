@@ -28,6 +28,7 @@ import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
 
+from integrations.generic_adapt_vqe.pool import generate_singles_doubles_pool
 from qpubench.schemas.mirrors.bestquark_gsopt import ActiveSpaceSpec
 from qpubench.schemas.mirrors.erikkjellgren_slowquant import UCCActiveSpaceConfig
 from qpubench.schemas.mirrors.microsoft_qdk import (
@@ -35,8 +36,6 @@ from qpubench.schemas.mirrors.microsoft_qdk import (
     ActiveSpaceSelectorType,
 )
 from qpubench.schemas.mirrors.pyscf_pyscf import PySCFAtomSpec, PySCFMoleculeSpec
-
-from integrations.generic_adapt_vqe.pool import generate_singles_doubles_pool
 
 
 def run_avas() -> tuple[int, int, list[int], list[int]] | None:

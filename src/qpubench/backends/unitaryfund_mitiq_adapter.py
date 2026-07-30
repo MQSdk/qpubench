@@ -34,9 +34,13 @@ from typing import TYPE_CHECKING, Any
 from ..schemas.backend import BackendSpec
 from ..schemas.circuit import CircuitSpec
 from ..schemas.execution import ExecutionOptions
+from ..schemas.mirrors.unitaryfund_mitiq import (
+    MitiqNoiseScalingMethod,
+    MitiqZNEConfig,
+    MitiqZNEFactory,
+)
 from ..schemas.primitives import JobStatus
 from ..schemas.result import ExpectationResult, QuantumResult
-from ..schemas.mirrors.unitaryfund_mitiq import MitiqNoiseScalingMethod, MitiqZNEConfig, MitiqZNEFactory
 from ._qiskit_common import load_qiskit_circuit as _load_qiskit_circuit
 
 if TYPE_CHECKING:

@@ -79,8 +79,8 @@ class AerAdapter:
         options: ExecutionOptions,
     ) -> tuple[CircuitSpec, TranspileLayout | None]:
         """Transpile to Aer's native gate set via the Qiskit transpiler."""
-        from qiskit import transpile as qk_transpile
         from qiskit import qasm3
+        from qiskit import transpile as qk_transpile
         from qiskit_aer import AerSimulator
 
         qc = _load_qiskit_circuit(circuit)

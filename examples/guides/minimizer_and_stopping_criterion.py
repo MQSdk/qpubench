@@ -20,9 +20,6 @@ import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
 
-from qpubench.schemas.execution import AdaptVQERunConfig
-from qpubench.schemas.catalogs.optimizer_catalog import MINIMIZER_CATALOG, STOPPING_CRITERION_CATALOG
-
 from examples.common.toy_hamiltonians import (
     NUM_ELECTRONS,
     NUM_QUBITS,
@@ -31,6 +28,11 @@ from examples.common.toy_hamiltonians import (
 )
 from examples.common.toy_statevector_backend import ToyStatevectorAdapter
 from integrations.generic_adapt_vqe.engine import GenericAdaptVQEEngine
+from qpubench.schemas.catalogs.optimizer_catalog import (
+    MINIMIZER_CATALOG,
+    STOPPING_CRITERION_CATALOG,
+)
+from qpubench.schemas.execution import AdaptVQERunConfig
 
 
 def run_with(optimizer: str, gradient_threshold: float) -> tuple[float, int]:

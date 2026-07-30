@@ -21,12 +21,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..schemas.circuit import CircuitSpec
 from ..schemas.catalogs.contraction_path import (
     ContractionPathConfig,
     ContractionPathResult,
     ContractionPathStrategy,
 )
+from ..schemas.circuit import CircuitSpec
 from ..schemas.primitives import CircuitFormat
 
 

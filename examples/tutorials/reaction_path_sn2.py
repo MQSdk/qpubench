@@ -31,11 +31,6 @@ import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
 
-from qpubench import AlgorithmSpec, BenchmarkRunner, CircuitSpec, ExecutionOptions
-from qpubench.schemas.execution import AdaptVQERunConfig
-from qpubench.schemas.primitives import AlgorithmFamily, CircuitFormat
-from qpubench.schemas.catalogs.reactions import ReactionCoordinateSpec, ReactionPathResult
-
 from examples.common.real_molecules import (
     DEHALOGENASE_ACTIVE_ELECTRONS,
     DEHALOGENASE_ACTIVE_ORBITALS,
@@ -45,6 +40,10 @@ from examples.common.real_molecules import (
 )
 from examples.common.toy_statevector_backend import ToyStatevectorAdapter
 from integrations.ibm_qiskit_adapt_vqe.adapter import IBMQiskitAdaptVQEAdapter
+from qpubench import AlgorithmSpec, BenchmarkRunner, CircuitSpec, ExecutionOptions
+from qpubench.schemas.catalogs.reactions import ReactionCoordinateSpec, ReactionPathResult
+from qpubench.schemas.execution import AdaptVQERunConfig
+from qpubench.schemas.primitives import AlgorithmFamily, CircuitFormat
 
 
 def main() -> None:
