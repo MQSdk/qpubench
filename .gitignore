@@ -220,3 +220,7 @@ __marimo__/
 # qpubench — downloaded/cached Hamiltonian datasets (HamLib, PennyLane qchem, etc.)
 # Pulled on demand by hamiltonian_sources/*; never part of the repo itself.
 datasets/
+
+# qpubench — local benchmark outputs and scratch notes
+results/
+temporary/
