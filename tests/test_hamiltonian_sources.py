@@ -68,6 +68,8 @@ class TestParseHamlibQubitOperator:
         import sys
         from pathlib import Path
 
+        pytest.importorskip("numpy")  # dense diagonalization only; parsing needs no deps
+
         sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
         from examples.common.toy_hamiltonians import exact_ground_state_energy
 

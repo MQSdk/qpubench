@@ -18,7 +18,11 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Install package and dev tools
         run: |
-          pip install -e .
+          # [adapt_vqe] is scipy + numpy — classical numerics, not a quantum
+          # SDK. Installing it here keeps the generic_adapt_vqe and
+          # gate_selector tests (and the dense-diagonalization reference
+          # energies) running in CI instead of silently skipping.
+          pip install -e '.[adapt_vqe]'
           # Pinned: unpinned linters change their default rule set between
           # releases, which turns CI red on pushes that changed nothing.
           # Bump these deliberately, with the fixes in the same commit.

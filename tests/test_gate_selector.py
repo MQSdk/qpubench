@@ -2,6 +2,11 @@
 (gradient screen, extracted from the engine unchanged) and
 BruteForceGateSelector (full re-optimization per candidate), closing
 qrunch's "Create a FAST/Brute Force Gate Selector" guides.
+
+Requires: pip install 'qpubench[adapt_vqe]'  (scipy + numpy — not quantum
+SDKs; scipy runs the classical optimizer, numpy backs the toy statevector
+backend and the dense-diagonalization reference energy). Skipped
+automatically if unavailable, consistent with test_generic_adapt_vqe.py.
 """
 from __future__ import annotations
 
@@ -10,6 +15,9 @@ import pathlib
 import sys
 
 import pytest
+
+pytest.importorskip("numpy")
+pytest.importorskip("scipy")
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
