@@ -59,11 +59,16 @@ runner.register(QForteAlgorithmAdapter(), name="qforte")
 
 adapt = AdaptVQERunner(runner)
 mol   = molecule_spec_from_file("path/to/He-ccpvdz.json")
+# or let converters.find_molecule_json("He-ccpvdz.json") locate it — see below
 
 # Compare BFGS vs jacobi
 records = adapt.compare_optimizers(mol, pool_type="SD")
 table   = AdaptVQERunner.summary_table(records)
 ```
+
+## Finding QForte's test molecules
+
+`He-ccpvdz.json` and the other molecule files live in QForte's `tests/` directory, and QForte's `setup.py` does not install it — neither `pip install .` nor `python setup.py develop` puts those files inside the installed package. `converters.find_molecule_json(name, env_var=...)` handles that: it checks the environment variable you name, the installed package, the checkout the package came from (parent directories, plus the source path pip records in `direct_url.json`), and the working directory. If it still comes up empty it raises with the searched paths and the `curl` command for the single file.
 
 ## Running on an external backend (Aer, Qrack, IBM)
 

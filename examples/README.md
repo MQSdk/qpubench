@@ -8,6 +8,8 @@ Runnable, educative examples of what you can do with qpubench, in three tiers:
 
 Three standalone scripts at this level predate the tiers and remain good starting points: `gate_based_example.py` (circuit → runner → store round trip on the stub backend), `mbqc_example.py` (an MBQC measurement pattern, FPGA COE file generation, stub execution), and `qforte_vqe_benchmark.py` (three QForte VQE methods on He/cc-pVDZ via the `AlgorithmAdapter` protocol; needs `pip install qforte`).
 
+The molecule for that last one, `He-ccpvdz.json`, lives in QForte's `tests/` directory, which its `setup.py` does not install — so it is only on disk if you installed QForte from a checkout you still have. The example searches the likely places and, failing that, either builds the same system with Psi4 or prints how to fetch the file; you can always point it straight at the file with `export HE_JSON_PATH=/path/to/qforte/tests/He-ccpvdz.json`.
+
 ## Two things every example is honest about
 
 **Which Hamiltonians are real.** Some examples use the small illustrative qubit Hamiltonians in `common/toy_hamiltonians.py` — explicitly educational, never presented as physically accurate. Examples that need genuine numbers build or load real ones: via PySCF (`pip install 'qpubench[pyscf]'`), via `qpubench.hamiltonian_sources` (HamLib Chemistry, PennyLane qchem datasets, or ab initio construction from any geometry — see "Real Hamiltonian sources" below), or via QForte. Each script says which kind it uses.

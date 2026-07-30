@@ -6,6 +6,7 @@ This module is the only place that knows about both.
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -23,6 +24,136 @@ from qpubench.schemas.observable import SparsePauliObservable
 from qpubench.schemas.primitives import CircuitFormat, ComplexNumber, ComputingModel, JobStatus
 from qpubench.schemas.record import VQAConfig, VQAResult
 from qpubench.schemas.result import AdaptIteration, ExpectationResult, QuantumResult
+
+# ---------------------------------------------------------------------------
+# Locating QForte's bundled test molecules
+# ---------------------------------------------------------------------------
+
+_QFORTE_TESTS_RAW_URL = "https://raw.githubusercontent.com/evangelistalab/qforte/master/tests"
+
+# Relative locations of a molecule JSON under any candidate root.
+_MOLECULE_SUBDIRS = (Path(), Path("tests"), Path("qforte") / "tests", Path("share") / "qforte")
+
+
+def _distribution_source_dir(dist_name: str) -> Path | None:
+    """Source directory recorded by ``pip install .`` / ``pip install -e .``.
+
+    PEP 610 makes pip write ``direct_url.json`` into the ``.dist-info`` of
+    anything installed from a local path, which is how we get from an
+    installed QForte back to the checkout its ``tests/`` directory lives in.
+    """
+    try:
+        from importlib.metadata import distribution
+        raw = distribution(dist_name).read_text("direct_url.json")
+    except Exception:
+        return None
+    if not raw:
+        return None
+    try:
+        url = json.loads(raw).get("url", "")
+    except json.JSONDecodeError:
+        return None
+    if not url.startswith("file://"):
+        return None
+
+    from urllib.parse import unquote, urlparse
+    path = Path(unquote(urlparse(url).path))
+    return path if path.is_dir() else None
+
+
+def _qforte_search_roots() -> list[Path]:
+    """Directories that may contain (or contain a parent of) QForte's tests/."""
+    roots: list[Path] = []
+
+    try:
+        import qforte
+    except ImportError:
+        qforte = None  # type: ignore[assignment]
+
+    pkg_dir: Path | None = None
+    if qforte is not None and getattr(qforte, "__file__", None):
+        pkg_dir = Path(qforte.__file__).resolve().parent
+        # setup.py develop / editable installs leave qforte importable from
+        # inside the checkout: <clone>/src/qforte/__init__.py → <clone>/tests/.
+        roots += [pkg_dir, *list(pkg_dir.parents)[:3]]
+
+    src_dir = _distribution_source_dir("qforte")
+    if src_dir is not None:
+        roots.append(src_dir)
+
+    cwd = Path.cwd().resolve()
+    roots += [cwd, *list(cwd.parents)[:3]]
+
+    seen: set[Path] = set()
+    unique: list[Path] = []
+    for root in roots:
+        if root not in seen:
+            seen.add(root)
+            unique.append(root)
+    return unique
+
+
+def find_molecule_json(name: str, *, env_var: str | None = None) -> Path:
+    """Locate a molecule JSON that ships in QForte's ``tests/`` directory.
+
+    QForte's setup.py does not install ``tests/``, so these files exist only
+    in a source checkout — an installed-only QForte will never have them.
+    Search order:
+
+      1. ``$env_var``, either the file itself or a directory holding it
+      2. the installed ``qforte`` package directory (recursively)
+      3. the checkout: parents of the package directory, plus the source
+         path pip recorded for a ``pip install .`` / ``pip install -e .``
+      4. the current directory and its parents
+
+    Raises FileNotFoundError listing the searched roots and how to fix it.
+    """
+    override = os.environ.get(env_var) if env_var else None
+    if override:
+        candidate = Path(override).expanduser()
+        if candidate.is_dir():
+            candidate = candidate / name
+        if not candidate.is_file():
+            raise FileNotFoundError(
+                f"${env_var} is set to {override!r}, but {candidate} is not a file."
+            )
+        return candidate.resolve()
+
+    roots = _qforte_search_roots()
+    for root in roots:
+        for subdir in _MOLECULE_SUBDIRS:
+            candidate = root / subdir / name
+            if candidate.is_file():
+                return candidate.resolve()
+
+    # Last resort: walk the installed package itself (small, and would find
+    # the file if a future QForte release starts shipping its test data).
+    try:
+        import qforte
+        pkg_dir = Path(qforte.__file__).resolve().parent
+    except (ImportError, AttributeError, TypeError):
+        pass
+    else:
+        for hit in pkg_dir.rglob(name):
+            return hit.resolve()
+
+    searched = "\n".join(f"    {root}" for root in roots)
+    env_hint = env_var or "QFORTE_MOLECULE_PATH"
+    raise FileNotFoundError(
+        f"{name} not found.\n\n"
+        "QForte does not install its tests/ directory, so this file is only\n"
+        "present in a source checkout.  Any of these fixes work:\n\n"
+        "  1. Point at a checkout you already have:\n"
+        f"       export {env_hint}=/path/to/qforte/tests/{name}\n"
+        "  2. Download the single file:\n"
+        f"       curl -LO {_QFORTE_TESTS_RAW_URL}/{name}\n"
+        f"       export {env_hint}=$PWD/{name}\n"
+        "  3. Install QForte from a git clone (keep the clone in place):\n"
+        "       git clone https://github.com/evangelistalab/qforte.git\n"
+        "       pip install ./qforte\n\n"
+        f"Searched under:\n{searched}\n"
+    )
+
 
 # ---------------------------------------------------------------------------
 # Molecule spec helpers

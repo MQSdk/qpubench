@@ -10,8 +10,14 @@ protocol.  Results are recorded in qpubench's BenchmarkRecord schema and
 stored to an NDJSON file.
 
 The molecule is supplied as a path to a QForte external JSON file that
-ships with QForte's test suite.  If you have Psi4 installed, replace
-HE_JSON_PATH with an inline psi4 spec (see inline_psi4_spec() below).
+ships with QForte's test suite (tests/He-ccpvdz.json).  QForte's setup.py
+does not install tests/, so that file exists only in a source checkout —
+set HE_JSON_PATH to point at it if it cannot be found automatically:
+
+    export HE_JSON_PATH=/path/to/qforte/tests/He-ccpvdz.json
+
+If Psi4 is installed, no file is needed at all: the same He/cc-pvdz system
+is built on the fly (see inline_psi4_spec() below).
 
 Run:
     python examples/qforte_vqe_benchmark.py
@@ -22,30 +28,33 @@ import json
 import pathlib
 import sys
 
+# integrations/ is not an installed package — add the repo root so the
+# integrations/qforte/ bridge (adapter.py + converters.py) is importable
+# when running this example in place. Copy integrations/qforte/ into your
+# own project (see its README) instead of relying on this path shim.
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
+
 # ---------------------------------------------------------------------------
 # Locate QForte's He test molecule JSON
 # ---------------------------------------------------------------------------
 
-def _find_he_json() -> pathlib.Path:
-    """Search for He-ccpvdz.json in the QForte package directory."""
-    try:
-        import qforte
-        qforte_root = pathlib.Path(qforte.__file__).parent
-    except ImportError:
-        print("QForte is not installed.  See: https://github.com/evangelistalab/qforte")
-        sys.exit(1)
+HE_JSON_ENV = "HE_JSON_PATH"
 
-    candidates = list(qforte_root.rglob("He-ccpvdz.json"))
-    if not candidates:
-        # Also check relative to wherever qforte was cloned
-        candidates = list(pathlib.Path(".").rglob("He-ccpvdz.json"))
-    if not candidates:
-        raise FileNotFoundError(
-            "Could not find He-ccpvdz.json.  "
-            "Either install QForte from source (it ships in tests/) or "
-            "provide a path manually via HE_JSON_PATH."
-        )
-    return candidates[0]
+
+def _find_he_json() -> pathlib.Path | None:
+    """Locate He-ccpvdz.json, or return None if Psi4 can build it instead."""
+    from integrations.qforte.converters import find_molecule_json
+
+    try:
+        return find_molecule_json("He-ccpvdz.json", env_var=HE_JSON_ENV)
+    except FileNotFoundError as exc:
+        try:
+            import psi4  # noqa: F401
+        except ImportError:
+            raise
+        print(f"He-ccpvdz.json not found; building He/cc-pvdz with Psi4 instead.\n"
+              f"(Set ${HE_JSON_ENV} to use QForte's test file: {exc.args[0].splitlines()[0]})\n")
+        return None
 
 
 def inline_psi4_spec(mol_geometry: list, basis: str = "sto-6g") -> str:
@@ -69,6 +78,7 @@ def inline_psi4_spec(mol_geometry: list, basis: str = "sto-6g") -> str:
 # Benchmark
 # ---------------------------------------------------------------------------
 
+from integrations.qforte.adapter import QForteAlgorithmAdapter
 from qpubench import (
     AdaptVQERunConfig,
     AlgorithmFamily,
@@ -80,13 +90,6 @@ from qpubench import (
 )
 from qpubench.schemas.circuit import CircuitSpec
 from qpubench.schemas.primitives import CircuitFormat
-
-# integrations/ is not an installed package — add the repo root so the
-# integrations/qforte/ bridge (adapter.py + converters.py) is importable
-# when running this example in place. Copy integrations/qforte/ into your
-# own project (see its README) instead of relying on this path shim.
-sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
-from integrations.qforte.adapter import QForteAlgorithmAdapter
 
 ALGORITHMS: list[tuple[AlgorithmSpec, AdaptVQERunConfig]] = [
     (
@@ -130,15 +133,31 @@ def print_record(record: BenchmarkRecord) -> None:
 
 
 def main() -> None:
-    he_json = _find_he_json()
-    print(f"Using molecule file: {he_json}\n")
+    try:
+        import qforte  # noqa: F401
+    except ImportError:
+        print("QForte is not installed.  See: https://github.com/evangelistalab/qforte")
+        sys.exit(1)
+
+    try:
+        he_json = _find_he_json()
+    except FileNotFoundError as exc:
+        print(exc, file=sys.stderr)
+        sys.exit(1)
+
+    if he_json is None:
+        serialized = inline_psi4_spec([("He", (0.0, 0.0, 0.0))], basis="cc-pvdz")
+        print("Using molecule: He / cc-pvdz built by Psi4\n")
+    else:
+        serialized = str(he_json)
+        print(f"Using molecule file: {he_json}\n")
 
     # The CircuitSpec represents the problem (He molecule), not a pre-written circuit.
     # num_qubits is filled in after QForte builds the system; set 0 as a placeholder.
     mol_spec = CircuitSpec(
         num_qubits=0,
         format=CircuitFormat.MOLECULE_JSON,
-        serialized=str(he_json),
+        serialized=serialized,
     )
 
     store  = NDJSONStore(pathlib.Path("results/qforte_he_benchmark.ndjson"))

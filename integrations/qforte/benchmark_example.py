@@ -17,24 +17,11 @@ import pathlib
 import sys
 
 # ---------------------------------------------------------------------------
-# Locate He-ccpvdz.json (ships with QForte tests/)
+# Locate He-ccpvdz.json (ships in QForte's tests/, which setup.py does not
+# install — set $HE_JSON_PATH if it is not found automatically)
 # ---------------------------------------------------------------------------
 
-def _find_molecule_json(name: str) -> pathlib.Path:
-    try:
-        import qforte
-        root = pathlib.Path(qforte.__file__).parent
-    except ImportError:
-        print("QForte is not installed.  See: https://github.com/evangelistalab/qforte")
-        sys.exit(1)
-
-    hits = list(root.rglob(name)) or list(pathlib.Path(".").rglob(name))
-    if not hits:
-        raise FileNotFoundError(
-            f"{name} not found.  Install QForte from source; "
-            "it ships in qforte/tests/."
-        )
-    return hits[0]
+HE_JSON_ENV = "HE_JSON_PATH"
 
 
 # ---------------------------------------------------------------------------
@@ -48,7 +35,7 @@ from qpubench_qforte import (
     AdaptVQERunner,
     QForteAlgorithmAdapter,
 )
-from qpubench_qforte.converters import molecule_spec_from_file
+from qpubench_qforte.converters import find_molecule_json, molecule_spec_from_file
 
 from qpubench import (
     BenchmarkRunner,
@@ -99,7 +86,11 @@ def _print_adapt_convergence(records) -> None:
 # ---------------------------------------------------------------------------
 
 def main() -> None:
-    he_json = _find_molecule_json("He-ccpvdz.json")
+    try:
+        he_json = find_molecule_json("He-ccpvdz.json", env_var=HE_JSON_ENV)
+    except FileNotFoundError as exc:
+        print(exc, file=sys.stderr)
+        sys.exit(1)
     mol     = molecule_spec_from_file(he_json)
     print(f"Molecule file : {he_json}")
 
