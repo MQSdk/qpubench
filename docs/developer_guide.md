@@ -321,6 +321,68 @@ constructor arguments. See the credentials section of the
 
 ---
 
+## Why the models are hand-written
+
+Pydantic is the only mandatory runtime dependency, so the framework is
+essentially a Pydantic schema library with adapters and stores around it. It
+uses Pydantic in a specific way that is worth stating outright, because the
+obvious alternative is common in scientific-workflow tooling: **qpubench
+contains no `create_model()` call.** Every model is written by hand.
+
+Stacks that generate models at runtime do so because their task interfaces are
+defined by another team, vary per task, and are ephemeral — validating input
+just before execution is the whole job, and hand-writing hundreds of models
+would not scale. qpubench's schemas are the opposite kind of object. A
+`BenchmarkRecord` is archival data: it round-trips through NDJSON/Parquet/S3
+(`store.py` re-validates every line with `model_validate_json`) and must still
+be readable years after the code that wrote it. A runtime-generated model
+undermines exactly that guarantee, and it also costs the thing that makes this
+repo navigable — every field being greppable and visible to mypy.
+
+So the design is a **static, versioned core plus dynamically-validated vendor
+extension points**:
+
+- The core (`circuit`, `execution`, `result`, `record`, `backend`,
+  `observable`, `primitives`) is hand-written, carries `SCHEMA_VERSION`, and
+  uses `extra="forbid"` on the VQA models so stale callers fail loudly instead
+  of silently dropping data.
+- Where shapes genuinely vary — dozens of mirrored upstreams — nothing is
+  generated either. Vendor payloads travel through namespaced `dict[str, Any]`
+  slots guarded by a `mode="before"` validator that auto-dumps any Pydantic
+  model passed in, and are re-validated against the vendor's own static schema
+  on the way out:
+
+  ```python
+  record.result.vendor_results["qforte_result"] = qforte_run_result  # a BaseModel
+  # ... stored as its dict dump, rehydrated by the consumer:
+  MBQCPattern.model_validate(spec.measurement_pattern)
+  ```
+
+The short version: *we don't generate models — we defer them.* The core stays
+vendor-neutral and JSON-serialisable, and a vendor schema module can evolve
+without touching `record.py`.
+
+### The rule this implies
+
+New vendor-specific metadata goes in `VQAConfig.vendor_data`, new vendor result
+payloads in `QuantumResult.vendor_results[<key>]`, new vendor mitigation
+options in `ExecutionOptions.mitigation_options`. **Never add a top-level
+vendor field to a core model, and never import a vendor module from one.**
+
+### The honest cost
+
+The established-keys list in `result.py` is documentation-enforced, not
+type-enforced — nothing stops a typo'd vendor key. That is the trade accepted
+in exchange for the archival guarantees above; if it ever needs closing, the
+narrow fix is generating a per-vendor typed *view* of `vendor_results` from a
+key registry, not generating the records themselves. Related: the open
+escape-hatch-convention item in [roadmap.md](roadmap.md), which covers the
+split between open extension points (`*_data`, `*_results`) and slots that are
+dicts only to keep the core import-free (`CircuitSpec.measurement_pattern` and
+friends).
+
+---
+
 ## Making a schema change
 
 Schema modules are the stable core; stored records outlive the code that wrote

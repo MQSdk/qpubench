@@ -53,6 +53,7 @@ the `<maintainer>_<package>.py` schema naming: [docs/developer_guide.md](docs/de
 
 - **No quantum SDK imports inside `src/qpubench/`**. Only adapters (in your project or `integrations/`) import external SDKs. The test suite must pass with `pip install .` alone.
 - **Never change a schema field name or type without bumping `schema_version`** in `src/qpubench/schemas/record.py`. Existing stored records break silently otherwise.
+- **Vendor-specific data goes through the extension points, never onto core models.** New vendor metadata → `VQAConfig.vendor_data`; new vendor result payloads → `QuantumResult.vendor_results[<key>]`; new vendor mitigation options → `ExecutionOptions.mitigation_options`. No top-level vendor fields in core models, and no vendor imports in core modules. Rationale: [docs/developer_guide.md](docs/developer_guide.md#why-the-models-are-hand-written).
 - **Pauli encoding is non-standard for Qrack**: I=0, X=1, **Z=2, Y=3** (Q# convention). Always use `PauliLabel.to_qrack_int()`, never raw integers.
 - **MBQC byproduct register bit order**: bit 0 = Z, bit 1 = X — reversed from gate-based convention. See `schemas/mirrors/johnrscott_mbqc_fpga.py`.
 - **`AlgorithmAdapter` detection is duck-typed**: your class must have both `validate_problem` and `run_algorithm` methods, or the runner silently falls through to the `BackendAdapter` path.
