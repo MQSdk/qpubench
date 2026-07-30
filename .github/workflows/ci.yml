@@ -22,7 +22,12 @@ jobs:
           # Pinned: unpinned linters change their default rule set between
           # releases, which turns CI red on pushes that changed nothing.
           # Bump these deliberately, with the fixes in the same commit.
-          pip install pytest pytest-cov 'ruff==0.15.13' 'mypy==2.1.0'
+          # types-requests: `requests` ships no inline types, so without the
+          # stubs mypy fails on the lazy `import requests` in the HamLib,
+          # QUBO and q-vSZP loaders. Stubs are a type-check-only dependency;
+          # `requests` itself stays an optional extra.
+          pip install pytest pytest-cov 'ruff==0.15.13' 'mypy==2.1.0' \
+                      'types-requests==2.33.0.20260518'
       - name: Ruff lint
         run: ruff check
       - name: Mypy (strict)

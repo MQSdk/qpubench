@@ -109,6 +109,7 @@ dev = [
     "pytest-cov",
     "ruff",
     "mypy",
+    "types-requests",   # stubs for the lazy `import requests` in the HamLib/QUBO/q-vSZP loaders
 ]
 
 # ── Hatchling ─────────────────────────────────────────────────────────────────
@@ -129,6 +130,7 @@ dev-dependencies = [
     "pytest-cov",
     "ruff",
     "mypy",
+    "types-requests",
 ]
 
 # ── Ruff ──────────────────────────────────────────────────────────────────────
@@ -167,6 +169,7 @@ module = [
     "botocore.*",
     "cotengra.*",
     "h5py.*",
+    "iqm.*",
     "mitiq.*",
     "openfermion.*",
     "openfermionpyscf.*",
@@ -187,6 +190,22 @@ module = [
     "yaml.*",
 ]
 ignore_missing_imports = true
+
+# openfermion and iqm-client *do* ship inline types, so whether their calls
+# need a per-line `type: ignore` depends on whether the optional extra is
+# installed: with the SDK present mypy follows it and flags the partially
+# typed API (attributes not re-exported, untyped calls), while without it the
+# override above makes the module `Any` and those same comments turn into
+# "unused ignore" errors. CI installs no quantum SDKs, so keep the ignores —
+# correct for developers who have `[openfermion]` / `[iqm]` — and stop warning
+# about them being unused in the SDK-less environment. Only these two modules
+# are affected; ignores elsewhere hold either way.
+[[tool.mypy.overrides]]
+module = [
+    "qpubench.backends.iqm_adapter",
+    "qpubench.hamiltonian_sources.ab_initio",
+]
+warn_unused_ignores = false
 
 # ── Pytest ────────────────────────────────────────────────────────────────────
 [tool.pytest.ini_options]
