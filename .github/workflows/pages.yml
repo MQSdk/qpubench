@@ -1,0 +1,78 @@
+name: GitHub Pages
+
+# Publishes the documentation site to GitHub Pages.
+#
+# The site is assembled from two sources:
+#   1. Jekyll renders every Markdown file under docs/ (the user guide, schema
+#      reference, integration pages) using docs/_config.yml.
+#   2. docs/site/ — the hand-written landing page and its assets — is overlaid
+#      on top of the render, so docs/site/index.html becomes the site root.
+#
+# Jekyll's own render of docs/index.md is moved to /guide.html first, so the
+# Markdown user guide stays reachable; the landing page links to it.
+#
+# The site is served from the custom domain https://qpubench.org — docs/site/CNAME
+# is published at the artifact root to carry it. See docs/site/README.md for the
+# DNS records and the one-time repository setup:
+#   Settings → Pages → Source = "GitHub Actions"
+#   Settings → Pages → Custom domain = qpubench.org, then "Enforce HTTPS"
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Let a running deploy finish; queue at most one more.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify generated logo tiles and grid are in sync
+        run: python3 docs/site/tools/make_logos.py --check
+
+      - uses: actions/configure-pages@v5
+
+      - name: Render Markdown docs with Jekyll
+        uses: actions/jekyll-build-pages@v1
+        with:
+          source: ./docs
+          destination: ./_site
+
+      - name: Overlay the landing page
+        run: |
+          set -euo pipefail
+          # Keep the Markdown user guide reachable at /guide.html …
+          mv _site/index.html _site/guide.html
+          # … and put the hand-written landing page at the site root.
+          # This also lands docs/site/CNAME at _site/CNAME, which is what binds
+          # the deployment to the qpubench.org custom domain — do not remove it.
+          cp -R docs/site/. _site/
+          # packages.json and the generator are inputs, not published assets.
+          rm -f _site/packages.json _site/README.md
+          rm -rf _site/tools
+          test -s _site/CNAME || { echo "::error::CNAME missing from artifact"; exit 1; }
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./_site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
