@@ -1,4 +1,4 @@
-# Fragmentation — decomposing the problem
+# Fragmentation: decomposing the problem
 
 Fragmentation makes an intractable molecule tractable by splitting it into
 subsystems, solving each one, and recombining. qpubench models this with one
@@ -6,16 +6,16 @@ general schema plus two project mirrors:
 
 | Module | Upstream | Role |
 |---|---|---|
-| `qpubench.schemas.catalogs.fragmentation` | — (framework-general) | The shared vocabulary every method reduces to |
+| `qpubench.schemas.catalogs.fragmentation` | n/a (framework-general) | The shared vocabulary every method reduces to |
 | `qpubench.schemas.mirrors.fragmentqc_fragment` | [fragment-qc/fragment](https://gitlab.com/fragment-qc/fragment) | MBE / GMBE via PIE trees, multilevel layers, adaptive screening |
 | `qpubench.schemas.mirrors.qiskitcommunity_fragment_methods` | [qiskit-community/quantum-fragment-methods](https://github.com/qiskit-community/quantum-fragment-methods) | EWF embedding with per-fragment quantum solvers |
 
-Neither upstream package is a dependency. These are Pydantic v2 mirrors —
+Neither upstream package is a dependency. These are Pydantic v2 mirrors;
 `pytest tests/` passes with `pip install .` alone.
 
 ## The shared abstraction
 
-Every fragmentation method — MBE, GMBE, DMET, EWF, ONIOM — is:
+Every fragmentation method (MBE, GMBE, DMET, EWF, ONIOM) is:
 
 1. a set of **fragments**, in real space or orbital space;
 2. an **expansion**: `(fragment, signed coefficient)` terms whose weighted sum
@@ -25,7 +25,7 @@ Every fragmentation method — MBE, GMBE, DMET, EWF, ONIOM — is:
    *adaptive* part) and **layers** solving different orders at different levels
    of theory (the *multilevel* part).
 
-`FragmentExpansionTerm` is deliberately the most general form — an arbitrary
+`FragmentExpansionTerm` is deliberately the most general form: an arbitrary
 real coefficient on an arbitrary fragment. A 2-body MBE, a generalized MBE over
 overlapping fragments and an ONIOM subtractive scheme all fit without a
 method-specific schema.
@@ -56,7 +56,7 @@ spec = FragmentationSpec(
     ],
 )
 
-spec.coefficient_sum      # 0.0 ... wait — see below
+spec.coefficient_sum      # 0.0 ... wait, see below
 spec.terms_by_order()     # {1: 3, 2: 3}
 ```
 
@@ -64,7 +64,7 @@ spec.terms_by_order()     # {1: 3, 2: 3}
 
 A valid expansion covering the whole supersystem has coefficients summing to
 **1** (every atom counted exactly once). For a 3-monomer 2-body MBE the
-monomer coefficient is `-(n-2) = -1`, giving `3·(-1) + 3·(+1) = 0` — which is
+monomer coefficient is `-(n-2) = -1`, giving `3·(-1) + 3·(+1) = 0`, which is
 correct for the *interaction* energy, not the total. Use `coefficient_sum` and
 `is_complete()` to see which of the two you built:
 
@@ -73,7 +73,7 @@ spec.is_complete()        # False -> this expansion is not covering the supersys
 ```
 
 A shortfall on a run that *should* be complete usually means screening dropped
-terms — which is expected for an adaptive run. That is why it is reported
+terms, which is expected for an adaptive run. That is why it is reported
 rather than enforced.
 
 ## Adaptive screening
@@ -96,7 +96,7 @@ rule.threshold_for(9)                 # None (falls back to `cutoff`)
 ```
 
 Screening is only worthwhile when the estimator is far cheaper than the solver
-it protects — hence the explicit `backend` field.
+it protects; hence the explicit `backend` field.
 
 ## Multilevel layers
 
@@ -136,7 +136,7 @@ spec.quantum_fragments()                            # fragments headed for the Q
 spec.max_fragment_qubits                            # the QPU width this plan needs
 ```
 
-`matches()` only evaluates the machine-checkable `max_*` limits — `condition`
+`matches()` only evaluates the machine-checkable `max_*` limits; `condition`
 is documentation. A limit compared against an unset fragment field does not
 reject, so a fragment with no `num_qubits` estimate is not excluded by
 `max_qubits`.
@@ -155,7 +155,7 @@ spec = strategy.to_fragmentation_spec("my_calculation")
 spec.is_multilevel, spec.is_adaptive
 ```
 
-The idea worth importing wholesale is the **PIE tree** — nodes keyed by a set
+The idea worth importing wholesale is the **PIE tree**: nodes keyed by a set
 of primary indices, each with an integer coefficient. Every expansion is the
 same object; only the coefficients differ.
 
@@ -189,7 +189,7 @@ mod.to_screening_rule()      # -> FragmentScreeningRule, or None
 ```
 
 Basis mods (`UseSupersystemBasis`, `ClusterBasis`, …) and MIC mods change *how*
-a term is computed, not *whether* it is, so they return `None` — map over every
+a term is computed, not *whether* it is, so they return `None`; map over every
 mod and filter.
 
 > Upstream's own `fragment/schemas/` models are Pydantic **v1**
@@ -212,8 +212,8 @@ spec = cfg.to_fragmentation_spec()
 ### Credentials are dropped, deliberately
 
 The upstream `qpu.credentials` block holds an API token and a CRN instance id.
-`QFMQPUConfig` mirrors `channel` and `instance` — a benchmark record *should*
-state which service it ran on — but has **no token field**, and
+`QFMQPUConfig` mirrors `channel` and `instance`, since a benchmark record *should*
+state which service it ran on, but it has **no token field**, and
 `from_config_dict()` never reads one. You can pass a real config file in
 verbatim without leaking a secret into a stored record.
 
@@ -233,7 +233,7 @@ execution](distributed_qc.md) decomposes the *circuit* solving each fragment.
 frag_result.record_id            # -> BenchmarkRecord.experiment_id
 ```
 
-That record may itself carry a `CircuitCutSpec` or `CircuitPartitionSpec` — a
+That record may itself carry a `CircuitCutSpec` or `CircuitPartitionSpec`; a
 fragment too wide for one QPU is cut or partitioned like any other circuit.
 
 ## Attaching to a benchmark record

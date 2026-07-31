@@ -6,7 +6,7 @@ answer whether qpubench should grow a QUBO *constructor* alongside
 loaders, and what building one would actually involve.
 
 The brief was: if a QUBO generator is added, it should work the way
-[`ab_initio.py`](../src/qpubench/hamiltonian_sources/ab_initio.py) does — you
+[`ab_initio.py`](../src/qpubench/hamiltonian_sources/ab_initio.py) does: you
 define a molecule, and a QUBO is constructed for it.
 
 ---
@@ -47,7 +47,7 @@ spin symmetry, with those constraints folded in as penalties. Directly
 inherits an active space, so it composes with `ab_initio.py`'s existing
 `occupied_indices` / `active_indices` machinery.
 
-- **Variables:** one per selected determinant — grows combinatorially with
+- **Variables:** one per selected determinant, growing combinatorially with
   active space size, which is the binding constraint.
 - **Well-defined?** The construction is, once you fix the determinant list and
   the penalty weights. Neither has a canonical choice.
@@ -59,7 +59,7 @@ inherits an active space, so it composes with `ab_initio.py`'s existing
 
 Discretise torsion angles or lattice positions, one-hot encode each rotatable
 bond's allowed values, and write the force-field energy as a pairwise sum.
-This is the family with real published traction — the lattice protein-folding
+This is the family with real published traction; the lattice protein-folding
 formulations are the canonical example.
 
 - **Variables:** (rotatable bonds) × (angle bins), plus one-hot penalties.
@@ -74,13 +74,13 @@ formulations are the canonical example.
 Choosing how to cut a molecule into fragments, which fragments to keep after
 screening, and which solver to assign to each is a combinatorial optimisation
 problem in its own right. qpubench already models all three
-(`schemas/catalogs/fragmentation.py` — `FragmentScreeningRule`,
+(`schemas/catalogs/fragmentation.py`: `FragmentScreeningRule`,
 `FragmentSolverAssignment`).
 
 - **Variables:** one per candidate fragment or per fragment-solver pair.
 - **Well-defined?** The objective needs a cost model that does not currently
   exist in the schema.
-- **Fit with this repo:** the most *native* option — it optimises something
+- **Fit with this repo:** the most *native* option; it optimises something
   qpubench already represents, rather than importing an unrelated problem.
 
 ### 4. Reaction-network / kinetics selection
@@ -98,7 +98,7 @@ and Arrhenius rate constants.
 Independent of which family is chosen:
 
 1. **A `QUBOSpec` input model.** `ab_initio.py` takes a geometry, basis, charge
-   and multiplicity — all standard. A QUBO generator's inputs are the
+   and multiplicity, all standard. A QUBO generator's inputs are the
    *encoding choices*: discretisation, penalty weights, variable ordering. None
    is standard, so all must be captured explicitly or results are not
    reproducible. This is the piece that must be designed first; it is a schema
@@ -118,7 +118,7 @@ Independent of which family is chosen:
    since only the encoding knows what the constraints were.
 
 4. **A classical reference.** Every other Hamiltonian source in this repo pairs
-   with one — `HamiltonianLibraryRecord.fci_energy`, GSOpt's
+   with one: `HamiltonianLibraryRecord.fci_energy`, GSOpt's
    `REFERENCE_ENERGIES`. For QUBOs the analogue is a best-known objective
    value. OR-Library publishes these for its instances; a *generated* QUBO has
    none, so a generator must also produce a classical baseline (exhaustive for
@@ -132,18 +132,18 @@ Independent of which family is chosen:
 **Do not build a general molecule-to-QUBO generator.** The abstraction does not
 exist to be wrapped; each family above is a separate research choice, and a
 module that pretended otherwise would be making physics decisions silently on
-the user's behalf — the opposite of what the loaders do.
+the user's behalf, the opposite of what the loaders do.
 
 Instead, in this order:
 
-1. **Ship the loaders** (done — `hamiltonian_sources/qubo.py`). Pre-defined
+1. **Ship the loaders** (done, in `hamiltonian_sources/qubo.py`). Pre-defined
    instances from OR-Library and MQLib, with best-known objective values, are
    what a benchmark framework actually needs first: they make QUBO results
    comparable against published numbers immediately.
 
 2. **Design `QUBOSpec` before any generator.** Encoding choices, penalty
    weights and their provenance, plus a feasibility predicate. This is
-   independently useful — it is also what is needed to record a QUBO produced
+   independently useful; it is also what is needed to record a QUBO produced
    by any external tool, including a QBPP or QUBO.jl model.
 
 3. **If one family is implemented first, make it family 3 (fragment /
@@ -163,9 +163,9 @@ Instead, in this order:
 
 | Capability | Status |
 |---|---|
-| Load pre-defined QUBOs (OR-Library, MQLib) | implemented — `hamiltonian_sources/qubo.py` |
+| Load pre-defined QUBOs (OR-Library, MQLib) | implemented, in `hamiltonian_sources/qubo.py` |
 | Read QUBOTools/qbsolv `.qubo` and BQPJSON | implemented |
-| QUBO → Ising `SparsePauliObservable` | implemented — exact change of variable, offset returned separately |
-| Evaluate an objective at a bitstring | implemented — `QUBOInstance.objective()` |
-| `QUBOSpec` for encoding provenance | **not designed** — step 2 above |
+| QUBO → Ising `SparsePauliObservable` | implemented; exact change of variable, offset returned separately |
+| Evaluate an objective at a bitstring | implemented, via `QUBOInstance.objective()` |
+| `QUBOSpec` for encoding provenance | **not designed**; step 2 above |
 | Any molecule → QUBO generator | **not implemented, not recommended as a general facility** |

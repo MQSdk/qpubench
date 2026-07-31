@@ -51,7 +51,7 @@ assert genome2.depth == genome.depth
 
 ## `BitstringGenome` (original Xenakis)
 
-Binary string genome from `sweep_results.csv`. Decoding to an actual circuit requires the Xenakis library — this model is a **data holder only**.
+Binary string genome from `sweep_results.csv`. Decoding to an actual circuit requires the Xenakis library; this model is a **data holder only**.
 
 ```python
 from qpubench.schemas import BitstringGenome

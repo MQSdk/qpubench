@@ -12,34 +12,34 @@ A statevector simulation of `n` qubits stores `2^n` complex amplitudes (16 bytes
 | PennyLane Lightning (Xanadu) | `PennyLaneLightningAdapter` | ✅ `lightning.qubit` | ✅ `lightning.gpu` / `lightning.kokkos` | `lightning.gpu` uses NVIDIA cuQuantum; Kokkos also targets AMD HIP |
 | CUDA-Q (NVIDIA) | `BackendSpec.cudaq(target=...)` | ✅ `qpp-cpu` | ✅ `nvidia`, `tensornet` | GPU-first by design; multi-GPU tensor-network target |
 | Qrack | `QrackAdapter` (stub) | ✅ | ✅ OpenCL/CUDA | Vendor-neutral GPU support (NVIDIA, AMD, Intel) |
-| AWS Braket local | `BraketAdapter` (`device_arn="local"`) | ✅ | — | CPU statevector/density-matrix |
+| AWS Braket local | `BraketAdapter` (`device_arn="local"`) | ✅ | n/a | CPU statevector/density-matrix |
 | Strawberry Fields (Xanadu, photonic) | `BackendSpec.strawberry_fields(...)` | ✅ `fock` / `gaussian` | ✅ `tf` backend | The TensorFlow backend runs on GPU if TensorFlow sees one |
-| thewalrus / photochipsim (photonic) | `BackendSpec.photochipsim(...)` | ✅ multithreaded | — | Hafnian/permanent computation is CPU-parallel |
-| Bloqade emulator (neutral atom) | `BackendSpec.bloqade_emulator(...)` | ✅ | — | Exact statevector, practical to ~20 atoms |
-| Stub adapters | `StubGateAdapter` / `StubMBQCAdapter` | ✅ | — | No SDK; random results for pipeline testing |
-| MBQC-FPGA | copy `backend_adapter_template.py` | — | — | **FPGA** — real-time MBQC control logic, see below |
+| thewalrus / photochipsim (photonic) | `BackendSpec.photochipsim(...)` | ✅ multithreaded | n/a | Hafnian/permanent computation is CPU-parallel |
+| Bloqade emulator (neutral atom) | `BackendSpec.bloqade_emulator(...)` | ✅ | n/a | Exact statevector, practical to ~20 atoms |
+| Stub adapters | `StubGateAdapter` / `StubMBQCAdapter` | ✅ | n/a | No SDK; random results for pipeline testing |
+| MBQC-FPGA | copy `backend_adapter_template.py` | n/a | n/a | **FPGA**, real-time MBQC control logic, see below |
 
-## CPUs — the default everywhere
+## CPUs: the default everywhere
 
 Every adapter qpubench ships runs on CPU out of the box, with no extra installation:
 
 - **Qiskit Aer** (`AerAdapter`) uses OpenMP-parallelized statevector and QASM methods; Aer also offers `matrix_product_state` and `stabilizer` methods (`BackendSpec.qiskit_aer(method=...)`) that trade generality for much larger tractable circuits on CPU.
 - **PennyLane `lightning.qubit`** (`PennyLaneLightningAdapter`, `BackendSpec.lightning_qubit()`) is Xanadu's C++ OpenMP statevector kernel.
 - **Braket's local backend** (`BraketAdapter` with `device_arn="local"`) runs Amazon's CPU statevector simulator with no AWS account.
-- **Photonic simulators** (Strawberry Fields Fock/Gaussian backends, photochipsim via thewalrus) compute permanents and hafnians — `#P`-hard matrix functions — with multithreaded CPU code; this is exactly why Gaussian boson sampling is a quantum-advantage candidate.
+- **Photonic simulators** (Strawberry Fields Fock/Gaussian backends, photochipsim via thewalrus) compute permanents and hafnians (`#P`-hard matrix functions) with multithreaded CPU code; this is exactly why Gaussian boson sampling is a quantum-advantage candidate.
 - **Bloqade's Python emulator** integrates the neutral-atom Rydberg Hamiltonian exactly on CPU up to roughly 20 atoms.
 
 For benchmarking, CPU runs are the reproducibility baseline: results depend only on core count and BLAS/OpenMP settings, not on driver/toolkit versions.
 
-## GPUs — same adapters, bigger circuits
+## GPUs: same adapters, bigger circuits
 
-GPU execution is available in the SDKs behind several supported simulators. qpubench's shipped adapters construct the CPU defaults; switching to GPU is a one-line change in a copied adapter (adapters are plain classes — copy, edit, register under a new name, and the records stay comparable):
+GPU execution is available in the SDKs behind several supported simulators. qpubench's shipped adapters construct the CPU defaults; switching to GPU is a one-line change in a copied adapter (adapters are plain classes, so copy, edit, register under a new name, and the records stay comparable):
 
-- **Qiskit Aer (IBM)** — install `qiskit-aer-gpu` (Linux + NVIDIA CUDA) and construct `AerSimulator(device="GPU")` inside your copy of `AerAdapter`; with cuQuantum installed, `cuStateVec_enable=True` switches the kernel to NVIDIA's cuStateVec library. Statevector, density-matrix, unitary, and tensor-network methods all run on GPU.
-- **PennyLane (Xanadu)** — replace `lightning.qubit` with `lightning.gpu` (`pennylane-lightning-gpu`, backed by cuQuantum cuStateVec, NVIDIA only) or `lightning.kokkos` (Kokkos kernels — CUDA, AMD HIP, or OpenMP, chosen at build time) in your copy of `PennyLaneLightningAdapter`.
-- **CUDA-Q (NVIDIA)** — GPU-first by design: `BackendSpec.cudaq(target="nvidia")` describes the GPU statevector target, `target="tensornet"` the (multi-)GPU tensor-network contraction target, and `target="qpp-cpu"` the CPU fallback.
-- **Qrack** — uniquely vendor-neutral: OpenCL kernels run on NVIDIA, AMD, and Intel GPUs alike (plus a CUDA build). `qrack_adapter.py` is still a stub; the schema side (`BackendSpec`, `avg_gate_fidelity` from `GetUnitaryFidelity()`) is ready.
-- **Strawberry Fields (Xanadu, photonic)** — the `"tf"` backend (`BackendSpec.strawberry_fields(backend="tf", ...)`) executes the Fock-space simulation as a TensorFlow graph, which runs on GPU whenever TensorFlow detects one.
+- **Qiskit Aer (IBM)**: install `qiskit-aer-gpu` (Linux + NVIDIA CUDA) and construct `AerSimulator(device="GPU")` inside your copy of `AerAdapter`; with cuQuantum installed, `cuStateVec_enable=True` switches the kernel to NVIDIA's cuStateVec library. Statevector, density-matrix, unitary, and tensor-network methods all run on GPU.
+- **PennyLane (Xanadu)**: replace `lightning.qubit` with `lightning.gpu` (`pennylane-lightning-gpu`, backed by cuQuantum cuStateVec, NVIDIA only) or `lightning.kokkos` (Kokkos kernels for CUDA, AMD HIP, or OpenMP, chosen at build time) in your copy of `PennyLaneLightningAdapter`.
+- **CUDA-Q (NVIDIA)**: GPU-first by design, `BackendSpec.cudaq(target="nvidia")` describes the GPU statevector target, `target="tensornet"` the (multi-)GPU tensor-network contraction target, and `target="qpp-cpu"` the CPU fallback.
+- **Qrack**: uniquely vendor-neutral, OpenCL kernels run on NVIDIA, AMD, and Intel GPUs alike (plus a CUDA build). `qrack_adapter.py` is still a stub; the schema side (`BackendSpec`, `avg_gate_fidelity` from `GetUnitaryFidelity()`) is ready.
+- **Strawberry Fields (Xanadu, photonic)**: the `"tf"` backend (`BackendSpec.strawberry_fields(backend="tf", ...)`) executes the Fock-space simulation as a TensorFlow graph, which runs on GPU whenever TensorFlow detects one.
 
 Because a GPU-backed adapter is registered under its own name, a CPU-vs-GPU comparison is just a two-backend `sweep()`:
 
@@ -54,9 +54,9 @@ records = runner.sweep(
 
 The per-record `result.total_time_s` / `result.qpu_time_s` timings then give you the architecture comparison directly from the store.
 
-## FPGAs — real-time control for MBQC
+## FPGAs: real-time control for MBQC
 
-FPGAs enter quantum benchmarking in a different role: not simulating amplitudes, but making **feed-forward decisions faster than decoherence**. In measurement-based quantum computing (MBQC), each measurement outcome determines the basis of later measurements, so byproduct tracking and adaptive-setting logic must run in real time between rounds — a job for dedicated hardware, not a Python process. qpubench models the FPGA control program of [`gitlab.com/johnrscott/mbqc-fpga`](https://gitlab.com/johnrscott/mbqc-fpga) bit-exactly (commit `fde787d1`; files: `qubit.vhd`, `byproduct.vhd`, `adapt.vhd`, `ops_update.vhd`, `comm_correct.vhd`, `program.cpp`), so an MBQC-on-FPGA run produces the same `BenchmarkRecord` as any simulator run.
+FPGAs enter quantum benchmarking in a different role: not simulating amplitudes, but making **feed-forward decisions faster than decoherence**. In measurement-based quantum computing (MBQC), each measurement outcome determines the basis of later measurements, so byproduct tracking and adaptive-setting logic must run in real time between rounds, a job for dedicated hardware, not a Python process. qpubench models the FPGA control program of [`gitlab.com/johnrscott/mbqc-fpga`](https://gitlab.com/johnrscott/mbqc-fpga) bit-exactly (commit `fde787d1`; files: `qubit.vhd`, `byproduct.vhd`, `adapt.vhd`, `ops_update.vhd`, `comm_correct.vhd`, `program.cpp`), so an MBQC-on-FPGA run produces the same `BenchmarkRecord` as any simulator run.
 
 The subsections below are the full reference for that FPGA program format.
 
@@ -69,9 +69,9 @@ bit:  15  14  13  12  11 | 10   9   8   7   6 |  5   4   3   2   1   0
       CommutationSpec      AdaptiveSpec             ByproductUpdateSpec
 ```
 
-`theta` (measurement angle) is **never** encoded in this word — it is an analog-domain quantity tracked in software only (`MBQCRound.theta`).
+`theta` (measurement angle) is **never** encoded in this word; it is an analog-domain quantity tracked in software only (`MBQCRound.theta`).
 
-### `b_prog` — byproduct update (`ByproductUpdateSpec`)
+### `b_prog`: byproduct update (`ByproductUpdateSpec`)
 
 Bits [5:0] encode XOR masks applied to the neighbourhood measurement triple `(m_below, m_self, m_above)` (from `ops_update.vhd`):
 
@@ -86,8 +86,8 @@ m[2] = qubit above (or 0 at boundary)
 
 | Field | Bits | Description |
 |---|---|---|
-| `z_mask` | [2:0] | 3-bit mask — selects which neighbours update Z byproduct |
-| `x_mask` | [5:3] | 3-bit mask — selects which neighbours update X byproduct |
+| `z_mask` | [2:0] | 3-bit mask, selects which neighbours update Z byproduct |
+| `x_mask` | [5:3] | 3-bit mask, selects which neighbours update X byproduct |
 
 ```python
 spec = ByproductUpdateSpec(z_mask=0b011, x_mask=0b100)
@@ -96,7 +96,7 @@ dz, dx = spec.update(m_below=1, m_self=0, m_above=1)
 
 `ops` register convention: **bit 0 = Z, bit 1 = X** (reversed from gate-based X-first order).
 
-### `s_prog` — adaptive measurement setting (`AdaptiveSpec`)
+### `s_prog`: adaptive measurement setting (`AdaptiveSpec`)
 
 Bits [10:6] compute the adaptive measurement setting `s` (from `adapt.vhd`):
 
@@ -111,7 +111,7 @@ Shift register direction: `sr[2]` = most recent, `sr[0]` = oldest.
 
 | Field | Bits | Description |
 |---|---|---|
-| `sr_mask` | [2:0] | 3-bit — selects shift-register positions |
+| `sr_mask` | [2:0] | 3-bit, selects shift-register positions |
 | `z_byp_enable` | [3] | XOR in stored Z byproduct |
 | `x_byp_enable` | [4] | XOR in stored X byproduct |
 
@@ -120,7 +120,7 @@ spec = AdaptiveSpec(sr_mask=0b011, z_byp_enable=True, x_byp_enable=False)
 s = spec.compute_s(shift_register=0b101, ops_stored_z=1, ops_stored_x=0)
 ```
 
-### `c_prog` — commutation correction (`CommutationSpec`)
+### `c_prog`: commutation correction (`CommutationSpec`)
 
 Bits [15:11] control CNOT byproduct commutation (from `comm_correct.vhd`):
 
@@ -151,7 +151,7 @@ CommutationSpec.cnot_target_control_below()      # role=0b00
 
 ### File formats
 
-**Xilinx COE (single qubit)** — `MBQCPattern.to_single_qubit_coe(qubit_idx)`, radix-2, one 16-bit binary word per line:
+**Xilinx COE (single qubit)**: `MBQCPattern.to_single_qubit_coe(qubit_idx)`, radix-2, one 16-bit binary word per line:
 
 ```
 memory_initialization_radix=2;
@@ -160,9 +160,9 @@ memory_initialization_vector=
 0010100000000010  ; round=1  theta=-1.047198
 ```
 
-**Xilinx COE (multi-qubit)** — `MBQCPattern.to_multi_qubit_coe()`, radix-16, N qubits concatenated into one hex word per round.
+**Xilinx COE (multi-qubit)**: `MBQCPattern.to_multi_qubit_coe()`, radix-16, N qubits concatenated into one hex word per round.
 
-**MTB CSV (testbench)** — `MBQCExecutionResult.to_multi_qubit_csv()`, compatible with `mbqc2_tb.vhd`:
+**MTB CSV (testbench)**: `MBQCExecutionResult.to_multi_qubit_csv()`, compatible with `mbqc2_tb.vhd`:
 
 ```
 line,meas,ops,s
@@ -219,7 +219,7 @@ f = FidelityResult(fidelity=0.972, metric=FidelityMetric.FUBINI_STUDY, reference
 
 ## Recording which architecture you ran on
 
-The record format already captures most of what an architecture comparison needs: `BackendSpec.name`/`provider` identify the simulator variant (register CPU and GPU variants under distinct names, e.g. `"aer_cpu"` / `"aer_gpu"`), and `QuantumResult.total_time_s` captures wall-clock time. For anything else — GPU model, driver version, core count — use `tags` and `notes` on `runner.run()` so the information is queryable from the store later:
+The record format already captures most of what an architecture comparison needs: `BackendSpec.name`/`provider` identify the simulator variant (register CPU and GPU variants under distinct names, e.g. `"aer_cpu"` / `"aer_gpu"`), and `QuantumResult.total_time_s` captures wall-clock time. For anything else, such as GPU model, driver version or core count, use `tags` and `notes` on `runner.run()` so the information is queryable from the store later:
 
 ```python
 record = runner.run(circuit, "aer_gpu", shots=8192,

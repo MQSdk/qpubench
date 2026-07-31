@@ -7,10 +7,10 @@ QESEM is available through two interfaces:
 - **IBM Qiskit Function**: `QiskitFunctionsCatalog.load("qedma/qesem")` on the IBM Quantum platform
 
 QESEM wraps any IBM gate-based backend with:
-1. **Device characterization** — noise-learning protocol builds a tailored noise model
-2. **Noise-aware transpilation** — maps circuit to physical qubits minimising QPU time
-3. **Quasi-probabilistic Error Tuning (QET)** — runs circuits at multiple noise scale factors
-4. **Classical post-processing** — extrapolates to a zero-noise unbiased estimate with error bar
+1. **Device characterization**: noise-learning protocol builds a tailored noise model
+2. **Noise-aware transpilation**: maps circuit to physical qubits minimising QPU time
+3. **Quasi-probabilistic Error Tuning (QET)**: runs circuits at multiple noise scale factors
+4. **Classical post-processing**: extrapolates to a zero-noise unbiased estimate with error bar
 
 Error mitigation strategy in qpubench: `ErrorMitigationStrategy.QESEM`
 
@@ -186,7 +186,7 @@ obs_result = QESEMObservableResult(
 print(f"Best mitigated: {obs_result.mitigated.value}")  # -0.80 (uses heuristic)
 ```
 
-### Circuit result — accessing mitigated values
+### Circuit result: accessing mitigated values
 
 ```python
 from qpubench.schemas.mirrors.qedma_qesem import QESEMCircuitResult, QESEMCircuitObservableResult

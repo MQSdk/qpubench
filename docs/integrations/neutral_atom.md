@@ -171,10 +171,10 @@ wf_poly = AHSWaveform(
 | Rabi amplitude Ω(t) | Piecewise linear | [0, 15.8] rad/µs |
 | Phase φ(t) | Piecewise constant | [-99, 99] rad |
 | Detuning Δ(t) | Piecewise linear | [-125, 125] rad/µs |
-| Max slope dΩ/dt | — | 250 rad/µs² |
-| Max slope dΔ/dt | — | 2500 rad/µs² |
-| Time resolution | — | 0.001 µs |
-| Max duration | — | 4.0 µs |
+| Max slope dΩ/dt | n/a | 250 rad/µs² |
+| Max slope dΔ/dt | n/a | 2500 rad/µs² |
+| Time resolution | n/a | 0.001 µs |
+| Max duration | n/a | 4.0 µs |
 
 ---
 
@@ -257,7 +257,7 @@ shot = AHSShotResult(
     pre_sequence=[1, 1, 1, 1, 1],   # all atoms loaded
     post_sequence=[1, 0, 1, 0, 1],  # alternating Rydberg excitations (Z2 order)
 )
-print(shot.is_perfect_fill)   # True — usable for analysis
+print(shot.is_perfect_fill)   # True, usable for analysis
 
 # Imperfect fill: site 2 missing before evolution
 bad = AHSShotResult(
@@ -265,7 +265,7 @@ bad = AHSShotResult(
     pre_sequence=[1, 1, 0, 1, 1],
     post_sequence=[1, 0, 0, 0, 1],
 )
-print(bad.is_perfect_fill)   # False — excluded from default analysis
+print(bad.is_perfect_fill)   # False, excluded from default analysis
 ```
 
 ### Task result analysis
@@ -288,7 +288,7 @@ task = AHSTaskResult(
 print(task.perfect_fill_shots)   # shots with all pre_sequence == 1 and SUCCESS
 print(task.bitstrings)           # [[1,0,1,0,1], [0,1,0,1,0], ...]
 print(task.counts)               # {"10101": 47, "01010": 43, ...}
-print(task.rydberg_densities)    # [0.48, 0.51, 0.47, 0.52, 0.49] — P(Rydberg) per site
+print(task.rydberg_densities)    # [0.48, 0.51, 0.47, 0.52, 0.49], P(Rydberg) per site
 ```
 
 ### Attach to QuantumResult

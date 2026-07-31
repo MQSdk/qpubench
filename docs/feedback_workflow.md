@@ -1,7 +1,7 @@
 # Feedback & issue tracking workflow (git-bug)
 
-How external feedback — like the two review documents that used to sit in
-`temporary/Feedback_1.txt` / `Feedback_2.txt` — gets turned into tracked,
+How external feedback, like the two review documents that used to sit in
+`temporary/Feedback_1.txt` / `Feedback_2.txt`, gets turned into tracked,
 actionable, non-lost work items.
 
 ## Why git-bug
@@ -15,21 +15,21 @@ board doesn't, for free:
   like committing. Sync later with `git bug push`/`git bug pull`, the same
   mental model as `git push`/`git pull` for branches.
 - **Lives with the code, forever.** A bug references file paths, line
-  numbers, commit-shaped resolutions — and travels with the repo (clone,
+  numbers, commit-shaped resolutions, and travels with the repo (clone,
   fork, mirror) instead of being stranded on one vendor's servers.
 - **Bridges to GitHub/GitLab, doesn't replace them.** git-bug isn't "instead
-  of" GitHub Issues — a bridge syncs bugs both ways, so collaborators who
+  of" GitHub Issues; a bridge syncs bugs both ways, so collaborators who
   only use the GitHub web UI still see and can comment on the same bugs.
 
 This repo's actual issue tracker link (`pyproject.toml`'s `Bug Tracker`
-URL) still points at GitHub Issues — nothing about the public-facing entry
+URL) still points at GitHub Issues; nothing about the public-facing entry
 point changes. git-bug is the *local, offline-capable* half of the
 workflow; the bridge keeps GitHub in sync for everyone else.
 
 ## One-time setup
 
 ```sh
-# Install (no package manager entry yet — grab the release binary)
+# Install (no package manager entry yet; grab the release binary)
 curl -sL https://github.com/git-bug/git-bug/releases/latest/download/git-bug_linux_amd64 \
     -o ~/.local/bin/git-bug && chmod +x ~/.local/bin/git-bug
 
@@ -40,7 +40,7 @@ git bug user new --name "$(git config user.name)" --email "$(git config user.ema
 ### Bridging to GitHub (do this once, needs a token)
 
 ```sh
-# Token needs 'public_repo' scope (public repo) — https://github.com/settings/tokens
+# Token needs 'public_repo' scope (public repo): https://github.com/settings/tokens
 git bug bridge new \
     --name=github \
     --target=github \
@@ -55,18 +55,18 @@ git bug bridge pull github    # pull GitHub Issues -> local bugs
 GitLab is the same shape (`--target=gitlab --url=... --token=...`) if the
 canonical remote ever moves there instead.
 
-**Not run yet in this repo** — creating the bridge requires a personal
+**Not run yet in this repo**: creating the bridge requires a personal
 access token and the first `bridge push` creates real, visible GitHub
 issues, which is a call for whoever owns the `MQSdk/qpubench` GitHub repo to
 make, not something to do silently as part of an unrelated task.
 
-## Intake workflow — turning feedback into bugs
+## Intake workflow: turning feedback into bugs
 
 When feedback arrives (a review document, a Slack message, a call
 transcript, a raw `.txt` file dropped in `temporary/`), the general shape:
 
 1. **Split it into discrete, actionable items.** One bug per distinct point
-   — not one giant bug per document. A 6-bullet feedback email becomes up
+   and not one giant bug per document. A 6-bullet feedback email becomes up
    to 6 bugs. This keeps status (open/closed) meaningful per-item instead
    of one bug staying "open" for months because 1 of 6 points is unresolved.
 2. **File each with `git bug bug new`**, non-interactively so it's
@@ -76,21 +76,21 @@ transcript, a raw `.txt` file dropped in `temporary/`), the general shape:
    git bug bug new --non-interactive \
        -t "Short, specific title" \
        -m "Full context: what was said, why it matters, what file/slide
-   it refers to. Include the resolution once you have one — bugs don't
+   it refers to. Include the resolution once you have one; bugs don't
    need to start empty and get filled in later, and a closed bug with no
    resolution note is nearly as useless as no bug at all."
    ```
 
 3. **Label it.** This repo's convention so far:
-   - `reviewer-feedback` — came from an external review pass
-   - `schema-review` — came from an internal cross-schema review of the core
+   - `reviewer-feedback`: came from an external review pass
+   - `schema-review`: came from an internal cross-schema review of the core
      record format; the finding is written up in
      [schema_review.md](schema_review.md) and sequenced in
      [roadmap.md](roadmap.md)
-   - `docs` / `enhancement` / `bug` — what kind of change it needs
-   - `follow-up` — a gap noticed *while* fixing something else, not the
+   - `docs` / `enhancement` / `bug`: what kind of change it needs
+   - `follow-up`: a gap noticed *while* fixing something else, not the
      original ask
-   - `partially-resolved` — some sub-points fixed, others intentionally
+   - `partially-resolved`: some sub-points fixed, others intentionally
      deferred (say which, in the bug body)
 
    ```sh
@@ -103,13 +103,13 @@ transcript, a raw `.txt` file dropped in `temporary/`), the general shape:
    git bug bug status close <id>
    ```
 
-   The body should already say *what changed* (file, slide, function) —
+   The body should already say *what changed* (file, slide, function), so that
    `git bug bug show <id>` should be enough on its own to understand both
    the original complaint and the fix, without needing to dig through
    `git log`.
 
 5. **Leave genuinely open items open.** Not every piece of feedback gets
-   resolved in the same pass — a follow-up discovered mid-fix (e.g. "this
+   resolved in the same pass; a follow-up discovered mid-fix (e.g. "this
    adapter doesn't exist yet either") is exactly what `git bug bug new`
    without a `status close` is for.
 
@@ -124,14 +124,14 @@ That split is deliberate and worth copying for the next review:
 
 | Where | Holds | Changes when |
 |---|---|---|
-| `schema_review.md` | the evidence — what is missing and why it matters | a finding is applied (say so) or disproved |
-| `roadmap.md` | the plan — phases, acceptance criteria, what is explicitly *not* being done | an item lands or is re-prioritised |
+| `schema_review.md` | the evidence: what is missing and why it matters | a finding is applied (say so) or disproved |
+| `roadmap.md` | the plan: phases, acceptance criteria, what is explicitly *not* being done | an item lands or is re-prioritised |
 | git-bug | the status | continuously |
 
 Duplicating status into the markdown is how a roadmap rots. Duplicating the
-evidence into a bug body is fine — a bug should stand alone.
+evidence into a bug body is fine; a bug should stand alone.
 
-### Example — this session's intake
+### Example: this session's intake
 
 Feedback_1.txt/Feedback_2.txt were split into 13 discrete bugs (5 schema/
 framework points, 8 slide points), each resolved and closed with a

@@ -1,7 +1,7 @@
 # PySCF integration
 
 [PySCF](https://pyscf.org/) is free, open-source, pip-installable (no
-compiler required — pure wheel), and already the engine behind
+compiler required, a pure wheel), and already the engine behind
 `erikkjellgren_slowquant.py`. qpubench models molecules, periodic cells,
 mean-field/DFT, solvation, and embedding problem specs as typed Pydantic
 schemas in `src/qpubench/schemas/mirrors/pyscf_pyscf.py`.
@@ -19,11 +19,11 @@ for what's real vs. schema-only.
 pip install 'qpubench[pyscf]'
 ```
 
-No C/Fortran compiler needed — PySCF ships a `manylinux` wheel.
+No C/Fortran compiler needed; PySCF ships a `manylinux` wheel.
 
 ---
 
-## Molecules and periodic cells — real, verified
+## Molecules and periodic cells: real, verified
 
 `PySCFMoleculeSpec` / `PySCFCellSpec` mirror PySCF's own `gto.M()` /
 `pbc.gto.Cell()` argument shapes directly, confirmed by round-tripping
@@ -40,17 +40,17 @@ spec = PySCFMoleculeSpec(atoms=[
 
 mol = gto.M(atom=spec.to_pyscf_atom_string(), basis=spec.basis,
             charge=spec.charge, spin=spec.spin, unit=spec.unit)
-energy = scf.RHF(mol).kernel()   # -1.1166843870853405 Ha — exact match,
+energy = scf.RHF(mol).kernel()   # -1.1166843870853405 Ha, exact match,
                                   # see tests/test_schemas.py
 ```
 
 `PySCFCellSpec` adds `lattice_vectors` (3×3, Å) and `dimension` (0–3) for
-periodic boundary conditions — builds a real `pbc.gto.Cell()` (verified in
+periodic boundary conditions, and builds a real `pbc.gto.Cell()` (verified in
 `tests/test_schemas.py`).
 
 ---
 
-## Solvation — real, verified; the free equivalent of Cebule's `COSMO`
+## Solvation: real, verified; the free equivalent of Cebule's `COSMO`
 
 ```python
 from qpubench.schemas.mirrors.pyscf_pyscf import PCMMethod, PySCFSolvationConfig
@@ -73,11 +73,11 @@ defaults (`eps=78.3553`, `lebedev_order=29`) are confirmed against a real
 
 ---
 
-## Embedding — schema-only (PsiEmbed / libDMET are real but not on PyPI)
+## Embedding: schema-only (PsiEmbed / libDMET are real but not on PyPI)
 
 Two embedding families, both genuinely free and PySCF-based, neither
 installable with a plain `pip install` (both are GitHub-only research
-code) — so unlike everything above, qpubench models their I/O shape but
+code), so unlike everything above, qpubench models their I/O shape but
 calls neither for real. Write that adapter yourself once you've installed
 one from source, following the `erikkjellgren_slowquant.py` /
 `microsoft_qdk.py` "schema, not solver" pattern.
@@ -97,7 +97,7 @@ config = ProjectionEmbeddingConfig(
 Free implementation: [PsiEmbed](https://github.com/danclaudino/PsiEmbed)
 (PySCF/Psi4-based).
 
-**DMET** (Density Matrix Embedding Theory — PennyLane's own [DMET-embedding
+**DMET** (Density Matrix Embedding Theory; PennyLane's own [DMET-embedding
 demo](https://pennylane.ai/demos/tutorial_dmet_embedding) runs this
 end-to-end, including on a periodic hydrogen chain):
 

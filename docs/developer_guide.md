@@ -1,7 +1,7 @@
 # Developer guide
 
 Why the code is written the way it is. This page explains the Python
-constructs qpubench leans on and the reasoning behind each one — read it
+constructs qpubench leans on and the reasoning behind each one; read it
 before your first change to `src/qpubench/`, and it should save you from
 "why is this method empty?" and "why is that module named with an
 underscore?".
@@ -44,27 +44,27 @@ class BackendAdapter(Protocol):
 ```
 
 **What a Protocol is.** A `typing.Protocol` describes the *shape* a class must
-have — which methods, with which signatures. Any class with that shape
+have, which methods with which signatures. Any class with that shape
 satisfies it. This is "structural" typing, as opposed to the "nominal" typing
 of an abstract base class, where a class only counts if it explicitly
 inherits.
 
 **Why we use one here.** With an ABC, every adapter author would have to
-`from qpubench.backends.base import BackendAdapter` and subclass it — a hard
+`from qpubench.backends.base import BackendAdapter` and subclass it, a hard
 dependency from their package onto ours, and one more thing to get wrong. With
 a Protocol, they write a plain class with `spec`, `validate` and `run`, import
 nothing, and it works. That is what makes rule 2 above achievable.
 
 **Why the method bodies are `...`.** A Protocol carries no behaviour to
 inherit, so there is nothing for a body to *do*. `...` (the `Ellipsis`
-literal) is Python's conventional marker for a deliberately empty body — the
+literal) is Python's conventional marker for a deliberately empty body, the
 same role `pass` plays, but read by convention as "this is a declaration, not
 a stub awaiting work". These are not unfinished methods. Nothing ever calls
 them; they exist so that a type checker, and a human reading the file, can see
 the required signature in one place.
 
-**When to use an ABC instead.** If you have real shared behaviour to inherit —
-a base class with working methods subclasses build on — use an ABC. qpubench's
+**When to use an ABC instead.** If you have real shared behaviour to inherit,
+a base class with working methods subclasses build on, use an ABC. qpubench's
 interfaces have no shared behaviour, only a shape, so a Protocol is the
 lighter and less coupling-prone choice.
 
@@ -83,7 +83,7 @@ else:
 ```
 
 The runner has to decide, at runtime, which of the two execution paths an
-adapter wants — and it must do so without importing the adapter's class or
+adapter wants, and it must do so without importing the adapter's class or
 being told. `@runtime_checkable` plus `isinstance()` is how.
 
 **The caveat you must know.** A runtime protocol check tests only that the
@@ -93,14 +93,14 @@ being told. `@runtime_checkable` plus `isinstance()` is how.
 call. This is why `AGENTS.md` warns that "`AlgorithmAdapter` detection is
 duck-typed": if your algorithm adapter is missing one of the two required
 method names, the runner silently takes the `BackendAdapter` path instead.
-mypy catches the signature mismatches that `isinstance` cannot — run
+mypy catches the signature mismatches that `isinstance` cannot; run
 `mypy src/` before committing.
 
 ---
 
 ## `super()`
 
-`super()` returns a proxy to the next class in the method resolution order —
+`super()` returns a proxy to the next class in the method resolution order,
 in practice, "the class I inherit from". It is how you extend a method
 rather than replace it.
 
@@ -117,7 +117,7 @@ class JSONFormatter(logging.Formatter):
 
 We override `logging.Formatter.format` to emit a benchmark record as one JSON
 line. But the same handler may receive log records from anywhere else in the
-process, which have no `record_payload` — and reformatting those as JSON would
+process, which have no `record_payload`, and reformatting those as JSON would
 be wrong, while reimplementing the standard formatting (timestamps, level
 names, `%`-style templates, exception tracebacks) would be worse. So we handle
 our case and hand everything else back to the implementation we inherited from.
@@ -142,7 +142,7 @@ Every adapter exposes `spec` this way. Two reasons:
   `__init__`, but an adapter that needs to derive one from live device data can
   do that inside the property without changing how callers use it.
 
-The schema layer uses it for the same reason —
+The schema layer uses it for the same reason:
 `BenchmarkRecord.vqa_result.chemical_accuracy` and `CircuitSpec.total_gates`
 are derived values, not stored fields, so they never go stale and never get
 serialised into a record where they could disagree with the data they came
@@ -156,21 +156,21 @@ Both put a function inside a class without giving it an instance.
 
 - **`@classmethod`** receives the class as its first argument (`cls`) and is
   the idiomatic way to write an *alternative constructor*. `BackendSpec` has
-  around thirty of them — `BackendSpec.aer_statevector()`,
-  `BackendSpec.ibm(...)`, `BackendSpec.qrack(...)` — because the alternative is
+  around thirty of them (`BackendSpec.aer_statevector()`,
+  `BackendSpec.ibm(...)`, `BackendSpec.qrack(...)`) because the alternative is
   making every caller remember which combination of `provider`,
   `computing_model` and `qubit_modality` describes a given machine.
   `S3Store.huggingface(...)` is the same pattern for a store.
   `CircuitSpec.from_openqasm3(...)` is one for a schema.
 - **`@staticmethod`** receives neither the class nor the instance. Use it for a
-  function that belongs to a class *conceptually* but needs none of its state —
+  function that belongs to a class *conceptually* but needs none of its state:
   `IQMAdapter.fetch_calibration(...)` queries a device's calibration data and
   needs no adapter instance to do it.
 
 Rule of thumb: reach for `@classmethod` when the function returns an instance
 of the class; `@staticmethod` when it just happens to live there; a
 module-level function when neither is true. Prefer the module-level function
-when in doubt — a `@staticmethod` that nothing about the class informs is
+when in doubt; a `@staticmethod` that nothing about the class informs is
 usually just a function in disguise.
 
 ---
@@ -184,7 +184,7 @@ def bind(self, values: dict[str, float]) -> CircuitSpec:
     return self.model_copy(update={"parameter_bindings": bindings})
 ```
 
-A parametric circuit — a VQE ansatz, a QAOA layer — is a *template*:
+A parametric circuit, a VQE ansatz or a QAOA layer, is a *template*:
 `CircuitSpec` holds the gate structure with named free parameters, and
 `parameter_bindings` holds the numbers to substitute. `bind()` pairs them.
 
@@ -192,7 +192,7 @@ A parametric circuit — a VQE ansatz, a QAOA layer — is a *template*:
 `self`. A VQE optimizer evaluates the same ansatz at hundreds of parameter
 points, and each evaluation must be recorded as its own `BenchmarkRecord`. If
 `bind()` mutated in place, every stored record would end up referring to the
-same object and reporting the *last* parameter values — every energy in the
+same object and reporting the *last* parameter values, with every energy in the
 convergence history attributed to the final iteration's angles. Returning a
 copy makes the natural loop correct:
 
@@ -221,7 +221,7 @@ def run(self, circuit, options):
     ...
 ```
 
-This looks wrong — PEP 8 says imports go at the top — and here it is
+This looks wrong, since PEP 8 says imports go at the top, and here it is
 deliberate. It is what enforces rule 1. `qpubench.backends.aer_adapter` must be
 *importable* without qiskit-aer installed, so that `from qpubench.backends
 import AerAdapter` in `__init__.py` does not explode for a user who only
@@ -234,7 +234,7 @@ import between `runner` and `store`.
 
 Consequence for tests: a missing SDK surfaces as an `ImportError` at
 `run()`-time, not at import time. Adapter tests therefore mock at the import
-level rather than requiring the SDK — see the testing section of `AGENTS.md`.
+level rather than requiring the SDK; see the testing section of `AGENTS.md`.
 
 ---
 
@@ -250,7 +250,7 @@ and it may be renamed or removed without a deprecation cycle.
 which turns a `CircuitSpec`'s QASM text into a `qiskit.QuantumCircuit`. The
 Aer, IBM, IQM and Braket adapters all need exactly that step, and four private
 copies would drift apart. Factoring it out is right; *exporting* it would not
-be — it is a shared implementation detail of those four adapters, not a
+be; it is a shared implementation detail of those four adapters, not a
 capability qpubench offers.
 
 The same convention applies inside modules: `_matches()`, `_flatten_record()`
@@ -264,11 +264,11 @@ follows from one question: *how many upstreams does it speak for?*
 
 | Directory | Upstreams | Naming |
 |---|---|---|
-| `schemas/` | none — these are qpubench's own record types | plain (`circuit.py`, `record.py`) |
+| `schemas/` | none, these are qpubench's own record types | plain (`circuit.py`, `record.py`) |
 | `schemas/catalogs/` | several, or none | named for what it catalogues (`basis_sets.py`, `optimizer_catalog.py`) |
 | `schemas/mirrors/` | exactly one | `<org_or_maintainer>_<package>.py` (`erikkjellgren_slowquant.py`, `quera_bloqade.py`, `qedma_qesem.py`) |
 
-The mirror convention makes the filename answer "whose format is this?" — which
+The mirror convention makes the filename answer "whose format is this?", which
 matters when dozens of modules mirror dozens of upstreams and several model the
 same concept incompatibly.
 
@@ -284,7 +284,7 @@ community-registry mirror: name it for the thing, cite the URL in the module
 docstring, and put it in `catalogs/`.
 
 Adding a module means adding it to `schemas/__init__.py` (public API), to the
-index in [schemas.md](schemas.md), and to the tests — see the checklist in
+index in [schemas.md](schemas.md), and to the tests; see the checklist in
 `AGENTS.md`.
 
 ---
@@ -295,15 +295,15 @@ Every module, class and function gets a `"""docstring"""`. Prefer expanding
 the docstring over adding a `#` comment: a docstring is reachable from
 `help()`, from an IDE tooltip and from generated documentation, while a `#`
 comment is visible only to whoever has the file open. Reserve `#` for
-genuinely line-local notes — a non-obvious constant, a workaround for a
+genuinely line-local notes: a non-obvious constant, a workaround for a
 specific upstream bug.
 
 Docstrings here carry a particular kind of content: **verified facts about the
 outside world**. When an adapter's docstring says a value was "confirmed
-against qiskit-ibm-runtime 0.47", that is load-bearing — it records that
+against qiskit-ibm-runtime 0.47", that is load-bearing; it records that
 someone checked, and against which version. Keep those notes and update the
 version when you re-verify. Do not, on the other hand, write docstrings about
-this repository's own history ("this is the first real implementation of…") —
+this repository's own history ("this is the first real implementation of…");
 that belongs in git history and the bug tracker, not in a module that a user
 reads to learn what the code does.
 
@@ -312,8 +312,8 @@ reads to learn what the code does.
 ## Credentials
 
 No credential is ever a function argument. Adapters take a `*_ref` parameter
-naming the *environment variable* to read — `IBMAdapter(..., token_ref="MY_VAR")`
-— and read it at the point of use, so nothing is held on the object or
+naming the *environment variable* to read, `IBMAdapter(..., token_ref="MY_VAR")`,
+and read it at the point of use, so nothing is held on the object or
 serialised into a `BenchmarkRecord`. `BackendSpec.auth` stores variable names
 only. `S3Store` actively rejects `aws_secret_access_key=` and friends as
 constructor arguments. See the credentials section of the
@@ -330,14 +330,14 @@ obvious alternative is common in scientific-workflow tooling: **qpubench
 contains no `create_model()` call.** Every model is written by hand.
 
 Stacks that generate models at runtime do so because their task interfaces are
-defined by another team, vary per task, and are ephemeral — validating input
+defined by another team, vary per task, and are ephemeral; validating input
 just before execution is the whole job, and hand-writing hundreds of models
 would not scale. qpubench's schemas are the opposite kind of object. A
 `BenchmarkRecord` is archival data: it round-trips through NDJSON/Parquet/S3
 (`store.py` re-validates every line with `model_validate_json`) and must still
 be readable years after the code that wrote it. A runtime-generated model
 undermines exactly that guarantee, and it also costs the thing that makes this
-repo navigable — every field being greppable and visible to mypy.
+repo navigable, with every field greppable and visible to mypy.
 
 So the design is a **static, versioned core plus dynamically-validated vendor
 extension points**:
@@ -346,7 +346,7 @@ extension points**:
   `observable`, `primitives`) is hand-written, carries `SCHEMA_VERSION`, and
   uses `extra="forbid"` on the VQA models so stale callers fail loudly instead
   of silently dropping data.
-- Where shapes genuinely vary — dozens of mirrored upstreams — nothing is
+- Where shapes genuinely vary, across dozens of mirrored upstreams, nothing is
   generated either. Vendor payloads travel through namespaced `dict[str, Any]`
   slots guarded by a `mode="before"` validator that auto-dumps any Pydantic
   model passed in, and are re-validated against the vendor's own static schema
@@ -358,7 +358,7 @@ extension points**:
   MBQCPattern.model_validate(spec.measurement_pattern)
   ```
 
-The short version: *we don't generate models — we defer them.* The core stays
+The short version: *we don't generate models; we defer them.* The core stays
 vendor-neutral and JSON-serialisable, and a vendor schema module can evolve
 without touching `record.py`.
 
@@ -372,7 +372,7 @@ vendor field to a core model, and never import a vendor module from one.**
 ### The honest cost
 
 The established-keys list in `result.py` is documentation-enforced, not
-type-enforced — nothing stops a typo'd vendor key. That is the trade accepted
+type-enforced; nothing stops a typo'd vendor key. That is the trade accepted
 in exchange for the archival guarantees above; if it ever needs closing, the
 narrow fix is generating a per-vendor typed *view* of `vendor_results` from a
 key registry, not generating the records themselves. Related: the open
@@ -387,7 +387,7 @@ friends).
 
 Schema modules are the stable core; stored records outlive the code that wrote
 them. Before changing one, read the "Critical constraints" section of
-[`AGENTS.md`](../AGENTS.md) — in particular:
+[`AGENTS.md`](../AGENTS.md), in particular:
 
 - Renaming or retyping a field requires bumping `SCHEMA_VERSION` in
   `schemas/record.py`. Existing stored records break silently otherwise.

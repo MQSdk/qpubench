@@ -9,9 +9,9 @@ qpubench harmonizes its quantum chemistry schemas with three interoperable stand
 | **PennyLane qchem** | [pennylane.ai/datasets/collection/qchem](https://pennylane.ai/datasets/collection/qchem) | Molecular Hamiltonians, energies, wavefunctions for benchmark molecules |
 
 The schema bridges three use cases:
-1. **Classical reference data** — attach FCI/CCSD(T) energies from QCElemental results to a `QuantumResult` for QPU error benchmarking
-2. **Problem specification** — describe the molecular system in QCSchema-standard format for adapter interoperability
-3. **PennyLane dataset lookup** — reference a specific PennyLane qchem dataset entry (molecule, basis, bond length) and its precomputed energies
+1. **Classical reference data**: attach FCI/CCSD(T) energies from QCElemental results to a `QuantumResult` for QPU error benchmarking
+2. **Problem specification**: describe the molecular system in QCSchema-standard format for adapter interoperability
+3. **PennyLane dataset lookup**: reference a specific PennyLane qchem dataset entry (molecule, basis, bond length) and its precomputed energies
 
 ---
 
@@ -62,15 +62,15 @@ print(QCSchemaRecord.model_validate(
 ## Molecule format
 
 `QCMolecule` follows QCSchema v2 conventions:
-- `symbols` — list of element symbols (title case: `"H"`, `"O"`, `"N"`)
-- `geometry` — flat list of 3×nat Cartesian coordinates **in Bohr** (x₀,y₀,z₀, x₁,y₁,z₁, …)
-- `molecular_charge` — net charge (default 0.0)
-- `molecular_multiplicity` — 2S+1 (default 1 = singlet)
+- `symbols`: list of element symbols (title case: `"H"`, `"O"`, `"N"`)
+- `geometry`: flat list of 3×nat Cartesian coordinates **in Bohr** (x₀,y₀,z₀, x₁,y₁,z₁, …)
+- `molecular_charge`: net charge (default 0.0)
+- `molecular_multiplicity`: 2S+1 (default 1 = singlet)
 
-This differs from `MoleculeStructureSpec` in `microsoft_qdk.py`, which uses Angström coordinates and a list of `AtomSpec` objects. Both formats coexist — use `QCMolecule` for QCSchema interoperability.
+This differs from `MoleculeStructureSpec` in `microsoft_qdk.py`, which uses Angström coordinates and a list of `AtomSpec` objects. Both formats coexist; use `QCMolecule` for QCSchema interoperability.
 
 ```python
-# Water — geometry in Bohr
+# Water, geometry in Bohr
 water = QCMolecule(
     symbols=["O", "H", "H"],
     geometry=[
@@ -184,7 +184,7 @@ wfn = QCWavefunctionData(
     basis_name="sto-3g",
     nao=2,
     nmo=2,
-    # Occupied (σ) and virtual (σ*) MOs — column-major (nao × nmo flat)
+    # Occupied (σ) and virtual (σ*) MOs, column-major (nao × nmo flat)
     scf_orbitals_a=[0.5489, 0.5489, 0.5489, -0.5489],
     scf_eigenvalues_a=[-0.5783, 0.6695],   # orbital energies (Hartree)
     scf_occupations_a=[2.0, 0.0],
@@ -250,7 +250,7 @@ h2 = PennyLaneMolDataset(
 )
 print(h2.correlation_energy)   # ≈ -0.0341 (FCI − HF)
 
-# LiH — larger basis
+# LiH, larger basis
 lih = PennyLaneMolDataset(
     molname="LiH",
     basis="STO-3G",
@@ -275,7 +275,7 @@ lih = PennyLaneMolDataset(
 
 ---
 
-## QCSchemaRecord — reference energy bridge
+## QCSchemaRecord: reference energy bridge
 
 `QCSchemaRecord` is the top-level container that attaches to `QuantumResult.vendor_results["qcschema_record"]`. Its `reference_energy` property returns the best available classical reference regardless of which sub-record is populated.
 
@@ -311,8 +311,8 @@ result = QuantumResult(
 |---|---|---|
 | Molecule format | `MoleculeStructureSpec` (Å, per-atom objects) | `QCMolecule` (Bohr, flat arrays) |
 | SCF result | `SCFResult` (QDK-specific fields) | `QCAtomicResultProperties` (QCSchema standard) |
-| Wavefunction | — | `QCWavefunctionData` (orbital coefs, density) |
+| Wavefunction | n/a | `QCWavefunctionData` (orbital coefs, density) |
 | Pipeline | `QChemPipelineSpec` (full SCF→QPE) | `QCAtomicResult` / `QCOptimizationResult` |
-| Model Hamiltonians | `ModelHamiltonianSpec` (Ising, Hubbard, …) | — |
-| Qubit Hamiltonian | `QubitHamiltonianSpec` | — (use `gsopt` or `qdk_chemistry`) |
+| Model Hamiltonians | `ModelHamiltonianSpec` (Ising, Hubbard, …) | n/a |
+| Qubit Hamiltonian | `QubitHamiltonianSpec` | n/a (use `gsopt` or `qdk_chemistry`) |
 | Interop target | Microsoft QDK, QuNorth | MolSSI QCSchema, PennyLane, Psi4, PySCF |

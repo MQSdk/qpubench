@@ -6,7 +6,7 @@ qpubench's only mandatory runtime dependency is `pydantic>=2.0`. All quantum bac
 
 ## pip
 
-The examples in the README use a plain `pip install .` — that copies the package into your environment, which is what you want when you just *use* qpubench. The `-e` (editable) flag below instead links the environment to this source checkout, so code changes take effect without reinstalling — use it when you *develop* qpubench or your own adapters against it. The extras (`[qiskit]`, `[storage]`, …) mean the same thing in both forms.
+The examples in the README use a plain `pip install .`, which copies the package into your environment, which is what you want when you just *use* qpubench. The `-e` (editable) flag below instead links the environment to this source checkout, so code changes take effect without reinstalling; use it when you *develop* qpubench or your own adapters against it. The extras (`[qiskit]`, `[storage]`, …) mean the same thing in both forms.
 
 ```sh
 # Editable local install (development)
@@ -29,7 +29,7 @@ pip install "qpubench[qiskit,storage]"
 
 ## uv
 
-uv reads `pyproject.toml` natively — no extra configuration needed.
+uv reads `pyproject.toml` natively; no extra configuration needed.
 
 ```sh
 # Sync the environment (installs package + dev dependency group)
@@ -57,7 +57,7 @@ Dev tools (pytest, ruff, mypy) are declared in the standard PEP 735 `[dependency
 
 ## Poetry 2
 
-Poetry 2+ reads the standard `[project]` table directly — no `[tool.poetry]` section required.
+Poetry 2+ reads the standard `[project]` table directly; no `[tool.poetry]` section required.
 
 ```sh
 # Install from the local directory (development)
@@ -80,7 +80,7 @@ poetry build
 
 ## conda
 
-### Option 1 — development environment (recommended)
+### Option 1: development environment (recommended)
 
 Creates a named conda environment with Python 3.12, pydantic from conda-forge, and the package installed in editable mode via pip.
 
@@ -111,7 +111,7 @@ pip install qiskit-ibm-runtime "qiskit-nature>=0.7"
 
 CUDA-Q must be installed per [NVIDIA's instructions](https://nvidia.github.io/cuda-quantum/).
 
-### Option 2 — conda-build package
+### Option 2: conda-build package
 
 Builds a relocatable `noarch: python` conda package from the `conda-recipe/` directory.
 
@@ -135,7 +135,7 @@ cp .env.example .env
 
 `.env` is gitignored. `.env.example` lists every variable qpubench looks for,
 with the adapter each belongs to. The rules that govern all of them are in the
-root README's [Credentials](../README.md#credentials) section — in short:
+root README's [Credentials](../README.md#credentials) section; in short:
 qpubench never takes a secret as a function argument, and no credential
 belongs anywhere in the codebase, examples, or notebooks.
 

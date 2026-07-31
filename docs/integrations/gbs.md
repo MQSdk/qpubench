@@ -1,6 +1,6 @@
 # GBS (Gaussian Boson Sampling) integration
 
-qpubench models Gaussian Boson Sampling in `src/qpubench/schemas/mirrors/mqsdk_photoq.py` (the GBS section). This covers the Gaussian-state / hafnian-based formalism — **distinct from the LOQC section of the same module**, which uses the permanent-based / Fock-state formalism for linear-optics chips.
+qpubench models Gaussian Boson Sampling in `src/qpubench/schemas/mirrors/mqsdk_photoq.py` (the GBS section). This covers the Gaussian-state / hafnian-based formalism, **distinct from the LOQC section of the same module**, which uses the permanent-based / Fock-state formalism for linear-optics chips.
 
 | | LOQC (permanent) | GBS (hafnian) |
 |---|---|---|
@@ -207,7 +207,7 @@ from qpubench.schemas.primitives import ComplexNumber
 
 # One mode demultiplexed across N=4 on/off detectors.
 det = PseudoPNRDSpec(num_branches=4, multiplexing="spatial")
-det.collision_error(2)   # 0.4 — P(two of 2 photons share one of 4 branches)
+det.collision_error(2)   # 0.4, P(two of 2 photons share one of 4 branches)
 
 # The full click-pattern distribution P(k), computed by method i.
 dist = ClickPatternProbabilityResult(
@@ -231,7 +231,7 @@ The `SimulationMethod` enum names the paper's four methods (and one variant):
 
 | `SimulationMethod` | Paper | Idea | photoq code |
 |---|---|---|---|
-| `KENSINGTONIAN_FORMULA` | i | Kensingtonian matrix function — the click-counting analogue of the hafnian (Eq. 26, arXiv:2305.00853) | `methods/kenform/` |
+| `KENSINGTONIAN_FORMULA` | i | Kensingtonian matrix function; the click-counting analogue of the hafnian (Eq. 26, arXiv:2305.00853) | `methods/kenform/` |
 | `HAFNIAN_MODIFIED` | ii | Fock/hafnian probabilities modified by the pPNRD model `P_{k,n}(N)` | `methods/kenhaf/` |
 | `TENSOR_NETWORK_MPS` | iii | Matrix-product-state simulation with a truncation-fidelity cutoff `f_t` | `methods/mps/`, `mps_fast/` |
 | `BRUTE_FORCE_POVM` | iv | Explicit POVM trace (demultiplex + vacuum projection); `THERMAL_POVM` is the thermal-Gaussian variant | `methods/utility/ppnrd.py` |
@@ -301,7 +301,7 @@ Store in `QuantumResult.vendor_results["pt_series_sampling"]`.
 
 ## DTU QCloud (REST API v1)
 
-`qcloud.dtu.dk` exposes a Bearer-token REST API with two GBS job types: `tn-covariance` (build a covariance matrix server-side) and `tn-sampling` (tensor-network GBS sampling — the successor of the DASQ Kensingtonian sampler, aligned with the paper's MPS method).
+`qcloud.dtu.dk` exposes a Bearer-token REST API with two GBS job types: `tn-covariance` (build a covariance matrix server-side) and `tn-sampling` (tensor-network GBS sampling, the successor of the DASQ Kensingtonian sampler, aligned with the paper's MPS method).
 
 ```python
 from qpubench.schemas.mirrors.mqsdk_photoq import (
@@ -331,7 +331,7 @@ Store in `QuantumResult.vendor_results["qcloud_job"]`.
 
 ## Xanadu Aurora dataset
 
-Aurora is the modular photonic quantum computer of *"Scaling and networking a modular photonic quantum computer"* (Nature 638, 2025): 35 chips, 84 squeezers, 36 PNRDs, 12 qubit modes per clock cycle. It is a published **dataset** (public S3 bucket `xanadu-aurora-data`), not a programmable device — two experiment sets: cluster-state acquisition and the decoder demo.
+Aurora is the modular photonic quantum computer of *"Scaling and networking a modular photonic quantum computer"* (Nature 638, 2025): 35 chips, 84 squeezers, 36 PNRDs, 12 qubit modes per clock cycle. It is a published **dataset** (public S3 bucket `xanadu-aurora-data`), not a programmable device, with two experiment sets: cluster-state acquisition and the decoder demo.
 
 ```python
 from qpubench.schemas.mirrors.mqsdk_photoq import AuroraDatasetSpec, AuroraExperiment

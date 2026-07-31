@@ -50,7 +50,7 @@ spec = result.to_circuit_spec()
 ```
 
 `ClassiqSynthesisResult.to_circuit_spec()` picks `qasm3` over `qasm2` when both
-are present — OpenQASM 3.0 is qpubench's preferred format (`CircuitSpec.from_openqasm3`).
+are present; OpenQASM 3.0 is qpubench's preferred format (`CircuitSpec.from_openqasm3`).
 
 ---
 
@@ -82,7 +82,7 @@ it holds Classiq's native `dict[str, int]` counts, converted to a qpubench
 **Hybrid path**: because synthesis and execution are separate steps, you can
 synthesize with Classiq and execute the resulting `CircuitSpec` on *any*
 qpubench `BackendAdapter` (Aer, Qrack, IBM, IQM) instead of Classiq's own
-`execute()` — useful for isolating "is this a synthesis win or an execution win?"
+`execute()`, useful for isolating "is this a synthesis win or an execution win?"
 
 ---
 
@@ -117,7 +117,7 @@ vqe = ClassiqVQEResult(
 )
 
 # Populates qpubench's shared VQAConfig using the SAME fields Xenakis, QForte,
-# and Cebule already write to (mapper, ansatz, n_cnot, num_parameters) —
+# and Cebule already write to (mapper, ansatz, n_cnot, num_parameters),
 # no Classiq-specific duplicate fields needed:
 vqa = vqe.to_vqa_config(molecule="H2", model=model)
 ```
@@ -137,7 +137,7 @@ spec = ClassiqCombinatorialOptimizationSpec(
 ```
 
 `problem_type` intentionally reuses `XenakisRunConfig.objective`'s vocabulary
-(`"maxcut"`, `"vqe_molecule"`) — the same maxcut instance can be handed to a
+(`"maxcut"`, `"vqe_molecule"`): the same maxcut instance can be handed to a
 Xenakis GA search (`objective="maxcut"`) and to Classiq's QAOA synthesis, and
 tagged identically in `BenchmarkRecord.tags`.
 
@@ -149,7 +149,7 @@ tagged identically in `BenchmarkRecord.tags`.
 
 `XenakisMolecule` (xenakis.py) stores coordinates as a list of `(x, y, z)`
 tuples; `ClassiqMoleculeSpec` stores `(symbol, (x, y, z))` pairs. Convert
-between them directly — no intermediate format needed:
+between them directly, with no intermediate format needed:
 
 ```python
 from qpubench.schemas import ClassiqMoleculeSpec, XenakisMolecule
@@ -185,7 +185,7 @@ print(comparison.search_cost_label)  # "GA: 40 generations vs Classiq: 2.30s syn
 This is the practical difference between the two families: Xenakis trades wall
 time for a searched circuit (measured in GA generations); Classiq trades a
 single solve's latency for a synthesized one under hard bounds. Neither
-dominates universally — `CircuitOptimizationComparison` exists to make that
+dominates universally; `CircuitOptimizationComparison` exists to make that
 comparison a first-class, serializable object rather than an ad-hoc script.
 
 ### Linking a Classiq run to a `BenchmarkRecord`
@@ -216,6 +216,6 @@ pip install "qpubench[classiq]"
 
 Requires separate authentication with `classiq.authenticate()` (device-code
 flow against the Classiq cloud) before `synthesize()` / `execute()` calls will
-succeed — see [docs.classiq.io](https://docs.classiq.io/) for setup. qpubench
+succeed; see [docs.classiq.io](https://docs.classiq.io/) for setup. qpubench
 itself never imports the `classiq` package directly; see
 `integrations/classiq/` for the adapter that does.

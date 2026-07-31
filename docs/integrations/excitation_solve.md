@@ -7,7 +7,7 @@ Schemas: `src/qpubench/schemas/mirrors/dlr_excitation_solve.py`
 **Tracking the upstream release** (checked against the `main` branch, July 2026):
 
 - The follow-up paper Haas et al. 2026 ([arXiv:2602.10776](https://arxiv.org/abs/2602.10776)) adds **operator-selection and warm-start strategies** for the adaptive variant. Recorded via `ExcitationAdaptResult.operator_selection` (free-text strategy label, e.g. `"max_gradient"` or `"warm_start"`) and `AdaptVQEStep.optimal_theta`.
-- `optimal_theta` / `optimal_theta_pyscf` compute the **analytic optimal parameter** (and its energy lowering) for a single double excitation applied to a Hartree-Fock reference — a cheap warm start, toggled by `ExcitationSolveConfig.warm_start_double_excitations`.
+- `optimal_theta` / `optimal_theta_pyscf` compute the **analytic optimal parameter** (and its energy lowering) for a single double excitation applied to a Hartree-Fock reference, a cheap warm start toggled by `ExcitationSolveConfig.warm_start_double_excitations`.
 - The new upstream `parameter_occ` optimizer argument (per-parameter occurrence / ordering hint) is carried on `ExcitationSolveConfig.parameter_occ`.
 
 ---
@@ -184,7 +184,7 @@ sweep_2d = ExcitationSolveSweep(
 
 ## Fewer than 5 samples (noisy circuit)
 
-When `num_samples > 5`, ExcitationSolve performs a least-squares fit instead of an exact 5-point reconstruction. Record this the same way — just pass more `ParameterSample` entries:
+When `num_samples > 5`, ExcitationSolve performs a least-squares fit instead of an exact 5-point reconstruction. Record this the same way; just pass more `ParameterSample` entries:
 
 ```python
 cfg_noisy = ExcitationSolveConfig(num_samples=9)   # 9 probe points per parameter

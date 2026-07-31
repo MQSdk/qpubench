@@ -3,13 +3,13 @@
 [Cebule SDK](https://docs.mqs.dk/sections/section_014_quantum_computing/) (MQS) provides cloud quantum-chemistry and materials-property task types. qpubench models each task's input and output as typed Pydantic schemas in `src/qpubench/schemas/mirrors/mqsdk_cebule.py`.
 
 **Revised 2026-07-08.** This module was checked directly against the real
-SDK source — [gitlab.com/mqsdk/python-sdk](https://gitlab.com/mqsdk/python-sdk),
+SDK source, [gitlab.com/mqsdk/python-sdk](https://gitlab.com/mqsdk/python-sdk),
 specifically `mqsdk/core/cebule.py`'s `TaskType` enum, `mqsdk/utils/tasks.py`'s
-helper functions, and the `notebooks/` examples — and turned up a real gap:
+helper functions, and the `notebooks/` examples, and turned up a real gap:
 `MOL_MAP`/`QASM_GEN` (below) do not appear in that `TaskType` enum, while
 fifteen other task types the SDK does expose (solvation, ab initio MD,
 geometry optimization, group-contribution/GNN property prediction) weren't
-modeled at all. Both are now fixed — see "Task types" below for what's
+modeled at all. Both are now fixed; see "Task types" below for what's
 confirmed vs. kept-with-caveat, and the new sections for each task family.
 
 ---
@@ -18,7 +18,7 @@ confirmed vs. kept-with-caveat, and the new sections for each task family.
 
 `CebuleTaskEnvelope` (`max_processors`, `connected_task_id`,
 `connected_model_id`, `connected_dataset_id`,
-`notification_minutes_threshold`) is common to every task below —
+`notification_minutes_threshold`) is common to every task below,
 confirmed directly against `MQSCebule.create_task()`'s signature. Tasks
 chain into a DAG via `connected_task_id` (e.g. `GEOMETRY_OPT` →
 `COSMO` → `SIGMA` → `SOLUBILITY`).
@@ -32,15 +32,15 @@ chain into a DAG via `connected_task_id` (e.g. `GEOMETRY_OPT` →
 | `CAR_PARRINELLO_MD` | Ab initio MD, Quantum-ESPRESSO-backed (periodic-capable) | `notebooks/4_CPMD_task_Cebule.ipynb` |
 | `FORCE_FIELD_MD` | Classical MD of a molecule (or polymer) in a solvent box | `scripts/md.py` |
 | `GEOMETRY_OPT` | Force-field + semi-empirical geometry optimisation | `scripts/geometry.py` |
-| `PERIODIC_GEOMETRY_OPT` | Geometry optimisation under periodic boundary conditions | Enum only — no usage example found; fields inferred |
+| `PERIODIC_GEOMETRY_OPT` | Geometry optimisation under periodic boundary conditions | Enum only; no usage example found, fields inferred |
 | `GROUP_CONTRIBUTION` | Group-contribution property estimation, batchable over mixtures | `scripts/group_contribution.py` |
 | `ATOM_ORDER` | Canonical atom ordering for a SMILES (+ optional geometry) | `mqsdk/utils/tasks.py` |
-| `ACTIVITY_COEFFICIENT` | — | Enum only — no usage example found; not modeled beyond the envelope |
+| `ACTIVITY_COEFFICIENT` | n/a | Enum only; no usage example found, not modeled beyond the envelope |
 | `GNN_DATASET_CREATE`/`_EXTEND`/`_GET`/`_DELETE`, `GNN_TRAIN`, `GNN_PREDICT` | Property-prediction GNN dataset/model lifecycle | `notebooks/6_GNN_task_HLGap_GeometryOpt.ipynb` |
 | `TN_QC_OPT` | Tensor-network + quantum circuit hybrid VQE optimisation | Confirmed in `TaskType` enum |
 | `COVO` | Correlation-optimised virtual orbital pre-processing | Confirmed in `TaskType` enum |
-| `MOL_MAP` *(unconfirmed)* | Map a molecular geometry to a qubit Hamiltonian via constraint-based encoding | Not found in `TaskType` enum — kept, see caveat above |
-| `QASM_GEN` *(unconfirmed)* | Generate OpenQASM 2.0 measurement circuits for a Hamiltonian | Not found in `TaskType` enum — kept, see caveat above |
+| `MOL_MAP` *(unconfirmed)* | Map a molecular geometry to a qubit Hamiltonian via constraint-based encoding | Not found in `TaskType` enum; kept, see caveat above |
+| `QASM_GEN` *(unconfirmed)* | Generate OpenQASM 2.0 measurement circuits for a Hamiltonian | Not found in `TaskType` enum; kept, see caveat above |
 
 ---
 
@@ -108,9 +108,9 @@ result = MolMapResult(
 The measurement method: evaluates the expectation value of a mapped
 Hamiltonian via a circuit-generation scheme that groups terms by
 computational basis state pairs rather than per-Pauli-string
-decomposition — generates OpenQASM 2.0 circuits, one per basis-state
+decomposition; generates OpenQASM 2.0 circuits, one per basis-state
 grouping. Explicitly documented as compatible with the output of either
-`MOL_MAP` or `TN_QC_OPT` (see below — it's also usable *inside*
+`MOL_MAP` or `TN_QC_OPT` (see below, since it's also usable *inside*
 `TN_QC_OPT` directly via `measurement_method="grouped"`).
 
 `include_state_circuit` defaults to `False` (corrected 2026-07-09 against
@@ -138,10 +138,10 @@ qasm3_specs = result.to_openqasm3_circuit_specs(num_qubits=4, qasm3_sources=[…
 ## TN_QC_OPT
 
 Hybrid tensor-network + quantum circuit VQE. `opt_method` defaults to
-`"COBYLA"` (corrected 2026-07-09 — was `"BFGS"` in an earlier revision of
-this doc). `measurement_method` (`"pauli"` default, or `"grouped"` —
+`"COBYLA"` (corrected 2026-07-09; was `"BFGS"` in an earlier revision of
+this doc). `measurement_method` (`"pauli"` default, or `"grouped"`,
 QASM_GEN's own basis-state-pair grouping used internally) and
-`optimization_mode` (`"both"` default — jointly optimize θ/φ; `"circuit"`
+`optimization_mode` (`"both"` default, jointly optimize θ/φ; `"circuit"`
 freezes θ for plain VQE over φ; `"network"` freezes φ for a classical-only
 θ search) were added 2026-07-09, confirmed real against the current
 docs.mqs.dk table.
@@ -246,7 +246,7 @@ estimate. This is Cebule's route to a solvent model (see
 ```python
 from qpubench.schemas import CosmoInput, CosmoMethod, SigmaInput, SolubilityInput
 
-# Step 1 — COSMO on the (already geometry-optimized) solute, chained via
+# Step 1: COSMO on the (already geometry-optimized) solute, chained via
 # connected_task_id to a prior GEOMETRY_OPT task's ID.
 cosmo = CosmoInput(
     connected_task_id="geometry-opt-task-id",
@@ -255,10 +255,10 @@ cosmo = CosmoInput(
     dielec=78.0,       # water
 )
 
-# Step 2 — sigma profile from the COSMO result.
+# Step 2: sigma profile from the COSMO result.
 sigma = SigmaInput(connected_task_id="cosmo-task-id", cosmo_method=CosmoMethod.COSMO_SAC)
 
-# Step 3 — solubility from solute + solvent sigma profiles.
+# Step 3: solubility from solute + solvent sigma profiles.
 solubility = SolubilityInput(
     connected_task_id=["sigma-solute-id", "sigma-solvent-id"],
     temperature=298.15,
@@ -284,7 +284,7 @@ geo = GeometryOptInput(
 )
 ```
 
-`PeriodicGeometryOptInput` is the periodic-cell counterpart — confirmed to
+`PeriodicGeometryOptInput` is the periodic-cell counterpart, confirmed to
 exist in the SDK's `TaskType` enum, but no usage example was found during
 this check, so its fields (`cell_lengths`, `cell_angles`, plus the same
 `force_field`/`optimization_method` choice) are inferred by analogy rather
@@ -294,10 +294,10 @@ than confirmed. Verify against the live SDK before relying on exact names.
 
 ## Ab initio MD: `BORN_OPPENHEIMER_MD` / `CAR_PARRINELLO_MD`
 
-Both wrap Quantum ESPRESSO directly — the payload is a **raw QE input file**
+Both wrap Quantum ESPRESSO directly; the payload is a **raw QE input file**
 (`&control`/`&system`/`&electrons` or `&ions` namelists), not kwargs. The
 confirmed example notebooks use a periodic 8-water cell (`ibrav`/`celldm`
-lattice parameters), i.e. genuine periodic plane-wave DFT — a plane-wave
+lattice parameters), i.e. genuine periodic plane-wave DFT, a plane-wave
 alternative for periodic-system chemistry (e.g. the carbon-capture
 tutorial's framework, `examples/tutorials/carbon_capture_periodic_dft.py`).
 
@@ -311,7 +311,7 @@ bomd = AbInitioMDInput(
 ```
 
 Result is raw QE stdout text (`AbInitioMDResult.stdout`), not structured
-JSON — parse energies/forces yourself.
+JSON; parse energies/forces yourself.
 
 ## Classical MD: `FORCE_FIELD_MD`
 
@@ -336,14 +336,14 @@ md = ForceFieldMDInput(
 ```python
 from qpubench.schemas import GroupContributionInput, AtomOrderInput
 
-# Batchable over multiple mixtures — each inner list is one mixture's SMILES.
+# Batchable over multiple mixtures; each inner list is one mixture's SMILES.
 gc = GroupContributionInput(smiles_list=[["CCO", "O"], ["CCC", "O"]], gc_type="unifac")
 
 atom_order = AtomOrderInput(smiles="CCO")   # or smiles=[...] + geometry=[...] for a polymer
 ```
 
 `ActivityCoefficientInput` exists (confirmed in the `TaskType` enum) but no
-usage example was found — it currently carries no task-specific fields
+usage example was found; it currently carries no task-specific fields
 beyond the common envelope.
 
 ---

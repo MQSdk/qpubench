@@ -171,6 +171,11 @@ def render_grid(groups: list[dict]) -> str:
             file = supplied or f"{slug}.svg"
             name = html.escape(pkg["name"])
             note = html.escape(pkg.get("note", ""))
+            # "upstream" names the repository qpubench actually integrates
+            # against, as maintainer/package. Vendors that ship no public
+            # source repository leave it out and get the bare label.
+            repo = html.escape(pkg.get("upstream", ""))
+            up_label = f"Upstream: {repo} ↗" if repo else "Upstream ↗"
             if supplied or not is_generated(LOGO_DIR / file):
                 # Real artwork, whether pointed at by "file" or dropped in place of
                 # a generated tile: render it as an image, never masked or tinted.
@@ -186,11 +191,11 @@ def render_grid(groups: list[dict]) -> str:
             out.append(
                 f'    <li class="logo-cell">'
                 f'<a class="logo-link" href="{pkg["doc"]}" '
-                f'title="{name} — {note}">'
+                f'title="{name}: {note}">'
                 f'{mark}'
                 f'<span class="logo-note">{note}</span></a>'
                 f'<a class="logo-up" href="{pkg["url"]}" rel="noopener"'
-                f' title="{name} upstream project">upstream ↗</a></li>'
+                f' title="{name} upstream project">{up_label}</a></li>'
             )
         out.append("  </ul>")
         out.append("</section>")

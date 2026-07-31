@@ -1,4 +1,4 @@
-# Distributed quantum execution — decomposing the circuit
+# Distributed quantum execution: decomposing the circuit
 
 When a circuit does not fit on one QPU there are two ways out, and they pay in
 different currencies. qpubench models both with one general schema plus two
@@ -6,7 +6,7 @@ project mirrors:
 
 | Module | Upstream | Role |
 |---|---|---|
-| `qpubench.schemas.catalogs.distributed_execution` | — (framework-general) | Shared vocabulary: networks, partitions, cuts, reconstruction |
+| `qpubench.schemas.catalogs.distributed_execution` | n/a (framework-general) | Shared vocabulary: networks, partitions, cuts, reconstruction |
 | `qpubench.schemas.mirrors.felixburt_disqco` | [felix-burt/DISQCO](https://github.com/felix-burt/DISQCO) | Multilevel hypergraph partitioning over a QPU network |
 | `qpubench.schemas.mirrors.bscwdc_qdislib` | [bsc-wdc/qdislib](https://github.com/bsc-wdc/qdislib) | Gate/wire cutting with quasiprobability reconstruction |
 
@@ -24,7 +24,7 @@ QPUs.
 **Cutting** breaks the circuit into genuinely independent subcircuits with no
 quantum link at all.
 
-- Cost: **classical sampling overhead** — 6 quasiprobability terms per gate
+- Cost: **classical sampling overhead**: 6 quasiprobability terms per gate
   cut, 8 per wire cut, so `k` cuts need `base ** k` subcircuit evaluations.
 - Exponential in the number of cuts, but embarrassingly parallel.
 - Requires no quantum network.
@@ -40,7 +40,7 @@ run.communication_cost    # whichever one applies
 ```
 
 > `communication_cost` reports the knob a run is dominated by. Ebits and
-> quasiprobability terms are **not** the same unit — do not divide one by the
+> quasiprobability terms are **not** the same unit; do not divide one by the
 > other.
 
 ## Describing the network
@@ -60,13 +60,13 @@ count reserved for holding halves of EPR pairs, and it caps how many
 teleportations can be in flight at once.
 
 Only directly connected nodes can generate EPR pairs. Long-range entanglement
-is routed along a path of links, consuming auxiliary pairs at every hop — which
+is routed along a path of links, consuming auxiliary pairs at every hop, which
 is why a partition that is cheap on an all-to-all network can be expensive on a
 linear one, and why topology is a recorded field rather than an assumption.
 
 ## Sizing a cut before you run it
 
-The sampling overhead — not subcircuit size — dominates the cost of a cut run.
+The sampling overhead, not subcircuit size, dominates the cost of a cut run.
 Check it first:
 
 ```python
@@ -82,7 +82,7 @@ cut, including mixed gate + wire cuts.
 
 ## DISQCO (`felixburt_disqco`)
 
-A circuit becomes a **temporally extended hypergraph** — a vertex per
+A circuit becomes a **temporally extended hypergraph**: a vertex per
 `(qubit, time)`, a hyperedge per group of gates that can share one distributed
 control. Partitioning assigns every vertex to a QPU; because vertices are
 time-resolved, a qubit may live on different QPUs at different depths. The
@@ -114,7 +114,7 @@ result.to_distributed_run_result()
 Upstream an assignment is a NumPy array indexed `[qubit][time]` holding a QPU
 **index**. `DisqcoPartitionResult.assignment` keeps that layout as nested
 lists, and the converters map indices to `QPUNodeSpec.node_id` strings via the
-network's node ordering — so the index order in `DisqcoNetworkSpec.qpu_sizes`
+network's node ordering, so the index order in `DisqcoNetworkSpec.qpu_sizes`
 is significant. `to_partition_spec()` raises without a `network`, because the
 indices are meaningless unnamed.
 
@@ -122,10 +122,10 @@ indices are meaningless unnamed.
 
 Both are recorded:
 
-- **Hypergraph coarsening** (`DisqcoCoarsener.RECURSIVE`, `BLOCKS`, …) —
+- **Hypergraph coarsening** (`DisqcoCoarsener.RECURSIVE`, `BLOCKS`, …):
   contract the circuit's time axis into a hierarchy, partition the coarsest
   level, project down and refine.
-- **Network coarsening** (`DisqcoCoarsener.NETWORK`) — contract the *network*
+- **Network coarsening** (`DisqcoCoarsener.NETWORK`): contract the *network*
   into sub-regions and partition hierarchically across them, for large-scale
   networks.
 
@@ -136,7 +136,7 @@ materially change the achievable ebit count, so they belong in the record.
 ### Circuit extraction
 
 The extractor emits one Qiskit circuit in which each QPU is a pair of registers
-— data and communication qubits — sharing one classical register for LOCC.
+(data and communication qubits) sharing one classical register for LOCC.
 
 ```python
 extracted.epr_pairs_per_link     # {"q0<->q1": 6}
@@ -154,7 +154,7 @@ Cutting replaces a two-qubit gate or a wire with a quasiprobability
 decomposition. Every subcircuit evaluation is independent, which is exactly the
 shape PyCOMPSs distributes across CPUs, GPUs and QPUs.
 
-Upstream names cuts by gate label and callers dispatch on the element shape —
+Upstream names cuts by gate label and callers dispatch on the element shape:
 a gate cut is `["CZ_2"]`, a wire cut a pair `[("H_1", "CZ_2")]`.
 `from_find_cut()` applies that same shape test once and stores the kind
 explicitly, so a stored record never re-infers it:
@@ -188,17 +188,17 @@ run.cache_hit_rate
 run.to_distributed_run_result()
 ```
 
-`software` must match the backend the subcircuits are evaluated on — Qdislib
+`software` must match the backend the subcircuits are evaluated on; Qdislib
 emits subcircuits in the target SDK's own circuit type and does not convert at
 execution time.
 
 The three-step workflow (`*_subcircuits` → evaluate → `reconstruct`) puts the
-evaluation loop under the caller's control, so where each subcircuit ran —
-simulator, GPU, remote QPU — varies within a single run. That is why
+evaluation loop under the caller's control, so where each subcircuit ran,
+on a simulator, a GPU or a remote QPU, varies within a single run. That is why
 `executed_on` and `cache_hit` are per-subcircuit fields.
 
 The **semantic cache** keys on circuit semantics, so structurally different but
-equivalent subcircuits share an entry — that is where the speedup in
+equivalent subcircuits share an entry; that is where the speedup in
 arXiv:2604.26788 comes from, and why the hit rate is worth recording alongside
 the wall time it explains.
 
@@ -231,7 +231,7 @@ CircuitCutSpec.model_validate(circuit.distribution)
 
 The split is deliberate: `DistributedRunConfig` holds the *budgets and
 strategy* you asked for, `CircuitSpec.distribution` holds the *decision* the
-tool made — which gates it cut, which qubit it put where.
+tool made: which gates it cut, which qubit it put where.
 
 ## Composing with fragmentation
 

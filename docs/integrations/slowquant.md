@@ -9,7 +9,7 @@ qpubench models the full [SlowQuant](https://github.com/erikkjellgren/SlowQuant)
 | **Result field** | `QuantumResult.vendor_results["slowquant_record"]` |
 | **Quantum backend** | Qiskit circuit compilation (any gate-based provider) |
 
-SlowQuant specializes in **unitary parameterized wave functions** — UCC, factorized UCC, and truncated UPS — where the same parameter vector describes both the classical statevector and the compiled Qiskit quantum circuit. This makes it directly suitable for hybrid QPU workflows where the optimizer runs classically and only the energy evaluation is sent to hardware.
+SlowQuant specializes in **unitary parameterized wave functions** (UCC, factorized UCC, and truncated UPS), where the same parameter vector describes both the classical statevector and the compiled Qiskit quantum circuit. This makes it directly suitable for hybrid QPU workflows where the optimizer runs classically and only the energy evaluation is sent to hardware.
 
 ---
 
@@ -25,7 +25,7 @@ from qpubench.schemas.mirrors.erikkjellgren_slowquant import (
 from qpubench.schemas.result import QuantumResult
 from qpubench.schemas.primitives import ComputingModel
 
-# H2 / STO-3G  —  2 electrons in 2 orbitals
+# H2 / STO-3G: 2 electrons in 2 orbitals
 active_space = UCCActiveSpaceConfig(
     num_active_electrons=2,
     num_active_orbitals=2,
@@ -112,8 +112,8 @@ print(active.num_qubits)   # 10  (= 2 × 5 orbitals)
 |---|---|---|
 | `ucc` | `WaveFunctionUCC` | Standard unitary coupled cluster |
 | `fucc` | `WaveFunctionUCC` (factorized) | Product of individual excitation unitaries |
-| `tups` | `WaveFunctionUPS` | Truncated Unitary Product State — hardware-efficient |
-| `qnp` | `WaveFunctionUPS` (QNP) | Qubit Number Parity — preserves qubit parity |
+| `tups` | `WaveFunctionUPS` | Truncated Unitary Product State; hardware-efficient |
+| `qnp` | `WaveFunctionUPS` (QNP) | Qubit Number Parity; preserves qubit parity |
 | `saups` | `WaveFunctionUPS` (state-averaged) | Simultaneous ground + excited state optimization |
 
 ```python
@@ -149,7 +149,7 @@ integrals = UCCIntegralData(
     num_basis_functions=14,
     h_ao=[...],      # 14×14 = 196 floats, row-major
     overlap_ao=[...],  # 196 floats
-    # g_ao omitted — 14⁴ = 38416 entries; only include for small systems
+    # g_ao omitted: 14⁴ = 38416 entries, only include for small systems
 )
 
 # 2. HF SCF
@@ -164,7 +164,7 @@ scf = UCCSCFResult(
 )
 print(scf.homo_lumo_gap)   # 0.245 Hartree
 
-# 3. UCC optimization — with per-iteration history
+# 3. UCC optimization, with per-iteration history
 opt = UCCOptimizationResult(
     method=UCCOptimizationMethod.TWO_STEP,
     num_iterations=25,

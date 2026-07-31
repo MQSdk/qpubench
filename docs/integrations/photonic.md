@@ -1,10 +1,10 @@
 # Photonic integration
 
-qpubench models linear-optics photonic chips and Fusion-Based QC (FBQC) in `src/qpubench/schemas/mirrors/mqsdk_photoq.py` (the LOQC/FBQC section). This is **permanent-based simulation** using Fock states — distinct from the Gaussian-state / hafnian-based GBS section of the same module.
+qpubench models linear-optics photonic chips and Fusion-Based QC (FBQC) in `src/qpubench/schemas/mirrors/mqsdk_photoq.py` (the LOQC/FBQC section). This is **permanent-based simulation** using Fock states, distinct from the Gaussian-state / hafnian-based GBS section of the same module.
 
-Computing model: `ComputingModel.GATE_BASED` (MZI chips, boson sampling — LOQC circuits) and `ComputingModel.FUSION_BASED` (FBQC with resource states + fusion gates). Qubit modality: `QubitModality.PHOTONIC` in both cases.
+Computing model: `ComputingModel.GATE_BASED` (MZI chips, boson sampling, LOQC circuits) and `ComputingModel.FUSION_BASED` (FBQC with resource states + fusion gates). Qubit modality: `QubitModality.PHOTONIC` in both cases.
 
-> The `mqsdk_photoq` module also covers Gaussian Boson Sampling, the pseudo-PNRD click-counting simulation methods, and the ORCA PT Series / DTU QCloud / Xanadu Aurora backends — see [gbs.md](gbs.md).
+> The `mqsdk_photoq` module also covers Gaussian Boson Sampling, the pseudo-PNRD click-counting simulation methods, and the ORCA PT Series / DTU QCloud / Xanadu Aurora backends; see [gbs.md](gbs.md).
 
 ---
 

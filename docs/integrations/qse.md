@@ -2,7 +2,7 @@
 
 qpubench models Krylov Quantum Diagonalization (KQD) and Quantum Subspace Expansion (QSE) in `src/qpubench/schemas/mirrors/mqsdk_qse.py`. The schemas cover the algorithm families implemented in [MQSdk/qse](https://github.com/MQSdk/qse).
 
-Computing model: `ComputingModel.GATE_BASED` (KQD is an algorithmic technique on top of gate-based circuits — see `KQDMethod`, not a separate paradigm)
+Computing model: `ComputingModel.GATE_BASED` (KQD is an algorithmic technique on top of gate-based circuits; see `KQDMethod`, not a separate paradigm)
 
 ---
 
@@ -82,7 +82,7 @@ te_spec = KQDTimeEvolutionSpec(
     variant=KrylovTimeEvolutionVariant.EFFICIENT_ALTERNATING,
 )
 
-print(te_spec.dt_circ)   # dt / 6 — Trotter step size for each sub-circuit
+print(te_spec.dt_circ)   # dt / 6, the Trotter step size for each sub-circuit
 ```
 
 `EFFICIENT_ALTERNATING`: alternating forward/reverse Rxyz blocks (default in qse).  

@@ -153,7 +153,7 @@ config = GSOptTNRunConfig(
     max_sweeps=64,
     init_bond_dim=13,
     init_seed=42,
-)   # method / init_state / tau / chi / local_eig_ncv stay None — TN-lane only
+)   # method / init_state / tau / chi / local_eig_ncv stay None; TN-lane only
 ```
 
 `GSOptBenchmarkResult.config` is typed as the union of all five, so parsing a
@@ -165,7 +165,7 @@ lane's shape.
 > run* was parameterised. The package-agnostic contracts an adapter accepts to
 > drive an algorithm are `VQERunConfig` / `AdaptVQERunConfig` / `QAOARunConfig`
 > in `schemas.execution`, set on `ExecutionOptions` and keyed by
-> `AlgorithmFamily` — see
+> `AlgorithmFamily`; see
 > [Algorithms & `AlgorithmSpec`](../algorithm_spec.md#vqaconfig--runconfig).
 > `schemas.VQERunConfig` is that contract; GSOpt's VQE-lane record is
 > `GSOptVQERunConfig`.

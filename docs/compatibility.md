@@ -1,6 +1,6 @@
 # Cross-framework compatibility notes
 
-These encoding differences cause silent errors when porting circuits or results between frameworks. They are encoded in the schema helper methods so you rarely need to deal with them directly — but understanding them prevents subtle bugs.
+These encoding differences cause silent errors when porting circuits or results between frameworks. They are encoded in the schema helper methods so you rarely need to deal with them directly, but understanding them prevents subtle bugs.
 
 ---
 
@@ -17,7 +17,7 @@ The consequences when comparing runs across the two frameworks:
 - Counts histograms for the same circuit have their bitstring keys reversed.
 - Multi-qubit observables must be mapped consistently: `Z ⊗ I` acts on *different* physical qubits under the two conventions.
 
-qpubench's own containers fix one convention: `SparsePauliObservable` addresses qubits by explicit `qubit_indices` (no positional string ordering, so the estimator path is unaffected), and `ShotResult.counts` uses **MSB-first bitstrings with qubit 0 rightmost** (the Qiskit convention). Converting at the boundary is the adapter's job. When you post-process counts yourself — or compare stored records produced through different SDKs — check the bit order first; otherwise two physically identical runs will look like they disagree.
+qpubench's own containers fix one convention: `SparsePauliObservable` addresses qubits by explicit `qubit_indices` (no positional string ordering, so the estimator path is unaffected), and `ShotResult.counts` uses **MSB-first bitstrings with qubit 0 rightmost** (the Qiskit convention). Converting at the boundary is the adapter's job. When you post-process counts yourself, or compare stored records produced through different SDKs, check the bit order first; otherwise two physically identical runs will look like they disagree.
 
 ---
 
@@ -30,7 +30,7 @@ qpubench's own containers fix one convention: `SparsePauliObservable` addresses 
 | `Z` | **2** | 0b0001 (1) |
 | `Y` | **3** | 0b0011 (3) |
 
-**Qrack Z=2, Y=3 — swapped from the alphabetical order most people expect.**
+**Qrack Z=2, Y=3, swapped from the alphabetical order most people expect.**
 
 Always use:
 ```python
@@ -38,7 +38,7 @@ PauliLabel.Z.to_qrack_int()       # → 2 (correct)
 PauliLabel.Y.to_qrack_int()       # → 3 (correct)
 PauliLabel.Z.to_qiskit_c_bit_term()  # → 1 (correct)
 ```
-Never hardcode `2` for Z or `3` for Y — the meaning flips between SDKs.
+Never hardcode `2` for Z or `3` for Y; the meaning flips between SDKs.
 
 ---
 
@@ -46,14 +46,14 @@ Never hardcode `2` for Z or `3` for Y — the meaning flips between SDKs.
 
 `QkComplex64` (the Qiskit C API complex type) is two `float32` values, **not** `float64`.
 
-Passing a Python `complex` (which is always `float64`) to a Qiskit-C ctypes bridge causes silent data corruption — the extra bytes are silently truncated, not an exception.
+Passing a Python `complex` (which is always `float64`) to a Qiskit-C ctypes bridge causes silent data corruption; the extra bytes are silently truncated, not an exception.
 
 ```python
-# Correct — explicitly cast to numpy.complex64 before any ctypes call
+# Correct: explicitly cast to numpy.complex64 before any ctypes call
 import numpy as np
 amp = np.complex64(0.707 + 0.707j)
 
-# Wrong — passes float64 to a float32 slot
+# Wrong: passes float64 to a float32 slot
 amp = 0.707 + 0.707j
 ```
 
@@ -83,7 +83,7 @@ x_bit = state.ops_x   # (ops >> 1) & 1
 
 ## MBQC byproduct update is a neighbourhood triple
 
-`b_prog` conditions byproduct updates on `(m_below, m_self, m_above)` — three measurements from neighbouring qubits — not on a single measurement outcome.
+`b_prog` conditions byproduct updates on `(m_below, m_self, m_above)`, three measurements from neighbouring qubits, not on a single measurement outcome.
 
 ```python
 z_mask = 0b011   # update Z using m_below ^ m_self
@@ -106,7 +106,7 @@ sr[1] = one round ago
 sr[0] = oldest
 ```
 
-Iterating `sr` as `0 = most recent` produces wrong adaptive measurement settings. The schema preserves this convention — `AdaptiveSpec.compute_s()` accepts `shift_register` as a 3-bit integer with `sr[2]` as the MSB.
+Iterating `sr` as `0 = most recent` produces wrong adaptive measurement settings. The schema preserves this convention; `AdaptiveSpec.compute_s()` accepts `shift_register` as a 3-bit integer with `sr[2]` as the MSB.
 
 ---
 
@@ -129,7 +129,7 @@ Qrack's `MeasureShots` C function returns bitstring outcomes as packed **integer
 # Correct
 bitstring = format(outcome, f"0{n_qubits}b")   # MSB-first (Qiskit convention)
 
-# Wrong — iterating raw integer bytes
+# Wrong: iterating raw integer bytes
 ```
 
 qpubench's `ShotResult.counts` uses MSB-first bitstrings throughout.
@@ -167,4 +167,4 @@ Cebule delivers the operators and their coefficients as two parallel lists, so t
 SparsePauliObservable.from_cebule_operators(operators, coefficients, num_qubits)
 ```
 
-For observables you write by hand, use `Pauli()` — it reads the same token format, and accepts commas as well as spaces, so `Pauli("X0 Y1 Z3")` and `Pauli("X0,Y1,Z3")` are the same observable.
+For observables you write by hand, use `Pauli()`; it reads the same token format, and accepts commas as well as spaces, so `Pauli("X0 Y1 Z3")` and `Pauli("X0,Y1,Z3")` are the same observable.

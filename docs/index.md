@@ -2,7 +2,7 @@
 
 **QPUBench is a benchmark framework for quantum computing paradigms and quantum computers (QPUs) that separates *what* you benchmark from *how* it runs and *where* the results go.**
 
-You describe a circuit or problem once, as a typed [Pydantic v2](https://docs.pydantic.dev/) model. You run it against any registered backend — a local simulator, IBM or IQM hardware, or an algorithm library that builds its own circuits. Every run produces the same self-describing `BenchmarkRecord`, so results from different hardware, paradigms, and vendors are directly comparable and remain readable years later without any quantum SDK installed.
+You describe a circuit or problem once, as a typed [Pydantic v2](https://docs.pydantic.dev/) model. You run it against any registered backend: a local simulator, IBM or IQM hardware, or an algorithm library that builds its own circuits. Every run produces the same self-describing `BenchmarkRecord`, so results from different hardware, paradigms, and vendors are directly comparable and remain readable years later without any quantum SDK installed.
 
 The core package depends only on `pydantic`. Every quantum SDK is an optional extra.
 
@@ -12,13 +12,13 @@ The core package depends only on `pydantic`. Every quantum SDK is an optional ex
 
 QPUBench is built from three small, independent layers. Understanding them is enough to use the whole framework.
 
-**1. Schemas — what you benchmark.**
+**1. Schemas: what you benchmark.**
 `CircuitSpec` (a circuit or problem), `BackendSpec` (a machine), `ExecutionOptions` (how to run), and `QuantumResult` (what came back) are plain Pydantic models. They serialize to JSON, validate on construction, and never import a quantum SDK. A `BenchmarkRecord` bundles one circuit × one backend × one options set × one result, stamped with a schema version, a UUID (`experiment_id`), and a UTC `timestamp` recording when the run was created.
 
-**2. Adapters — how execution happens.**
-An adapter is any object with three members: `spec`, `validate(circuit)`, and `run(circuit, options)` (the `BackendAdapter` protocol). Libraries that generate their *own* circuits from a problem description — ADAPT-VQE engines, for example — implement the sibling `AlgorithmAdapter` protocol instead, and the runner dispatches automatically. No base class to inherit; protocols are structural.
+**2. Adapters: how execution happens.**
+An adapter is any object with three members: `spec`, `validate(circuit)`, and `run(circuit, options)` (the `BackendAdapter` protocol). Libraries that generate their *own* circuits from a problem description, ADAPT-VQE engines for example, implement the sibling `AlgorithmAdapter` protocol instead, and the runner dispatches automatically. No base class to inherit; protocols are structural.
 
-**3. Stores — where results go.**
+**3. Stores: where results go.**
 `NDJSONStore` (zero-dependency, append-only), `ParquetStore` (columnar, for analysis with pandas), and `S3Store` (one object per record, safe for distributed sweeps). All share the same `save` / `load` / `query` interface, and the runner persists every record automatically.
 
 ```
@@ -35,19 +35,19 @@ CircuitSpec ──▶ BenchmarkRunner ──▶ BackendAdapter / AlgorithmAdapte
 ## Installation
 
 ```sh
-pip install .              # schemas + runner + stubs — pydantic is the only dependency
+pip install .              # schemas + runner + stubs; pydantic is the only dependency
 pip install ".[qiskit]"    # + Qiskit Aer and IBM Quantum Runtime backends
 pip install ".[storage]"   # + Parquet store
 pip install ".[all]"       # everything on PyPI
 ```
 
-Works identically with `uv`, Poetry 2, and conda — see the [installation guide](installation.md).
+Works identically with `uv`, Poetry 2, and conda; see the [installation guide](installation.md).
 
 ---
 
 ## Your first benchmark
 
-This runs end-to-end with the bare install — no quantum SDK, no credentials. It prepares a 3-qubit GHZ state, measures two observables on a stub backend, and appends the record to an NDJSON file. Compared with the README's minimal Bell example, this one deliberately reaches for a few more knobs — multiple observables, an explicit `ExecutionOptions` (reproducibility seed, transpiler tier), and record tags/notes — so you meet them early:
+This runs end-to-end with the bare install: no quantum SDK, no credentials. It prepares a 3-qubit GHZ state, measures two observables on a stub backend, and appends the record to an NDJSON file. Compared with the README's minimal Bell example, this one deliberately reaches for a few more knobs, namely multiple observables, an explicit `ExecutionOptions` (reproducibility seed, transpiler tier), and record tags/notes, so you meet them early:
 
 ```python
 from qpubench import BenchmarkRunner, CircuitSpec, ExecutionOptions, Pauli
@@ -66,7 +66,7 @@ xxx = Pauli("X0 X1 X2")
 circuit = CircuitSpec(num_qubits=3, serialized=ghz_qasm, observables=[zzz, xxx])
 
 # How to run it, and where results go.  A plain string path becomes an
-# append-only NDJSONStore — no pathlib, no store import needed.
+# append-only NDJSONStore; no pathlib, no store import needed.
 runner = BenchmarkRunner(store="results/ghz.ndjson")
 runner.register(name="stub", seed=42)
 
@@ -86,16 +86,16 @@ for ev in record.result.expectation_values:
 print("created at:", record.timestamp)          # UTC timestamp, auto-stamped
 ```
 
-`Pauli("Z0 Z1 Z2")` is the short spelling of an observable: it returns a `SparsePauliObservable` — the schema type every adapter consumes — from a string of Pauli letters with 0-based qubit indices. Multi-term Hamiltonians are either a mapping or a sum, whichever reads better:
+`Pauli("Z0 Z1 Z2")` is the short spelling of an observable: it returns a `SparsePauliObservable`, the schema type every adapter consumes, from a string of Pauli letters with 0-based qubit indices. Multi-term Hamiltonians are either a mapping or a sum, whichever reads better:
 
 ```python
 H = Pauli({"Z0": 0.39, "X0 X1": 0.18})
 H = -1.05 * Pauli("") + 0.39 * Pauli("Z0") + 0.18 * Pauli("X0 X1")   # Pauli("") is the identity
 ```
 
-Nothing is hidden behind it — the explicit `SparsePauliObservable(num_qubits=…, terms=[PauliTerm(…)])` form builds the same object and is still the right choice when a program generates terms rather than a person typing them. See [schemas.md](schemas.md#observable) for the full signature.
+Nothing is hidden behind it; the explicit `SparsePauliObservable(num_qubits=…, terms=[PauliTerm(…)])` form builds the same object and is still the right choice when a program generates terms rather than a person typing them. See [schemas.md](schemas.md#observable) for the full signature.
 
-Registering with just a `name` and a `seed` creates a **`StubGateAdapter`** behind the scenes: a built-in placeholder backend that returns random, seed-reproducible values instead of simulating anything. It exists so you can build and test the full pipeline — circuit, runner, store — before installing a quantum SDK or touching real hardware. `runner.run(..., shots=4096)` would build `ExecutionOptions(shots=4096)` for you; here we pass a full `ExecutionOptions` to reach the extra settings (`seed`, `optimization_level`, and later error mitigation, transpiler settings, or algorithm hyperparameters). When a circuit carries observables the stub takes the estimator path and returns expectation values; drop the observables and it samples bitstrings into `record.result.shots` instead (set `memory=True` for per-shot data).
+Registering with just a `name` and a `seed` creates a **`StubGateAdapter`** behind the scenes: a built-in placeholder backend that returns random, seed-reproducible values instead of simulating anything. It exists so you can build and test the full pipeline, from circuit to runner to store, before installing a quantum SDK or touching real hardware. `runner.run(..., shots=4096)` would build `ExecutionOptions(shots=4096)` for you; here we pass a full `ExecutionOptions` to reach the extra settings (`seed`, `optimization_level`, and later error mitigation, transpiler settings, or algorithm hyperparameters). When a circuit carries observables the stub takes the estimator path and returns expectation values; drop the observables and it samples bitstrings into `record.result.shots` instead (set `memory=True` for per-shot data).
 
 To run the same circuit on a real simulator, change **one line**:
 
@@ -106,7 +106,7 @@ runner.register(AerAdapter(), name="aer")
 record = runner.run(circuit, "aer", options)      # <ZZZ> ≈ 0, <XXX> ≈ 1 for GHZ
 ```
 
-That substitution — same circuit, same options, same record format, different machine — is the entire point of the framework.
+That substitution, with the same circuit, the same options and the same record format on a different machine, is the entire point of the framework.
 
 ### Simulators you can drop in
 
@@ -114,7 +114,7 @@ Every backend below is a **real, credential-free simulator** that swaps into tha
 
 | Simulator | Install extra | Register it with |
 |---|---|---|
-| Stub (random, seeded — no SDK) | *(built-in)* | `runner.register(name="stub", seed=42)` |
+| Stub (random, seeded, no SDK) | *(built-in)* | `runner.register(name="stub", seed=42)` |
 | Stub MBQC (random round results) | *(built-in)* | `runner.register(StubMBQCAdapter(seed=7), name="mbqc")` |
 | Qiskit Aer (statevector + QASM) | `[qiskit]` | `runner.register(AerAdapter(), name="aer")` |
 | PennyLane `lightning.qubit` | `[pennylane]` | `runner.register(PennyLaneLightningAdapter(), name="pennylane")` |
@@ -123,7 +123,7 @@ Every backend below is a **real, credential-free simulator** that swaps into tha
 | Qrack (GPU/CPU statevector) | `[qrack]` | `runner.register(QrackAdapter(2, gpu=False), name="qrack")` |
 | Mitiq ZNE (wraps another simulator) | `[mitiq]` | `runner.register(MitiqZNEAdapter(AerAdapter()), name="mitiq")` |
 
-All adapter classes import from `qpubench.backends`. Fake-noise hardware backends (IBM `FakeManilaV2`, IQM `IQMFakeAdonis`, Quantinuum `machine_debug=True`) also run without credentials — see [Backends & adapters](backends.md) for those and for real-hardware access.
+All adapter classes import from `qpubench.backends`. Fake-noise hardware backends (IBM `FakeManilaV2`, IQM `IQMFakeAdonis`, Quantinuum `machine_debug=True`) also run without credentials; see [Backends & adapters](backends.md) for those and for real-hardware access.
 
 ### What got saved
 
@@ -166,9 +166,9 @@ record.vqa_result.energy_error       # |final − reference|, when a reference i
 record.vqa_result.chemical_accuracy  # True (< 1.6 mHa)
 ```
 
-`VQAConfig` is input metadata, not configuration — it changes nothing about execution and never carries computed values. `problem_type` (the only required field) labels the problem domain (`"chemistry"`, `"optimization"`, `"ml"`) so records can be filtered by domain in the store. The computed side (`VQAResult`) is produced by the run itself: algorithm adapters return the converged energy, convergence history, and computed references (FCI / exact diagonalisation); for estimator-path circuit runs the runner derives `final_eigenvalue` from the result's expectation values. `energy_error` and `chemical_accuracy` are derived whenever a computed reference is present.
+`VQAConfig` is input metadata, not configuration; it changes nothing about execution and never carries computed values. `problem_type` (the only required field) labels the problem domain (`"chemistry"`, `"optimization"`, `"ml"`) so records can be filtered by domain in the store. The computed side (`VQAResult`) is produced by the run itself: algorithm adapters return the converged energy, convergence history, and computed references (FCI / exact diagonalisation); for estimator-path circuit runs the runner derives `final_eigenvalue` from the result's expectation values. `energy_error` and `chemical_accuracy` are derived whenever a computed reference is present.
 
-Hooks fire on every completed record before persistence — use them for live progress lines or structured logging (`BenchmarkLogger` ships with a JSON formatter):
+Hooks fire on every completed record before persistence; use them for live progress lines or structured logging (`BenchmarkLogger` ships with a JSON formatter):
 
 ```python
 runner.add_hook(lambda r: print(r.backend.name, r.result.status.value))
@@ -194,7 +194,7 @@ runner.add_hook(lambda r: print(r.backend.name, r.result.status.value))
 | Load pre-defined QUBO Hamiltonians (OR-Library, MQLib, BQPJSON) | [`hamiltonian_sources/qubo.py`](../src/qpubench/hamiltonian_sources/qubo.py) and the [generator roadmap](qubo_generator_roadmap.md) |
 | Avoid cross-SDK convention traps (Pauli encodings, bit orders) | [Compatibility](compatibility.md) |
 | Write your own adapter, step by step | [Backends & adapters](backends.md) and the [integrations directory](https://github.com/mqsdk/qpubench/tree/main/integrations) |
-| Learn from runnable code | [examples/](https://github.com/mqsdk/qpubench/tree/main/examples) — guides, demos, and full tutorials |
+| Learn from runnable code | [examples/](https://github.com/mqsdk/qpubench/tree/main/examples): guides, demos, and full tutorials |
 
 The examples directory follows a three-tier layout: `guides/` are focused how-tos (one concept each), `demos/` are self-contained showcases, and `tutorials/` are multi-step scientific workflows such as a bond-dissociation curve or an SN2 reaction path.
 
@@ -202,7 +202,7 @@ The examples directory follows a three-tier layout: `guides/` are focused how-to
 
 ## Plugging in your own backend
 
-An adapter is a plain class — no registration machinery, no inheritance:
+An adapter is a plain class, with no registration machinery and no inheritance:
 
 ```python
 from qpubench.schemas.backend import BackendSpec
@@ -236,7 +236,7 @@ Two rules keep the ecosystem healthy: SDK imports live **inside** methods (so im
 
 ## Beyond gate-based circuits
 
-The same record format covers paradigms that most benchmark tools can't express side by side. `ComputingModel` (how a program is expressed: `GATE_BASED`, `MBQC`, `FUSION_BASED`, `ADIABATIC`, `ANNEALING`, `GBS`, `SAMPLING`) and `QubitModality` (what hardware realizes it: superconducting, trapped-ion, neutral-atom, photonic, silicon-spin) are independent axes on every circuit, backend, and result — so a gate-based run on photonic hardware and a Gaussian boson sampling run land in the same store and can be queried together.
+The same record format covers paradigms that most benchmark tools can't express side by side. `ComputingModel` (how a program is expressed: `GATE_BASED`, `MBQC`, `FUSION_BASED`, `ADIABATIC`, `ANNEALING`, `GBS`, `SAMPLING`) and `QubitModality` (what hardware realizes it: superconducting, trapped-ion, neutral-atom, photonic, silicon-spin) are independent axes on every circuit, backend, and result, so a gate-based run on photonic hardware and a Gaussian boson sampling run land in the same store and can be queried together.
 
 Vendor- and framework-specific schemas (41 modules, from QForte and PySCF to QuEra's analog Hamiltonian simulation and Qedma's QESEM error mitigation) live in [`qpubench.schemas`](schemas.md). They are split three ways by directory: `schemas/` holds the core record types, `schemas/mirrors/` one module per external project (named `<maintainer>_<package>.py`, so the filename tells you the upstream source), and `schemas/catalogs/` the cross-cutting catalogues that draw on several upstreams at once (basis sets, Hamiltonian metadata, the advantage tracker).
 

@@ -1,6 +1,6 @@
 # Stores & persistence
 
-A **store** is where the `BenchmarkRunner` persists every `BenchmarkRecord` after execution — the third of qpubench's three layers (schemas describe, adapters execute, stores persist). qpubench ships three stores. All implement the `ResultStore` protocol:
+A **store** is where the `BenchmarkRunner` persists every `BenchmarkRecord` after execution, the third of qpubench's three layers (schemas describe, adapters execute, stores persist). qpubench ships three stores. All implement the `ResultStore` protocol:
 
 ```python
 class ResultStore(Protocol):
@@ -45,7 +45,7 @@ record = store.load("3f2a1b4c-...")
 all_records = store.all()
 ```
 
-The query matches on the `model_dump()` representation of `BenchmarkRecord`. Nested dicts use the same `__` convention, e.g. `result__expectation_values` would require a further traversal that the query engine does not yet support — load the record and filter in Python for deep nesting.
+The query matches on the `model_dump()` representation of `BenchmarkRecord`. Nested dicts use the same `__` convention, e.g. `result__expectation_values` would require a further traversal that the query engine does not yet support; load the record and filter in Python for deep nesting.
 
 ### Thread safety
 
@@ -73,7 +73,7 @@ Records are flattened one level deep before writing. A `_raw_json` column stores
 df = store.to_dataframe()
 print(df[["molecule", "final_eigenvalue", "circuit_depth"]].describe())
 
-# Query — column-level only: filters use flat single-underscore column
+# Query, column-level only: filters use flat single-underscore column
 # names (not NDJSONStore's dotted __ paths); unknown columns are ignored
 records = store.query(backend_name="aer_statevector")
 records = store.query(result_status="succeeded")
@@ -102,7 +102,7 @@ Flat column names produced from a `BenchmarkRecord`:
 
 Object store backed by S3 or any S3-compatible endpoint. Requires `pip install 'qpubench[s3]'`.
 
-One JSON object per record — `f"{prefix}/{experiment_id}.json"` — instead of NDJSONStore's shared append-only file. There is no read-modify-write of shared state, so concurrent writers (separate processes, machines, or a distributed sweep) do not race. Only `put_object`, `get_object`, and the `list_objects_v2` paginator are used, so it works unmodified against real AWS S3 and against S3-compatible gateways.
+One JSON object per record, `f"{prefix}/{experiment_id}.json"`, instead of NDJSONStore's shared append-only file. There is no read-modify-write of shared state, so concurrent writers (separate processes, machines, or a distributed sweep) do not race. Only `put_object`, `get_object`, and the `list_objects_v2` paginator are used, so it works unmodified against real AWS S3 and against S3-compatible gateways.
 
 ### AWS S3
 
@@ -113,14 +113,14 @@ store = S3Store(
     "my-results-bucket",
     prefix="sweeps/2026-07-06",
     region_name="eu-west-1",
-    # aws_access_key_id / aws_secret_access_key are optional — omit them to
+    # aws_access_key_id / aws_secret_access_key are optional; omit them to
     # use the standard boto3 credential chain (env vars, ~/.aws/credentials,
     # instance role, etc.)
 )
 runner = BenchmarkRunner(store=store)
 ```
 
-Any keyword accepted by `boto3.client("s3", ...)` can be passed through directly — `endpoint_url`, `region_name`, `aws_access_key_id`, `aws_secret_access_key`, `config=botocore.config.Config(...)` — which also makes `S3Store` work against MinIO or any other S3-compatible service. Pass an already-constructed client instead via `client=`:
+Any keyword accepted by `boto3.client("s3", ...)` can be passed through directly (`endpoint_url`, `region_name`, `aws_access_key_id`, `aws_secret_access_key`, `config=botocore.config.Config(...)`), which also makes `S3Store` work against MinIO or any other S3-compatible service. Pass an already-constructed client instead via `client=`:
 
 ```python
 import boto3
@@ -149,7 +149,7 @@ Generate the S3 credentials from a Hugging Face [User Access Token](https://hugg
 
 ### Loading and querying
 
-Identical API to `NDJSONStore` — `save()`, `load(experiment_id)`, `query(**filters)`, `all()`:
+Identical API to `NDJSONStore`: `save()`, `load(experiment_id)`, `query(**filters)`, `all()`:
 
 ```python
 record  = store.load("3f2a1b4c-...")
@@ -157,7 +157,7 @@ records = store.query(backend__name="aer_statevector", result__status="succeeded
 all_records = store.all()   # lists every object under the prefix, then fetches each
 ```
 
-`query()`/`all()` list every object under the store's prefix and fetch each in turn — fine for benchmark-scale result sets, but there is no server-side filtering, so very large buckets should be partitioned by `prefix` (e.g. one prefix per `run_id`) to keep listings small.
+`query()`/`all()` list every object under the store's prefix and fetch each in turn, fine for benchmark-scale result sets, but there is no server-side filtering, so very large buckets should be partitioned by `prefix` (e.g. one prefix per `run_id`) to keep listings small.
 
 ---
 

@@ -167,8 +167,8 @@
 
 \begin{frame}[fragile]{What is QPUBench?}
 \phantomsection\label{what-is-qpubench}
-\textbf{Modality-agnostic quantum benchmark framework --- three layers,
-one record}
+\textbf{Modality-agnostic quantum benchmark framework: three layers, one
+record}
 
 \footnotesize
 
@@ -186,11 +186,11 @@ Lives in
 \end{minipage} \\
 \midrule\noalign{}
 \endhead
-\textbf{Schema} & \emph{What} are you benchmarking? & \texttt{schemas/}
---- 37 Pydantic v2 modules (= ``Schema v4.2.0'') \\
+\textbf{Schema} & \emph{What} are you benchmarking? & \texttt{schemas/}:
+37 Pydantic v2 modules (= ``Schema v5.0.0'') \\
 \textbf{Adapter} & \emph{How} does it run? & \texttt{backends/} +
 \texttt{integrations/} (next slide) \\
-\textbf{Store} & \emph{How} is it persisted? & \texttt{store.py} ---
+\textbf{Store} & \emph{How} is it persisted? & \texttt{store.py}:
 \texttt{NDJSONStore}, \texttt{ParquetStore}, \texttt{S3Store} \\
 \bottomrule\noalign{}
 \end{longtable}
@@ -198,7 +198,7 @@ Lives in
 \normalsize
 
 \begin{block}{Core invariants}
-\texttt{qpubench} itself never imports from any quantum library — only adapters do. And since schema v3.0.0 the core schema modules import \emph{zero vendor schema modules}: vendor data flows through vendor-neutral dict extension points (next section).
+\texttt{qpubench} itself never imports from any quantum library; only adapters do. And since schema v3.0.0 the core schema modules import \emph{zero vendor schema modules}: vendor data flows through vendor-neutral dict extension points (next section).
 \end{block}
 \end{frame}
 
@@ -213,11 +213,11 @@ Lives in
 \begin{itemize}
 \tightlist
 \item
-  \texttt{schemas/} --- Schema layer
+  \texttt{schemas/}: Schema layer
 \item
-  \texttt{runner.py} --- \texttt{BenchmarkRunner}
+  \texttt{runner.py}: \texttt{BenchmarkRunner}
 \item
-  \texttt{store.py} --- Store layer
+  \texttt{store.py}: Store layer
 \end{itemize}
 \end{column}
 
@@ -227,12 +227,12 @@ Lives in
 \begin{itemize}
 \tightlist
 \item
-  \texttt{backends/} --- adapter protocols + stubs
+  \texttt{backends/}: adapter protocols + stubs
 \item
-  \texttt{integrations/} --- real reference adapters, \textbf{not
-  installed} --- copy into your project (like a template)
+  \texttt{integrations/}: real reference adapters, \textbf{not
+  installed}; copy into your project (like a template)
 \item
-  \texttt{examples/} --- runnable demos
+  \texttt{examples/}: runnable demos
 \end{itemize}
 \end{column}
 \end{columns}
@@ -247,7 +247,7 @@ Lives in
 
 \footnotesize
 
-\textbf{``Contract''} = a Python \texttt{Protocol} --- a fixed method
+\textbf{``Contract''} = a Python \texttt{Protocol}, a fixed method
 signature (\texttt{spec}/\texttt{validate}/\texttt{run}) callers rely on
 without caring which class implements it. A \textbf{stub} satisfies it
 with fake data; real adapters (Aer, IBM, IQM, Braket) satisfy the same
@@ -270,21 +270,21 @@ Implementation
 \end{minipage} \\
 \midrule\noalign{}
 \endhead
-\textbf{Schema-first} & Pydantic v2 models are the stable contract ---
+\textbf{Schema-first} & Pydantic v2 models are the stable contract;
 every record round-trips through \texttt{.model\_dump\_json()} \\
 \textbf{No SDK lock-in} & Core never imports any quantum library \\
 \textbf{Three adapter protocols} & \texttt{BackendAdapter} ·
 \texttt{AlgorithmAdapter} · \texttt{ErrorMitigationAdapter} \\
 \textbf{Append-only stores} & \texttt{NDJSONStore}/\texttt{ParquetStore}
 for reproducible sweeps; \texttt{S3Store} for concurrent writers \\
-\textbf{Language-agnostic} & Every record is plain JSON --- any language
+\textbf{Language-agnostic} & Every record is plain JSON, so any language
 can parse it, whichever store wrote it \\
 \textbf{Inputs vs.~outputs} & \texttt{VQAConfig} = what you chose to
-run; \texttt{VQAResult} = what the run produced --- computed values are
+run; \texttt{VQAResult} = what the run produced; computed values are
 never user-supplied \\
 \textbf{Vendor-neutral core} & Vendor payloads live in keyed dicts
 (\texttt{vendor\_results}, \texttt{mitigation\_options},
-\texttt{vendor\_data}) --- adding a vendor never touches a core file \\
+\texttt{vendor\_data}); adding a vendor never touches a core file \\
 \bottomrule\noalign{}
 \end{longtable}
 
@@ -296,8 +296,8 @@ never user-supplied \\
 \footnotesize
 
 Every \texttt{BenchmarkRecord} serializes to one JSON object, always.
-\emph{How that object reaches disk} differs by store --- same schema,
-three storage strategies, not an inconsistency:
+\emph{How that object reaches disk} differs by store: same schema, three
+storage strategies, not an inconsistency:
 
 \begin{longtable}[]{@{}
   >{\raggedright\arraybackslash}p{(\columnwidth - 2\tabcolsep) * \real{0.5000}}
@@ -312,7 +312,7 @@ On-disk shape
 \endhead
 \texttt{NDJSONStore} & One JSON object per line, appended to one shared
 file (``\textbf{N}ewline-\textbf{D}elimited JSON'') \\
-\texttt{S3Store} & One whole JSON file per record --- no shared file, so
+\texttt{S3Store} & One whole JSON file per record; no shared file, so
 concurrent writers can't race \\
 \texttt{ParquetStore} & Same records converted to a columnar table \\
 \bottomrule\noalign{}
@@ -325,15 +325,15 @@ concurrent writers can't race \\
 \phantomsection\label{installation}
 \footnotesize
 
-Not yet on PyPI --- install from a git clone until it is: \normalsize
+Not yet on PyPI; install from a git clone until it is: \normalsize
 
 \begin{Shaded}
 \begin{Highlighting}[]
 \FunctionTok{git}\NormalTok{ clone https://github.com/mqsdk/qpubench }\KeywordTok{\&\&} \BuiltInTok{cd}\NormalTok{ qpubench}
-\ExtensionTok{pip}\NormalTok{ install .                }\CommentTok{\# Minimal — schemas + stubs, no quantum SDK}
+\ExtensionTok{pip}\NormalTok{ install .                }\CommentTok{\# Minimal: schemas + stubs, no quantum SDK}
 \ExtensionTok{pip}\NormalTok{ install }\StringTok{".[qiskit]"}      \CommentTok{\# Qiskit Aer + IBM Quantum Runtime V2}
 \ExtensionTok{pip}\NormalTok{ install }\StringTok{".[storage]"}     \CommentTok{\# Parquet store (pyarrow + pandas)}
-\ExtensionTok{pip}\NormalTok{ install }\StringTok{".[s3]"}          \CommentTok{\# S3 store (boto3) — AWS S3 / MinIO / HF buckets}
+\ExtensionTok{pip}\NormalTok{ install }\StringTok{".[s3]"}          \CommentTok{\# S3 store (boto3): AWS S3 / MinIO / HF buckets}
 \ExtensionTok{pip}\NormalTok{ install }\StringTok{".[all]"}         \CommentTok{\# everything, all optional extras}
 \end{Highlighting}
 \end{Shaded}
@@ -350,7 +350,7 @@ Not yet on PyPI --- install from a git clone until it is: \normalsize
 \phantomsection\label{reading-this-reference}
 \footnotesize
 
-The next 9 slides are a \textbf{reference listing}, not a narrative ---
+The next 9 slides are a \textbf{reference listing}, not a narrative;
 they exist so you know a module is there when you need it, not to be
 read top-to-bottom. The take-home message fits in one line: \normalsize
 
@@ -364,7 +364,7 @@ Every schema module is a set of typed Pydantic models for one vendor/technique's
 \textbf{If you just want to see the package in action}: skip ahead to
 \emph{Adapters} (real running code) or \emph{Examples \& Coverage} at
 the end (a full worked example). Come back here when you need to look up
-what a specific module contains --- that's what a GitHub repo's own
+what a specific module contains; that's what a GitHub repo's own
 reference docs (\texttt{docs/schemas.md}) are for; these slides just
 mirror the module list so it's not a total blank spot. \normalsize
 \end{frame}
@@ -377,33 +377,36 @@ The schema library splits into \textbf{three groups} (same split as
 \begin{enumerate}
 \tightlist
 \item
-  \textbf{Core record format} --- the unprefixed modules defining the
-  types every benchmark shares: \texttt{primitives} · \texttt{circuit} ·
+  \textbf{Core record format}: the unprefixed modules defining the types
+  every benchmark shares: \texttt{primitives} · \texttt{circuit} ·
   \texttt{observable} · \texttt{backend} · \texttt{execution} ·
   \texttt{result} · \texttt{record}.
 \item
-  \textbf{Cross-cutting catalogues \& registries} --- unprefixed modules
-  that aggregate \emph{multiple} external sources or define
-  framework-own catalogues: \texttt{advantage} (IBM Quantum Advantage
-  Tracker) · \texttt{optimizer\_catalog} · \texttt{hamiltonian\_library}
-  · \texttt{basis\_sets} · \texttt{contraction\_path} ·
-  \texttt{reactions} · \texttt{polarizable\_embedding}.
+  \textbf{Cross-cutting catalogues \& registries}
+  (\texttt{schemas/catalogs/}): modules that aggregate \emph{multiple}
+  external sources or define framework-own catalogues:
+  \texttt{quantum\_advantage\_tracker} · \texttt{optimizer\_catalog} ·
+  \texttt{hamiltonian\_library} · \texttt{basis\_sets} ·
+  \texttt{contraction\_path} · \texttt{reactions} ·
+  \texttt{polarizable\_embedding} · \texttt{fragmentation} ·
+  \texttt{distributed\_execution}.
 \item
-  \textbf{Project mirrors} --- one module per external project, named
+  \textbf{Project mirrors} (\texttt{schemas/mirrors/}): one module per
+  external project, named
   \texttt{\textless{}org\_or\_maintainer\textgreater{}\_\textless{}package\textgreater{}.py}
   so the filename alone names the upstream source.
 \end{enumerate}
 
 \vspace{0.3em}
 
-Two orthogonal axes --- \textbf{computing model} (paradigm) and
-\textbf{qubit modality} (QPU) --- are stamped on every circuit, backend,
+Two orthogonal axes, \textbf{computing model} (paradigm) and
+\textbf{qubit modality} (QPU), are stamped on every circuit, backend,
 and result, independently of the group.
 \end{frame}
 
 \begin{frame}[fragile]{Core Schema Modules (1/3)}
 \phantomsection\label{core-schema-modules-13}
-All rows are computing-model/qubit-modality \textbf{all / all} --- these
+All rows are computing-model/qubit-modality \textbf{all / all}; these
 are the framework's own foundational types, not vendor-specific.
 
 \begin{longtable}[]{@{}
@@ -419,11 +422,11 @@ Key types
 \endhead
 \texttt{primitives} & \texttt{ComputingModel}, \texttt{QubitModality},
 \texttt{CircuitFormat}, \texttt{PauliLabel}, \texttt{ComplexNumber} \\
-\texttt{circuit} & \texttt{CircuitSpec} --- \texttt{from\_openqasm3()},
+\texttt{circuit} & \texttt{CircuitSpec}: \texttt{from\_openqasm3()},
 \texttt{bind()}, \texttt{is\_parametric()} \\
 \texttt{observable} & \texttt{SparsePauliObservable},
 \texttt{PauliTerm} \\
-\texttt{backend} & \texttt{BackendSpec} --- 35 factory constructors \\
+\texttt{backend} & \texttt{BackendSpec}: 35 factory constructors \\
 \bottomrule\noalign{}
 \end{longtable}
 \end{frame}
@@ -443,8 +446,8 @@ Key types
 \endhead
 \texttt{execution} & \texttt{ExecutionOptions}, \texttt{AlgorithmSpec},
 \texttt{ZNEConfig} \\
-\texttt{advantage} & \texttt{QuantumAdvantageRecord} --- multi-org
-registry, unprefixed \\
+\texttt{catalogs/quantum\_advantage\_tracker} &
+\texttt{QuantumAdvantageRecord}: multi-org community registry \\
 \texttt{result} & \texttt{QuantumResult} (+ \texttt{vendor\_results}
 dict), \texttt{ExpectationResult}, \texttt{ShotResult} \\
 \texttt{record} & \texttt{BenchmarkRecord}, \texttt{VQAConfig} (inputs),
@@ -469,14 +472,13 @@ Key types
 \midrule\noalign{}
 \endhead
 \texttt{optimizer\_catalog} & \texttt{MINIMIZER\_CATALOG},
-\texttt{STOPPING\_CRITERION\_CATALOG} --- over
+\texttt{STOPPING\_CRITERION\_CATALOG}, used over
 \texttt{AdaptVQERunConfig} fields \\
 \texttt{hamiltonian\_library} & \texttt{HamiltonianSource},
-\texttt{HamiltonianLibraryRecord} --- metadata for real Hamiltonians
+\texttt{HamiltonianLibraryRecord}: metadata for real Hamiltonians
 (PennyLane qchem, HamLib, ab initio) \\
 \texttt{contraction\_path} &
-\texttt{ContractionPathStrategy/Config/Result} --- real quimb +
-cotengra \\
+\texttt{ContractionPathStrategy/Config/Result}: real quimb + cotengra \\
 \bottomrule\noalign{}
 \end{longtable}
 
@@ -488,8 +490,8 @@ cotengra \\
 \footnotesize
 
 Named
-\texttt{\textless{}org\textgreater{}\_\textless{}package\textgreater{}.py}
---- who maintains the upstream project + what it's called. \normalsize
+\texttt{\textless{}org\textgreater{}\_\textless{}package\textgreater{}.py}:
+who maintains the upstream project + what it's called. \normalsize
 
 \begin{longtable}[]{@{}
   >{\raggedright\arraybackslash}p{(\columnwidth - 2\tabcolsep) * \real{0.2759}}
@@ -502,14 +504,14 @@ Computing model (qubit modality)
 \end{minipage} \\
 \midrule\noalign{}
 \endhead
-\texttt{johnrscott\_mbqc\_fpga} & MBQC-FPGA --- bit-exact 16-bit program
+\texttt{johnrscott\_mbqc\_fpga} & MBQC-FPGA: bit-exact 16-bit program
 word \\
-\texttt{mqsdk\_photoq} & Photonic LOQC/FBQC + GBS --- Fock states, HOM,
+\texttt{mqsdk\_photoq} & Photonic LOQC/FBQC + GBS: Fock states, HOM,
 photonic VQE/analog, hafnian, TDM/Borealis, pseudo-PNRD methods,
 ORCA/QCloud/Aurora backends \\
-\texttt{microsoft\_qdk} & Gate-based (QPE technique) --- SCF → active
-space → resource estimation \\
-\texttt{mqsdk\_qse} & Gate-based (KQD technique) --- Krylov Quantum
+\texttt{microsoft\_qdk} & Gate-based (QPE technique): SCF → active space
+→ resource estimation \\
+\texttt{mqsdk\_qse} & Gate-based (KQD technique): Krylov Quantum
 Diagonalization / SQD \\
 \bottomrule\noalign{}
 \end{longtable}
@@ -520,10 +522,10 @@ Diagonalization / SQD \\
 \footnotesize
 
 \texttt{classiq\_classiq}/\texttt{pyscf\_pyscf} double up their name
-because the maintaining org and the package name are the same word ---
-kept for consistency rather than shortened.
-\texttt{polarizable\_embedding} stays unprefixed: it bridges CPPE +
-PyFraME with no single vendor to name.
+because the maintaining org and the package name are the same word, kept
+for consistency rather than shortened. \texttt{polarizable\_embedding}
+stays unprefixed: it bridges CPPE + PyFraME with no single vendor to
+name.
 
 \begin{longtable}[]{@{}
   >{\raggedright\arraybackslash}p{(\columnwidth - 2\tabcolsep) * \real{0.2759}}
@@ -536,17 +538,17 @@ Computing model (qubit modality)
 \end{minipage} \\
 \midrule\noalign{}
 \endhead
-\texttt{molssi\_qcschema} & all / all --- QCSchema / QCElemental /
+\texttt{molssi\_qcschema} & all / all: QCSchema / QCElemental /
 PennyLane interoperability \\
-\texttt{quera\_bloqade} & Adiabatic (neutral atom) --- Bloqade / Aquila
+\texttt{quera\_bloqade} & Adiabatic (neutral atom): Bloqade / Aquila
 AHS \\
-\texttt{erikkjellgren\_slowquant} & Gate-based --- SlowQuant UCC/VQE
+\texttt{erikkjellgren\_slowquant} & Gate-based: SlowQuant UCC/VQE
 ansatz, SCF, linear response \\
-\texttt{classiq\_classiq} & Gate-based --- Classiq synthesis +
+\texttt{classiq\_classiq} & Gate-based: Classiq synthesis +
 chemistry/QAOA \\
-\texttt{pyscf\_pyscf} & Gate-based (chemistry) --- mean-field/DFT, PCM
+\texttt{pyscf\_pyscf} & Gate-based (chemistry): mean-field/DFT, PCM
 solvation, ERI builder \\
-\texttt{polarizable\_embedding} & Gate-based (chemistry) --- CPPE +
+\texttt{polarizable\_embedding} & Gate-based (chemistry): CPPE +
 PyFraME, via \texttt{pyscf.solvent.PE} \\
 \bottomrule\noalign{}
 \end{longtable}
@@ -558,7 +560,7 @@ PyFraME, via \texttt{pyscf.solvent.PE} \\
 \phantomsection\label{computing-model-qubit-modality}
 \scriptsize
 
-Two \textbf{independent, orthogonal} axes --- not one flat enum (a fixed
+Two \textbf{independent, orthogonal} axes, not one flat enum (a fixed
 set of named choices). Many-to-many: some paradigms run on several QPU
 modalities, but not every pairing exists.
 
@@ -569,19 +571,19 @@ modalities, but not every pairing exists.
 \begin{itemize}
 \tightlist
 \item
-  \texttt{GATE\_BASED} --- circuit model
+  \texttt{GATE\_BASED}: circuit model
 \item
-  \texttt{MBQC} --- measurement-based
+  \texttt{MBQC}: measurement-based
 \item
-  \texttt{FUSION\_BASED} --- FBQC resource states + fusion
+  \texttt{FUSION\_BASED}: FBQC resource states + fusion
 \item
-  \texttt{ADIABATIC} --- continuous-time evolution (AHS)
+  \texttt{ADIABATIC}: continuous-time evolution (AHS)
 \item
-  \texttt{ANNEALING} --- quantum annealing
+  \texttt{ANNEALING}: quantum annealing
 \item
-  \texttt{GBS} --- Gaussian Boson Sampling
+  \texttt{GBS}: Gaussian Boson Sampling
 \item
-  \texttt{SAMPLING} --- general sampling paradigms
+  \texttt{SAMPLING}: general sampling paradigms
 \end{itemize}
 \end{column}
 
@@ -591,53 +593,52 @@ modalities, but not every pairing exists.
 \begin{itemize}
 \tightlist
 \item
-  \texttt{SUPERCONDUCTING} --- IBM, IQM, Qibo/Qibolab
+  \texttt{SUPERCONDUCTING}: IBM, IQM, Qibo/Qibolab
 \item
-  \texttt{TRAPPED\_ION} --- Quantinuum, IonQ
+  \texttt{TRAPPED\_ION}: Quantinuum, IonQ
 \item
-  \texttt{NEUTRAL\_ATOM} --- QuEra
+  \texttt{NEUTRAL\_ATOM}: QuEra
 \item
-  \texttt{PHOTONIC} --- Quandela, Xanadu, ORCA, DTU
+  \texttt{PHOTONIC}: Quandela, Xanadu, ORCA, DTU
 \item
-  \texttt{SILICON\_SPIN} --- Quantum Motion
+  \texttt{SILICON\_SPIN}: Quantum Motion
 \end{itemize}
 \end{column}
 \end{columns}
 
 \texttt{GATE\_BASED} alone spans superconducting, trapped-ion,
-silicon-spin, and photonic hardware ---
-\texttt{GBS}/\texttt{FUSION\_BASED} are photonic-only today.
-\texttt{QPE}/\texttt{KQD} are techniques on \texttt{GATE\_BASED}, not
-separate paradigms. \normalsize
+silicon-spin, and photonic hardware; \texttt{GBS}/\texttt{FUSION\_BASED}
+are photonic-only today. \texttt{QPE}/\texttt{KQD} are techniques on
+\texttt{GATE\_BASED}, not separate paradigms. \normalsize
 \end{frame}
 
-\begin{frame}[fragile]{CircuitSpec --- One Type for All Circuits}
+\begin{frame}[fragile]{CircuitSpec: One Type for All Circuits}
 \phantomsection\label{circuitspec-one-type-for-all-circuits}
 \begin{Shaded}
 \begin{Highlighting}[]
-\CommentTok{\# Gate{-}based — read a .qasm file straight into \textasciigrave{}serialized\textasciigrave{}}
+\CommentTok{\# Gate{-}based: read a .qasm file straight into \textasciigrave{}serialized\textasciigrave{}}
 \NormalTok{source }\OperatorTok{=}\NormalTok{ pathlib.Path(}\StringTok{"bell\_state.qasm"}\NormalTok{).read\_text()}
 \NormalTok{circuit }\OperatorTok{=}\NormalTok{ CircuitSpec(num\_qubits}\OperatorTok{=}\DecValTok{2}\NormalTok{, serialized}\OperatorTok{=}\NormalTok{source,   }\CommentTok{\# OpenQASM 2.0}
 \NormalTok{                      observables}\OperatorTok{=}\NormalTok{[...])}
 
-\CommentTok{\# OpenQASM 3.0 — same file{-}read pattern}
+\CommentTok{\# OpenQASM 3.0: same file{-}read pattern}
 \NormalTok{circuit }\OperatorTok{=}\NormalTok{ CircuitSpec.from\_openqasm3(}
 \NormalTok{    pathlib.Path(}\StringTok{"bell\_state.qasm3"}\NormalTok{).read\_text(), num\_qubits}\OperatorTok{=}\DecValTok{2}\NormalTok{)}
 
-\CommentTok{\# Parametric VQE — bind() returns a new copy}
+\CommentTok{\# Parametric VQE: bind() returns a new copy}
 \NormalTok{ansatz }\OperatorTok{=}\NormalTok{ CircuitSpec(num\_qubits}\OperatorTok{=}\DecValTok{2}\NormalTok{, parameters}\OperatorTok{=}\NormalTok{[}\StringTok{"theta"}\NormalTok{], ...)}
 \NormalTok{bound  }\OperatorTok{=}\NormalTok{ ansatz.bind(\{}\StringTok{"theta"}\NormalTok{: }\FloatTok{1.2566}\NormalTok{\})}
 \end{Highlighting}
 \end{Shaded}
 \end{frame}
 
-\begin{frame}[fragile]{Schema v3.0.0 --- Inputs vs Outputs,
-Vendor-Neutral Core}
+\begin{frame}[fragile]{Schema v3.0.0: Inputs vs Outputs, Vendor-Neutral
+Core}
 \phantomsection\label{schema-v3.0.0-inputs-vs-outputs-vendor-neutral-core}
 \scriptsize
 
 Two breaking changes define v3.0.0. \textbf{First}: VQA metadata is
-split --- configs never carry computed values (passing one raises a
+split; configs never carry computed values (passing one raises a
 \texttt{ValidationError}):
 
 \begin{Shaded}
@@ -649,7 +650,7 @@ split --- configs never carry computed values (passing one raises a
 \end{Highlighting}
 \end{Shaded}
 
-\textbf{Second}: core schemas import zero vendor modules --- vendor
+\textbf{Second}: core schemas import zero vendor modules; vendor
 payloads travel as keyed dicts (pass a Pydantic model, it's auto-dumped;
 rehydrate with the vendor schema):
 
@@ -687,8 +688,8 @@ Example key
 \scriptsize
 
 Three ways to get a real molecule's qubit Hamiltonian as a
-\texttt{SparsePauliObservable} (\texttt{hamiltonian\_sources.*}) ---
-drops into any Estimator path:
+\texttt{SparsePauliObservable} (\texttt{hamiltonian\_sources.*}), each
+dropping into any Estimator path:
 
 \begin{longtable}[]{@{}
   >{\raggedright\arraybackslash}p{(\columnwidth - 4\tabcolsep) * \real{0.3333}}
@@ -709,7 +710,7 @@ What it gives you
 \textbf{PennyLane qchem} & \texttt{load\_pennylane\_qchem()} & Dataset
 service, ships \texttt{fci\_energy}/\texttt{vqe\_energy} \\
 \textbf{Ab initio} & \texttt{build\_qubit\_hamiltonian()} & \emph{Any}
-geometry --- PySCF HF + active-space + mapper \\
+geometry; PySCF HF + active-space + mapper \\
 \bottomrule\noalign{}
 \end{longtable}
 
@@ -753,26 +754,26 @@ ERI Builder &
 \texttt{mol.intor(\textquotesingle{}int2e\textquotesingle{})} vs
 \texttt{mf.density\_fit()} (RI/DF) & RI matches standard ERIs to
 \texttt{2e-5} Ha (H2O/cc-pVDZ) \\
-Gate Selector & \texttt{GateSelector} protocol --- gradient screen vs
-full re-opt & Both converge to exact H2 ground state \\
+Gate Selector & \texttt{GateSelector} protocol: gradient screen vs full
+re-opt & Both converge to exact H2 ground state \\
 Orbital Optimizer & Newton (\texttt{CASSCF}) / Simple / Basin-Hopping &
 All 3 agree on H2/6-31G to \texttt{3e-9} Ha \\
 \bottomrule\noalign{}
 \end{longtable}
 
 A real bug found along the way: quimb's
-\texttt{contraction\_info(optimize=False)} raises \texttt{TypeError} ---
+\texttt{contraction\_info(optimize=False)} raises \texttt{TypeError},
 worked around via \texttt{opt\_einsum.contract\_path()} directly.
 \normalsize
 \end{frame}
 
-\begin{frame}[fragile]{\texttt{reactions} --- Bridging Cantera,
-PennyLane \& Cebule}
+\begin{frame}[fragile]{\texttt{reactions}: Bridging Cantera, PennyLane
+\& Cebule}
 \phantomsection\label{reactions-bridging-cantera-pennylane-cebule}
 \footnotesize
 
-Moved out of ``core'' --- it bridges three real external tools, not a
-shape qpubench invented:
+Moved out of ``core'': it bridges three real external tools, not a shape
+qpubench invented:
 
 \begin{longtable}[]{@{}
   >{\raggedright\arraybackslash}p{(\columnwidth - 2\tabcolsep) * \real{0.5000}}
@@ -785,10 +786,10 @@ What it adds
 \end{minipage} \\
 \midrule\noalign{}
 \endhead
-\textbf{Cantera} & \texttt{ReactionMechanism.to\_cantera\_yaml()} ---
-real, loadable mechanism \\
-\textbf{PennyLane} demo & \texttt{ReactionPathResult.rate\_constant()}
---- barrier → classical \texttt{k\ =\ A\ exp(-Ea/RT)} \\
+\textbf{Cantera} & \texttt{ReactionMechanism.to\_cantera\_yaml()}: real,
+loadable mechanism \\
+\textbf{PennyLane} demo & \texttt{ReactionPathResult.rate\_constant()}:
+barrier → classical \texttt{k\ =\ A\ exp(-Ea/RT)} \\
 \textbf{Cebule \texttt{RXN\_OPT}} & Complementary: network flux
 optimization, not merged in \\
 \bottomrule\noalign{}
@@ -796,7 +797,7 @@ optimization, not merged in \\
 
 Verified against real \texttt{cantera==3.2.0}, all 3 reaction types.
 Real gotcha found: Cantera's default \texttt{quantity} unit is
-\texttt{kmol} not \texttt{mol} --- an unstated \texttt{Ea} silently
+\texttt{kmol} not \texttt{mol}, so an unstated \texttt{Ea} silently
 becomes 1000x too small; \texttt{to\_cantera\_dict()} always declares
 units explicitly to prevent it. \normalsize
 \end{frame}
@@ -806,8 +807,8 @@ units explicitly to prevent it. \normalsize
 \begin{frame}{Adapters}
 \footnotesize
 
-\textbf{What vs.~how}: this slide is the \emph{what} --- three abstract
-shapes, no vendor code yet. Every slide after is the \emph{how} --- a
+\textbf{What vs.~how}: this slide is the \emph{what}, three abstract
+shapes with no vendor code yet. Every slide after is the \emph{how}, a
 vendor satisfying one shape with real code. \normalsize
 \end{frame}
 
@@ -874,12 +875,12 @@ Mitiq (real, next section) Fire Opal/Haiqu (schema only)
 \normalsize
 \vspace{0.3em}
 
-\texttt{BenchmarkRunner} dispatches automatically ---
+\texttt{BenchmarkRunner} dispatches automatically;
 \texttt{ErrorMitigationAdapter} registers like any
 \texttt{BackendAdapter}.
 \end{frame}
 
-\begin{frame}[fragile]{BackendAdapter --- Estimator vs Sampler}
+\begin{frame}[fragile]{BackendAdapter: Estimator vs Sampler}
 \phantomsection\label{backendadapter-estimator-vs-sampler}
 \footnotesize
 
@@ -894,7 +895,7 @@ Mitiq (real, next section) Fire Opal/Haiqu (schema only)
 
 \begin{columns}[T]
 \begin{column}{0.5\textwidth}
-\textbf{Estimator path} --- \texttt{circuit.observables} set
+\textbf{Estimator path}: \texttt{circuit.observables} set
 
 \begin{Shaded}
 \begin{Highlighting}[]
@@ -910,7 +911,7 @@ VQE / QAOA objective values
 \end{column}
 
 \begin{column}{0.5\textwidth}
-\textbf{Sampler path} --- no observables
+\textbf{Sampler path}: no observables
 
 \begin{Shaded}
 \begin{Highlighting}[]
@@ -929,8 +930,8 @@ Raw bitstring / shot counts
 
 \normalsize
 
-\textbf{Rule}: SDK imports go inside the method that uses them --- never
-at module level.
+\textbf{Rule}: SDK imports go inside the method that uses them, never at
+module level.
 \end{frame}
 
 \begin{frame}[fragile]{AlgorithmAdapter (QForte example)}
@@ -988,11 +989,10 @@ at module level.
 \normalsize
 \end{frame}
 
-\begin{frame}[fragile]{AlgorithmFamily --- Switch Implementations
-Freely}
+\begin{frame}[fragile]{AlgorithmFamily: Switch Implementations Freely}
 \phantomsection\label{algorithmfamily-switch-implementations-freely}
 \texttt{AlgorithmSpec} carries \textbf{identity only} (\texttt{name} +
-\texttt{family}) --- hyperparameters live in one shared config every
+\texttt{family}); hyperparameters live in one shared config every
 adapter for that family accepts:
 
 \footnotesize
@@ -1017,14 +1017,14 @@ Three adapters implement \texttt{AlgorithmFamily.ADAPT\_VQE}:
 engine). \normalsize
 \end{frame}
 
-\begin{frame}[fragile]{Circuit Optimization --- Three Real Strategies,
-Not Two}
+\begin{frame}[fragile]{Circuit Optimization: Three Real Strategies, Not
+Two}
 \phantomsection\label{circuit-optimization-three-real-strategies-not-two}
 \footnotesize
 
 Every gate-based backend adapter already runs the \textbf{Qiskit
 transpiler} (\texttt{ExecutionOptions.optimization\_level} 0--3 +
-\texttt{TranspilerConfig}) --- the baseline every circuit gets.
+\texttt{TranspilerConfig}), the baseline every circuit gets.
 Xenakis/Classiq below are two \emph{additional}, heavier strategies for
 when that isn't enough.
 
@@ -1055,12 +1055,12 @@ Cost & One pass, ms & Generations \(\times\) population & One solve
 \end{longtable}
 
 \textbf{Not yet modeled}: Microsoft QDK/Q\#'s own circuit-optimization
-passes have no schema representation here --- \texttt{microsoft\_qdk.py}
+passes have no schema representation here; \texttt{microsoft\_qdk.py}
 stops at resource estimation. Open gap, not silently assumed.
 \normalsize
 \end{frame}
 
-\begin{frame}[fragile]{Xenakis \(\leftrightarrow\) Classiq --- Comparing
+\begin{frame}[fragile]{Xenakis \(\leftrightarrow\) Classiq: Comparing
 Two Optimization Runs}
 \phantomsection\label{xenakis-leftrightarrow-classiq-comparing-two-optimization-runs}
 \footnotesize
@@ -1118,13 +1118,12 @@ characterisation \\
 \normalsize
 \end{frame}
 
-\begin{frame}[fragile]{ErrorMitigationAdapter --- Demonstrated (Mitiq
-ZNE)}
+\begin{frame}[fragile]{ErrorMitigationAdapter: Demonstrated (Mitiq ZNE)}
 \phantomsection\label{errormitigationadapter-demonstrated-mitiq-zne}
 \scriptsize
 
 Only \textbf{Mitiq} has a real \texttt{ErrorMitigationAdapter} behind it
-today (\texttt{MitiqZNEAdapter}) --- the rest on the previous slide are
+today (\texttt{MitiqZNEAdapter}); the rest on the previous slide are
 schema-only metadata. Wraps any \texttt{BackendAdapter}; mitigates the
 estimator path only.
 
@@ -1142,17 +1141,17 @@ estimator path only.
 
 Verified against a real depolarizing-noise Aer simulator (2\%/5\% error
 on H/CX): ZNE recovers \texttt{0.997} vs.~raw noisy \texttt{0.950} and
-noiseless-exact \texttt{1.0} --- real Mitiq
+noiseless-exact \texttt{1.0}, from real Mitiq
 \texttt{Factory.run()}/\texttt{.reduce()} calls, the adapter
 \texttt{base.py} described but that never existed until now. \normalsize
 \end{frame}
 
-\begin{frame}[fragile]{Running on Real Hardware --- IBM · IQM · Braket ·
+\begin{frame}[fragile]{Running on Real Hardware: IBM · IQM · Braket ·
 Quantinuum · Qibo}
 \phantomsection\label{running-on-real-hardware-ibm-iqm-braket-quantinuum-qibo}
 \scriptsize
 
-All five adapters are \textbf{real, verified end-to-end} ---
+All five adapters are \textbf{real, verified end-to-end}:
 Aer/Braket/Qibo(local sim) need no credentials; IBM/IQM/Quantinuum
 verified against bundled fake / offline backends.
 \texttt{opts\ =\ ExecutionOptions(shots=4096)} shared by all.
@@ -1180,8 +1179,8 @@ Estimator/Sampler auto-chosen.
 
 \begin{Shaded}
 \begin{Highlighting}[]
-\NormalTok{adapter }\OperatorTok{=}\NormalTok{ IQMAdapter(}\StringTok{"garnet"}\NormalTok{,}
-\NormalTok{    token}\OperatorTok{=}\NormalTok{os.environ[}\StringTok{"IQM\_TOKEN"}\NormalTok{])}
+\NormalTok{adapter }\OperatorTok{=}\NormalTok{ IQMAdapter(}\StringTok{"garnet"}\NormalTok{)}
+\CommentTok{\# token read from $IQM\_TOKEN}
 \NormalTok{runner.register(adapter, }\StringTok{"iqm"}\NormalTok{)}
 \NormalTok{runner.run(circuit, }\StringTok{"iqm"}\NormalTok{, opts)}
 \end{Highlighting}
@@ -1210,8 +1209,8 @@ Needs an S3 result location.
 \end{columns}
 
 \textbf{Plus two more, same contract:} \textbf{Quantinuum} H-Series
-(trapped-ion) via \texttt{pytket-quantinuum} ---
-\texttt{QuantinuumAdapter("H2-1")}; \textbf{Qibo} --- one
+(trapped-ion) via \texttt{pytket-quantinuum}, as
+\texttt{QuantinuumAdapter("H2-1")}; \textbf{Qibo}, one
 \texttt{QiboAdapter} spanning local simulator, self-hosted
 \textbf{Qibolab} hardware, and \textbf{Qibo cloud}
 (\texttt{execution="local"\textbar{}"qibolab"\textbar{}"cloud"}).
@@ -1227,8 +1226,8 @@ transpiles internally. Verified: \texttt{qiskit-iqm} standalone obsolete
 \scriptsize
 
 \textbf{Problem}: ``quantum advantage'' claims are hard to compare
-across papers --- no shared record of what ran, on what hardware,
-vs.~what classical method. \texttt{BenchmarkRecord.advantage} holds one
+across papers; no shared record of what ran, on what hardware, vs.~what
+classical method. \texttt{BenchmarkRecord.advantage} holds one
 \texttt{QuantumAdvantageRecord}, attached after the fact:
 
 \begin{Shaded}
@@ -1276,11 +1275,11 @@ verifiable. \normalsize
 \normalsize
 \end{frame}
 
-\begin{frame}[fragile]{Structured Logging --- \texttt{BenchmarkLogger}}
+\begin{frame}[fragile]{Structured Logging: \texttt{BenchmarkLogger}}
 \phantomsection\label{structured-logging-benchmarklogger}
 \footnotesize
 
-Built directly on \texttt{BenchmarkRunner.add\_hook()} --- real levels,
+Built directly on \texttt{BenchmarkRunner.add\_hook()}: real levels,
 handlers, and formatters, not one flat log line:
 
 \begin{Shaded}
@@ -1320,7 +1319,7 @@ swappable \\
 \phantomsection\label{data-persistence}
 \footnotesize
 
-\textbf{NDJSONStore} --- zero dependencies, append-only, grep-able
+\textbf{NDJSONStore}: zero dependencies, append-only, grep-able
 
 \begin{Shaded}
 \begin{Highlighting}[]
@@ -1331,7 +1330,7 @@ swappable \\
 \end{Highlighting}
 \end{Shaded}
 
-\textbf{ParquetStore} --- columnar analytics
+\textbf{ParquetStore}: columnar analytics
 (\texttt{pip\ install\ ".{[}storage{]}"})
 
 \begin{Shaded}
@@ -1341,16 +1340,17 @@ swappable \\
 \end{Highlighting}
 \end{Shaded}
 
-Every record is one JSON line --- stream-able, pandas-ready,
-archive-safe. \normalsize
+Every record is one JSON line: stream-able, pandas-ready, archive-safe.
+\normalsize
 \end{frame}
 
-\begin{frame}[fragile]{S3Store --- AWS S3 \& Hugging Face Buckets}
+\begin{frame}[fragile]{S3Store: AWS S3 \& Hugging Face Buckets}
 \phantomsection\label{s3store-aws-s3-hugging-face-buckets}
 \footnotesize
 
-One JSON object per record (\texttt{\{prefix\}/\{experiment\_id\}.json})
---- no shared file, so concurrent writers never race.
+One JSON object per record
+(\texttt{\{prefix\}/\{experiment\_id\}.json}); no shared file, so
+concurrent writers never race.
 \texttt{pip\ install\ "qpubench{[}s3{]}"}.
 
 \begin{columns}[T]
@@ -1367,8 +1367,8 @@ One JSON object per record (\texttt{\{prefix\}/\{experiment\_id\}.json})
 \end{Highlighting}
 \end{Shaded}
 
-Any \texttt{boto3.client("s3",\ ...)} kwarg works --- same path covers
-MinIO too.
+Any \texttt{boto3.client("s3",\ ...)} kwarg works, and the same path
+covers MinIO too.
 \end{column}
 
 \begin{column}{0.5\textwidth}
@@ -1395,14 +1395,13 @@ Same \texttt{ResultStore} protocol as \texttt{NDJSONStore}:
 
 \section{Integrations}\label{integrations}
 
-\begin{frame}[fragile]{Integration Ecosystem ---
-\texttt{BackendAdapter}}
+\begin{frame}[fragile]{Integration Ecosystem: \texttt{BackendAdapter}}
 \phantomsection\label{integration-ecosystem-backendadapter}
 \footnotesize
 
 Schema modules are named
-\texttt{\textless{}org\textgreater{}\_\textless{}package\textgreater{}.py}
---- one glance tells you who maintains it and what it's called.
+\texttt{\textless{}org\textgreater{}\_\textless{}package\textgreater{}.py},
+so one glance tells you who maintains it and what it's called.
 
 \begin{longtable}[]{@{}
   >{\raggedright\arraybackslash}p{(\columnwidth - 2\tabcolsep) * \real{0.4815}}
@@ -1420,9 +1419,9 @@ photoq (photochipsim, DTU-GBS, photonic\_QC, pseudo-PNRD,
 ORCA/Xanadu/DTU backends) & \texttt{mqsdk\_photoq} \\
 QESEM (Qedma) & \texttt{qedma\_qesem} \\
 Bloqade / Aquila & \texttt{quera\_bloqade} \\
-IQM Resonance (garnet · deneb · sirius) & --- \\
-Quantinuum H-Series (H2-1 · H2-1E · H2-1SC) & --- \\
-Qibo (simulator · Qibolab · cloud) & --- \\
+IQM Resonance (garnet · deneb · sirius) & n/a \\
+Quantinuum H-Series (H2-1 · H2-1E · H2-1SC) & n/a \\
+Qibo (simulator · Qibolab · cloud) & n/a \\
 Quantum Motion CMOS spin-qubit & \texttt{quantum\_motion\_hardware} \\
 \bottomrule\noalign{}
 \end{longtable}
@@ -1430,8 +1429,7 @@ Quantum Motion CMOS spin-qubit & \texttt{quantum\_motion\_hardware} \\
 \normalsize
 \end{frame}
 
-\begin{frame}[fragile]{Integration Ecosystem ---
-\texttt{AlgorithmAdapter}}
+\begin{frame}[fragile]{Integration Ecosystem: \texttt{AlgorithmAdapter}}
 \phantomsection\label{integration-ecosystem-algorithmadapter}
 \footnotesize
 
@@ -1462,10 +1460,10 @@ PyPI) & \texttt{erikkjellgren\_slowquant} \\
 \normalsize
 \end{frame}
 
-\begin{frame}[fragile]{Integration Ecosystem ---
+\begin{frame}[fragile]{Integration Ecosystem:
 \texttt{ErrorMitigationAdapter}}
 \phantomsection\label{integration-ecosystem-errormitigationadapter}
-One module per vendor now --- previously all bundled into a single
+One module per vendor now; previously all bundled into a single
 \texttt{error\_mitigation} grab-bag (including a hardware vendor
 miscategorized as ``error mitigation'').
 
@@ -1488,7 +1486,7 @@ QMatter problem compression & \texttt{qmatter\_qmatter} \\
 \footnotesize
 
 \textbf{For readers who haven't met Kubeflow}: an open-source platform
-that runs a workflow as a graph of steps (a DAG) on Kubernetes --- each
+that runs a workflow as a graph of steps (a DAG) on Kubernetes: each
 step is a container; it schedules them, tracks inputs/outputs, and shows
 the graph in a web dashboard.
 
@@ -1500,11 +1498,11 @@ mol_map ──▶ tn_qc_opt ──▶ qasm_gen ──▶ execute_circuits
 \textbf{Why it's here}: earlier integrations only needed
 \texttt{runner.run()}. Kubeflow becomes useful once a \emph{sequence} of
 qpubench steps needs to run unattended, on a schedule, with a visual
-record --- e.g.~a nightly benchmark sweep. The next slides show that
+record, e.g.~a nightly benchmark sweep. The next slides show that
 sequence as a real, compiled Kubeflow pipeline. \normalsize
 \end{frame}
 
-\begin{frame}[fragile]{Orchestration --- Kubeflow Pipelines}
+\begin{frame}[fragile]{Orchestration: Kubeflow Pipelines}
 \phantomsection\label{orchestration-kubeflow-pipelines}
 \footnotesize
 
@@ -1525,12 +1523,11 @@ Role here
 \end{minipage} \\
 \midrule\noalign{}
 \endhead
-\textbf{\texttt{kfp}} (Pipelines) & Owns the DAG + Central Dashboard ---
+\textbf{\texttt{kfp}} (Pipelines) & Owns the DAG + Central Dashboard;
 every step is a native \texttt{@dsl.component} \\
 \textbf{Unified SDK} & Narrow, opt-in
-(\texttt{TrainerClient}/\texttt{OptimizerClient}) --- called
-\emph{inside} one component body only, for multi-node dispatch or Katib
-search \\
+(\texttt{TrainerClient}/\texttt{OptimizerClient}), called \emph{inside}
+one component body only, for multi-node dispatch or Katib search \\
 \bottomrule\noalign{}
 \end{longtable}
 
@@ -1544,7 +1541,7 @@ Its own docs list Pipelines support as "Planned," not shipped, and \texttt{Train
 \phantomsection\label{component-taxonomy}
 \footnotesize
 
-Every pipeline decomposes into two kinds of \texttt{kfp} node --- same
+Every pipeline decomposes into two kinds of \texttt{kfp} node: same
 shape, different resource profile:
 
 \begin{longtable}[]{@{}
@@ -1569,22 +1566,22 @@ adapter & GPU sim (Qrack) · real QPU (IBM, IQM, QESEM) \\
 \bottomrule\noalign{}
 \end{longtable}
 
-Kubeflow can't reach a QPU directly --- an Execution component does what
+Kubeflow can't reach a QPU directly; an Execution component does what
 \texttt{BackendAdapter.run()} already does: call the vendor SDK, submit
 to \emph{their} queue, poll, return. Kubeflow's role is a scheduled,
 credentialed place to host that client, not compute.
 
-\textbf{Iterative loops stay one job} ---
+\textbf{Iterative loops stay one job}:
 \texttt{n\_iterations}/macro-micro-iterations never explode into one DAG
 node per iteration. \normalsize
 \end{frame}
 
-\begin{frame}[fragile]{Worked Example --- Cebule Task Chain as Four
+\begin{frame}[fragile]{Worked Example: Cebule Task Chain as Four
 \texttt{kfp} DAGs}
 \phantomsection\label{worked-example-cebule-task-chain-as-four-kfp-dags}
 \footnotesize
 
-\texttt{integrations/kubeflow/} --- one \texttt{@dsl.pipeline} per
+\texttt{integrations/kubeflow/}: one \texttt{@dsl.pipeline} per
 \texttt{Mapper} category in \texttt{data/IBM\_VQE\_Test\_Benchmark.csv},
 matching Cebule SDK's own documented task order:
 
@@ -1595,11 +1592,11 @@ mol_map:            mol_map ─────────────────�
 JW:                 jw_map  ─────────────────────────▶ execute_static_hamiltonian
 \end{verbatim}
 
-\texttt{mol\_map}/\texttt{JW} carry no VQE ansatz --- they measure the
+\texttt{mol\_map}/\texttt{JW} carry no VQE ansatz; they measure the
 fixed Hartree-Fock reference state instead.
 
 Verified by actually compiling all four against \texttt{kfp==2.16.1}:
-surfaced a real gotcha ---
+surfaced a real gotcha:
 \texttt{from\ \_\_future\_\_\ import\ annotations} breaks kfp's
 component introspection (needs live type objects, not PEP 563 strings).
 Every component body was also run directly (\texttt{.python\_func}),
@@ -1608,13 +1605,13 @@ injected via \texttt{kfp-kubernetes}'s \texttt{use\_secret\_as\_env},
 never as plain pipeline parameters. \normalsize
 \end{frame}
 
-\begin{frame}[fragile]{Kubeflow --- Sweep Design}
+\begin{frame}[fragile]{Kubeflow: Sweep Design}
 \phantomsection\label{kubeflow-sweep-design}
 \footnotesize
 
 \textbf{Rule}: \texttt{Mapper} change → new pipeline (different
 components). Every other benchmark column is a \emph{parameter value},
-resolved inside one pipeline run --- never one DAG per CSV row:
+resolved inside one pipeline run, never one DAG per CSV row:
 
 \begin{longtable}[]{@{}
   >{\raggedright\arraybackslash}p{(\columnwidth - 2\tabcolsep) * \real{0.5000}}
@@ -1628,16 +1625,16 @@ Resolved via
 \midrule\noalign{}
 \endhead
 \texttt{TN\_Layers\_Network/Circuit}, \texttt{Rotation\_Type},
-\texttt{Measurement\_Method} & nested \texttt{dsl.ParallelFor} --- one
+\texttt{Measurement\_Method} & nested \texttt{dsl.ParallelFor}: one
 dashboard graph, fanned out \\
 \texttt{Shots}, \texttt{Qiskit\_Opt\_Level} &
-\texttt{BenchmarkRunner.sweep()} \emph{inside} the Execution component
---- same ``stays one job'' treatment as \texttt{n\_iterations} \\
+\texttt{BenchmarkRunner.sweep()} \emph{inside} the Execution component:
+the same ``stays one job'' treatment as \texttt{n\_iterations} \\
 \bottomrule\noalign{}
 \end{longtable}
 
-\begin{block}{Conversion utilities — closed TODO}
-\texttt{SparsePauliObservable.to\_dense\_matrix()} / \texttt{.from\_dense\_matrix()} now ship in core (verified against Qiskit's \texttt{SparsePauliOp}, size-guarded via \texttt{max\_qubits}) — all 6 (hamiltonian\_kind, measurement\_method) branch combinations run; only the live Cebule \texttt{create\_task} calls still await real credentials.
+\begin{block}{Conversion utilities: closed TODO}
+\texttt{SparsePauliObservable.to\_dense\_matrix()} / \texttt{.from\_dense\_matrix()} now ship in core (verified against Qiskit's \texttt{SparsePauliOp}, size-guarded via \texttt{max\_qubits}); all 6 (hamiltonian\_kind, measurement\_method) branch combinations run; only the live Cebule \texttt{create\_task} calls still await real credentials.
 \end{block}
 \normalsize
 \end{frame}
@@ -1646,8 +1643,8 @@ dashboard graph, fanned out \\
 \phantomsection\label{cross-framework-compatibility}
 \footnotesize
 
-\textbf{Pauli encoding} --- explicit converters prevent silent
-convention bugs:
+\textbf{Pauli encoding}: explicit converters prevent silent convention
+bugs:
 
 \begin{Shaded}
 \begin{Highlighting}[]
@@ -1662,8 +1659,8 @@ convention bugs:
 \end{Highlighting}
 \end{Shaded}
 
-\textbf{Complex numbers}: stored as \texttt{\{"re":\ 1.0,\ "im":\ 0.5\}}
---- valid JSON without Python eval
+\textbf{Complex numbers}: stored as
+\texttt{\{"re":\ 1.0,\ "im":\ 0.5\}}, valid JSON without Python eval
 
 \textbf{QCSchema / QCElemental / PennyLane} interoperability via the
 \texttt{molssi\_qcschema} module \normalsize
@@ -1675,8 +1672,8 @@ convention bugs:
 \phantomsection\label{guides-demos-tutorials-supported}
 \footnotesize
 
-\texttt{examples/} --- 30+ runnable examples built only on qpubench's
-own schemas and adapters:
+\texttt{examples/}: 30+ runnable examples built only on qpubench's own
+schemas and adapters:
 
 \begin{longtable}[]{@{}lll@{}}
 \toprule\noalign{}
@@ -1691,7 +1688,7 @@ Top-level & 3 & Gate-based, MBQC, and QForte VQE quick starts \\
 \bottomrule\noalign{}
 \end{longtable}
 
-Full breakdown --- what's fully supported vs.~partial, and why --- in
+Full breakdown of what's fully supported vs.~partial, and why, in
 \texttt{examples/README.md}. \normalsize
 \end{frame}
 
@@ -1699,7 +1696,7 @@ Full breakdown --- what's fully supported vs.~partial, and why --- in
 \phantomsection\label{one-guide-end-to-end}
 \scriptsize
 
-\texttt{examples/guides/vqe\_calculator.py} --- all three layers in one
+\texttt{examples/guides/vqe\_calculator.py}: all three layers in one
 runnable file:
 
 \begin{Shaded}
@@ -1719,28 +1716,28 @@ runnable file:
 
 \textbf{Real output}: \texttt{HF:\ -4.000000} →
 \texttt{ADAPT-VQE\ (3\ iters):\ -4.472136} → \texttt{exact:\ -4.472136}
-(matches to \texttt{1e-12}) --- the same three-layer shape as every
+(matches to \texttt{1e-12}), the same three-layer shape as every
 guide/demo above. \normalsize
 \end{frame}
 
-\begin{frame}{Methodology --- Honest by Construction (1/2)}
+\begin{frame}{Methodology: Honest by Construction (1/2)}
 \phantomsection\label{methodology-honest-by-construction-12}
 \footnotesize
 \begin{block}{No fabricated chemistry}
-Illustrative qubit Hamiltonians (\texttt{toy\_hamiltonians.py}) stay explicitly labeled, never presented as physically accurate. Real molecules: \texttt{qforte\_vqe\_benchmark.py} (He/cc-pVDZ) and \texttt{hamiltonian\_sources/} — real ab initio Hamiltonians replaced toy ones in 3 tutorials, checked against real reference notebooks.
+Illustrative qubit Hamiltonians (\texttt{toy\_hamiltonians.py}) stay explicitly labeled, never presented as physically accurate. Real molecules: \texttt{qforte\_vqe\_benchmark.py} (He/cc-pVDZ) and \texttt{hamiltonian\_sources/}, where real ab initio Hamiltonians replaced toy ones in 3 tutorials, checked against real reference notebooks.
 \end{block}
 
 \begin{block}{No random numbers standing in for physics}
-\texttt{StubGateAdapter} returns \emph{random} expectation values — useless as an ADAPT-VQE energy oracle. Built \texttt{ToyStatevectorAdapter}: a real, small, dense-matrix statevector simulator instead.
+\texttt{StubGateAdapter} returns \emph{random} expectation values, useless as an ADAPT-VQE energy oracle. Built \texttt{ToyStatevectorAdapter}: a real, small, dense-matrix statevector simulator instead.
 \end{block}
 \normalsize
 \end{frame}
 
-\begin{frame}[fragile]{Methodology --- Honest by Construction (2/2)}
+\begin{frame}[fragile]{Methodology: Honest by Construction (2/2)}
 \phantomsection\label{methodology-honest-by-construction-22}
 \footnotesize
 \begin{block}{No fabricated API calls either}
-PsiEmbed, libDMET, and SlowQuant aren't on PyPI. Their adapters call each package's \emph{actual documented API} — checked field-by-field against real GitHub source — behind an \texttt{ImportError} guard: real code, honestly unexecuted until installed from source.
+PsiEmbed, libDMET, and SlowQuant aren't on PyPI. Their adapters call each package's \emph{actual documented API}, checked field-by-field against real GitHub source, behind an \texttt{ImportError} guard: real code, honestly unexecuted until installed from source.
 \end{block}
 \normalsize
 
@@ -1808,7 +1805,7 @@ CI if the schema version or module count drifts between code and docs \\
 \end{longtable}
 
 \begin{block}{Tracking document}
-\texttt{CODE\_QUALITY\_REVIEW.md} — living record of resolved findings, open ToDos, and conventions (single-source schema version, vendor extension points, no computed values in configs).
+\texttt{CODE\_QUALITY\_REVIEW.md}: living record of resolved findings, open ToDos, and conventions (single-source schema version, vendor extension points, no computed values in configs).
 \end{block}
 \normalsize
 \end{frame}
@@ -1817,13 +1814,12 @@ CI if the schema version or module count drifts between code and docs \\
 \phantomsection\label{roadmap-links}
 \textbf{Repository}: \texttt{github.com/mqsdk/qpubench}
 
-\textbf{Schema v4.2.0} --- 37 modules · 7 computing models × 5 qubit
+\textbf{Schema v5.0.0}: 37 modules · 7 computing models × 5 qubit
 modalities · zero quantum SDK deps in core
 
 \vspace{0.5em}
 
-\textbf{Contributing} --- writing an adapter takes \textasciitilde30
-lines:
+\textbf{Contributing}: writing an adapter takes \textasciitilde30 lines:
 
 \begin{Shaded}
 \begin{Highlighting}[]

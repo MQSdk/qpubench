@@ -11,7 +11,7 @@ different quantum computing paradigms can be compared side by side.**
 
 You describe what to run as plain typed data, execute it through a pluggable
 backend adapter, and every run is stored as the same self-describing
-`BenchmarkRecord` — readable years later without any quantum SDK installed.
+`BenchmarkRecord`, readable years later without any quantum SDK installed.
 It is a framework for running *your own* benchmark campaigns, not a fixed
 suite of standard benchmark circuits with a leaderboard.
 
@@ -20,15 +20,15 @@ suite of standard benchmark circuits with a leaderboard.
 | Scenario | Supported? |
 |---|---|
 | Absolute performance of a quantum algorithm (accuracy / cost) | **Yes.** Expectation values with error bars, energy error against a stored classical reference (FCI / exact diagonalization), timings, and QPU-cost estimates. See the note below on what "reference" means here. |
-| Comparing implementations of the same algorithm | **Yes — a core design goal.** E.g. one ADAPT-VQE configuration runs unchanged against three different engines, producing directly comparable records. |
+| Comparing implementations of the same algorithm | **Yes, a core design goal.** E.g. one ADAPT-VQE configuration runs unchanged against three different engines, producing directly comparable records. |
 | Comparing different algorithms | **Yes.** Records are tagged with a package-agnostic algorithm family, so different algorithms on the same problem stay comparable in one store. |
 | Comparing different hardware | **Yes.** Register several backends (Aer, IBM, IQM, Braket, Quantinuum, Qibo, …) and sweep the same circuits across all of them. |
-| Comparing different quantum computing modalities | **Yes — this is the "modality-agnostic" in the tagline.** The record format covers gate-based, MBQC, boson sampling, neutral-atom analog, and more. Runnable adapters today are mostly gate-based; other modalities enter via schemas and integrations. |
+| Comparing different quantum computing modalities | **Yes, this is the "modality-agnostic" in the tagline.** The record format covers gate-based, MBQC, boson sampling, neutral-atom analog, and more. Runnable adapters today are mostly gate-based; other modalities enter via schemas and integrations. |
 | Comparing a quantum algorithm to a classical algorithm | **Partially.** Classical reference values (FCI / exact diagonalization) are computed and stored so quantum results are judged against them, but classical algorithms are not benchmarked as first-class runs. |
 | Modelling noise | **No.** Backends bring their own noise models (e.g. pass a Qiskit Aer noise model to the Aer adapter); QPUBench records what ran, it does not define noise models. |
 | Measuring noise | **No.** It can *store* device-characterization results produced by external tools (e.g. Qedma's QESEM), but it does not perform characterization itself. |
 
-> **A note on "chemical accuracy".** QPUBench reports an *energy error* — the
+> **A note on "chemical accuracy".** QPUBench reports an *energy error*, the
 > gap between a run's result and a **classically computed** reference (FCI or
 > exact diagonalization), and flags whether that gap is below 1.6 mHartree.
 > This is a numerical-convergence check against a computed value; it is **not**
@@ -42,7 +42,7 @@ suite of standard benchmark circuits with a leaderboard.
 ## Installation
 
 ```sh
-pip install .                # minimal — pydantic is the only dependency
+pip install .                # minimal; pydantic is the only dependency
 pip install ".[qiskit]"      # + Qiskit Aer simulator backend
 ```
 
@@ -51,7 +51,7 @@ Other extras and full instructions for uv, Poetry 2, and conda:
 
 ## Quick start
 
-Copy, paste, run — works on the minimal install, no quantum SDK or
+Copy, paste, run; it works on the minimal install, no quantum SDK or
 credentials needed. It prepares a two-qubit Bell state, measures the ⟨ZZ⟩
 correlation, and appends the result record to an NDJSON file:
 
@@ -67,7 +67,7 @@ cx q[0],q[1];"""
 circuit = CircuitSpec(
     num_qubits=2,
     serialized=bell_qasm,
-    observables=[Pauli("Z0 Z1")],   # ⟨ZZ⟩ — Pauli() builds a SparsePauliObservable
+    observables=[Pauli("Z0 Z1")],   # ⟨ZZ⟩; Pauli() builds a SparsePauliObservable
 )
 
 runner = BenchmarkRunner(store="results/bell.ndjson")   # str path → NDJSONStore
@@ -88,13 +88,13 @@ runner.register(AerAdapter(), name="aer")
 record = runner.run(circuit, "aer", shots=4096)   # <ZZ> ≈ 1.0 for a Bell state
 ```
 
-That is the whole loop: describe → run → record. Everything else — VQE,
-sweeps across backends, real hardware, other paradigms — is the same loop
+That is the whole loop: describe → run → record. Everything else, from VQE to
+sweeps across backends, real hardware and other paradigms, is the same loop
 with different pieces. Continue with the [user guide](docs/index.md).
 
 ## Plain VQE in a dozen lines
 
-Plain VQE is *not* a special object or an algorithm adapter — it is exactly
+Plain VQE is *not* a special object or an algorithm adapter; it is exactly
 that same describe → run → record loop wrapped in a classical optimizer. You
 keep one unbound parametrized ansatz (with its Hamiltonian attached as an
 observable), and each energy evaluation binds the current parameters into a
@@ -108,7 +108,7 @@ from qpubench import BenchmarkRunner, CircuitSpec, Pauli, VQAConfig
 from qpubench.backends import AerAdapter        # pip install "qpubench[qiskit]"
 from qpubench.schemas.primitives import CircuitFormat
 
-ansatz = CircuitSpec(                            # the unbound master copy — reused every step
+ansatz = CircuitSpec(                            # the unbound master copy, reused every step
     num_qubits=1,
     format=CircuitFormat.QASM3,
     serialized='OPENQASM 3.0; include "stdgates.inc"; input float[64] theta; qubit[1] q; ry(theta) q[0];',
@@ -117,7 +117,7 @@ ansatz = CircuitSpec(                            # the unbound master copy — r
 )
 
 runner = BenchmarkRunner()
-runner.register(AerAdapter(), name="aer")        # swap for hardware here — nothing else changes
+runner.register(AerAdapter(), name="aer")        # swap for hardware here; nothing else changes
 
 def energy(theta: np.ndarray) -> float:
     bound = ansatz.bind({"theta": float(theta[0])})   # .bind() never mutates the master
@@ -130,7 +130,7 @@ res = minimize(energy, x0=[0.1], method="COBYLA")
 print(f"ground-state energy ≈ {res.fun:.4f}")   # → -1.0000
 ```
 
-qpubench ships no optimizer of its own — the loop is a few lines and any
+qpubench ships no optimizer of its own; the loop is a few lines and any
 optimizer works. Every evaluation is persisted as a full `BenchmarkRecord`, so
 the stored history *is* the convergence trace. The full guide (real chemistry
 Hamiltonians, QAOA, the interchangeable ADAPT-VQE engines) is in
@@ -140,32 +140,32 @@ Hamiltonians, QAOA, the interchangeable ADAPT-VQE engines) is in
 
 Three layers, three responsibilities:
 
-- **Schemas** describe — circuits, backends, options, and results are plain
+- **Schemas** describe: circuits, backends, options, and results are plain
   [Pydantic v2](https://docs.pydantic.dev/) models with no quantum SDK imports.
-- **Adapters** execute — a `BackendAdapter` runs a circuit you provide; an
+- **Adapters** execute: a `BackendAdapter` runs a circuit you provide; an
   `AlgorithmAdapter` wraps a library that generates its own circuits from a
   problem (e.g. the ground state energy calculation of a molecule) and drives
   its own loop. Both register with the same `BenchmarkRunner`.
-- **Stores** persist — every record lands in NDJSON, Parquet, or S3 through
+- **Stores** persist: every record lands in NDJSON, Parquet, or S3 through
   one `save`/`load`/`query` interface.
 
 ## What is a "schema" here?
 
 Just typed Python classes (Pydantic models) that you **import and
-instantiate** — `CircuitSpec` in the quick start is one. You pick them from
+instantiate**; `CircuitSpec` in the quick start is one. You pick them from
 the library; there is nothing to design or register yourself. The library
 ships **48 schema modules** at the current schema version (see the badge
-above), split into three groups — core record format, cross-cutting
+above), split into three groups: core record format, cross-cutting
 catalogues, and per-project mirrors.
 
 - The **core modules** (`circuit`, `backend`, `execution`, `result`,
   `record`, …) define the record format every benchmark uses. For most
-  work this is all you touch — the quick start used nothing else.
+  work this is all you touch; the quick start used nothing else.
 - The remaining modules are **optional add-ons**, each mirroring one
   external project (`microsoft_qdk.py`, `qedma_qesem.py`, …) or a shared
   catalogue (basis sets, Hamiltonian metadata, …). You only need one if
   your benchmark involves that specific tool, and its results attach to the
-  same `BenchmarkRecord` (via dedicated fields or the `vendor_data` dict) —
+  same `BenchmarkRecord` (via dedicated fields or the `vendor_data` dict);
   there is no assembly of multiple schema files required.
 
 Full model-by-model reference: [docs/schemas.md](docs/schemas.md)
@@ -194,7 +194,7 @@ never contains a secret and can be shared as-is. `S3Store` goes further and
 raises if you pass `aws_secret_access_key=` at all.
 
 Settings that are account-specific but not secret (`IBM_QUANTUM_INSTANCE`,
-`AWS_REGION`) have no built-in default either — an adapter tells you which
+`AWS_REGION`) have no built-in default either; an adapter tells you which
 variable to set rather than guessing one that happens to work on someone
 else's machine. `.env.example` lists every variable, grouped by adapter.
 
@@ -222,7 +222,7 @@ pytest tests/       # full schema test suite, no quantum SDK required
 ```
 
 Known gaps and follow-ups are tracked in-repo with
-[git-bug](https://github.com/git-bug/git-bug) (`git bug bug` to list them) —
+[git-bug](https://github.com/git-bug/git-bug) (`git bug bug` to list them);
 see [docs/feedback_workflow.md](docs/feedback_workflow.md).
 
 ## License
@@ -236,7 +236,7 @@ texts under these names:
 | File | Contents | Role |
 | --- | --- | --- |
 | [`COPYING.LESSER`](COPYING.LESSER) | LGPLv3 | The license QPUBench is under |
-| [`COPYING`](COPYING) | GPLv3 | Base terms the LGPLv3 builds on — **not** a separate license offer |
+| [`COPYING`](COPYING) | GPLv3 | Base terms the LGPLv3 builds on; **not** a separate license offer |
 | [`LICENSE`](LICENSE) | LGPLv3 (same text as `COPYING.LESSER`) | Kept so GitHub and packaging tools detect the license |
 
 In short: you may use QPUBench in proprietary or differently-licensed

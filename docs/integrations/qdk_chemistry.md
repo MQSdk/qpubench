@@ -2,7 +2,7 @@
 
 qpubench models the Microsoft QDK quantum chemistry pipeline in `src/qpubench/schemas/mirrors/microsoft_qdk.py`. The schemas cover the full pipeline from molecular structure through SCF, active-space selection, Hamiltonian construction, qubit encoding, state preparation, QPE/IQPE phase estimation, and Azure Quantum resource estimation.
 
-Computing model: `ComputingModel.GATE_BASED` (QPE/IQPE is an algorithmic technique on top of gate-based circuits — see `QPEMethod`, not a separate paradigm)
+Computing model: `ComputingModel.GATE_BASED` (QPE/IQPE is an algorithmic technique on top of gate-based circuits; see `QPEMethod`, not a separate paradigm)
 
 ---
 

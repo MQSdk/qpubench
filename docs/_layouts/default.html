@@ -30,7 +30,7 @@
 
 {%- comment -%}
   The header and footer mirror docs/site/index.html by hand. That page is
-  deliberately outside Jekyll — it has to render straight off the filesystem —
+  deliberately outside Jekyll, since it has to render straight off the filesystem,
   so the two cannot share an include. Change one, change the other.
 
   Jekyll renders docs/index.md to index.html and the Pages workflow then moves it
@@ -43,7 +43,6 @@
 <header class="topbar">
   <div class="wrap topbar-inner">
     <a class="brand" href="{{ '/' | relative_url }}">
-      <img src="{{ '/assets/mark.svg' | relative_url }}" alt="" width="30" height="30">
       <span>QPUBench</span>
     </a>
     <nav aria-label="Main">
@@ -72,7 +71,7 @@
 <footer class="footer">
   <div class="wrap footer-inner">
     <div>
-      <p class="footer-brand"><img src="{{ '/assets/mark.svg' | relative_url }}" alt="" width="22" height="22"> QPUBench</p>
+      <p class="footer-brand">QPUBench</p>
       <p>Free software under the <a href="https://www.gnu.org/licenses/lgpl-3.0.html" rel="noopener">GNU LGPL v3.0 or later</a>.
       Not dual-licensed. Use it in proprietary applications; changes to QPUBench itself must be
       published under the LGPL.</p>
