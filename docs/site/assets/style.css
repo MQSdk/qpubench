@@ -340,23 +340,7 @@ hr { border: 0; border-top: 1px solid var(--rule); margin: 40px 0; }
 }
 .lede strong { color: var(--fg); font-weight: 600; }
 
-.hero-actions { display: flex; gap: 16px; flex-wrap: wrap; margin: 0 0 36px; }
-
-/* MQS hero stat blocks: mono value over an uppercase label. */
-.stats {
-  list-style: none; margin: 0; padding: 0;
-  display: grid; gap: 20px 28px;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-}
-.stats li {
-  font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.1em;
-  text-transform: uppercase; color: var(--fg-muted);
-}
-.stats b {
-  display: block; margin-bottom: 4px;
-  font-size: 1.35rem; font-weight: 500; letter-spacing: -0.01em;
-  text-transform: none; color: var(--fg);
-}
+.hero-actions { display: flex; gap: 16px; flex-wrap: wrap; margin: 0; }
 
 /* ---------- code ---------- */
 
@@ -679,7 +663,6 @@ section.wrap + section.wrap { border-top: 1px solid var(--rule-soft); }
   section.wrap { padding: 44px 20px; }
   .hero { padding: 32px 0 40px; }
   .hero-actions { gap: 12px; }
-  .stats { gap: 16px 28px; }
   .prose { padding: 32px 20px 64px; }
 }
 
