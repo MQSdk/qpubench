@@ -1,16 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" data-generated="qpubench"
      viewBox="0 0 232 64" width="232" height="64"
-     role="img" aria-label="MQSdk qse">
-  <title>MQSdk qse</title>
+     role="img" aria-label="QSE">
+  <title>QSE</title>
   <style>
     text { font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fill: #000000; letter-spacing: -0.02em; }
     .wm { font-weight: 600; }
     .mg { font-weight: 600; }
   </style>
-  <rect x="5" y="11"
-        width="42" height="42"
-        fill="none" stroke="#000000" stroke-width="2"/>
-  <text class="mg" x="26" y="36.9"
-        font-size="14" text-anchor="middle">QSE</text>
-  <text class="wm" x="60" y="36.9" font-size="14">MQSdk qse</text>
+  <text class="wm" x="42" y="36.9" font-size="14">QSE</text>
 </svg>

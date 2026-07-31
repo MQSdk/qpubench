@@ -7,10 +7,6 @@
     .wm { font-weight: 600; }
     .mg { font-weight: 600; }
   </style>
-  <rect x="5" y="11"
-        width="42" height="42"
-        fill="none" stroke="#000000" stroke-width="2"/>
-  <text class="mg" x="26" y="36.9"
-        font-size="14" text-anchor="middle">IBM</text>
-  <text class="wm" x="60" y="36.9" font-size="14">IBM Quantum</text>
+  <text class="mg" x="4" y="36.9" font-size="14">IBM</text>
+  <text class="wm" x="42" y="36.9" font-size="14">IBM Quantum</text>
 </svg>

@@ -17,8 +17,8 @@ as a CSS mask tinted with the current text colour (``.logo-mark`` in style.css),
 because an ``<img>`` cannot see the page's ``data-theme`` — the day/night switch
 would leave the tiles behind. Two consequences for anything drawn here:
 
-* every shape must be opaque where ink belongs and absent elsewhere, so the
-  monogram badge is a stroked outline rather than a filled block; and
+* every shape must be opaque where ink belongs and absent elsewhere, which is
+  why the mark is type only, with nothing drawn around the monogram; and
 * colour inside the tile carries no meaning — the stylesheet supplies it, which
   is also what turns a tile MQS orange on hover.
 
@@ -57,11 +57,11 @@ MONO_ADVANCE = 0.6
 
 TILE_W = 232
 TILE_H = 64
-BADGE = 44
-BADGE_X = 4
-BADGE_Y = (TILE_H - BADGE) / 2
-BADGE_STROKE = 2
-TEXT_X = BADGE_X + BADGE + 12
+MONO_X = 4
+# The monogram sits in a fixed column so every wordmark on the page starts at the
+# same x. Three characters at 14px in a 0.6em-advance face is the widest one.
+MONO_COL = 26
+TEXT_X = MONO_X + MONO_COL + 12
 TEXT_MAX = TILE_W - TEXT_X - 6
 
 
@@ -117,12 +117,22 @@ def render_tile(name: str, mono: str) -> str:
     leading = size * 1.25
     first_y = TILE_H / 2 + size * 0.35 - (leading * (len(lines) - 1)) / 2
     mono_size = 18.0 if len(mono) <= 2 else 14.0
-    inset = BADGE_STROKE / 2
 
     spans = "\n".join(
         f'  <text class="wm" x="{TEXT_X}" y="{first_y + i * leading:.1f}" '
         f'font-size="{size:g}">{html.escape(line)}</text>'
         for i, line in enumerate(lines)
+    )
+
+    # A package whose name already is its monogram (IQM, QSE) would otherwise
+    # print it twice; drop the monogram and leave the column empty, so the
+    # wordmark still starts where every other one does.
+    glyph = (
+        ""
+        if mono.casefold() == name.casefold()
+        else (f'  <text class="mg" x="{MONO_X:g}" '
+              f'y="{TILE_H / 2 + mono_size * 0.35:.1f}" '
+              f'font-size="{mono_size:g}">{html.escape(mono)}</text>\n')
     )
 
     return f"""<svg xmlns="http://www.w3.org/2000/svg" {GENERATED_MARKER}
@@ -134,12 +144,7 @@ def render_tile(name: str, mono: str) -> str:
     .wm {{ font-weight: 600; }}
     .mg {{ font-weight: 600; }}
   </style>
-  <rect x="{BADGE_X + inset:g}" y="{BADGE_Y + inset:g}"
-        width="{BADGE - BADGE_STROKE:g}" height="{BADGE - BADGE_STROKE:g}"
-        fill="none" stroke="{INK}" stroke-width="{BADGE_STROKE}"/>
-  <text class="mg" x="{BADGE_X + BADGE / 2:g}" y="{TILE_H / 2 + mono_size * 0.35:.1f}"
-        font-size="{mono_size:g}" text-anchor="middle">{html.escape(mono)}</text>
-{spans}
+{glyph}{spans}
 </svg>
 """
 

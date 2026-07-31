@@ -436,21 +436,31 @@ section.wrap + section.wrap { border-top: 1px solid var(--rule-soft); }
 
 .logo-grid {
   list-style: none; padding: 0; margin: 0;
-  display: grid; gap: 12px;
+  display: grid; column-gap: 12px; row-gap: 0;
   grid-template-columns: repeat(auto-fill, minmax(248px, 1fr));
+  /* Two implicit rows per visual row of tiles: one for the link, one for the
+     upstream strip. Row spacing is a cell margin instead of row-gap, because a
+     subgrid inherits the parent's gap and would open it up inside every tile. */
+  margin-bottom: -12px;
 }
 .logo-cell {
   position: relative;
-  /* A column so the upstream strip stays pinned to the bottom edge: a long
-     maintainer/package slug wraps to two lines without shunting the strip
-     up out of line with its neighbours in the same row. */
-  display: flex; flex-direction: column;
+  /* Each cell spans both of its row's tracks and re-uses them as its own, so a
+     long maintainer/package slug that wraps to two lines lifts the grey strip on
+     every tile in the row together: the strips stay one continuous band. */
+  grid-row: span 2;
+  display: grid; grid-template-rows: subgrid;
+  margin-bottom: 12px;
   border: 1px solid var(--rule); background: var(--surface);
   overflow: hidden;
   transition: border-color .14s ease, transform .14s ease;
 }
+/* Without subgrid the two rows still stack in order; they just size per tile. */
+@supports not (grid-template-rows: subgrid) {
+  .logo-cell { grid-row: auto; grid-template-rows: 1fr auto; }
+}
 .logo-cell:hover { border-color: var(--accent); transform: translateY(-2px); }
-.logo-link { display: block; flex: 1; padding: 14px 16px 14px; color: inherit; }
+.logo-link { display: block; padding: 14px 16px 14px; color: inherit; }
 .logo-link:hover { text-decoration: none; }
 
 /* Generated tiles are single-ink silhouettes tinted through a CSS mask, so they

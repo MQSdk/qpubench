@@ -142,7 +142,7 @@
           "note": "VQE · TN · DMRG · AFQMC lanes"
         },
         {
-          "name": "MQSdk qse",
+          "name": "QSE",
           "mono": "QSE",
           "url": "https://github.com/MQSdk/qse",
           "upstream": "MQSdk/qse",
@@ -229,7 +229,7 @@
       "blurb": "Beyond gate-based superconducting qubits. <code>ComputingModel</code> and <code>QubitModality</code> are independent axes on every record, so these runs share one store with everything above.",
       "packages": [
         {
-          "name": "MQSdk photoq",
+          "name": "PhotoQ",
           "mono": "phq",
           "url": "https://gitlab.com/mqsdk",
           "doc": "integrations/photonic.html",
@@ -302,7 +302,7 @@
       "blurb": "The layers around execution: making a noisy run usable, making a large circuit fit, and running the whole campaign as scheduled compute.",
       "packages": [
         {
-          "name": "Mitiq",
+          "name": "Unitary Fund Mitiq",
           "mono": "Mi",
           "url": "https://github.com/unitaryfund/mitiq",
           "upstream": "unitaryfund/mitiq",
@@ -310,7 +310,7 @@
           "note": "ZNE · PEC · CDR · REM · DDD"
         },
         {
-          "name": "Qedma QESEM",
+          "name": "QEDMA QESEM",
           "mono": "Qed",
           "url": "https://docs.qedma.io/",
           "doc": "integrations/qesem.html",
