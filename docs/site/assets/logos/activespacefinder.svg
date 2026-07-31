@@ -5,8 +5,6 @@
   <style>
     text { font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fill: #000000; letter-spacing: -0.02em; }
     .wm { font-weight: 600; }
-    .mg { font-weight: 600; }
   </style>
-  <text class="mg" x="4" y="36.9" font-size="14">ASF</text>
-  <text class="wm" x="42" y="36.9" font-size="14">ActiveSpaceFinder</text>
+  <text class="wm" x="4" y="36.9" font-size="14">ActiveSpaceFinder</text>
 </svg>

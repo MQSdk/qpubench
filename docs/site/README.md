@@ -160,7 +160,6 @@ workflow build it).
 ```json
 {
   "name": "Qiskit Aer",
-  "mono": "Aer",
   "url":  "https://github.com/Qiskit/qiskit-aer",
   "upstream": "Qiskit/qiskit-aer",
   "doc":  "backends.html",
@@ -175,7 +174,6 @@ workflow build it).
 | `doc` | yes | QPUBench documentation page, as a published path (`.html`) |
 | `note` | yes | One-line caption under the tile |
 | `upstream` | no | `maintainer/package` of the repository QPUBench integrates against, shown as "Upstream: `maintainer/package`". Omit it for vendors that publish no source repository; the tile then reads plain "Upstream" and `url` points at the vendor's own page |
-| `mono` | no | Monogram override; otherwise derived from initials. Dropped from the tile when it is the whole name anyway, as for `IQM` or `QSE` |
 | `slug` | no | Filename override; otherwise slugified from `name` |
 | `file` | no | Use this file in `assets/logos/` verbatim instead of generating one |
 
@@ -202,8 +200,8 @@ build if the committed output is stale.
 
 <a name="logos"></a>
 
-The tiles are **generated placeholder wordmarks, not vendor artwork**: a
-monogram plus the package name, set in one consistent style. This is
+The tiles are **generated placeholder wordmarks, not vendor artwork**: the
+package name spelled out in full, set in one consistent style. This is
 deliberate: the grid reads as one system rather than forty mismatched raster
 logos, the site ships no third-party trademarks, and nothing is hotlinked from
 another host.
@@ -214,7 +212,7 @@ switch and turn orange on hover. An `<img>` could not do that; it cannot see the
 page's `data-theme`. Two things follow for anyone editing the generator:
 
 - shapes must be opaque where ink belongs and absent elsewhere, which is why the
-  mark is type only, with nothing drawn around the monogram; and
+  mark is type only, with nothing drawn around the wordmark; and
 - colour inside the tile means nothing; the stylesheet supplies it. There is no
   per-package accent any more.
 

@@ -5,8 +5,8 @@ Reads ``docs/site/packages.json``, writes one SVG tile per package into
 ``docs/site/assets/logos/``, and rewrites the block between the
 ``<!-- GRID:BEGIN -->`` / ``<!-- GRID:END -->`` markers in ``docs/site/index.html``.
 
-The tiles are *generated placeholder marks*, not vendor artwork — a consistent
-monogram + wordmark per package, so the grid reads as one system and the site
+The tiles are *generated placeholder marks*, not vendor artwork — the package
+name set as a wordmark, so the grid reads as one system and the site
 carries no third-party trademarks. To use a real logo instead, drop your own
 ``assets/logos/<slug>.svg`` (or ``.png``, and set ``"file"`` in packages.json)
 in place of the generated file; this script only overwrites files it generated,
@@ -18,7 +18,7 @@ because an ``<img>`` cannot see the page's ``data-theme`` — the day/night swit
 would leave the tiles behind. Two consequences for anything drawn here:
 
 * every shape must be opaque where ink belongs and absent elsewhere, which is
-  why the mark is type only, with nothing drawn around the monogram; and
+  why the mark is type only, with nothing drawn around the wordmark; and
 * colour inside the tile carries no meaning — the stylesheet supplies it, which
   is also what turns a tile MQS orange on hover.
 
@@ -57,11 +57,8 @@ MONO_ADVANCE = 0.6
 
 TILE_W = 232
 TILE_H = 64
-MONO_X = 4
-# The monogram sits in a fixed column so every wordmark on the page starts at the
-# same x. Three characters at 14px in a 0.6em-advance face is the widest one.
-MONO_COL = 26
-TEXT_X = MONO_X + MONO_COL + 12
+# Every wordmark starts in the same column, so the grid lines up down the page.
+TEXT_X = 4
 TEXT_MAX = TILE_W - TEXT_X - 6
 
 
@@ -70,14 +67,6 @@ def slugify(name: str) -> str:
     decomposed = unicodedata.normalize("NFKD", name)
     ascii_name = decomposed.encode("ascii", "ignore").decode("ascii")
     return re.sub(r"[^a-z0-9]+", "-", ascii_name.lower()).strip("-")
-
-
-def monogram(name: str) -> str:
-    """Up to three characters: initials for multi-word names, else a prefix."""
-    words = [w for w in re.split(r"[\s_\-/]+", name) if w]
-    if len(words) >= 2:
-        return "".join(w[0] for w in words[:3]).upper()
-    return name[:2].capitalize()
 
 
 def text_width(text: str, size: float) -> float:
@@ -112,27 +101,15 @@ def fit(name: str) -> tuple[list[str], float]:
     return wrap(name, 10.0), 10.0
 
 
-def render_tile(name: str, mono: str) -> str:
+def render_tile(name: str) -> str:
     lines, size = fit(name)
     leading = size * 1.25
     first_y = TILE_H / 2 + size * 0.35 - (leading * (len(lines) - 1)) / 2
-    mono_size = 18.0 if len(mono) <= 2 else 14.0
 
     spans = "\n".join(
         f'  <text class="wm" x="{TEXT_X}" y="{first_y + i * leading:.1f}" '
         f'font-size="{size:g}">{html.escape(line)}</text>'
         for i, line in enumerate(lines)
-    )
-
-    # A package whose name already is its monogram (IQM, QSE) would otherwise
-    # print it twice; drop the monogram and leave the column empty, so the
-    # wordmark still starts where every other one does.
-    glyph = (
-        ""
-        if mono.casefold() == name.casefold()
-        else (f'  <text class="mg" x="{MONO_X:g}" '
-              f'y="{TILE_H / 2 + mono_size * 0.35:.1f}" '
-              f'font-size="{mono_size:g}">{html.escape(mono)}</text>\n')
     )
 
     return f"""<svg xmlns="http://www.w3.org/2000/svg" {GENERATED_MARKER}
@@ -142,9 +119,8 @@ def render_tile(name: str, mono: str) -> str:
   <style>
     text {{ font-family: {FONT_STACK}; fill: {INK}; letter-spacing: -0.02em; }}
     .wm {{ font-weight: 600; }}
-    .mg {{ font-weight: 600; }}
   </style>
-{glyph}{spans}
+{spans}
 </svg>
 """
 
@@ -228,7 +204,7 @@ def main() -> int:
             wanted.add(path.name)
             if not is_generated(path):
                 continue  # hand-replaced artwork — leave it alone
-            svg = render_tile(pkg["name"], pkg.get("mono") or monogram(pkg["name"]))
+            svg = render_tile(pkg["name"])
             existing = path.read_text(encoding="utf-8") if path.exists() else None
             if existing == svg:
                 continue
