@@ -271,6 +271,10 @@ ev = record.result.expectation_values[<span class="m">0</span>]
 
 <section class="wrap contents">
   <h2>Documentation</h2>
+  <p class="section-lede">
+    Every page published on this site, grouped by what it is for. The integration pages
+    each document one upstream project and the schemas that mirror it.
+  </p>
   <div class="toc-grid">
     <div class="toc-col">
       <h3>Start here</h3>
@@ -279,12 +283,13 @@ ev = record.result.expectation_values[<span class="m">0</span>]
         <li><a href="installation.html">Installation</a>: pip, uv, Poetry 2, conda</li>
         <li><a href="backends.html">Adapters &amp; Backends</a>: protocols and the adapter index</li>
         <li><a href="persistence.html">Persistence</a>: NDJSON, Parquet, S3</li>
+        <li><a href="integrations.html">All integrations</a>: the full table</li>
       </ul>
     </div>
     <div class="toc-col">
       <h3>Reference</h3>
       <ul>
-        <li><a href="schemas.html">Schema Reference</a>: every model, field by field</li>
+        <li><a href="schemas.html">Schema reference</a>: every model, field by field</li>
         <li><a href="algorithm_spec.html">Algorithm specification</a></li>
         <li><a href="vqa.html">Variational algorithms</a>: VQE, ADAPT-VQE</li>
         <li><a href="compute_architectures.html">Compute architectures</a></li>
@@ -292,22 +297,59 @@ ev = record.result.expectation_values[<span class="m">0</span>]
       </ul>
     </div>
     <div class="toc-col">
-      <h3>Integrations</h3>
+      <h3>Development</h3>
       <ul>
-        <li><a href="integrations.html">All integrations</a>: the full table</li>
-        <li><a href="integrations/pyscf.html">PySCF</a> · <a href="integrations/slowquant.html">SlowQuant</a> · <a href="integrations/qdk_chemistry.html">MS QDK</a></li>
-        <li><a href="integrations/photonic.html">Photonics</a> · <a href="integrations/gbs.html">GBS</a> · <a href="integrations/neutral_atom.html">Neutral atoms</a></li>
-        <li><a href="integrations/fragmentation.html">Fragmentation</a> · <a href="integrations/distributed_qc.html">Distributed QC</a></li>
-        <li><a href="integrations/hqs.html">HQS Stack</a> · <a href="integrations/quest.html">QuEST</a> · <a href="integrations/qesem.html">QESEM</a></li>
+        <li><a href="developer_guide.html">Developer guide</a>: layout, tests, adding an adapter</li>
+        <li><a href="feedback_workflow.html">Feedback workflow</a>: git-bug intake</li>
+        <li><a href="schema_review.html">Schema review</a>: core-schema gap analysis</li>
+        <li><a href="roadmap.html">Roadmap</a></li>
+        <li><a href="qubo_generator_roadmap.html">QUBO generator roadmap</a></li>
       </ul>
     </div>
     <div class="toc-col">
-      <h3>Development</h3>
+      <h3>Integrations: chemistry</h3>
       <ul>
-        <li><a href="developer_guide.html">Developer guide</a></li>
-        <li><a href="feedback_workflow.html">Feedback workflow</a></li>
-        <li><a href="schema_review.html">Schema review</a></li>
-        <li><a href="roadmap.html">Roadmap</a> · <a href="qubo_generator_roadmap.html">QUBO roadmap</a></li>
+        <li><a href="integrations/pyscf.html">PySCF</a>: molecules, cells, mean-field, embedding</li>
+        <li><a href="integrations/slowquant.html">SlowQuant</a>: UCC, orbital optimization, linear response</li>
+        <li><a href="integrations/qdk_chemistry.html">Microsoft QDK</a>: SCF to QPE, resource estimation</li>
+        <li><a href="integrations/qcschema.html">QCSchema</a>: QCElemental, PennyLane datasets</li>
+        <li><a href="integrations/basis_sets.html">Basis sets</a>: Basis Set Exchange, Grimme group</li>
+      </ul>
+    </div>
+    <div class="toc-col">
+      <h3>Integrations: photonics &amp; atoms</h3>
+      <ul>
+        <li><a href="integrations/photonic.html">Photonics</a>: LOQC chips, fusion-based QC</li>
+        <li><a href="integrations/gbs.html">GBS</a>: Gaussian states, hafnians, vibronic spectra</li>
+        <li><a href="integrations/neutral_atom.html">Neutral atoms</a>: Bloqade, Aquila, AHS programs</li>
+      </ul>
+    </div>
+    <div class="toc-col">
+      <h3>Integrations: algorithms</h3>
+      <ul>
+        <li><a href="integrations/qse.html">QSE / KQD</a>: Krylov diagonalization, subspace expansion</li>
+        <li><a href="integrations/excitation_solve.html">ExcitationSolve</a>: gradient-free Fourier optimizer</li>
+        <li><a href="integrations/gsopt.html">GSOpt</a>: fixed-budget ground-state harness</li>
+        <li><a href="integrations/xenakis.html">Xenakis</a>: genetic circuit composition</li>
+        <li><a href="integrations/fragmentation.html">Fragmentation</a>: splitting the problem</li>
+        <li><a href="integrations/distributed_qc.html">Distributed QC</a>: splitting the circuit</li>
+      </ul>
+    </div>
+    <div class="toc-col">
+      <h3>Integrations: simulators &amp; SDKs</h3>
+      <ul>
+        <li><a href="integrations/quest.html">QuEST</a>: state-vector and density-matrix simulation</li>
+        <li><a href="integrations/hqs.html">HQS stack</a>: struqture, qoqo, ActiveSpaceFinder</li>
+        <li><a href="integrations/cebule.html">Cebule SDK</a>: MQS cloud chemistry and materials tasks</li>
+        <li><a href="integrations/classiq.html">Classiq</a>: synthesis under width and depth constraints</li>
+      </ul>
+    </div>
+    <div class="toc-col">
+      <h3>Integrations: services</h3>
+      <ul>
+        <li><a href="integrations/qesem.html">QESEM</a>: Qedma error suppression and mitigation</li>
+        <li><a href="integrations/ibm_cost_estimator.html">IBM cost estimator</a>: QPU seconds and price, before submitting</li>
+        <li><a href="integrations/kubeflow.html">Kubeflow</a>: pipelines, scheduling, resourced runs</li>
       </ul>
     </div>
   </div>
