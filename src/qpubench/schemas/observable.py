@@ -13,7 +13,10 @@ class PauliTerm(pydantic.BaseModel):
     Compatible with:
       - Qrack: PauliExpectation(qubits[], paulis[]) via to_qrack_arrays()
       - Qiskit C: QkObsTerm {coeff, bit_terms[], indices[]} via to_qiskit_c_arrays()
-      - Legacy sparse-dict: dict["X1,Z3", float] via SparsePauliObservable.from_legacy_dict()
+      - Cebule: "X0 Y1 Z3" token strings via SparsePauliObservable.from_cebule_operators()
+
+    Hand-written terms are usually shorter through the Pauli() factory at the
+    bottom of this module; these constructors are for generated ones.
     """
 
     qubit_indices: tuple[int, ...]
@@ -52,36 +55,104 @@ class SparsePauliObservable(pydantic.BaseModel):
 
     The internal representation is modality-agnostic; backend adapters convert
     to their own encoding via the helper methods.
+
+    Sums and scalar multiples compose with the usual operators, so a
+    Hamiltonian written with the :func:`Pauli` shorthand reads like maths::
+
+        H = 0.39 * Pauli("Z0") - 0.39 * Pauli("Z1") + 0.18 * Pauli("X0 X1")
     """
 
     num_qubits: int
     terms: list[PauliTerm]
 
-    @classmethod
-    def from_legacy_dict(
-        cls,
-        obs: dict[str, float],
-        num_qubits: int,
-    ) -> SparsePauliObservable:
-        """Convert a legacy sparse-dict observable format ('X1,Z3' -> float).
+    # ── Arithmetic ────────────────────────────────────────────────────────
+    # Sums concatenate term lists; like terms are deliberately *not* merged
+    # (Qiskit's SparsePauliOp behaves the same way).  Every expectation value
+    # is linear in the terms, so an unmerged duplicate is only a wasted
+    # measurement, never a wrong answer — call .simplify() to collapse them.
 
-        Each key is a comma-separated list of single-character Pauli followed
-        by a 0-based qubit index.  Example: {"X1,Z3": 0.5, "Z0": -1.0}.
+    def __add__(self, other: SparsePauliObservable) -> SparsePauliObservable:
+        if not isinstance(other, SparsePauliObservable):
+            raise TypeError(
+                f"cannot add {type(other).__name__} to a SparsePauliObservable; "
+                "wrap the scalar as a coefficient on the identity, e.g. "
+                'Pauli("", 1.5)'
+            )
+        return SparsePauliObservable(
+            num_qubits=max(self.num_qubits, other.num_qubits),
+            terms=[*self.terms, *other.terms],
+        )
+
+    def __radd__(self, other: int) -> SparsePauliObservable:
+        """Make ``sum(...)`` work — it starts from the integer 0."""
+        if other != 0:
+            raise TypeError(
+                f"cannot add a SparsePauliObservable to {type(other).__name__}"
+            )
+        return self
+
+    def __sub__(self, other: SparsePauliObservable) -> SparsePauliObservable:
+        return self + (-other)
+
+    def __neg__(self) -> SparsePauliObservable:
+        return self * -1
+
+    def __mul__(self, scalar: complex) -> SparsePauliObservable:
+        if not isinstance(scalar, (int, float, complex)):
+            raise TypeError(
+                f"can only scale a SparsePauliObservable by a number, not "
+                f"{type(scalar).__name__}"
+            )
+        return SparsePauliObservable(
+            num_qubits=self.num_qubits,
+            terms=[
+                term.model_copy(
+                    update={
+                        "coefficient": ComplexNumber.from_complex(
+                            term.coefficient.value * scalar
+                        )
+                    }
+                )
+                for term in self.terms
+            ],
+        )
+
+    def __rmul__(self, scalar: complex) -> SparsePauliObservable:
+        return self * scalar
+
+    def __truediv__(self, scalar: complex) -> SparsePauliObservable:
+        return self * (1 / scalar)
+
+    def simplify(self, *, atol: float = 1e-12) -> SparsePauliObservable:
+        """Merge terms acting with the same Paulis on the same qubits.
+
+        Coefficients are summed and terms below ``atol`` are dropped; the
+        surviving terms keep the order of their first appearance.  Factors
+        within a term are order-independent (each acts on its own qubit), so
+        'X0 Z1' and 'Z1 X0' merge.
         """
-        terms: list[PauliTerm] = []
-        for pauli_str, coeff in obs.items():
-            indices, ops = [], []
-            for part in pauli_str.split(","):
-                ops.append(PauliLabel(part[0]))
-                indices.append(int(part[1:]))
-            terms.append(
-                PauliTerm(
-                    qubit_indices=tuple(indices),
-                    pauli_ops=tuple(ops),
-                    coefficient=ComplexNumber(re=float(coeff)),
+        merged: dict[tuple[tuple[int, PauliLabel], ...], complex] = {}
+        for term in self.terms:
+            key = tuple(
+                sorted(
+                    (q, op)
+                    for q, op in zip(term.qubit_indices, term.pauli_ops)
+                    if op != PauliLabel.I
                 )
             )
-        return cls(num_qubits=num_qubits, terms=terms)
+            merged[key] = merged.get(key, 0j) + term.coefficient.value
+        return SparsePauliObservable(
+            num_qubits=self.num_qubits,
+            terms=[
+                PauliTerm(
+                    qubit_indices=tuple(q for q, _ in key),
+                    pauli_ops=tuple(op for _, op in key),
+                    coefficient=ComplexNumber.from_complex(coeff),
+                )
+                for key, coeff in merged.items()
+                if abs(coeff) > atol
+            ],
+        )
 
     @classmethod
     def from_cebule_operators(
@@ -308,3 +379,89 @@ class SparsePauliObservable(pydantic.BaseModel):
             qubits.extend(q)
             paulis.extend(p)
         return qubits, paulis
+
+
+_PAULI_LETTERS = frozenset("IXYZ")
+
+
+def _parse_pauli_term(spec: str, coefficient: complex) -> PauliTerm:
+    """Parse one Pauli string into a PauliTerm.
+
+    Factors are separated by spaces, commas, or both; each is a Pauli letter
+    followed by a 0-based qubit index ('X0', 'z3').  The empty string is the
+    identity term.
+    """
+    indices: list[int] = []
+    ops: list[PauliLabel] = []
+    for token in spec.replace(",", " ").split():
+        letter, digits = token[0].upper(), token[1:]
+        if letter not in _PAULI_LETTERS or not digits.isdigit():
+            raise ValueError(
+                f"Malformed Pauli factor {token!r} in {spec!r}: expected a Pauli "
+                "letter (I/X/Y/Z) followed by a 0-based qubit index, e.g. "
+                "'X0 Y1' or 'Z0,Z1'"
+            )
+        index = int(digits)
+        if index in indices:
+            raise ValueError(
+                f"Qubit {index} carries more than one factor in {spec!r}; give "
+                "their product as a single factor instead"
+            )
+        indices.append(index)
+        ops.append(PauliLabel(letter))
+    # Sort by qubit index so that 'X0 Y1' and 'Y1 X0' — the same operator,
+    # since each factor acts on its own qubit — also serialise identically.
+    ordered = sorted(zip(indices, ops))
+    return PauliTerm(
+        qubit_indices=tuple(index for index, _ in ordered),
+        pauli_ops=tuple(op for _, op in ordered),
+        coefficient=ComplexNumber.from_complex(coefficient),
+    )
+
+
+def Pauli(  # noqa: N802 -- reads as a constructor at call sites, not a function
+    spec: str | dict[str, complex],
+    coefficient: complex = 1.0,
+    *,
+    num_qubits: int | None = None,
+) -> SparsePauliObservable:
+    """Build a SparsePauliObservable from a Pauli string — the short spelling.
+
+    ``spec`` is either one Pauli string with an optional coefficient, or a
+    ``{pauli_string: coefficient}`` mapping for a multi-term sum::
+
+        Pauli("Z0 Z1")                      # <ZZ> on a two-qubit register
+        Pauli("X0", 0.5)                    # 0.5 * X0
+        Pauli({"Z0": 0.39, "X0 X1": 0.18})  # a two-term Hamiltonian
+        Pauli("")                           # the identity term
+
+    Factors may be separated by spaces or commas, so both the Cebule-style
+    "X0 Y1" and the comma-separated "X0,Y1" spellings parse.  Letter case
+    and factor order are irrelevant — each factor acts on its own qubit, and
+    factors are stored sorted by index so equal operators compare equal — while
+    a qubit carrying two factors is rejected rather than silently ordered.
+
+    ``num_qubits`` defaults to one past the highest index mentioned, which is
+    what you want whenever the observable spans the whole register.  Pass it
+    explicitly for an observable on a register wider than it touches (an
+    identity-only term mentions no qubit at all, so it infers 0).
+
+    The results compose, so a Hamiltonian can be written as a sum::
+
+        H = -1.05 * Pauli("") + 0.39 * Pauli("Z0") + 0.18 * Pauli("X0 X1")
+    """
+    if isinstance(spec, dict):
+        if coefficient != 1.0:
+            raise ValueError(
+                "Pass coefficients in the mapping's values, not as the second "
+                "argument, when spec is a dict"
+            )
+        terms = [_parse_pauli_term(s, c) for s, c in spec.items()]
+    else:
+        terms = [_parse_pauli_term(spec, coefficient)]
+    if num_qubits is None:
+        num_qubits = max(
+            (index + 1 for term in terms for index in term.qubit_indices),
+            default=0,
+        )
+    return SparsePauliObservable(num_qubits=num_qubits, terms=terms)

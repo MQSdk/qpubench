@@ -161,12 +161,10 @@ Cebule's TN_QC_OPT task returns `qubit_operators` as space-separated `PauliLabel
 "X0 Y1 Z3"   →  X on qubit 0, Y on qubit 1, Z on qubit 3
 ```
 
-This is different from the legacy `"X1,Z3"` comma-separated sparse-dict format. Use the correct factory:
+Cebule delivers the operators and their coefficients as two parallel lists, so they convert in bulk:
 
 ```python
-# Cebule format
 SparsePauliObservable.from_cebule_operators(operators, coefficients, num_qubits)
-
-# Legacy sparse-dict format
-SparsePauliObservable.from_legacy_dict({"X1,Z3": 0.5}, num_qubits)
 ```
+
+For observables you write by hand, use `Pauli()` — it reads the same token format, and accepts commas as well as spaces, so `Pauli("X0 Y1 Z3")` and `Pauli("X0,Y1,Z3")` are the same observable.

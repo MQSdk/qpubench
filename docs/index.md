@@ -50,10 +50,7 @@ Works identically with `uv`, Poetry 2, and conda — see the [installation guide
 This runs end-to-end with the bare install — no quantum SDK, no credentials. It prepares a 3-qubit GHZ state, measures two observables on a stub backend, and appends the record to an NDJSON file. Compared with the README's minimal Bell example, this one deliberately reaches for a few more knobs — multiple observables, an explicit `ExecutionOptions` (reproducibility seed, transpiler tier), and record tags/notes — so you meet them early:
 
 ```python
-from qpubench import (
-    BenchmarkRunner, CircuitSpec, ExecutionOptions,
-    SparsePauliObservable, PauliTerm, PauliLabel, ComplexNumber,
-)
+from qpubench import BenchmarkRunner, CircuitSpec, ExecutionOptions, Pauli
 
 # What to benchmark: a 3-qubit GHZ circuit with TWO observables
 ghz_qasm = """OPENQASM 2.0;
@@ -63,14 +60,8 @@ h q[0];
 cx q[0],q[1];
 cx q[1],q[2];"""
 
-zzz = SparsePauliObservable(num_qubits=3, terms=[
-    PauliTerm(qubit_indices=(0, 1, 2),
-              pauli_ops=(PauliLabel.Z, PauliLabel.Z, PauliLabel.Z),
-              coefficient=ComplexNumber(re=1.0))])
-xxx = SparsePauliObservable(num_qubits=3, terms=[
-    PauliTerm(qubit_indices=(0, 1, 2),
-              pauli_ops=(PauliLabel.X, PauliLabel.X, PauliLabel.X),
-              coefficient=ComplexNumber(re=1.0))])
+zzz = Pauli("Z0 Z1 Z2")
+xxx = Pauli("X0 X1 X2")
 
 circuit = CircuitSpec(num_qubits=3, serialized=ghz_qasm, observables=[zzz, xxx])
 
@@ -94,6 +85,15 @@ for ev in record.result.expectation_values:
     print(f"<{label}> = {ev.value:.4f} ± {ev.std_error:.4f}")
 print("created at:", record.timestamp)          # UTC timestamp, auto-stamped
 ```
+
+`Pauli("Z0 Z1 Z2")` is the short spelling of an observable: it returns a `SparsePauliObservable` — the schema type every adapter consumes — from a string of Pauli letters with 0-based qubit indices. Multi-term Hamiltonians are either a mapping or a sum, whichever reads better:
+
+```python
+H = Pauli({"Z0": 0.39, "X0 X1": 0.18})
+H = -1.05 * Pauli("") + 0.39 * Pauli("Z0") + 0.18 * Pauli("X0 X1")   # Pauli("") is the identity
+```
+
+Nothing is hidden behind it — the explicit `SparsePauliObservable(num_qubits=…, terms=[PauliTerm(…)])` form builds the same object and is still the right choice when a program generates terms rather than a person typing them. See [schemas.md](schemas.md#observable) for the full signature.
 
 Registering with just a `name` and a `seed` creates a **`StubGateAdapter`** behind the scenes: a built-in placeholder backend that returns random, seed-reproducible values instead of simulating anything. It exists so you can build and test the full pipeline — circuit, runner, store — before installing a quantum SDK or touching real hardware. `runner.run(..., shots=4096)` would build `ExecutionOptions(shots=4096)` for you; here we pass a full `ExecutionOptions` to reach the extra settings (`seed`, `optimization_level`, and later error mitigation, transpiler settings, or algorithm hyperparameters). When a circuit carries observables the stub takes the estimator path and returns expectation values; drop the observables and it samples bitstrings into `record.result.shots` instead (set `memory=True` for per-shot data).
 

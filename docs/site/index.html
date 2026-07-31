@@ -39,7 +39,6 @@
 <header class="topbar">
   <div class="wrap topbar-inner">
     <a class="brand" href="index.html">
-      <img src="assets/mark.svg" alt="" width="30" height="30">
       <span>QPUBench</span>
     </a>
     <nav aria-label="Main">
@@ -81,8 +80,7 @@
 
     <div class="hero-code">
       <div class="code-head"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span><span class="code-title">bell.py</span></div>
-<pre><code><span class="k">from</span> qpubench <span class="k">import</span> (BenchmarkRunner, CircuitSpec,
-                      SparsePauliObservable)
+<pre><code><span class="k">from</span> qpubench <span class="k">import</span> BenchmarkRunner, CircuitSpec, Pauli
 <span class="k">from</span> qpubench.backends <span class="k">import</span> AerAdapter
 
 bell_qasm = <span class="s">"""OPENQASM 2.0;
@@ -91,13 +89,10 @@ qreg q[2];
 h q[0];
 cx q[0],q[1];"""</span>
 
-zz = <span class="t">SparsePauliObservable</span>.from_legacy_dict(
-    {<span class="s">"Z0,Z1"</span>: <span class="m">1.0</span>}, num_qubits=<span class="m">2</span>)
-
 circuit = <span class="t">CircuitSpec</span>(
     num_qubits=<span class="m">2</span>,
     serialized=bell_qasm,
-    observables=[zz],
+    observables=[<span class="t">Pauli</span>(<span class="s">"Z0 Z1"</span>)],
 )
 
 runner = <span class="t">BenchmarkRunner</span>(store=<span class="s">"results/bell.ndjson"</span>)

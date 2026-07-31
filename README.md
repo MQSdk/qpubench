@@ -56,10 +56,7 @@ credentials needed. It prepares a two-qubit Bell state, measures the ⟨ZZ⟩
 correlation, and appends the result record to an NDJSON file:
 
 ```python
-from qpubench import (
-    BenchmarkRunner, CircuitSpec,
-    SparsePauliObservable, PauliTerm, PauliLabel, ComplexNumber,
-)
+from qpubench import BenchmarkRunner, CircuitSpec, Pauli
 
 bell_qasm = """OPENQASM 2.0;
 include "qelib1.inc";
@@ -70,13 +67,7 @@ cx q[0],q[1];"""
 circuit = CircuitSpec(
     num_qubits=2,
     serialized=bell_qasm,
-    observables=[
-        SparsePauliObservable(num_qubits=2, terms=[
-            PauliTerm(qubit_indices=(0, 1),
-                      pauli_ops=(PauliLabel.Z, PauliLabel.Z),
-                      coefficient=ComplexNumber(re=1.0))
-        ])
-    ],
+    observables=[Pauli("Z0 Z1")],   # ⟨ZZ⟩ — Pauli() builds a SparsePauliObservable
 )
 
 runner = BenchmarkRunner(store="results/bell.ndjson")   # str path → NDJSONStore
@@ -113,10 +104,7 @@ driven to the ground state of `H = Z` (minimum ⟨Z⟩ = −1 at θ = π):
 ```python
 import numpy as np
 from scipy.optimize import minimize
-from qpubench import (
-    BenchmarkRunner, CircuitSpec, VQAConfig,
-    SparsePauliObservable, PauliTerm, PauliLabel, ComplexNumber,
-)
+from qpubench import BenchmarkRunner, CircuitSpec, Pauli, VQAConfig
 from qpubench.backends import AerAdapter        # pip install "qpubench[qiskit]"
 from qpubench.schemas.primitives import CircuitFormat
 
@@ -125,9 +113,7 @@ ansatz = CircuitSpec(                            # the unbound master copy — r
     format=CircuitFormat.QASM3,
     serialized='OPENQASM 3.0; include "stdgates.inc"; input float[64] theta; qubit[1] q; ry(theta) q[0];',
     parameters=["theta"],
-    observables=[SparsePauliObservable(num_qubits=1, terms=[   # H = Z, the thing we minimize
-        PauliTerm(qubit_indices=(0,), pauli_ops=(PauliLabel.Z,),
-                  coefficient=ComplexNumber(re=1.0))])],
+    observables=[Pauli("Z0")],                   # H = Z, the thing we minimize
 )
 
 runner = BenchmarkRunner()

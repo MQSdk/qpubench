@@ -1,7 +1,7 @@
 """Gate-based benchmark example using the stub backend.
 
 Demonstrates:
-  - Building a CircuitSpec with a SparsePauliObservable
+  - Building a CircuitSpec with an observable
   - Registering a StubGateAdapter
   - Running a single experiment
   - Running a parameter sweep
@@ -17,12 +17,9 @@ import pathlib
 from qpubench import (
     BenchmarkRunner,
     CircuitSpec,
-    ComplexNumber,
     ExecutionOptions,
     NDJSONStore,
-    PauliLabel,
-    PauliTerm,
-    SparsePauliObservable,
+    Pauli,
     StubGateAdapter,
     VQAConfig,
     ZNEConfig,
@@ -37,16 +34,7 @@ h q[0];
 cx q[0],q[1];
 """
 
-ZZ_OBSERVABLE = SparsePauliObservable(
-    num_qubits=2,
-    terms=[
-        PauliTerm(
-            qubit_indices=(0, 1),
-            pauli_ops=(PauliLabel.Z, PauliLabel.Z),
-            coefficient=ComplexNumber(re=1.0),
-        )
-    ],
-)
+ZZ_OBSERVABLE = Pauli("Z0 Z1")
 
 
 def main() -> None:

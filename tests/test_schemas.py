@@ -33,7 +33,7 @@ from qpubench.schemas.mirrors.johnrscott_mbqc_fpga import (
     MBQCQubitState,
     MBQCRound,
 )
-from qpubench.schemas.observable import PauliTerm, SparsePauliObservable
+from qpubench.schemas.observable import Pauli, PauliTerm, SparsePauliObservable
 from qpubench.schemas.primitives import (
     CircuitFormat,
     ComplexNumber,
@@ -98,14 +98,74 @@ def test_pauli_term_qrack_arrays():
     assert paulis == [1, 2]   # X=1, Z=2
 
 
-def test_sparse_pauli_from_legacy_dict():
-    obs = {"X1,Z3": 0.5, "Z0": -1.0}
-    spo = SparsePauliObservable.from_legacy_dict(obs, num_qubits=4)
-    assert spo.num_qubits == 4
-    assert len(spo.terms) == 2
-    coeffs = {t.coefficient.re for t in spo.terms}
-    assert 0.5 in coeffs
-    assert -1.0 in coeffs
+def test_pauli_shorthand_matches_explicit_construction():
+    """Pauli() is sugar — it must build exactly what the long form builds."""
+    assert Pauli("Z0 Z1") == SparsePauliObservable(
+        num_qubits=2,
+        terms=[
+            PauliTerm(
+                qubit_indices=(0, 1),
+                pauli_ops=(PauliLabel.Z, PauliLabel.Z),
+                coefficient=ComplexNumber(re=1.0),
+            )
+        ],
+    )
+    assert Pauli("X1,Z3", 0.5) == Pauli("X1 Z3", 0.5)   # either separator parses
+    assert Pauli("X0 Y1") == Pauli("y1 x0")             # order and case are irrelevant
+
+
+def test_pauli_num_qubits_inference():
+    assert Pauli("Z0 Z1").num_qubits == 2
+    assert Pauli("X3").num_qubits == 4               # one past the highest index
+    assert Pauli("X0", num_qubits=7).num_qubits == 7  # explicit wins
+    assert Pauli("").num_qubits == 0                  # identity mentions no qubit
+    assert Pauli("").terms[0].qubit_indices == ()
+
+
+def test_pauli_rejects_malformed_input():
+    with pytest.raises(ValueError, match="Malformed Pauli factor"):
+        Pauli("Q0")
+    with pytest.raises(ValueError, match="Malformed Pauli factor"):
+        Pauli("Z")                                    # letter without an index
+    with pytest.raises(ValueError, match="more than one factor"):
+        Pauli("Z0 X0")                                # ambiguous product order
+    with pytest.raises(ValueError, match="mapping's values"):
+        Pauli({"Z0": 1.0}, 0.5)
+
+
+def test_observable_arithmetic():
+    h = -1.05 * Pauli("") + 0.39 * Pauli("Z0") - 0.39 * Pauli("Z1") + 0.18 * Pauli("X0 X1")
+    assert h.num_qubits == 2                          # widest summand wins
+    assert [t.coefficient.re for t in h.terms] == [-1.05, 0.39, -0.39, 0.18]
+    assert h == Pauli({"": -1.05, "Z0": 0.39, "Z1": -0.39, "X0 X1": 0.18}, num_qubits=2)
+
+    assert (Pauli("Z0") / 2).terms[0].coefficient.re == 0.5
+    assert (-Pauli("Z0")).terms[0].coefficient.re == -1.0
+    assert sum([Pauli("Z0"), Pauli("X1")]) == Pauli({"Z0": 1.0, "X1": 1.0})  # sum() starts at 0
+
+    with pytest.raises(TypeError):
+        Pauli("Z0") + 3
+    with pytest.raises(TypeError):
+        Pauli("Z0") * Pauli("Z1")
+
+
+def test_observable_arithmetic_agrees_with_dense_matrix():
+    """The operators must mean what they say on the resulting matrix."""
+    h = 0.5 * Pauli("Z0") + 0.25 * Pauli("X0")
+    assert h.to_dense_matrix() == [[0.5, 0.25], [0.25, -0.5]]
+    assert (h - h).to_dense_matrix() == [[0.0, 0.0], [0.0, 0.0]]
+    assert (2 * h).to_dense_matrix() == [[1.0, 0.5], [0.5, -1.0]]
+
+
+def test_observable_simplify_merges_like_terms():
+    h = Pauli("Z0") + Pauli("Z0") + Pauli("X0 Z1") + Pauli("Z1 X0")
+    simplified = h.simplify()
+    assert len(simplified.terms) == 2                 # factor order does not block a merge
+    assert simplified.num_qubits == h.num_qubits == 2
+    assert sorted(t.coefficient.re for t in simplified.terms) == [2.0, 2.0]
+    assert simplified.to_dense_matrix() == h.to_dense_matrix()   # same operator either way
+
+    assert (Pauli("Y0") - Pauli("Y0")).simplify().terms == []    # exact cancellation drops out
 
 
 def test_to_dense_matrix_single_qubit_paulis():

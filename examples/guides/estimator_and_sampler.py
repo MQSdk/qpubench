@@ -18,13 +18,7 @@ import sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
 
 from examples.common.toy_statevector_backend import ToyStatevectorAdapter
-from qpubench import (
-    CircuitSpec,
-    ComplexNumber,
-    PauliLabel,
-    PauliTerm,
-    SparsePauliObservable,
-)
+from qpubench import CircuitSpec, Pauli
 from qpubench.schemas.mirrors.ibm_runtime_v2 import IBMEstimatorPUB, IBMSamplerPUB
 
 # QASM3 (not QASM2) — ToyStatevectorAdapter only speaks the fixed gate
@@ -36,10 +30,7 @@ qubit[2] q;
 h q[0];
 cx q[0], q[1];
 """
-ZZ = SparsePauliObservable(num_qubits=2, terms=[
-    PauliTerm(qubit_indices=(0, 1), pauli_ops=(PauliLabel.Z, PauliLabel.Z),
-              coefficient=ComplexNumber(re=1.0)),
-])
+ZZ = Pauli("Z0 Z1")
 
 
 def main() -> None:

@@ -693,7 +693,7 @@ from .mirrors.unitaryfund_mitiq import (
     MitiqZNEConfig,
     MitiqZNEFactory,
 )
-from .observable import PauliTerm, SparsePauliObservable
+from .observable import Pauli, PauliTerm, SparsePauliObservable
 from .primitives import (
     AlgorithmFamily,
     CircuitFormat,
@@ -948,6 +948,7 @@ __all__ = [
     "CircuitSpec",
     "ParameterBinding",
     # observable
+    "Pauli",
     "PauliTerm",
     "SparsePauliObservable",
     # primitives

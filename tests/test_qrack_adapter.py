@@ -15,7 +15,7 @@ import pytest
 
 from qpubench.schemas.circuit import CircuitSpec
 from qpubench.schemas.execution import ExecutionOptions
-from qpubench.schemas.observable import SparsePauliObservable
+from qpubench.schemas.observable import Pauli
 from qpubench.schemas.primitives import CircuitFormat, JobStatus
 
 pytest.importorskip("qiskit")  # PyQrack has no QASM parser; see the adapter docstring
@@ -70,9 +70,7 @@ class TestQrackAdapter:
     def test_estimator_path_is_exact_on_a_bell_state(self) -> None:
         """<ZZ> = <XX> = +1 and <YY> = -1 for (|00> + |11>)/sqrt(2)."""
         circuit = _bell_circuit().model_copy(update={"observables": [
-            SparsePauliObservable.from_legacy_dict({"Z0,Z1": 1.0}, num_qubits=2),
-            SparsePauliObservable.from_legacy_dict({"X0,X1": 1.0}, num_qubits=2),
-            SparsePauliObservable.from_legacy_dict({"Y0,Y1": 1.0}, num_qubits=2),
+            Pauli("Z0 Z1"), Pauli("X0 X1"), Pauli("Y0 Y1"),
         ]})
         result = self._adapter().run(circuit, ExecutionOptions())
 
@@ -89,9 +87,7 @@ class TestQrackAdapter:
         Guards the module docstring's gotcha 2: Qrack's pauli_expectation
         returns one Pauli product, so the terms must be summed here.
         """
-        observable = SparsePauliObservable.from_legacy_dict(
-            {"Z0,Z1": 0.5, "X0,X1": 0.5}, num_qubits=2
-        )
+        observable = Pauli({"Z0 Z1": 0.5, "X0 X1": 0.5})
         circuit = _bell_circuit().model_copy(update={"observables": [observable]})
         result = self._adapter().run(circuit, ExecutionOptions())
 

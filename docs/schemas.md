@@ -57,7 +57,7 @@ Computing model (paradigm) and qubit modality are separate, independent axes on 
 |---|---|---|---|
 | [`primitives`](#primitives) | Enums and value types used across all other modules | all · all | `ComputingModel`, `QubitModality`, `CircuitFormat`, `PauliLabel`, `ComplexNumber` |
 | [`circuit`](#circuit) | Circuit or problem specification | all · all | `CircuitSpec` (`from_openqasm3`, `openqasm3`, `bind`), `ParameterBinding` |
-| [`observable`](#observable) | Sparse Pauli observables | all · all | `SparsePauliObservable`, `PauliTerm` |
+| [`observable`](#observable) | Sparse Pauli observables | all · all | `Pauli` (shorthand factory), `SparsePauliObservable`, `PauliTerm` |
 | [`backend`](#backend) | Hardware / simulator description | all · all | `BackendSpec` (31 factory constructors) |
 | [`execution`](#execution) | Execution options and algorithm hyperparameters | all · all | `ExecutionOptions`, `AlgorithmSpec`, `VQERunConfig` / `AdaptVQERunConfig` / `QAOARunConfig` (VQE / ADAPT / QAOA runtime hyperparameters; experiment metadata lives in `record.VQAConfig`), `ZNEConfig`, `TranspilerConfig` |
 | [`result`](#result) | Execution results (expectation values, counts, fidelity, per-iteration algorithm history) | all · all | `QuantumResult` (15 result-type fields), `ExpectationResult`, `ShotResult`, `TranspileLayout` |
@@ -215,6 +215,25 @@ Properties: `.value` → Python `complex`. Class method: `.from_complex(c)`.
 
 ## `observable`
 
+### `Pauli(spec, coefficient=1.0, *, num_qubits=None)`
+
+The short spelling — a module-level factory returning a `SparsePauliObservable`, so an observable fits inline in a `CircuitSpec`:
+
+```python
+Pauli("Z0 Z1")                      # ⟨ZZ⟩ on a two-qubit register
+Pauli("X0", 0.5)                    # 0.5 · X₀
+Pauli({"Z0": 0.39, "X0 X1": 0.18})  # a two-term Hamiltonian
+Pauli("")                           # the identity term
+```
+
+Factors separate on spaces or commas (so both the Cebule `"X0 Y1"` and the comma-separated `"X0,Y1"` spellings parse), letter case is free, and factors are stored sorted by qubit index so operators that are equal compare equal. A qubit carrying two factors raises rather than picking a product order for you. `num_qubits` defaults to one past the highest index mentioned — pass it explicitly for a register wider than the observable touches.
+
+Results compose with the usual operators, so a Hamiltonian reads like maths:
+
+```python
+H = -1.05 * Pauli("") + 0.39 * Pauli("Z0") - 0.39 * Pauli("Z1") + 0.18 * Pauli("X0 X1")
+```
+
 ### `PauliTerm`
 
 | Field | Type | Description |
@@ -238,6 +257,9 @@ Class methods:
 
 Methods:
 - `.to_dense_matrix(*, real=True, atol=1e-10, max_qubits=10)` — sparse → dense `2**n × 2**n` Pauli tensor expansion; `real=True` (default) returns `list[list[float]]` for e.g. Cebule `QASMGenInput.operator` and raises if entries are complex; `real=False` returns complex entries
+- `.simplify(*, atol=1e-12)` — merge terms with the same Paulis on the same qubits and drop those below `atol`
+
+Arithmetic: `+`, `-`, unary `-`, and scalar `*` / `/` build new observables (`sum()` works too, as it starts from `0`). A sum takes the wider `num_qubits` and concatenates terms — like terms are **not** merged automatically, matching Qiskit's `SparsePauliOp`. Every expectation value is linear in the terms, so a duplicate costs a measurement but never changes the answer; call `.simplify()` to collapse them.
 
 Both conversions are exponential by nature and guarded by `max_qubits` — raise it explicitly for larger observables only if you mean it.
 

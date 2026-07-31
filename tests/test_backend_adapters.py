@@ -23,7 +23,7 @@ import pytest
 
 from qpubench.schemas.circuit import CircuitSpec
 from qpubench.schemas.execution import ExecutionOptions
-from qpubench.schemas.observable import SparsePauliObservable
+from qpubench.schemas.observable import Pauli
 from qpubench.schemas.primitives import CircuitFormat, JobStatus
 
 _BELL_QASM3 = """OPENQASM 3.0;
@@ -37,8 +37,7 @@ cx q[0], q[1];
 def _bell_circuit(with_observable: bool = False) -> CircuitSpec:
     circ = CircuitSpec(num_qubits=2, format=CircuitFormat.QASM3, serialized=_BELL_QASM3)
     if with_observable:
-        obs = SparsePauliObservable.from_legacy_dict({"Z0,Z1": 1.0}, num_qubits=2)
-        circ = circ.model_copy(update={"observables": [obs]})
+        circ = circ.model_copy(update={"observables": [Pauli("Z0 Z1")]})
     return circ
 
 
