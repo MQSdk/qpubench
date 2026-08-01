@@ -214,6 +214,12 @@ hr { border: 0; border-top: 1px solid var(--rule); margin: 40px 0; }
 }
 .skip:focus { left: 0; top: 0; z-index: 100; }
 
+/* Label that only a screen reader reads. */
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+}
+
 /* An MQS signature: headline word in a contrast → orange gradient. */
 .grad {
   font-weight: 600;
@@ -353,10 +359,21 @@ hr { border: 0; border-top: 1px solid var(--rule); margin: 40px 0; }
 .dot.r { background: var(--orange-700); }
 .dot.y { background: var(--purple-100); }
 .dot.g { background: var(--bluegray-500); }
-.code-title {
-  margin-left: 6px; font-family: var(--mono); font-size: 0.78rem;
+/* The window chrome doubles as the tab strip: the filenames *are* the tabs. */
+.code-tabs { display: flex; flex-wrap: wrap; margin-left: 6px; }
+.code-tab {
+  padding: 3px 11px; border: 0; border-bottom: 2px solid transparent;
+  background: none; cursor: pointer;
+  font-family: var(--mono); font-size: 0.78rem; letter-spacing: 0.01em;
   color: var(--fg-muted);
 }
+.code-tab:hover { color: var(--fg); }
+.code-tab[aria-selected="true"] { color: var(--fg); border-bottom-color: var(--accent); }
+
+/* Hold the height across tabs, so switching does not shunt the hero copy
+ * beside it up and down. Set on the panel contents, not the panel, because
+ * the dark surface has to fill whatever height is reserved. */
+.code-panel > pre, .prompt-body { min-height: 486px; }
 
 pre {
   margin: 0; background: var(--code-bg); color: var(--code-fg);
@@ -397,6 +414,57 @@ pre .gp { color: #A995C0; }
   background: var(--code-chrome); border-top: 1px solid var(--rule);
 }
 .wide-code { border: 1px solid var(--rule); }
+
+/* ---------- prompt tab ---------- */
+
+/* Sits on the code surface, which is dark in both themes, so the colours here
+ * are fixed against --code-bg rather than following --fg / --bg. */
+.prompt-body {
+  display: flex; flex-direction: column; gap: 16px;
+  background: var(--code-bg); color: var(--code-fg);
+  padding: 20px 22px;
+}
+.prompt-lede { margin: 0; font-size: 0.92rem; line-height: 1.5; color: var(--purple-100); }
+.prompt-form { display: flex; flex-direction: column; gap: 12px; margin: 0; }
+
+.prompt-field {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+}
+.prompt-field:focus-within { border-color: var(--orange-400); }
+.prompt-icon { width: 17px; height: 17px; flex: none; margin-top: 4px; fill: var(--purple-100); }
+.prompt-field textarea {
+  flex: 1; min-width: 0; resize: vertical;
+  background: none; border: 0; padding: 0; color: var(--code-fg);
+  font-family: var(--sans); font-size: 0.95rem; line-height: 1.45;
+}
+.prompt-field textarea:focus { outline: none; }
+.prompt-field textarea::placeholder { color: var(--bluegray-500); }
+
+.prompt-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.prompt-actions .btn { padding: 9px 18px; font-size: 0.9rem; }
+.prompt-actions .btn.ghost { border-color: rgba(255, 255, 255, 0.3); color: var(--purple-50); }
+.prompt-actions .btn.ghost:hover { border-color: var(--orange-400); color: var(--orange-400); }
+.prompt-status { font-size: 0.82rem; color: var(--purple-100); }
+.prompt-hint { margin: 0; font-size: 0.8rem; line-height: 1.45; color: var(--bluegray-500); }
+
+.prompt-suggestions {
+  display: flex; flex-direction: column; gap: 8px;
+  list-style: none; margin: 0; padding: 0;
+}
+.prompt-suggestion {
+  display: flex; align-items: flex-start; gap: 10px;
+  width: 100%; text-align: left; padding: 10px 12px; cursor: pointer;
+  background: rgba(255, 255, 255, 0.04); border: 1px solid transparent;
+  color: var(--purple-50);
+  font-family: var(--sans); font-size: 0.88rem; line-height: 1.4;
+}
+.prompt-suggestion::before { content: "→"; flex: none; color: var(--orange-400); }
+.prompt-suggestion:hover {
+  background: rgba(255, 255, 255, 0.1); border-color: rgba(255, 255, 255, 0.18);
+}
 
 /* ---------- generic sections ---------- */
 
@@ -670,6 +738,8 @@ section.wrap + section.wrap { border-top: 1px solid var(--rule-soft); }
 @media (max-width: 940px) {
   .hero { padding: 48px 0 52px; }
   .hero-inner { grid-template-columns: minmax(0, 1fr); gap: 36px; }
+  /* One column: nothing sits beside the panel, so there is no height to hold. */
+  .code-panel > pre, .prompt-body { min-height: 0; }
   .card-row { grid-template-columns: 1fr; }
   .toc-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .scope-grid { grid-template-columns: 1fr; gap: 28px; }
