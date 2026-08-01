@@ -9,8 +9,9 @@
  *
  *   2. The prompt box. It does not run anything; it wraps the question in the
  *      framing an agent needs (what QPUBench is, which schemas to use, where
- *      to persist) and either copies that or opens it in Cebule, the same
- *      hand-off mqs.dk makes.
+ *      to persist) and copies that, to be pasted into the agent of your
+ *      choice. The Cebule hand-off is shown but disabled: the button is there
+ *      to say where this is going, not yet to go there.
  */
 (function () {
   "use strict";
@@ -122,12 +123,41 @@
     return text;
   };
 
-  form.addEventListener("submit", function (event) {
-    event.preventDefault();
+  var copy = function () {
     var text = question();
     if (!text) return;
-    window.open("https://cebule.io?prompt=" + encodeURIComponent(buildPrompt(text)), "_blank",
-                "noopener");
+    var prompt = buildPrompt(text);
+
+    var fallback = function () {
+      // Clipboard API is unavailable outside a secure context, and denied in
+      // some browsers. Selecting the text at least leaves the visitor one
+      // keystroke away rather than with a button that silently did nothing.
+      input.value = prompt;
+      input.select();
+      var copied = false;
+      try {
+        copied = document.execCommand("copy");
+      } catch (e) {
+        copied = false;
+      }
+      say(copied ? "Copied." : "Press Ctrl/⌘+C to copy.");
+    };
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(prompt).then(function () {
+        say("Copied.");
+      }, fallback);
+    } else {
+      fallback();
+    }
+  };
+
+  // Submitting copies. The Cebule button is disabled, but a disabled submitter
+  // does not stop the form from submitting by other means (Enter below), so
+  // the handler must not be the one that opens Cebule.
+  form.addEventListener("submit", function (event) {
+    event.preventDefault();
+    copy();
   });
 
   // Enter submits, Shift+Enter keeps the newline: a textarea so the long
@@ -140,36 +170,7 @@
     }
   });
 
-  if (copyButton) {
-    copyButton.addEventListener("click", function () {
-      var text = question();
-      if (!text) return;
-      var prompt = buildPrompt(text);
-
-      var fallback = function () {
-        // Clipboard API is unavailable outside a secure context, and denied in
-        // some browsers. Selecting the text at least leaves the visitor one
-        // keystroke away rather than with a button that silently did nothing.
-        input.value = prompt;
-        input.select();
-        var copied = false;
-        try {
-          copied = document.execCommand("copy");
-        } catch (e) {
-          copied = false;
-        }
-        say(copied ? "Copied." : "Press Ctrl/⌘+C to copy.");
-      };
-
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(prompt).then(function () {
-          say("Copied.");
-        }, fallback);
-      } else {
-        fallback();
-      }
-    });
-  }
+  if (copyButton) copyButton.addEventListener("click", copy);
 
   document.addEventListener("click", function (event) {
     var suggestion = event.target.closest && event.target.closest(".prompt-suggestion");

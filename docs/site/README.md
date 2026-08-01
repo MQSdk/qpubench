@@ -45,8 +45,11 @@ copy beside it up or down.
 
 The prompt tab runs nothing. It wraps the question in a fixed framing (what
 QPUBench is, which schemas to use, that results are persisted through a
-`BenchmarkRunner`) and either copies that or opens it at
-`https://cebule.io?prompt=…`, the same hand-off mqs.dk makes. If the question
+`BenchmarkRunner`) and copies that, to be pasted into any agent. The **Open in
+Cebule** button is rendered `disabled` and labelled *(currently disabled)*: it
+names where this is going without going there yet. Because a disabled submitter
+does not stop a form from submitting, `hero.js` binds the form's `submit` to the
+copy path, not to a Cebule hand-off, so Enter copies too. If the question
 names no simulator, QPU or vendor (checked against a literal word list in
 `hero.js`), a closing line asks for the PennyLane `lightning.qubit` simulator,
 so the study still runs. Widen that list when a new backend lands; guessing

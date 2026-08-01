@@ -323,6 +323,15 @@ hr { border: 0; border-top: 1px solid var(--rule); margin: 40px 0; }
 
 .btn.ghost { border-color: var(--rule); }
 
+/* A disabled button still has to read as a button, so it keeps its shape and
+ * loses only the affordances: no accent on hover, no pointer, no colour that
+ * promises something will happen. */
+.btn:disabled, .btn:disabled:hover {
+  opacity: 0.45; cursor: not-allowed;
+  background: transparent; border-color: var(--rule); color: var(--fg);
+}
+.btn-note { font-size: 0.82em; font-weight: 400; letter-spacing: 0.02em; }
+
 /* ---------- hero ---------- */
 
 .hero { padding: 72px 0 76px; border-bottom: 1px solid var(--rule-soft); }
@@ -458,6 +467,11 @@ pre .gp { color: #A995C0; }
 .prompt-actions .btn { padding: 9px 18px; font-size: 0.9rem; }
 .prompt-actions .btn.ghost { border-color: rgba(255, 255, 255, 0.3); color: var(--purple-50); }
 .prompt-actions .btn.ghost:hover { border-color: var(--orange-400); color: var(--orange-400); }
+/* The code window is dark in both themes, so the disabled button cannot fall
+ * back to the page's --fg the way the generic rule does. */
+.prompt-actions .btn:disabled, .prompt-actions .btn:disabled:hover {
+  border-color: rgba(255, 255, 255, 0.3); color: var(--purple-50);
+}
 .prompt-status { font-size: 0.82rem; color: var(--purple-100); }
 .prompt-hint { margin: 0; font-size: 0.8rem; line-height: 1.45; color: var(--bluegray-500); }
 

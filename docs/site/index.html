@@ -160,7 +160,9 @@ records = runner.sweep(
                           placeholder="What do you want to benchmark?"></textarea>
               </div>
               <div class="prompt-actions">
-                <button class="btn primary" type="submit">Open in Cebule&nbsp;↗</button>
+                <button class="btn primary" type="submit" disabled aria-disabled="true"
+                        title="The Cebule hand-off is not live yet">Open in Cebule&nbsp;↗
+                  <span class="btn-note">(currently disabled)</span></button>
                 <button class="btn ghost" type="button" id="prompt-copy">Copy prompt</button>
                 <span class="prompt-status" id="prompt-status" role="status" aria-live="polite"></span>
               </div>
