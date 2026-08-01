@@ -371,9 +371,17 @@ hr { border: 0; border-top: 1px solid var(--rule); margin: 40px 0; }
 .code-tab[aria-selected="true"] { color: var(--fg); border-bottom-color: var(--accent); }
 
 /* Hold the height across tabs, so switching does not shunt the hero copy
- * beside it up and down. Set on the panel contents, not the panel, because
- * the dark surface has to fill whatever height is reserved. */
-.code-panel > pre, .prompt-body { min-height: 486px; }
+ * beside it up and down. `is-stacked` puts all three panels in one grid cell,
+ * so the window is always as tall as the tallest example whichever tab is up;
+ * hero.js sets it, so with JS off `hidden` still means display:none and the
+ * page keeps the single-panel layout it had before the tabs existed. */
+.code-panels.is-stacked { display: grid; }
+.code-panels.is-stacked > .code-panel { grid-area: 1 / 1; }
+.code-panels.is-stacked > .code-panel[hidden] { display: block; visibility: hidden; }
+
+/* The dark surface has to fill whatever height the cell reserves, so the
+ * height goes on the panel contents rather than the panel. */
+.code-panel > pre, .prompt-body { min-height: 486px; height: 100%; }
 
 pre {
   margin: 0; background: var(--code-bg); color: var(--code-fg);
@@ -738,8 +746,11 @@ section.wrap + section.wrap { border-top: 1px solid var(--rule-soft); }
 @media (max-width: 940px) {
   .hero { padding: 48px 0 52px; }
   .hero-inner { grid-template-columns: minmax(0, 1fr); gap: 36px; }
-  /* One column: nothing sits beside the panel, so there is no height to hold. */
-  .code-panel > pre, .prompt-body { min-height: 0; }
+  /* One column: nothing sits beside the panel, so there is no height to hold,
+   * and each tab may size to its own content again. */
+  .code-panel > pre, .prompt-body { min-height: 0; height: auto; }
+  .code-panels.is-stacked { display: block; }
+  .code-panels.is-stacked > .code-panel[hidden] { display: none; }
   .card-row { grid-template-columns: 1fr; }
   .toc-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .scope-grid { grid-template-columns: 1fr; gap: 28px; }

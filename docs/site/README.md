@@ -33,22 +33,25 @@ The panel beside the headline is a three-tab ARIA tablist wired by `hero.js`:
 |---|---|
 | `bell.py` | one circuit, one backend, one expectation value |
 | `sweep.py` | `runner.sweep()` over two backends × three shot counts, one `run_id` |
-| `prompt` | a box that frames a question for an agent |
+| `Prompt` | a box that frames a question for an agent |
 
 The window chrome doubles as the tab strip, so the filenames are the tabs. The
 second and third panels carry `hidden` **in the markup**, not from JavaScript:
 with JS off a visitor sees the first example and nothing else, which is what the
-page showed before the tabs existed. `.code-panel > pre` and `.prompt-body`
-share a `min-height` so switching tabs does not shunt the hero copy up and down.
+page showed before the tabs existed. With JS on, `hero.js` adds `is-stacked`
+to `.code-panels`, which puts all three panels in one grid cell: the window is
+always as tall as the tallest example, so switching tabs cannot shunt the hero
+copy beside it up or down.
 
 The prompt tab runs nothing. It wraps the question in a fixed framing (what
 QPUBench is, which schemas to use, that results are persisted through a
 `BenchmarkRunner`) and either copies that or opens it at
 `https://cebule.io?prompt=…`, the same hand-off mqs.dk makes. If the question
 names no simulator, QPU or vendor (checked against a literal word list in
-`hero.js`), a closing line asks for the Aer simulator, so the study still runs.
-Widen that list when a new backend lands; guessing wrong and appending the Aer
-line to a question that already names a QPU is the failure worth avoiding.
+`hero.js`), a closing line asks for the PennyLane `lightning.qubit` simulator,
+so the study still runs. Widen that list when a new backend lands; guessing
+wrong and appending the default-backend line to a question that already names a
+QPU is the failure worth avoiding.
 
 Both example snippets are real API: `BenchmarkRunner`, `CircuitSpec`,
 `ExecutionOptions`, `runner.sweep()`, `record.result.expectation_values[i]`.

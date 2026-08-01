@@ -22,6 +22,13 @@
   if (tablist) {
     var tabs = [].slice.call(tablist.querySelectorAll('[role="tab"]'));
 
+    // Stacking the panels is only safe once JS owns the tabs: it keeps every
+    // panel in the layout so the window holds the tallest example's height and
+    // the hero copy beside it never moves. Without this class `hidden` stays
+    // display:none, which is what a visitor without JavaScript needs.
+    var panels = document.querySelector(".code-panels");
+    if (panels) panels.classList.add("is-stacked");
+
     var select = function (tab, moveFocus) {
       tabs.forEach(function (other) {
         var chosen = other === tab;
@@ -76,12 +83,13 @@
     "format. Use runner.sweep() if the study is more than a single point.\n\n";
 
   var DEFAULT_BACKEND =
-    "\n\nNo backend was named, so run this on the Qiskit Aer simulator " +
-    "(qpubench.backends.AerAdapter).";
+    "\n\nNo backend was named, so run this on the PennyLane lightning.qubit " +
+    "simulator (qpubench.backends.PennyLaneLightningAdapter).";
 
   /* Names that count as "the backend is decided". Kept deliberately literal:
-   * guessing wrong and appending the Aer line to a study that already names a
-   * QPU would contradict the question, which is worse than leaving it off. */
+   * guessing wrong and appending the default-backend line to a study that
+   * already names a QPU would contradict the question, which is worse than
+   * leaving it off. */
   var NAMED_BACKEND = new RegExp(
     "\\b(" +
       "aer|qiskit|ibm|ibmq|torino|brisbane|braket|iqm|quantinuum|honeywell|" +

@@ -88,11 +88,12 @@
           <button class="code-tab" type="button" role="tab" id="tab-sweep"
                   aria-controls="panel-sweep" aria-selected="false" tabindex="-1">sweep.py</button>
           <button class="code-tab" type="button" role="tab" id="tab-prompt"
-                  aria-controls="panel-prompt" aria-selected="false" tabindex="-1">prompt</button>
+                  aria-controls="panel-prompt" aria-selected="false" tabindex="-1">Prompt</button>
         </div>
       </div>
 
-      <div class="code-panel" role="tabpanel" id="panel-point" aria-labelledby="tab-point" tabindex="0">
+      <div class="code-panels">
+        <div class="code-panel" role="tabpanel" id="panel-point" aria-labelledby="tab-point" tabindex="0">
 <pre><code><span class="c"># One circuit, one backend, one data point.</span>
 <span class="k">from</span> qpubench <span class="k">import</span> BenchmarkRunner, CircuitSpec, Pauli
 <span class="k">from</span> qpubench.backends <span class="k">import</span> AerAdapter
@@ -115,9 +116,9 @@ record = runner.run(circuit, <span class="s">"aer"</span>, shots=<span class="m"
 
 ev = record.result.expectation_values[<span class="m">0</span>]
 <span class="c"># &lt;ZZ&gt; = 0.9986 ± 0.0156</span></code></pre>
-      </div>
+        </div>
 
-      <div class="code-panel" role="tabpanel" id="panel-sweep" aria-labelledby="tab-sweep" tabindex="0" hidden>
+        <div class="code-panel" role="tabpanel" id="panel-sweep" aria-labelledby="tab-sweep" tabindex="0" hidden>
 <pre><code><span class="c"># The same circuit across two backends and three shot counts,</span>
 <span class="c"># grouped under one run_id. `circuit` is the CircuitSpec above.</span>
 <span class="k">from</span> qpubench <span class="k">import</span> BenchmarkRunner, ExecutionOptions
@@ -142,39 +143,40 @@ records = runner.sweep(
 <span class="c"># aer 512   0.9883  0.0442</span>
 <span class="c"># aer 8192  0.9985  0.0110</span>
 <span class="c"># ibm 8192  0.8734  0.0112</span></code></pre>
-      </div>
+        </div>
 
-      <div class="code-panel" role="tabpanel" id="panel-prompt" aria-labelledby="tab-prompt" tabindex="0" hidden>
-        <div class="prompt-body">
-          <p class="prompt-lede">
-            Describe the study instead of writing it. QPUBench is schema-oriented precisely so an
-            agent can drive it, and the framing below is sent along with your question.
-          </p>
+        <div class="code-panel" role="tabpanel" id="panel-prompt" aria-labelledby="tab-prompt" tabindex="0" hidden>
+          <div class="prompt-body">
+            <p class="prompt-lede">
+              Describe the study instead of writing it. QPUBench is schema-oriented precisely so an
+              agent can drive it, and the framing below is sent along with your question.
+            </p>
 
-          <form class="prompt-form" id="prompt-form">
-            <label class="sr-only" for="prompt-input">Your benchmark question</label>
-            <div class="prompt-field">
-              <svg class="prompt-icon" viewBox="0 0 32 32" aria-hidden="true"><path d="M29 27.6 22.5 21a10 10 0 1 0-1.4 1.4l6.5 6.6ZM5 14a9 9 0 1 1 9 9 9 9 0 0 1-9-9Z"/></svg>
-              <textarea id="prompt-input" name="prompt" rows="2"
-                        placeholder="What do you want to benchmark?"></textarea>
-            </div>
-            <div class="prompt-actions">
-              <button class="btn primary" type="submit">Open in Cebule&nbsp;↗</button>
-              <button class="btn ghost" type="button" id="prompt-copy">Copy prompt</button>
-              <span class="prompt-status" id="prompt-status" role="status" aria-live="polite"></span>
-            </div>
-          </form>
+            <form class="prompt-form" id="prompt-form">
+              <label class="sr-only" for="prompt-input">Your benchmark question</label>
+              <div class="prompt-field">
+                <svg class="prompt-icon" viewBox="0 0 32 32" aria-hidden="true"><path d="M29 27.6 22.5 21a10 10 0 1 0-1.4 1.4l6.5 6.6ZM5 14a9 9 0 1 1 9 9 9 9 0 0 1-9-9Z"/></svg>
+                <textarea id="prompt-input" name="prompt" rows="2"
+                          placeholder="What do you want to benchmark?"></textarea>
+              </div>
+              <div class="prompt-actions">
+                <button class="btn primary" type="submit">Open in Cebule&nbsp;↗</button>
+                <button class="btn ghost" type="button" id="prompt-copy">Copy prompt</button>
+                <span class="prompt-status" id="prompt-status" role="status" aria-live="polite"></span>
+              </div>
+            </form>
 
-          <p class="prompt-hint">
-            Name a simulator or QPU and it is used as written; name none and the prompt asks for the
-            Aer simulator, so the study still runs.
-          </p>
+            <p class="prompt-hint">
+              Name a simulator or QPU and it is used as written; name none and the prompt asks for the
+              PennyLane lightning.qubit simulator, so the study still runs.
+            </p>
 
-          <ul class="prompt-suggestions">
-            <li><button class="prompt-suggestion" type="button">Compare ADAPT-VQE and UCCSD on H2 in sto-3g, and put both runs in one NDJSON file.</button></li>
-            <li><button class="prompt-suggestion" type="button">Sweep shots from 512 to 8192 for a 4-qubit QAOA circuit on Aer and on IBM Torino, then report the energy error against the classical reference.</button></li>
-            <li><button class="prompt-suggestion" type="button">Run the same Bell state on a superconducting QPU and on a neutral-atom analog backend, and show me the two records side by side.</button></li>
-          </ul>
+            <ul class="prompt-suggestions">
+              <li><button class="prompt-suggestion" type="button">Compare ADAPT-VQE and UCCSD on H2 in sto-3g, and put both runs in one NDJSON file.</button></li>
+              <li><button class="prompt-suggestion" type="button">Sweep shots from 512 to 8192 for a 4-qubit QAOA circuit on Aer and on IBM Torino, then report the energy error against the classical reference.</button></li>
+              <li><button class="prompt-suggestion" type="button">Run the same Bell state on a superconducting QPU and on a neutral-atom analog backend, and show me the two records side by side.</button></li>
+            </ul>
+          </div>
         </div>
       </div>
     </div>
