@@ -375,8 +375,11 @@ hr { border: 0; border-top: 1px solid var(--rule); margin: 40px 0; }
  * so the window is always as tall as the tallest example whichever tab is up;
  * hero.js sets it, so with JS off `hidden` still means display:none and the
  * page keeps the single-panel layout it had before the tabs existed. */
-.code-panels.is-stacked { display: grid; }
-.code-panels.is-stacked > .code-panel { grid-area: 1 / 1; }
+/* The single column is `minmax(0, 1fr)` rather than the implicit `auto`: an auto
+ * track grows to the widest panel's longest source line, which pushes the dark
+ * surface out past the tab strip above it instead of scrolling inside `pre`. */
+.code-panels.is-stacked { display: grid; grid-template-columns: minmax(0, 1fr); }
+.code-panels.is-stacked > .code-panel { grid-area: 1 / 1; min-width: 0; }
 .code-panels.is-stacked > .code-panel[hidden] { display: block; visibility: hidden; }
 
 /* The dark surface has to fill whatever height the cell reserves, so the
