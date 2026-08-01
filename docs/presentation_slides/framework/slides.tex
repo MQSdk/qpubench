@@ -1582,18 +1582,21 @@ node per iteration. \normalsize
 \footnotesize
 
 \texttt{integrations/kubeflow/}: one \texttt{@dsl.pipeline} per
-\texttt{Mapper} category in \texttt{data/IBM\_VQE\_Test\_Benchmark.csv},
-matching Cebule SDK's own documented task order:
+(\texttt{Mapper}, \texttt{Method}) pair in
+\texttt{data/IBM\_VQE\_Test\_Benchmark.csv}, matching Cebule SDK's own
+documented task order:
 
 \begin{verbatim}
-tn_qc_opt+mol_map:  mol_map ─▶ tn_qc_opt ─▶ qasm_gen ─▶ execute_circuits
-tn_qc_opt:          jw_map  ─▶ tn_qc_opt ─▶ qasm_gen ─▶ execute_circuits
-mol_map:            mol_map ─────────────────────────▶ execute_static_hamiltonian
-JW:                 jw_map  ─────────────────────────▶ execute_static_hamiltonian
+mol_map, TN-VQE:  mol_map ─▶ tn_qc_opt ─▶ qasm_gen ─▶ execute_circuits
+JW,      TN-VQE:  jw_map  ─▶ tn_qc_opt ─▶ qasm_gen ─▶ execute_circuits
+mol_map, VQE:     mol_map ─────────────────────────▶ execute_static_hamiltonian
+JW,      VQE:     jw_map  ─────────────────────────▶ execute_static_hamiltonian
 \end{verbatim}
 
-\texttt{mol\_map}/\texttt{JW} carry no VQE ansatz; they measure the
-fixed Hartree-Fock reference state instead.
+\texttt{Mapper} names the fermion-to-qubit mapping only; TN\_QC\_OPT is
+the optimisation method wrapped around one, so it is a separate
+\texttt{Method} column. The two \texttt{VQE} pipelines measure the fixed
+Hartree-Fock reference state rather than an optimized one.
 
 Verified by actually compiling all four against \texttt{kfp==2.16.1}:
 surfaced a real gotcha:

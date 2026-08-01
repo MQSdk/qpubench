@@ -3763,6 +3763,51 @@ def test_cebule_task_envelope_defaults():
     assert env.connected_task_id is None
 
 
+def test_mol_map_input_defaults_to_the_full_space():
+    from qpubench.schemas.mirrors.mqsdk_cebule import MolecularGeometry, MolMapInput
+
+    inp = MolMapInput(molecule=MolecularGeometry(
+        symbols=["H", "H"], geometry=[0.0, 0.0, 0.0, 0.0, 0.0, 0.7414],
+    ))
+    assert inp.task_type == CebuleTaskType.MOL_MAP
+    assert inp.active_electrons is None and inp.active_orbitals is None
+    assert inp.frozen_core is False
+
+
+def test_mol_map_input_accepts_an_active_space():
+    """Active-space support reported 2026-08-01 — what makes larger
+    molecules and basis sets tractable, since the constraint encoding's
+    qubit count follows the active space rather than the basis."""
+    from qpubench.schemas.mirrors.mqsdk_cebule import MolecularGeometry, MolMapInput
+
+    water = MolecularGeometry(
+        symbols=["O", "H", "H"],
+        geometry=[0.0, 0.0, 0.0, 0.0, 0.757, 0.587, 0.0, -0.757, 0.587],
+        basis="cc-pvtz",
+    )
+    inp = MolMapInput(molecule=water, active_electrons=8, active_orbitals=6, frozen_core=True)
+    assert (inp.active_electrons, inp.active_orbitals) == (8, 6)
+    assert inp.frozen_core is True
+
+
+def test_mol_map_input_rejects_an_incoherent_active_space():
+    import pytest
+
+    from qpubench.schemas.mirrors.mqsdk_cebule import MolecularGeometry, MolMapInput
+
+    h2 = MolecularGeometry(symbols=["H", "H"], geometry=[0.0, 0.0, 0.0, 0.0, 0.0, 0.7414])
+    # Half-specified: one without the other says nothing usable.
+    with pytest.raises(ValueError):
+        MolMapInput(molecule=h2, active_electrons=2)
+    with pytest.raises(ValueError):
+        MolMapInput(molecule=h2, active_orbitals=2)
+    # More electrons than the spatial orbitals have room for.
+    with pytest.raises(ValueError):
+        MolMapInput(molecule=h2, active_electrons=13, active_orbitals=6)
+    with pytest.raises(ValueError):
+        MolMapInput(molecule=h2, active_electrons=0, active_orbitals=6)
+
+
 def test_cosmo_input_requires_dielec_and_basis():
     cosmo = CosmoInput(basis="6-31g**", dielec=78.0, optimize=True)
     assert cosmo.task_type == CebuleTaskType.COSMO

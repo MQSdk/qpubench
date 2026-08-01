@@ -1,7 +1,7 @@
 """Resource + cost estimator walkthrough: what would
-data/IBM_VQE_Test_Benchmark.csv (1,218 rows: JW/mol_map baselines plus a
-full Cebule TN-VQE `tn_qc_opt`/`tn_qc_opt+mol_map` sweep) actually cost to
-run on real IBM Quantum hardware, under each of the four access plans?
+data/IBM_VQE_Test_Benchmark.csv (294 rows, the stage-1 screening matrix)
+actually cost to run on real IBM Quantum hardware, under each of the four
+access plans?
 
 Requires: pip install 'qpubench[qiskit]'
 
@@ -12,16 +12,17 @@ Two things this script deliberately keeps separate:
    scheduled transpilation against a real IBM calibration snapshot
    (`FakeBrisbane`, no credentials needed) plus IBM's own documented usage
    formula. Circuit depth/gate counts/duration are real Qiskit output, not
-   guessed.
-2. **Illustrative, clearly-labeled assumptions**: the benchmark CSV's
-   sweep columns (`Ansatz`, `Optimizer`, `Shots`, ...) are still blank
-   (see `data/README.md` — that's an open question back to whoever is
-   designing the study, not something this script should silently
-   invent). To show a concrete number anyway, this script assumes a
-   hardware-efficient `EfficientSU2` ansatz (1 repetition) and a fixed
-   shot count/iteration count, both printed prominently and easy to
-   change at the top of `main()` — swap in the real ansatz/shot choices
-   once they're decided.
+   guessed. The ansatz is real too: each row names its own `Ansatz` and
+   `Ansatz_Reps`, and `_ansatz_builders.py` builds that circuit rather
+   than substituting a hardware-efficient stand-in, which matters a lot
+   (a real Trotterized UCCSD costs ~17x EfficientSU2 at 12 qubits).
+2. **Illustrative, clearly-labeled assumptions**: the CSV's `Shots` and
+   `Qiskit_Opt_Level` columns are still blank (see `data/README.md` —
+   that's an open question back to whoever is designing the study, not
+   something this script should silently invent). To show a concrete
+   number anyway, this script assumes a fixed shot count and iteration
+   count, both printed prominently and easy to change at the top of
+   `main()`.
 
 Run:
     python examples/guides/estimate_ibm_cost.py
@@ -33,6 +34,9 @@ import pathlib
 import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+
+from _ansatz_builders import circuit_spec
 
 from qpubench.backends.ibm_cost_estimator import estimate_circuit_resources
 from qpubench.schemas.mirrors.ibm_cost_estimator import (
@@ -46,21 +50,7 @@ _BACKEND_NAME = "ibm_brisbane"   # offline FakeBrisbane snapshot -- no credentia
 
 # --- Illustrative assumptions (the CSV doesn't specify these yet) ---------
 _ASSUMED_SHOTS_PER_CIRCUIT = 4096
-_ASSUMED_ANSATZ_REPS = 1
 _ASSUMED_VQE_ITERATIONS = 30   # one circuit submission per optimizer iteration
-
-
-def _ansatz_circuit_spec(num_qubits: int, *, reps: int = _ASSUMED_ANSATZ_REPS):
-    from qiskit import qasm3
-    from qiskit.circuit.library import efficient_su2
-
-    from qpubench.schemas.circuit import CircuitSpec
-    from qpubench.schemas.primitives import CircuitFormat
-
-    qc = efficient_su2(num_qubits, reps=reps)
-    bound = qc.assign_parameters([0.0] * qc.num_parameters)
-    bound.measure_all()
-    return CircuitSpec(num_qubits=num_qubits, format=CircuitFormat.QASM3, serialized=qasm3.dumps(bound))
 
 
 def _load_csv_cases() -> list[dict[str, str]]:
@@ -72,46 +62,44 @@ def estimate_minimal_open_plan_study() -> CircuitResourceEstimate:
     """The smallest real case in the CSV (H2/sto-3g/JW, 4 qubits) — "the
     minimal possible benchmark study" the Open Plan's free quota is sized
     for."""
-    spec = _ansatz_circuit_spec(4)
+    spec = circuit_spec("EfficientSU2", 4, reps=1)
     return estimate_circuit_resources(
         spec, backend_name=_BACKEND_NAME, shots=_ASSUMED_SHOTS_PER_CIRCUIT,
-        label="H2/sto-3g/JW (minimal case)",
+        label="H2/sto-3g/JW EfficientSU2 (minimal case)",
     )
 
 
 def estimate_full_csv_study() -> list[CircuitResourceEstimate]:
-    """One resource estimate per CSV row with a real N_Qubit value,
-    assuming `_ASSUMED_VQE_ITERATIONS` optimizer iterations each submit
-    one circuit (illustrative -- see module docstring).
+    """One resource estimate per CSV row, assuming
+    `_ASSUMED_VQE_ITERATIONS` optimizer iterations each submit one
+    circuit (illustrative -- see module docstring).
 
-    The CSV now has 1,218 rows (`JW`/`mol_map` plus a full `tn_qc_opt`/
-    `tn_qc_opt+mol_map` sweep) -- most differ only in `TN_Layers_Network`,
-    `Rotation_Type`, or whether `mol_map` was used, none of which change
-    the real *quantum-circuit* resource estimate (`TN_Layers_Network` runs
-    classically, not on the QPU -- see `data/README.md`). Real transpile
-    calls are cached per (num_qubits, ansatz reps) pair -- for `tn_qc_opt`
-    rows, reps = `TN_Layers_Circuit` (the one TN-VQE knob that actually
-    changes the real submitted circuit depth); for plain `JW`/`mol_map`
-    rows, reps = the illustrative `_ASSUMED_ANSATZ_REPS`.
+    Many rows differ only in `Measurement_Method`, `TN_Layers_Network` or
+    `Rotation_Type`, none of which change the real *quantum-circuit*
+    resource estimate (`TN_Layers_Network` runs classically, not on the
+    QPU -- see `data/README.md`). So transpile calls are cached per
+    (ansatz, qubits, reps, electrons) key, which collapses all 294 rows
+    onto a much smaller number of distinct circuits.
     """
-    cache: dict[tuple[int, int], CircuitResourceEstimate] = {}
+    cache: dict[tuple[str, int, int, int], CircuitResourceEstimate] = {}
     estimates = []
     for row in _load_csv_cases():
+        ansatz = row["Ansatz"]
         num_qubits = int(row["N_Qubit"])
-        is_tn_vqe = row["Mapper"].startswith("tn_qc_opt")
-        reps = int(row["TN_Layers_Circuit"]) if is_tn_vqe and row["TN_Layers_Circuit"] else _ASSUMED_ANSATZ_REPS
+        reps = int(row["Ansatz_Reps"])
+        num_electrons = int(row["Active_Electrons"])
 
-        key = (num_qubits, reps)
+        key = (ansatz, num_qubits, reps, num_electrons)
         if key not in cache:
-            spec = _ansatz_circuit_spec(num_qubits, reps=reps)
-            label = f"{num_qubits}q, {reps} ansatz reps"
+            spec = circuit_spec(ansatz, num_qubits, reps=reps, num_electrons=num_electrons)
+            label = f"{ansatz}, {num_qubits}q, {reps} reps"
             cache[key] = estimate_circuit_resources(
                 spec, backend_name=_BACKEND_NAME, shots=_ASSUMED_SHOTS_PER_CIRCUIT, label=label,
             )
         # _ASSUMED_VQE_ITERATIONS separate circuit submissions per CSV row,
         # each paying its own per-sub-job overhead -- not just one estimate x N.
         estimates.extend([cache[key]] * _ASSUMED_VQE_ITERATIONS)
-    print(f"  ({len(cache)} distinct (qubits, ansatz reps) pairs really transpiled; "
+    print(f"  ({len(cache)} distinct circuits really transpiled; "
           f"the rest reused from cache)")
     return estimates
 
@@ -126,8 +114,9 @@ def _print_plan_breakdown(total_seconds: float, rates: IBMPricingRates) -> None:
 
 def main() -> None:
     print(f"Assumptions: {_ASSUMED_SHOTS_PER_CIRCUIT} shots/circuit, "
-          f"EfficientSU2 reps={_ASSUMED_ANSATZ_REPS}, "
-          f"{_ASSUMED_VQE_ITERATIONS} VQE iterations/case (each = 1 circuit submission).\n")
+          f"{_ASSUMED_VQE_ITERATIONS} VQE iterations/case (each = 1 circuit "
+          f"submission).\nAnsatz is not assumed: each row's own Ansatz/"
+          f"Ansatz_Reps is built and transpiled.\n")
 
     print("=== Minimal possible benchmark study (H2/sto-3g/JW, 1 circuit) ===")
     minimal = estimate_minimal_open_plan_study()

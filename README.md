@@ -2,7 +2,7 @@
 
 [![Python ≥ 3.11](https://img.shields.io/badge/python-≥3.11-blue)](https://python.org)
 [![License: LGPL v3](https://img.shields.io/badge/License-LGPL_v3-green)](LICENSE)
-[![Schema v6.1.0](https://img.shields.io/badge/schema-v6.1.0-orange)](docs/schemas.md)
+[![Schema v6.2.0](https://img.shields.io/badge/schema-v6.2.0-orange)](docs/schemas.md)
 [![Docs](https://img.shields.io/badge/docs-qpubench.org-blue)](https://qpubench.org)
 
 **QPUBench is a framework for running quantum benchmarks and recording every

@@ -1,12 +1,13 @@
-"""Four kfp DAGs — one per `Mapper` category in data/IBM_VQE_Test_Benchmark.csv
-(see data/README.md's "Four Mapper categories" table):
+"""Four kfp DAGs — one per (`Mapper`, `Method`) pair in
+data/IBM_VQE_Test_Benchmark.csv (see data/README.md's "Mapper and method
+are separate columns" section):
 
-    cebule_molecular_vqe_pipeline  -- tn_qc_opt+mol_map
-    cebule_tn_vqe_pipeline         -- tn_qc_opt (JW-mapped Hamiltonian, no mol_map)
-    mol_map_measurement_pipeline   -- mol_map (no VQE ansatz)
-    jw_baseline_pipeline           -- JW (no Cebule call at all)
+    cebule_molecular_vqe_pipeline  -- mol_map, TN-VQE
+    cebule_tn_vqe_pipeline         -- JW, TN-VQE (no mol_map)
+    mol_map_measurement_pipeline   -- mol_map, VQE (Hartree-Fock reference)
+    jw_baseline_pipeline           -- JW, VQE (no Cebule call at all)
 
-Mapper is the *only* axis that gets its own pipeline/DAG here: it's the one
+That pair is the *only* axis that gets its own pipeline/DAG here: it's the one
 dimension in the benchmark matrix that changes which components run (a
 component change, per docs/integrations/kubeflow.md's Transform/Execution
 taxonomy). Every other benchmark dimension --
@@ -36,7 +37,7 @@ Dashboard's Pipelines UI, or submit programmatically:
             "symbols": ["H", "H"],
             "tn_layers_network_values": [0, 1, 2, 3],
             "tn_layers_circuit_values": [1, 2, 3, 4],
-            "measurement_methods": ["pauli", "qasm_gen_grouped"],
+            "measurement_methods": ["pauli", "grouped"],
         },
     )
 
@@ -94,8 +95,8 @@ def _with_cebule_credentials(task: Any) -> Any:
     name="cebule-molecular-vqe",
     description=(
         "MOL_MAP -> TN_QC_OPT -> QASM_GEN -> circuit execution, following the "
-        "Cebule SDK task chain documented in schemas/mirrors/mqsdk_cebule.py. Mapper "
-        "category `tn_qc_opt+mol_map` in data/IBM_VQE_Test_Benchmark.csv."
+        "Cebule SDK task chain documented in schemas/mirrors/mqsdk_cebule.py. "
+        "Mapper `mol_map` + Method `TN-VQE` in data/IBM_VQE_Test_Benchmark.csv."
     ),
 )
 def cebule_molecular_vqe_pipeline(
@@ -111,7 +112,7 @@ def cebule_molecular_vqe_pipeline(
     tn_layers_network_values: list[int] = [3],
     tn_layers_circuit_values: list[int] = [3],
     rotation_types: list[bool] = [True],  # three_para_tn: True="full", False="phase"
-    measurement_methods: list[str] = ["pauli"],  # "pauli" | "qasm_gen_grouped"
+    measurement_methods: list[str] = ["pauli"],  # "pauli" | "grouped"
     opt_method: str = "COBYLA",   # Cebule's own current default (docs.mqs.dk, checked 2026-07-09)
     optimization_mode: str = "both",   # Cebule's own current default (docs.mqs.dk, checked 2026-07-09)
     tn_backend: str = "lightning.qubit",
@@ -283,7 +284,7 @@ def mol_map_measurement_pipeline(
     geometry: list[float],
     symbols: list[str],
     basis: str = "sto3g",
-    measurement_methods: list[str] = ["qasm_gen_grouped"],
+    measurement_methods: list[str] = ["grouped"],
     shots_values: list[int] = [1024],
     optimization_levels: list[int] = [1],
 ) -> None:
@@ -344,7 +345,7 @@ def jw_baseline_pipeline(
     )
 
     with dsl.ParallelFor(items=measurement_methods) as measurement_method:
-        # Credentials only actually used by the qasm_gen_grouped branch
+        # Credentials only actually used by the grouped branch
         # (execute_static_hamiltonian_component calls Cebule QASM_GEN for
         # that branch only) — harmless no-op env vars for the pauli branch.
         _with_cebule_credentials(

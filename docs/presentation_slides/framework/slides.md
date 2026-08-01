@@ -835,16 +835,16 @@ Kubeflow can't reach a QPU directly; an Execution component does what `BackendAd
 ## Worked Example: Cebule Task Chain as Four `kfp` DAGs
 
 \footnotesize
-`integrations/kubeflow/`: one `@dsl.pipeline` per `Mapper` category in `data/IBM_VQE_Test_Benchmark.csv`, matching Cebule SDK's own documented task order:
+`integrations/kubeflow/`: one `@dsl.pipeline` per (`Mapper`, `Method`) pair in `data/IBM_VQE_Test_Benchmark.csv`, matching Cebule SDK's own documented task order:
 
 ```
-tn_qc_opt+mol_map:  mol_map ─▶ tn_qc_opt ─▶ qasm_gen ─▶ execute_circuits
-tn_qc_opt:          jw_map  ─▶ tn_qc_opt ─▶ qasm_gen ─▶ execute_circuits
-mol_map:            mol_map ─────────────────────────▶ execute_static_hamiltonian
-JW:                 jw_map  ─────────────────────────▶ execute_static_hamiltonian
+mol_map, TN-VQE:  mol_map ─▶ tn_qc_opt ─▶ qasm_gen ─▶ execute_circuits
+JW,      TN-VQE:  jw_map  ─▶ tn_qc_opt ─▶ qasm_gen ─▶ execute_circuits
+mol_map, VQE:     mol_map ─────────────────────────▶ execute_static_hamiltonian
+JW,      VQE:     jw_map  ─────────────────────────▶ execute_static_hamiltonian
 ```
 
-`mol_map`/`JW` carry no VQE ansatz; they measure the fixed Hartree-Fock reference state instead.
+`Mapper` names the fermion-to-qubit mapping only; TN_QC_OPT is the optimisation method wrapped around one, so it is a separate `Method` column. The two `VQE` pipelines measure the fixed Hartree-Fock reference state rather than an optimized one.
 
 Verified by actually compiling all four against `kfp==2.16.1`: surfaced a real gotcha: `from __future__ import annotations` breaks kfp's component introspection (needs live type objects, not PEP 563 strings). Every component body was also run directly (`.python_func`), including a real PySCF/OpenFermion `jw_map` call. Credentials injected via `kfp-kubernetes`'s `use_secret_as_env`, never as plain pipeline parameters.
 \normalsize

@@ -191,9 +191,55 @@ class CebuleTaskEnvelope(pydantic.BaseModel):
 # ---------------------------------------------------------------------------
 
 class MolMapInput(pydantic.BaseModel):
-    """Input for the Cebule MOL_MAP task."""
-    task_type: CebuleTaskType = CebuleTaskType.MOL_MAP
-    molecule:  MolecularGeometry
+    """Input for the Cebule MOL_MAP task.
+
+    Active-space fields added 2026-08-01, reported by the campaign owner
+    as newly supported by MOL_MAP; not yet cross-checked against the
+    public SDK source, so treat the exact field *names* as provisional
+    even though the capability is confirmed.  Field names here follow
+    this project's existing cross-vendor vocabulary
+    (``bestquark_gsopt.ActiveSpaceSpec``, ``BenchmarkRecord``), not a
+    known Cebule signature.
+
+    Leaving both counts None runs the full space, the previous and still
+    default behaviour.  Setting them freezes the core electrons and
+    restricts the correlated space, which is what makes larger molecules
+    and larger basis sets tractable: the constraint encoding's qubit
+    count is set by the active space, not the basis set, so
+    ``CAS(8,6)`` costs the same whether the underlying basis is sto-3g or
+    cc-pVTZ (see ``hamiltonian_sources.mol_map``).
+
+    active_electrons  correlated electrons; None runs all of them
+    active_orbitals   spatial orbitals in the active space; None uses all
+    frozen_core       freeze the core orbitals PySCF-style, as an
+                       alternative to naming the space explicitly
+    """
+    task_type:        CebuleTaskType      = CebuleTaskType.MOL_MAP
+    molecule:         MolecularGeometry
+    active_electrons: int | None          = None
+    active_orbitals:  int | None          = None
+    frozen_core:      bool                = False
+
+    @pydantic.model_validator(mode="after")
+    def _check_active_space(self) -> "MolMapInput":
+        electrons, orbitals = self.active_electrons, self.active_orbitals
+        if electrons is None and orbitals is None:
+            return self                      # full space, the default
+        if electrons is None or orbitals is None:
+            raise ValueError(
+                "active_electrons and active_orbitals must be set together "
+                "(or both left None to run the full space)"
+            )
+        if electrons <= 0 or orbitals <= 0:
+            raise ValueError(
+                f"active space must be positive, got CAS({electrons}, {orbitals})"
+            )
+        if electrons > 2 * orbitals:
+            raise ValueError(
+                f"CAS({electrons}, {orbitals}) needs more than the "
+                f"{2 * orbitals} spin orbitals {orbitals} spatial orbitals provide"
+            )
+        return self
 
 
 class MolMapResult(pydantic.BaseModel):

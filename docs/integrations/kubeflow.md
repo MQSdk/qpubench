@@ -105,12 +105,13 @@ checklist right below that section is the concrete work item list
 `schemas/observable.py`, plus which of the four pipelines' Execution
 components each one unblocks).
 
-## Mapper category = new DAG; sweep point = parameter inside one DAG
+## Mapper × method = new DAG; sweep point = parameter inside one DAG
 
 `data/IBM_VQE_Test_Benchmark.csv` (see `data/README.md`) is the concrete
-test of the component-boundary rule above: it has four `Mapper` categories
-(`JW`, `mol_map`, `tn_qc_opt`, `tn_qc_opt+mol_map`), each requiring a
-different set of components, so each gets its **own** `@dsl.pipeline` in
+test of the component-boundary rule above: it has two `Mapper` values
+(`JW`, `mol_map`) crossed with two `Method` values (`VQE`, `TN-VQE`), and
+each of the four pairs requires a different set of components, so each
+gets its **own** `@dsl.pipeline` in
 `integrations/kubeflow/pipelines.py`. Everything else in that CSV,
 `TN_Layers_Network`, `TN_Layers_Circuit`, `Rotation_Type`,
 `Measurement_Method`, `Shots`, `Qiskit_Opt_Level`, is a parameter value
@@ -129,11 +130,11 @@ pipeline:
   component/job" treatment TN_QC_OPT's own `n_iterations` optimizer loop
   already gets.
 
-Running the CSV's full 2,436-row matrix (or any `data/batches/` tranche)
-against real hardware means: pick the pipeline matching each row's
-`Mapper`, then group rows by every other column into one
-`create_run_from_pipeline_package(...)` call per Mapper with all the
-distinct sweep values as list-valued arguments, not one run per row.
+Running the CSV's full 294-row stage-1 matrix (or any `data/batches/`
+tranche) against real hardware means: pick the pipeline matching each
+row's (`Mapper`, `Method`) pair, then group rows by every other column
+into one `create_run_from_pipeline_package(...)` call per pair with all
+the distinct sweep values as list-valued arguments, not one run per row.
 
 ## Why not build a custom DAG driver over `TrainerClient` instead
 

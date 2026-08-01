@@ -11,20 +11,22 @@ Requires: pip install 'qpubench[qiskit]'
 Real, not guessed: per-row QPU-time uses the same real ALAP-scheduled
 transpilation + IBM usage formula as
 `backends.ibm_cost_estimator.estimate_circuit_resources`
-(`examples/guides/estimate_ibm_cost.py`), with the same illustrative
-assumptions clearly carried over (4096 shots/circuit, 30 VQE iterations/
-case, EfficientSU2 ansatz with reps = TN_Layers_Circuit for tn_qc_opt rows
-else 1) — see that script's docstring and `data/README.md` for why these
-remain assumptions, not confirmed values, pending the still-open
-`Shots`/`Qiskit_Opt_Level`/`n_iterations` questions.
+(`examples/guides/estimate_ibm_cost.py`), and builds the ansatz each row
+actually names at that row's `Ansatz_Reps` (`_ansatz_builders.py`) —
+EfficientSU2,
+RealAmplitudes, StronglyEntanglingLayers (Cebule TN_QC_OPT's circuit
+side) and a real Trotterized UCCSD all transpile to very different
+depths, so an earlier revision's "assume EfficientSU2 everywhere" was the
+single largest source of error in these estimates.
+
+Still assumptions, clearly carried over from `estimate_ibm_cost.py`:
+4,096 shots per circuit and 30 VQE iterations per case, both still-open
+campaign decisions — see that script's docstring and `data/README.md`.
 
 Rows are sorted ascending by estimated per-row QPU time before batching,
 so each tranche is the cheapest calculations available at that point —
 appropriate for "run a cheap smoke test first, then scale up" campaign
-structure. The ~435 rows with no known `N_Qubit` (mol_map-derived, not
-computable without a real Cebule MOL_MAP run) can't be cost-estimated at
-all and are written to a separate file rather than silently dropped or
-guessed into a batch.
+structure.
 
 Run:
     python examples/guides/split_benchmark_batches.py
@@ -36,17 +38,20 @@ import pathlib
 import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+
+from _ansatz_builders import circuit_spec
 
 from qpubench.backends.ibm_cost_estimator import estimate_circuit_resources
 from qpubench.schemas.mirrors.ibm_cost_estimator import CircuitResourceEstimate
 
-_CSV_PATH = pathlib.Path(__file__).resolve().parents[2] / "data" / "IBM_VQE_Test_Benchmark.csv"
-_OUT_DIR = pathlib.Path(__file__).resolve().parents[2] / "data" / "batches"
+_REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
+_CSV_PATH = _REPO_ROOT / "data" / "IBM_VQE_Test_Benchmark.csv"
+_OUT_DIR = _REPO_ROOT / "data" / "batches"
 _BACKEND_NAME = "ibm_brisbane"
 
 # --- Illustrative assumptions, matching estimate_ibm_cost.py exactly -----
 _ASSUMED_SHOTS_PER_CIRCUIT = 4096
-_ASSUMED_ANSATZ_REPS = 1
 _ASSUMED_VQE_ITERATIONS = 30
 
 # Each plan's OWN budget in seconds -- independent, not cumulative with
@@ -59,52 +64,46 @@ _PLAN_BUDGETS_S = [
 ]
 
 
-def _ansatz_circuit_spec(num_qubits: int, *, reps: int):
-    from qiskit import qasm3
-    from qiskit.circuit.library import efficient_su2
-
-    from qpubench.schemas.circuit import CircuitSpec
-    from qpubench.schemas.primitives import CircuitFormat
-
-    qc = efficient_su2(num_qubits, reps=reps)
-    bound = qc.assign_parameters([0.0] * qc.num_parameters)
-    bound.measure_all()
-    return CircuitSpec(num_qubits=num_qubits, format=CircuitFormat.QASM3, serialized=qasm3.dumps(bound))
-
-
 def _load_rows() -> list[dict[str, str]]:
     with _CSV_PATH.open() as f:
         return list(csv.DictReader(f))
 
 
-def _row_ansatz_reps(row: dict[str, str]) -> int:
-    if row["Mapper"].startswith("tn_qc_opt") and row["TN_Layers_Circuit"]:
-        return int(row["TN_Layers_Circuit"])
-    return _ASSUMED_ANSATZ_REPS
+def _row_active_electrons(row: dict[str, str]) -> int:
+    """Electrons the ansatz builder sees.
+
+    Only UCCSD reads this, and only on JW rows, where qubits are spin
+    orbitals and the count carries over directly.
+    """
+    return int(row["Active_Electrons"])
 
 
 def estimate_per_row_qpu_seconds(rows: list[dict[str, str]]) -> dict[int, float]:
     """Real per-row QPU-time estimate (at `_ASSUMED_VQE_ITERATIONS`
     iterations), keyed by `Case_ID`. Real transpile calls are cached per
-    (num_qubits, ansatz reps) pair -- most of the 783 estimable rows share
-    one of a much smaller number of distinct pairs.
+    (ansatz, qubits, reps, electrons) key -- the matrix has far more rows
+    than distinct circuits.
     """
-    cache: dict[tuple[int, int], CircuitResourceEstimate] = {}
+    cache: dict[tuple[str, int, int, int], CircuitResourceEstimate] = {}
     per_row: dict[int, float] = {}
     for row in rows:
-        if not row["N_Qubit"]:
+        if not row["N_Qubit"] or not row["Ansatz"]:
             continue
         num_qubits = int(row["N_Qubit"])
-        reps = _row_ansatz_reps(row)
-        key = (num_qubits, reps)
+        reps = int(row["Ansatz_Reps"])
+        ansatz = row["Ansatz"]
+        num_electrons = _row_active_electrons(row)
+        key = (ansatz, num_qubits, reps, num_electrons)
         if key not in cache:
-            spec = _ansatz_circuit_spec(num_qubits, reps=reps)
+            spec = circuit_spec(
+                ansatz, num_qubits, reps=reps, num_electrons=num_electrons
+            )
             cache[key] = estimate_circuit_resources(
                 spec, backend_name=_BACKEND_NAME, shots=_ASSUMED_SHOTS_PER_CIRCUIT,
-                label=f"{num_qubits}q, {reps} ansatz reps",
+                label=f"{ansatz}, {num_qubits}q, {reps} reps",
             )
         per_row[int(row["Case_ID"])] = cache[key].estimated_qpu_time_s * _ASSUMED_VQE_ITERATIONS
-    print(f"  ({len(cache)} distinct (qubits, ansatz reps) pairs really transpiled)")
+    print(f"  ({len(cache)} distinct circuits really transpiled)")
     return per_row
 
 
@@ -117,10 +116,10 @@ def split_into_batches(
     has one list per entry in `_PLAN_BUDGETS_S`, `overflow_rows` is
     anything left over after all three budgets are full (empty unless the
     total workload exceeds Open+Flex+Premium combined), and
-    `unestimable_rows` is every row with no known `N_Qubit`.
+    `unestimable_rows` is every row no circuit could be built for.
     """
-    unestimable = [r for r in rows if not r["N_Qubit"]]
-    estimable = [r for r in rows if r["N_Qubit"]]
+    estimable = [r for r in rows if int(r["Case_ID"]) in per_row_seconds]
+    unestimable = [r for r in rows if int(r["Case_ID"]) not in per_row_seconds]
     estimable.sort(key=lambda r: per_row_seconds[int(r["Case_ID"])])
 
     batches: list[list[dict[str, str]]] = [[] for _ in _PLAN_BUDGETS_S]
@@ -186,10 +185,12 @@ def main() -> None:
     else:
         print("  No overflow -- every estimable row fits within Open+Flex+Premium.")
 
-    out_path = _OUT_DIR / "batch0_unestimable_needs_mol_map_run.csv"
-    _write_csv(out_path, unestimable, per_row_seconds)
-    print(f"  {out_path.name}: {len(unestimable)} rows -- N_Qubit unknown, "
-          f"not batchable until a real Cebule MOL_MAP run fills it in")
+    if unestimable:
+        out_path = _OUT_DIR / "batch0_unestimable.csv"
+        _write_csv(out_path, unestimable, per_row_seconds)
+        print(f"  {out_path.name}: {len(unestimable)} rows -- no circuit could be built")
+    else:
+        print("  No unestimable rows -- every row has a qubit count and a named ansatz.")
 
 
 if __name__ == "__main__":

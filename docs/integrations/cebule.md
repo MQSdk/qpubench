@@ -101,6 +101,29 @@ result = MolMapResult(
 )
 ```
 
+### Restricting the active space
+
+MOL_MAP accepts an active space (reported 2026-08-01; the capability is
+confirmed, the exact SDK field names are not, so treat
+`MolMapInput`'s names as this project's vocabulary rather than a mirrored
+signature). Leaving them unset runs the full space, the previous default:
+
+```python
+inp = MolMapInput(
+    molecule=MolecularGeometry(geometry=[…], symbols=["O", "H", "H"], basis="cc-pvtz"),
+    active_electrons=8,      # H2O valence CAS(8,6)
+    active_orbitals=6,
+    frozen_core=True,        # freeze the O 1s
+)
+```
+
+This is what makes larger molecules and larger basis sets tractable. The
+constraint encoding's qubit count is set by the active space, not the
+basis set, so `CAS(8,6)` needs 8 qubits whether the underlying basis is
+sto-3g or cc-pVTZ. `hamiltonian_sources.mol_map.count_qubits()` computes
+that count offline; see [`data/README.md`](../../data/README.md) for the
+formula and the real runs it reproduces.
+
 ---
 
 ## QASM_GEN *(unconfirmed against current SDK source; fully documented on docs.mqs.dk)*

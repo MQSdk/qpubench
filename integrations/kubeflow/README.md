@@ -13,20 +13,20 @@ and for the narrower cases (multi-node distributed simulation, Katib
 hyperparameter search) where it's worth reaching for inside a component
 body.
 
-## Four pipelines, one per `Mapper` category
+## Four pipelines, one per (`Mapper`, `Method`) pair
 
 [`data/IBM_VQE_Test_Benchmark.csv`](../../data/IBM_VQE_Test_Benchmark.csv)
-(see [`data/README.md`](../../data/README.md)) has four `Mapper`
-categories, and each gets its own `@dsl.pipeline` — `Mapper` is the one
-axis that changes which components exist (a component change), so it's the
-one thing that gets its own DAG:
+(see [`data/README.md`](../../data/README.md)) crosses two `Mapper`
+values with two `Method` values, and each of the four pairs gets its own
+`@dsl.pipeline` — that pair is the one axis that changes which components
+exist (a component change), so it's the one thing that gets its own DAG:
 
-| Pipeline | Mapper category | Components |
-|---|---|---|
-| `cebule_molecular_vqe_pipeline` | `tn_qc_opt+mol_map` | `mol_map_component -> tn_qc_opt_component -> qasm_gen_component -> execute_circuits_component` |
-| `cebule_tn_vqe_pipeline` | `tn_qc_opt` | `jw_map_component -> tn_qc_opt_component -> qasm_gen_component -> execute_circuits_component` |
-| `mol_map_measurement_pipeline` | `mol_map` | `mol_map_component -> execute_static_hamiltonian_component` |
-| `jw_baseline_pipeline` | `JW` | `jw_map_component -> execute_static_hamiltonian_component` |
+| Pipeline | Mapper | Method | Components |
+|---|---|---|---|
+| `cebule_molecular_vqe_pipeline` | `mol_map` | `TN-VQE` | `mol_map_component -> tn_qc_opt_component -> qasm_gen_component -> execute_circuits_component` |
+| `cebule_tn_vqe_pipeline` | `JW` | `TN-VQE` | `jw_map_component -> tn_qc_opt_component -> qasm_gen_component -> execute_circuits_component` |
+| `mol_map_measurement_pipeline` | `mol_map` | `VQE` | `mol_map_component -> execute_static_hamiltonian_component` |
+| `jw_baseline_pipeline` | `JW` | `VQE` | `jw_map_component -> execute_static_hamiltonian_component` |
 
 Every other benchmark dimension — `TN_Layers_Network`, `TN_Layers_Circuit`,
 `Rotation_Type`, `Measurement_Method`, `Shots`, `Qiskit_Opt_Level` — is a
@@ -38,16 +38,19 @@ points it fans out to, is one graph in the dashboard — not one DAG per CSV
 row. See `components.py`'s and `pipelines.py`'s module docstrings for the
 full reasoning.
 
-`mol_map`/`JW` (no VQE ansatz — `Ansatz` is blank for both in
-`data/README.md`) measure the fixed Hartree-Fock reference state instead of
-an optimized state; see `execute_static_hamiltonian_component`'s docstring.
+The two `VQE` pipelines measure the fixed Hartree-Fock reference state
+rather than an optimized one; see `execute_static_hamiltonian_component`'s
+docstring. That is a limitation of these components, not of the matrix:
+`data/IBM_VQE_Test_Benchmark.csv` names a real `Ansatz` and `Ansatz_Reps`
+on every row, including the `VQE` ones, and nothing here consumes them
+yet.
 
 ## Files
 
 | File | Purpose |
 |------|---------|
 | `components.py` | `@dsl.component` functions — the DAG nodes, shared across the four pipelines where the same step applies |
-| `pipelines.py` | The four `@dsl.pipeline` functions wiring components together, one per Mapper category |
+| `pipelines.py` | The four `@dsl.pipeline` functions wiring components together, one per (`Mapper`, `Method`) pair |
 
 ## Component kinds
 
@@ -57,8 +60,8 @@ an optimized state; see `execute_static_hamiltonian_component`'s docstring.
 | `mol_map_component` | Transform | Cebule cloud API (MOL_MAP) |
 | `tn_qc_opt_component` | Transform (one job, whole optimizer loop inside) | Cebule cloud API (TN_QC_OPT) |
 | `qasm_gen_component` | Transform | Cebule cloud API (QASM_GEN) |
-| `execute_circuits_component` | Execution | qpubench `BenchmarkRunner` against a registered `BackendAdapter` (stub by default) — `tn_qc_opt`/`tn_qc_opt+mol_map` pipelines |
-| `execute_static_hamiltonian_component` | Execution | qpubench `BenchmarkRunner`, plus Cebule QASM_GEN for the `qasm_gen_grouped` branch only — `mol_map`/`JW` pipelines |
+| `execute_circuits_component` | Execution | qpubench `BenchmarkRunner` against a registered `BackendAdapter` (stub by default) — the two `TN-VQE` pipelines |
+| `execute_static_hamiltonian_component` | Execution | qpubench `BenchmarkRunner`, plus Cebule QASM_GEN for the `grouped` branch only — the two `VQE` pipelines |
 
 ## Setup
 
@@ -119,7 +122,7 @@ client.create_run_from_pipeline_package(
         "tn_layers_network_values": [0, 1, 2, 3],
         "tn_layers_circuit_values": [1, 2, 3, 4],
         "rotation_types": [True, False],
-        "measurement_methods": ["pauli", "qasm_gen_grouped"],
+        "measurement_methods": ["pauli", "grouped"],
         "shots_values": [1024],
         "optimization_levels": [1],
     },
@@ -134,13 +137,13 @@ Verified against `kfp==2.16.1` by actually compiling all four pipelines,
 not just reading them (nested 4-deep `dsl.ParallelFor` included) — see the
 note below on `from __future__ import annotations`, which surfaced from
 that test. The pure-Python logic inside each component body (JSON
-artifact reads, the pauli/Estimator vs qasm_gen_grouped/Sampler branch,
+artifact reads, the pauli/Estimator vs grouped/Sampler branch,
 `jw_map_component`'s real PySCF/OpenFermion call, `BenchmarkRunner.sweep()`
 against `StubGateAdapter`) was also run directly (outside a container,
 calling each `@dsl.component`'s `.python_func`) — real, not just
 compile-checked. Only the actual Cebule `create_task` calls
 (`mol_map_component`, `tn_qc_opt_component`, `qasm_gen_component`, and
-`execute_static_hamiltonian_component`'s `qasm_gen_grouped` branch) are
+`execute_static_hamiltonian_component`'s `grouped` branch) are
 untested here, same as before this change — they need real Cebule
 credentials this environment doesn't have.
 
@@ -156,9 +159,9 @@ them, so every (hamiltonian_kind, measurement_method) combination runs:
 
 | Component | Conversion used |
 |---|---|
-| `qasm_gen_component` (`tn_qc_opt`/`tn_qc_opt+mol_map` pipelines) | TN_QC_OPT sparse terms -> `to_dense_matrix()` -> `QASMGenInput.operator` |
+| `qasm_gen_component` (the two `TN-VQE` pipelines) | TN_QC_OPT sparse terms -> `to_dense_matrix()` -> `QASMGenInput.operator` |
 | `execute_static_hamiltonian_component(hamiltonian_kind="dense", measurement_method="pauli")` | `mol_map` dense matrix -> `from_dense_matrix()` -> Estimator observable |
-| `execute_static_hamiltonian_component(hamiltonian_kind="sparse", measurement_method="qasm_gen_grouped")` | JW sparse terms -> `to_dense_matrix()` -> `QASMGenInput.operator` |
+| `execute_static_hamiltonian_component(hamiltonian_kind="sparse", measurement_method="grouped")` | JW sparse terms -> `to_dense_matrix()` -> `QASMGenInput.operator` |
 
 Both conversions are exponential by nature (the dense side is already a
 `2**n x 2**n` matrix), matched to this benchmark's small `mol_map`/JW qubit

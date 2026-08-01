@@ -18,8 +18,8 @@ tn_qc_opt_component — it is one job, never exploded into one DAG node per
 iteration. Likewise, the Shots x Qiskit_Opt_Level execution-option sweep
 (see data/README.md) runs entirely inside the Execution components via
 BenchmarkRunner.sweep() — it is one job, not one DAG node per (shots,
-opt_level) pair. Only the `Mapper` axis (JW / mol_map / tn_qc_opt /
-tn_qc_opt+mol_map — see data/README.md) changes which components exist;
+opt_level) pair. Only the (`Mapper`, `Method`) pair (JW or mol_map, x
+VQE or TN-VQE — see data/README.md) changes which components exist;
 everything else in the benchmark matrix (TN_Layers_Network,
 TN_Layers_Circuit, Rotation_Type, Measurement_Method, Shots,
 Qiskit_Opt_Level) is a parameter value swept via dsl.ParallelFor /
@@ -181,8 +181,8 @@ def tn_qc_opt_component(
 
     mapper_result is whichever upstream mapping produced the Hamiltonian
     this call optimizes (mol_map_component's MolMapResult for the
-    `tn_qc_opt+mol_map` Mapper category, or jw_map_component's JSON for the
-    plain `tn_qc_opt` category) — read here only for DAG lineage/caching,
+    mol_map TN-VQE pipeline, or jw_map_component's JSON for the JW one)
+    — read here only for DAG lineage/caching,
     not parsed into a specific schema, since h_coeff_values/h_operators
     are supplied directly by the caller either way (qpubench does not ship
     a dense-matrix -> Pauli-term decomposition utility, so neither
@@ -241,7 +241,7 @@ def qasm_gen_component(
     measurement_method) combination from the enclosing dsl.ParallelFor in
     pipelines.py, regardless of which measurement_method that combination
     uses — execute_circuits_component decides whether to consume this
-    result's `circuit_files` (Measurement_Method=qasm_gen_grouped) or just
+    result's `circuit_files` (Measurement_Method=grouped) or just
     its `state_circuit` (Measurement_Method=pauli, Estimator path against
     tn_qc_opt_result's own sparse Pauli terms directly). That split is a
     plain Python branch inside one Execution component, not a DAG
@@ -293,9 +293,9 @@ def execute_circuits_component(
     """Execution-kind component: runs the TN_QC_OPT-converged circuit(s)
     through a registered qpubench BackendAdapter via BenchmarkRunner.
 
-    measurement_method ("pauli" | "qasm_gen_grouped") picks which of
+    measurement_method ("pauli" | "grouped") picks which of
     qasm_gen_result's outputs to execute:
-      - "qasm_gen_grouped": qasm_gen_result.circuit_files, one CircuitSpec
+      - "grouped": qasm_gen_result.circuit_files, one CircuitSpec
         per Pauli grouping (Sampler path — counts, no .observables).
       - "pauli": a single CircuitSpec built from qasm_gen_result's
         state_circuit with tn_qc_opt_result's own sparse Pauli terms
@@ -331,7 +331,7 @@ def execute_circuits_component(
     with open(tn_qc_opt_result.path) as f:
         tn_qc_opt = TNQCOptResult.model_validate_json(f.read())
 
-    if measurement_method == "qasm_gen_grouped":
+    if measurement_method == "grouped":
         circuits = qasm_gen.to_circuit_specs(num_qubits=num_qubits)
     else:
         observable = tn_qc_opt.to_sparse_pauli_observable(num_qubits=num_qubits)
@@ -371,12 +371,13 @@ def execute_static_hamiltonian_component(
     password_env: str,
     records: Output[Dataset],
 ) -> None:
-    """Execution-kind component for the two Mapper categories that carry no
-    VQE ansatz at all — plain `JW` and `mol_map`-only (see data/README.md,
-    where `Ansatz` is blank for both). There is no optimized state to
-    measure, so the "circuit" here is a fixed Hartree-Fock reference-state
-    preparation (X gates on the occupied qubits of mapper_result's own
-    `hf_state`) — not a fabricated ansatz, the standard HF baseline.
+    """Execution-kind component for the two `VQE` pipelines, plain `JW`
+    and `mol_map` (see data/README.md). This component does not build the
+    ansatz those rows name: the "circuit" here is a fixed Hartree-Fock
+    reference-state preparation (X gates on the occupied qubits of
+    mapper_result's own `hf_state`) — the standard HF baseline, not a
+    fabricated ansatz, and not an optimized state. Consuming each row's
+    real `Ansatz`/`Ansatz_Reps` is left open.
 
     hamiltonian_kind says which representation mapper_result carries:
       - "dense": mol_map_component's MolMapResult.mapped_hamiltonian — a
@@ -387,12 +388,12 @@ def execute_static_hamiltonian_component(
 
     measurement_method picks the execution path; all four
     (hamiltonian_kind, measurement_method) combinations run:
-      - dense  + qasm_gen_grouped -> QASM_GEN called directly with the
+      - dense  + grouped -> QASM_GEN called directly with the
         dense operator, no conversion needed.
       - sparse + pauli            -> Estimator path, no conversion needed.
       - dense  + pauli            -> SparsePauliObservable.from_dense_matrix()
         (Pauli decomposition, coeff_P = Tr(P@H)/2**n) feeds the Estimator.
-      - sparse + qasm_gen_grouped -> SparsePauliObservable.to_dense_matrix()
+      - sparse + grouped -> SparsePauliObservable.to_dense_matrix()
         (Pauli tensor expansion) feeds QASM_GEN's dense operator.
     Both conversions are exponential by nature — matched to this
     benchmark's small mol_map/JW qubit counts and size-guarded inside the
@@ -429,7 +430,7 @@ def execute_static_hamiltonian_component(
                 observables=[observable],
             )
         ]
-    else:  # "qasm_gen_grouped"
+    else:  # "grouped"
         if hamiltonian_kind == "dense":
             dense_operator = mapper_data["mapped_hamiltonian"]
         else:  # "sparse" — JW's Pauli terms, tensor-expanded
