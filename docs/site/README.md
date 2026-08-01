@@ -15,7 +15,8 @@ docs/site/
 │   ├── mark.svg          site mark / favicon
 │   ├── mqs-mark.png      MQS mark for the footer credit
 │   ├── fonts/*.woff2     IBM Plex Sans + Mono (OFL-1.1, licence alongside)
-│   └── logos/*.svg       one tile per package (generated)
+│   ├── logos/*.svg       one tile per package (generated)
+│   └── partners/         maintainer and supporter marks (real artwork, hand-placed)
 └── tools/make_logos.py   regenerates assets/logos/ and the grid in index.html
 ```
 
@@ -239,8 +240,9 @@ build if the committed output is stale.
 The tiles are **generated placeholder wordmarks, not vendor artwork**: the
 package name spelled out in full, set in one consistent style. This is
 deliberate: the grid reads as one system rather than forty mismatched raster
-logos, the site ships no third-party trademarks, and nothing is hotlinked from
-another host.
+logos, the package grid carries no third-party trademarks, and nothing is
+hotlinked from another host. The supporter band below the hero is the one place
+that does show real marks; see [Maintainer and supporters](#maintainer-and-supporters).
 
 Each tile is a **single-ink silhouette** that the page renders as a CSS mask
 (`.logo-mark`) tinted with the current text colour, so tiles follow the day/night
@@ -272,3 +274,33 @@ theme and greyscaled in the dark one, the way mqs.dk treats partner logos.
 Tiles are laid out for a 232 × 64 viewport; artwork of a different aspect ratio
 still works (the CSS scales to width) but will look inconsistent beside the
 generated ones. Check each project's trademark policy before using its mark.
+
+## Maintainer and supporters
+
+<a name="maintainer-and-supporters"></a>
+
+The band between the hero and *Three framework layers* names MQS as maintainer
+and credits the organisations supporting QPUBench. Unlike the package grid it is
+written by hand in `index.html` — `make_logos.py` neither generates nor checks
+it — and it is the only part of the site carrying real third-party marks, each
+vendored into `assets/partners/` rather than hotlinked.
+
+Every file is **flattened to one ink on transparency**: each brand colour is
+rewritten to black and white is kept as white, so interior knockouts (the
+Fraunhofer rays, the detail inside the KU seal) survive. That is what lets a
+single `filter: invert(1)` carry the whole row into the dark theme with the
+knockouts flipping correctly — the same treatment the footer gives the MQS mark.
+It also matches how mqs.dk shows partner logos, which are greyscaled rather than
+reproduced in full colour.
+
+Two things to keep in mind when adding one:
+
+- Give the SVG explicit `width`/`height` attributes, not just a `viewBox`. With
+  `width: auto`, an `<img>` whose SVG has no intrinsic size collapses to nothing
+  in Chrome, and the logo silently fails to appear.
+- `.supporter-art` bounds both axes (`max-height` and `max-width`) instead of
+  fixing a height, because these marks range from roughly 3:1 to 12:1. Fixing a
+  height alone would let a wide wordmark tower over a squarer one.
+
+These are other organisations' trademarks, shown to credit them. Confirm the
+organisation is happy to be listed, and follow its logo guidelines.

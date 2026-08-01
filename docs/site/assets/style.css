@@ -597,6 +597,53 @@ section.wrap + section.wrap { border-top: 1px solid var(--rule-soft); }
   :root:not([data-theme]) .logo-art { filter: brightness(0%); }
 }
 
+/* ---------- maintainer & supporters ---------- */
+
+/* A short band under the hero, so it stays lighter than a full section. */
+.supporters {
+  padding-block: 40px;
+  display: grid; grid-template-columns: auto 1fr; gap: 24px 48px; align-items: start;
+}
+/* The maintainer keeps its own column, divided from the supporters beside it. */
+.supporters .supporter-group + .supporter-group {
+  border-left: 1px solid var(--rule-soft); padding-left: 48px;
+}
+@media (max-width: 860px) {
+  .supporters { grid-template-columns: 1fr; }
+  .supporters .supporter-group + .supporter-group {
+    border-left: 0; padding-left: 0;
+    border-top: 1px solid var(--rule-soft); padding-top: 24px;
+  }
+}
+
+.supporter-label {
+  font-family: var(--mono); font-size: 0.78rem; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.1em;
+  color: var(--overline); margin: 0 0 14px;
+}
+.supporter-row {
+  list-style: none; padding: 0; margin: 0;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 16px 36px;
+}
+.supporter-link { display: block; }
+
+/* These are real marks, so they are never tinted or recoloured. Each file is
+ * vendored flattened to one ink on transparency, which lets a single invert
+ * carry them into dark mode with their internal knockouts intact — the same
+ * treatment the footer gives the MQS mark. Boxing by both axes rather than
+ * setting a height keeps a very wide wordmark (Commutator Studios is 12:1)
+ * from towering over a squarer one. */
+.supporter-art {
+  display: block; width: auto; height: auto;
+  max-height: 42px; max-width: 200px;
+  opacity: 0.78; transition: opacity .14s ease;
+}
+.supporter-link:hover .supporter-art { opacity: 1; }
+:root[data-theme="dark"] .supporter-art { filter: invert(1); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) .supporter-art { filter: invert(1); }
+}
+
 .logo-note {
   display: block; margin-top: 8px;
   font-size: 0.8rem; color: var(--fg-muted); line-height: 1.45;
