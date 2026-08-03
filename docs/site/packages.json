@@ -204,7 +204,8 @@
       "packages": [
         {
           "name": "MQS PhotoQ",
-          "url": "https://gitlab.com/mqsdk",
+          "url": "https://gitlab.com/mqsdk/python-sdk",
+          "upstream": "mqsdk/python-sdk",
           "doc": "integrations/photonic.html",
           "note": "LOQC · FBQC · GBS · pseudo-PNRD"
         },
@@ -240,6 +241,7 @@
         {
           "name": "DTU QCloud",
           "url": "https://qcloud.dtu.dk",
+          "link_label": "Link",
           "doc": "integrations/gbs.html#dtu-qcloud-rest-api-v1",
           "note": "photonic cloud access"
         },
@@ -274,12 +276,14 @@
         {
           "name": "QESEM",
           "url": "https://docs.qedma.io/",
+          "link_label": "Link",
           "doc": "integrations/qesem.html",
           "note": "QET noise-scaled mitigation"
         },
         {
           "name": "Fire Opal",
           "url": "https://q-ctrl.com/fire-opal",
+          "link_label": "Link",
           "doc": "backends.html#vendor-coverage-which-are-executable-which-are-schema-only",
           "note": "noise-robust compilation"
         },

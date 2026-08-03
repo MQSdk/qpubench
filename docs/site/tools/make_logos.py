@@ -156,7 +156,13 @@ def render_grid(groups: list[dict]) -> str:
             # against, as maintainer/package. Vendors that ship no public
             # source repository leave it out and get the bare label.
             repo = html.escape(pkg.get("upstream", ""))
-            up_label = f"Upstream: {repo} ↗" if repo else "Upstream ↗"
+            # A vendor that offers a service rather than a repository can name
+            # its own strip label — "Link" for a plain destination, say.
+            override = html.escape(pkg.get("link_label", ""))
+            if override:
+                up_label = f"{override} ↗"
+            else:
+                up_label = f"Upstream: {repo} ↗" if repo else "Upstream ↗"
             # A project whose schema was read off a publication rather than off
             # source gets a second line in the same strip.
             paper = pkg.get("paper")
@@ -172,8 +178,9 @@ def render_grid(groups: list[dict]) -> str:
                 url = f"url(assets/logos/{file})"
                 mark = (f'<span class="logo-mark" role="img" aria-label="{name}"'
                         f' style="-webkit-mask-image:{url};mask-image:{url}"></span>')
+            up_title = f"{name} website" if override else f"{name} upstream project"
             strip = (f'<a class="logo-up" href="{pkg["url"]}" rel="noopener"'
-                     f' title="{name} upstream project">{up_label}</a>')
+                     f' title="{up_title}">{up_label}</a>')
             if paper:
                 cite = html.escape(paper["label"])
                 strip += (f'<a class="logo-up" href="{paper["url"]}" rel="noopener"'
