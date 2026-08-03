@@ -282,7 +282,7 @@
         },
         {
           "name": "Fire Opal",
-          "url": "https://q-ctrl.com/fire-opal",
+          "url": "https://docs.q-ctrl.com/fire-opal",
           "link_label": "Link",
           "doc": "backends.html#vendor-coverage-which-are-executable-which-are-schema-only",
           "note": "noise-robust compilation"
