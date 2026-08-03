@@ -1,5 +1,5 @@
 {
-  "_comment": "Inventory behind the front-page logo grid. Edit this file, then run tools/make_logos.py to regenerate assets/logos/*.svg and the grid markup inside index.html. 'slug' overrides the filename derived from 'name'; 'file' points at hand-supplied artwork the generator leaves alone.",
+  "_comment": "Inventory behind the front-page logo grid. Edit this file, then run tools/make_logos.py to regenerate assets/logos/*.svg and the grid markup inside index.html. 'slug' overrides the filename derived from 'name'; 'file' points at hand-supplied artwork the generator leaves alone. 'upstream' is the maintainer/package the tile integrates against, omitted for vendors with no public source repository; 'paper' ({label, url}) adds a second strip line for a project whose schema was built from a publication rather than from source.",
   "groups": [
     {
       "id": "backends",
@@ -22,8 +22,8 @@
         },
         {
           "name": "Qrack",
-          "url": "https://github.com/vm6502q/pyqrack",
-          "upstream": "vm6502q/pyqrack",
+          "url": "https://github.com/unitaryfoundation/pyqrack",
+          "upstream": "unitaryfoundation/pyqrack",
           "doc": "backends.html#real-adapters-sdk-required",
           "note": "GPU / OpenCL simulator"
         },
@@ -35,28 +35,28 @@
           "note": "OpenMP × GPU × MPI simulator"
         },
         {
-          "name": "IBM Quantum",
+          "name": "Qiskit Runtime",
           "url": "https://github.com/Qiskit/qiskit-ibm-runtime",
           "upstream": "Qiskit/qiskit-ibm-runtime",
           "doc": "backends.html#real-adapters-sdk-required",
           "note": "Qiskit Runtime V2, superconducting"
         },
         {
-          "name": "AWS Braket",
+          "name": "Braket",
           "url": "https://github.com/amazon-braket/qiskit-braket-provider",
           "upstream": "amazon-braket/qiskit-braket-provider",
           "doc": "backends.html#real-adapters-sdk-required",
           "note": "multi-vendor cloud QPUs"
         },
         {
-          "name": "IQM",
+          "name": "IQM SDK",
           "url": "https://github.com/iqm-finland/sdk",
           "upstream": "iqm-finland/sdk",
           "doc": "backends.html#real-adapters-sdk-required",
           "note": "superconducting, sampler-only"
         },
         {
-          "name": "Quantinuum",
+          "name": "Pytket",
           "url": "https://github.com/Quantinuum/pytket-quantinuum",
           "upstream": "Quantinuum/pytket-quantinuum",
           "doc": "backends.html#real-adapters-sdk-required",
@@ -105,9 +105,9 @@
           "note": "mean-field · DFT · solvation · PBC"
         },
         {
-          "name": "Microsoft QDK",
-          "url": "https://github.com/microsoft/qsharp",
-          "upstream": "microsoft/qsharp",
+          "name": "MS QDK",
+          "url": "https://github.com/microsoft/qdk",
+          "upstream": "microsoft/qdk",
           "doc": "integrations/qdk_chemistry.html",
           "note": "SCF → MACIS → QPE → resources"
         },
@@ -126,7 +126,7 @@
           "note": "VQE · TN · DMRG · AFQMC lanes"
         },
         {
-          "name": "QSE",
+          "name": "MQS QSE",
           "url": "https://github.com/MQSdk/qse",
           "upstream": "MQSdk/qse",
           "doc": "integrations/qse.html",
@@ -189,7 +189,7 @@
           "note": "basis-set provenance catalogue"
         },
         {
-          "name": "Classiq",
+          "name": "Classiq Library",
           "url": "https://github.com/Classiq/classiq-library",
           "upstream": "Classiq/classiq-library",
           "doc": "integrations/classiq.html",
@@ -203,7 +203,7 @@
       "blurb": "Beyond gate-based superconducting qubits. <code>ComputingModel</code> and <code>QubitModality</code> are independent axes on every record, so these runs share one store with everything above.",
       "packages": [
         {
-          "name": "PhotoQ",
+          "name": "MQS PhotoQ",
           "url": "https://gitlab.com/mqsdk",
           "doc": "integrations/photonic.html",
           "note": "LOQC · FBQC · GBS · pseudo-PNRD"
@@ -216,20 +216,24 @@
           "note": "analog Hamiltonian simulation"
         },
         {
-          "name": "QuEra Aquila",
-          "url": "https://www.quera.com/aquila",
-          "doc": "integrations/neutral_atom.html#hardware-specification",
-          "note": "256-atom Rydberg array"
-        },
-        {
           "name": "ORCA Computing",
-          "url": "https://orcacomputing.com/",
+          "url": "https://github.com/orcacomputing/quantumqubo",
+          "upstream": "orcacomputing/quantumqubo",
+          "paper": {
+            "label": "arXiv:2605.30935",
+            "url": "https://arxiv.org/abs/2605.30935"
+          },
           "doc": "integrations/gbs.html#orca-pt-series-time-bin-interferometer",
           "note": "PT Series time-bin photonics"
         },
         {
           "name": "Xanadu Aurora",
-          "url": "https://www.xanadu.ai/",
+          "url": "https://github.com/XanaduAI/xanadu-aurora-data",
+          "upstream": "XanaduAI/xanadu-aurora-data",
+          "paper": {
+            "label": "Nature 638, 912 (2025)",
+            "url": "https://doi.org/10.1038/s41586-024-08406-9"
+          },
           "doc": "integrations/gbs.html#xanadu-aurora-dataset",
           "note": "Gaussian boson sampling"
         },
@@ -240,12 +244,6 @@
           "note": "photonic cloud access"
         },
         {
-          "name": "Quantum Motion",
-          "url": "https://quantummotion.tech/",
-          "doc": "schemas.html#project-mirrors-org_or_maintainer_package",
-          "note": "silicon CMOS spin qubits"
-        },
-        {
           "name": "Cebule SDK",
           "url": "https://gitlab.com/mqsdk/python-sdk",
           "upstream": "mqsdk/python-sdk",
@@ -253,9 +251,9 @@
           "note": "chemistry tasks → QASM 3.0"
         },
         {
-          "name": "Xenakis",
-          "url": "https://github.com/mqsdk/xenakis",
-          "upstream": "mqsdk/xenakis",
+          "name": "MQS Xenakis",
+          "url": "https://github.com/MQSdk/Xenakis",
+          "upstream": "MQSdk/Xenakis",
           "doc": "integrations/xenakis.html",
           "note": "genetic-algorithm ansatz search"
         }
@@ -267,42 +265,30 @@
       "blurb": "The layers around execution: making a noisy run usable, making a large circuit fit, and running the whole campaign as scheduled compute.",
       "packages": [
         {
-          "name": "Unitary Fund Mitiq",
-          "url": "https://github.com/unitaryfund/mitiq",
-          "upstream": "unitaryfund/mitiq",
+          "name": "Mitiq",
+          "url": "https://github.com/unitaryfoundation/mitiq",
+          "upstream": "unitaryfoundation/mitiq",
           "doc": "backends.html#vendor-coverage-which-are-executable-which-are-schema-only",
           "note": "ZNE · PEC · CDR · REM · DDD"
         },
         {
-          "name": "QEDMA QESEM",
+          "name": "QESEM",
           "url": "https://docs.qedma.io/",
           "doc": "integrations/qesem.html",
           "note": "QET noise-scaled mitigation"
         },
         {
-          "name": "Q-CTRL Fire Opal",
+          "name": "Fire Opal",
           "url": "https://q-ctrl.com/fire-opal",
           "doc": "backends.html#vendor-coverage-which-are-executable-which-are-schema-only",
           "note": "noise-robust compilation"
         },
         {
-          "name": "Haiqu Rivet",
+          "name": "Rivet",
           "url": "https://github.com/haiqu-ai/rivet",
           "upstream": "haiqu-ai/rivet",
           "doc": "backends.html#vendor-coverage-which-are-executable-which-are-schema-only",
           "note": "hardware-aware transpilation"
-        },
-        {
-          "name": "ParityQC",
-          "url": "https://parityqc.com/",
-          "doc": "backends.html#vendor-coverage-which-are-executable-which-are-schema-only",
-          "note": "parity encoding for optimisation"
-        },
-        {
-          "name": "QMatter",
-          "url": "https://qmatter.io/",
-          "doc": "backends.html#vendor-coverage-which-are-executable-which-are-schema-only",
-          "note": "quantum problem compression"
         },
         {
           "name": "Fragme∩t",
@@ -313,7 +299,7 @@
           "slug": "fragment"
         },
         {
-          "name": "quantum-fragment-methods",
+          "name": "Quantum Fragment Methods",
           "url": "https://github.com/qiskit-community/quantum-fragment-methods",
           "upstream": "qiskit-community/quantum-fragment-methods",
           "doc": "integrations/fragmentation.html#quantum-fragment-methods-qiskitcommunity_fragment_methods",

@@ -211,14 +211,25 @@ workflow build it).
 | `doc` | yes | QPUBench documentation page, as a published path (`.html`) |
 | `note` | yes | One-line caption under the tile |
 | `upstream` | no | `maintainer/package` of the repository QPUBench integrates against, shown as "Upstream: `maintainer/package`". Omit it for vendors that publish no source repository; the tile then reads plain "Upstream" and `url` points at the vendor's own page |
+| `paper` | no | `{"label": …, "url": …}` for a project whose schema was read off a publication rather than off source. Adds a second line, "Pre-print/Paper: `label`", in the same strip |
 | `slug` | no | Filename override; otherwise slugified from `name` |
 | `file` | no | Use this file in `assets/logos/` verbatim instead of generating one |
 
 Name the repository whose code the adapter or loader actually imports, not the
-vendor umbrella: the IBM tile is `Qiskit/qiskit-ibm-runtime`, the Braket tile is
-`amazon-braket/qiskit-braket-provider` (what `braket_adapter.py` imports), and
-Quantinuum is `Quantinuum/pytket-quantinuum`. `url` should point at that same
-repository so the label and the link agree.
+vendor umbrella: the Qiskit Runtime tile is `Qiskit/qiskit-ibm-runtime`, the
+Braket tile is `amazon-braket/qiskit-braket-provider` (what `braket_adapter.py`
+imports), and Pytket is `Quantinuum/pytket-quantinuum`. `url` should point at
+that same repository so the label and the link agree. Where the schema came from
+a paper — ORCA's PT Series, the Xanadu Aurora dataset — cite it in `paper`
+beside the repository rather than in place of it.
+
+Not every schema module earns a tile. A tile needs something a visitor can
+follow to the project itself — a repository, a paper, or a published API the
+schema was built against. `parityqc_parityqc`, `qmatter_qmatter` and
+`quantum_motion_hardware` describe vendors that publish none of those, so they
+stay documented in `schemas.md` and `backends.md` and are kept out of the grid.
+QuEra's Aquila is left out for the opposite reason: it has no repository of its
+own, and the Bloqade tile already covers the SDK its schema was built from.
 
 After editing, regenerate:
 

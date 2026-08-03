@@ -157,6 +157,9 @@ def render_grid(groups: list[dict]) -> str:
             # source repository leave it out and get the bare label.
             repo = html.escape(pkg.get("upstream", ""))
             up_label = f"Upstream: {repo} ↗" if repo else "Upstream ↗"
+            # A project whose schema was read off a publication rather than off
+            # source gets a second line in the same strip.
+            paper = pkg.get("paper")
             if supplied or not is_generated(LOGO_DIR / file):
                 # Real artwork, whether pointed at by "file" or dropped in place of
                 # a generated tile: render it as an image, never masked or tinted.
@@ -169,14 +172,20 @@ def render_grid(groups: list[dict]) -> str:
                 url = f"url(assets/logos/{file})"
                 mark = (f'<span class="logo-mark" role="img" aria-label="{name}"'
                         f' style="-webkit-mask-image:{url};mask-image:{url}"></span>')
+            strip = (f'<a class="logo-up" href="{pkg["url"]}" rel="noopener"'
+                     f' title="{name} upstream project">{up_label}</a>')
+            if paper:
+                cite = html.escape(paper["label"])
+                strip += (f'<a class="logo-up" href="{paper["url"]}" rel="noopener"'
+                          f' title="{name} pre-print / paper">'
+                          f'Pre-print/Paper: {cite} ↗</a>')
             out.append(
                 f'    <li class="logo-cell">'
                 f'<a class="logo-link" href="{pkg["doc"]}" '
                 f'title="{name}: {note}">'
                 f'{mark}'
                 f'<span class="logo-note">{note}</span></a>'
-                f'<a class="logo-up" href="{pkg["url"]}" rel="noopener"'
-                f' title="{name} upstream project">{up_label}</a></li>'
+                f'<div class="logo-strip">{strip}</div></li>'
             )
         out.append("  </ul>")
         out.append("</section>")

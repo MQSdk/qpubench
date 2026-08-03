@@ -648,13 +648,21 @@ section.wrap + section.wrap { border-top: 1px solid var(--rule-soft); }
   display: block; margin-top: 8px;
   font-size: 0.8rem; color: var(--fg-muted); line-height: 1.45;
 }
+/* The strip is the cell's second subgrid row, so it holds the border and the
+   fill once however many source lines a tile carries — a tile that also cites a
+   paper just makes the whole row's strip taller, which keeps the band level. */
+.logo-strip {
+  padding-block: 7px;
+  border-top: 1px solid var(--rule-soft); background: var(--strip);
+}
 .logo-up {
-  display: block; padding: 7px 16px;
+  display: block; padding-inline: 16px;
   font-family: var(--mono); font-size: 0.72rem; letter-spacing: 0.04em;
-  color: var(--fg-muted); border-top: 1px solid var(--rule-soft); background: var(--strip);
+  color: var(--fg-muted);
   /* Slugs are one long unbroken token; let them break rather than overflow. */
   overflow-wrap: anywhere;
 }
+.logo-up + .logo-up { margin-top: 4px; }
 .logo-up:hover { color: var(--accent); text-decoration: none; }
 .grid-note { font-size: 0.85rem; color: var(--fg-muted); margin: 0; }
 

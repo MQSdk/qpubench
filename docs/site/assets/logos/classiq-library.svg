@@ -1,10 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" data-generated="qpubench"
      viewBox="0 0 232 64" width="232" height="64"
-     role="img" aria-label="AWS Braket">
-  <title>AWS Braket</title>
+     role="img" aria-label="Classiq Library">
+  <title>Classiq Library</title>
   <style>
     text { font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fill: #000000; letter-spacing: -0.02em; }
     .wm { font-weight: 600; }
   </style>
-  <text class="wm" x="4" y="36.9" font-size="14">AWS Braket</text>
+  <text class="wm" x="4" y="36.9" font-size="14">Classiq Library</text>
 </svg>

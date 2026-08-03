@@ -1,10 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" data-generated="qpubench"
      viewBox="0 0 232 64" width="232" height="64"
-     role="img" aria-label="IBM Quantum">
-  <title>IBM Quantum</title>
+     role="img" aria-label="Qiskit Runtime">
+  <title>Qiskit Runtime</title>
   <style>
     text { font-family: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fill: #000000; letter-spacing: -0.02em; }
     .wm { font-weight: 600; }
   </style>
-  <text class="wm" x="4" y="36.9" font-size="14">IBM Quantum</text>
+  <text class="wm" x="4" y="36.9" font-size="14">Qiskit Runtime</text>
 </svg>
