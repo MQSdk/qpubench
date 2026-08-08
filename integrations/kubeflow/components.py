@@ -21,7 +21,7 @@ BenchmarkRunner.sweep() — it is one job, not one DAG node per (shots,
 opt_level) pair. Only the (`Mapper`, `Method`) pair (JW or mol_map, x
 VQE or TN-VQE — see data/README.md) changes which components exist;
 everything else in the benchmark matrix (TN_Layers_Network,
-TN_Layers_Circuit, Rotation_Type, Measurement_Method, Shots,
+TN_Layers_Circuit, TN_Ansatz, Measurement_Method, Shots,
 Qiskit_Opt_Level) is a parameter value swept via dsl.ParallelFor /
 BenchmarkRunner.sweep() inside a *single* pipeline definition — see
 pipelines.py and docs/integrations/kubeflow.md.
@@ -163,7 +163,7 @@ def tn_qc_opt_component(
     n_iterations: int,
     n_layers_network: int,
     n_layers_circuit: int,
-    three_para_tn: bool,
+    tn_ansatz: str,
     opt_method: str,
     measurement_method: str,
     optimization_mode: str,
@@ -188,17 +188,23 @@ def tn_qc_opt_component(
     a dense-matrix -> Pauli-term decomposition utility, so neither
     upstream result can be auto-converted into TN_QC_OPT's input shape).
 
-    n_layers_network/n_layers_circuit/three_para_tn/measurement_method
+    n_layers_network/n_layers_circuit/tn_ansatz/measurement_method
     sweep over data/README.md's TN_Layers_Network / TN_Layers_Circuit /
-    Rotation_Type / Measurement_Method columns — resolved by
+    TN_Ansatz / Measurement_Method columns — resolved by
     dsl.ParallelFor in pipelines.py, not by separate pipeline
     definitions, since none of these change which components run.
+
+    tn_ansatz is a plain `str` because kfp component parameters must be
+    primitives; it is validated against the four-member TNAnsatz enum
+    here, inside the component body. It replaces the older
+    `three_para_tn: bool`, which could only express two of the four
+    families (see TNAnsatz).
     """
     import os
 
     import mqsdk
 
-    from qpubench.schemas import TNQCOptInput, TNQCOptResult
+    from qpubench.schemas import TNAnsatz, TNQCOptInput, TNQCOptResult
 
     with open(mapper_result.path) as f:
         f.read()  # validated to exist for DAG lineage; not otherwise used here
@@ -210,7 +216,7 @@ def tn_qc_opt_component(
         n_iterations=n_iterations,
         n_layers_network=n_layers_network,
         n_layers_circuit=n_layers_circuit,
-        three_para_tn=three_para_tn,
+        tn_ansatz=TNAnsatz(tn_ansatz),
         opt_method=opt_method,
         measurement_method=measurement_method,
         optimization_mode=optimization_mode,
@@ -219,7 +225,9 @@ def tn_qc_opt_component(
     task = session.cebule.create_task(
         "qpubench-tn-qc-opt", mqsdk.TaskType.TN_QC_OPT, inp.model_dump()
     )
-    result = TNQCOptResult.model_validate(task.result)
+    # from_task_result, not model_validate: the task returns its own key
+    # spelling (VQE_energy, H_TN_opt_qubit, OptimizeResult).
+    result = TNQCOptResult.from_task_result(task.result)
 
     with open(tn_qc_opt_result.path, "w") as f:
         f.write(result.model_dump_json())
@@ -237,7 +245,7 @@ def qasm_gen_component(
     """Cebule QASM_GEN: generate hardware-verification measurement circuits
     for the operator TN_QC_OPT converged on.
 
-    Runs once per (tn_layers_network, tn_layers_circuit, three_para_tn,
+    Runs once per (tn_layers_network, tn_layers_circuit, tn_ansatz,
     measurement_method) combination from the enclosing dsl.ParallelFor in
     pipelines.py, regardless of which measurement_method that combination
     uses — execute_circuits_component decides whether to consume this

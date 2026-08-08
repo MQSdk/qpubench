@@ -113,12 +113,12 @@ test of the component-boundary rule above: it has two `Mapper` values
 each of the four pairs requires a different set of components, so each
 gets its **own** `@dsl.pipeline` in
 `integrations/kubeflow/pipelines.py`. Everything else in that CSV,
-`TN_Layers_Network`, `TN_Layers_Circuit`, `Rotation_Type`,
-`Measurement_Method`, `Shots`, `Qiskit_Opt_Level`, is a parameter value
+`TN_Layers_Network`, `TN_Layers_Circuit`, `TN_Ansatz`,
+`Measurement_Method`, `Shots`, `Optimization_Mode`, is a parameter value
 that doesn't change which components run, so none of it gets its own
 pipeline:
 
-- `TN_Layers_Network`/`TN_Layers_Circuit`/`Rotation_Type`/
+- `TN_Layers_Network`/`TN_Layers_Circuit`/`TN_Ansatz`/
   `Measurement_Method` are Cebule TN_QC_OPT task-call parameters, swept
   via nested `dsl.ParallelFor` inside the one relevant pipeline, so a
   single pipeline *run* fans out into every sweep point as branches of the

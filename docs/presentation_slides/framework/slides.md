@@ -857,8 +857,8 @@ Verified by actually compiling all four against `kfp==2.16.1`: surfaced a real g
 
 | Column | Resolved via |
 |---|---|
-| `TN_Layers_Network/Circuit`, `Rotation_Type`, `Measurement_Method` | nested `dsl.ParallelFor`: one dashboard graph, fanned out |
-| `Shots`, `Qiskit_Opt_Level` | `BenchmarkRunner.sweep()` *inside* the Execution component: the same "stays one job" treatment as `n_iterations` |
+| `TN_Layers_Network/Circuit`, `TN_Ansatz`, `Measurement_Method` | nested `dsl.ParallelFor`: one dashboard graph, fanned out |
+| `Shots`, `Optimization_Mode` | `BenchmarkRunner.sweep()` *inside* the Execution component: the same "stays one job" treatment as `n_iterations` |
 
 \begin{block}{Conversion utilities: closed TODO}
 \texttt{SparsePauliObservable.to\_dense\_matrix()} / \texttt{.from\_dense\_matrix()} now ship in core (verified against Qiskit's \texttt{SparsePauliOp}, size-guarded via \texttt{max\_qubits}); all 6 (hamiltonian\_kind, measurement\_method) branch combinations run; only the live Cebule \texttt{create\_task} calls still await real credentials.

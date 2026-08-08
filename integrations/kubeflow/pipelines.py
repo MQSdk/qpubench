@@ -11,7 +11,7 @@ That pair is the *only* axis that gets its own pipeline/DAG here: it's the one
 dimension in the benchmark matrix that changes which components run (a
 component change, per docs/integrations/kubeflow.md's Transform/Execution
 taxonomy). Every other benchmark dimension --
-TN_Layers_Network/TN_Layers_Circuit/Rotation_Type/Measurement_Method/Shots/
+TN_Layers_Network/TN_Layers_Circuit/TN_Ansatz/Measurement_Method/Shots/
 Qiskit_Opt_Level -- is a parameter value, resolved *inside* one pipeline via
 dsl.ParallelFor (for the Cebule-task-level knobs) and
 BenchmarkRunner.sweep() inside the Execution components (for the
@@ -106,16 +106,20 @@ def cebule_molecular_vqe_pipeline(
     h_coeff_values: list[float] = [],  # noqa: B006 — kfp pipeline params, not a mutable default trap
     h_operators: list[str] = [],  # noqa: B006
     n_iterations: int = 100,
-    # TN_Layers_Network / TN_Layers_Circuit / Rotation_Type / Measurement_Method
+    # TN_Layers_Network / TN_Layers_Circuit / TN_Ansatz / Measurement_Method
     # sweep points (data/README.md) — resolved by dsl.ParallelFor below, all
     # inside this one pipeline/DAG, not one pipeline per combination.
     tn_layers_network_values: list[int] = [3],
     tn_layers_circuit_values: list[int] = [3],
-    rotation_types: list[bool] = [True],  # three_para_tn: True="full", False="phase"
+    # TNAnsatz values as plain strings (kfp params must be primitives):
+    # rotation_1param | rotation_3param | givens | number_preserving.
+    # A list[bool] cannot express a four-valued sweep, which is why the
+    # older three_para_tn spelling is gone.
+    tn_ansatz_values: list[str] = ["givens"],
     measurement_methods: list[str] = ["pauli"],  # "pauli" | "grouped"
-    opt_method: str = "COBYLA",   # Cebule's own current default (docs.mqs.dk, checked 2026-07-09)
-    optimization_mode: str = "both",   # Cebule's own current default (docs.mqs.dk, checked 2026-07-09)
-    tn_backend: str = "lightning.qubit",
+    opt_method: str = "COBYLA",   # the task's own default (parsers.py, checked 2026-08-08)
+    optimization_mode: str = "both",   # the task's own default (parsers.py, checked 2026-08-08)
+    tn_backend: str = "default.qubit",   # the task's own default; "lightning.qubit"/"qiskit.aer" also valid
     # Needed downstream for the "pauli" measurement_method branch
     # (execute_circuits_component reads qasm_gen_result.state_circuit) —
     # always requested regardless of Cebule's own raw default.
@@ -139,7 +143,7 @@ def cebule_molecular_vqe_pipeline(
 
     with dsl.ParallelFor(items=tn_layers_network_values) as n_layers_network:
         with dsl.ParallelFor(items=tn_layers_circuit_values) as n_layers_circuit:
-            with dsl.ParallelFor(items=rotation_types) as three_para_tn:
+            with dsl.ParallelFor(items=tn_ansatz_values) as tn_ansatz:
                 with dsl.ParallelFor(items=measurement_methods) as measurement_method:
                     tn_qc_opt_task = _with_cebule_credentials(
                         tn_qc_opt_component(
@@ -149,7 +153,7 @@ def cebule_molecular_vqe_pipeline(
                             n_iterations=n_iterations,
                             n_layers_network=n_layers_network,
                             n_layers_circuit=n_layers_circuit,
-                            three_para_tn=three_para_tn,
+                            tn_ansatz=tn_ansatz,
                             opt_method=opt_method,
                             measurement_method=measurement_method,
                             optimization_mode=optimization_mode,
@@ -207,11 +211,11 @@ def cebule_tn_vqe_pipeline(
     n_iterations: int = 100,
     tn_layers_network_values: list[int] = [3],
     tn_layers_circuit_values: list[int] = [3],
-    rotation_types: list[bool] = [True],
+    tn_ansatz_values: list[str] = ["givens"],   # see the mol_map pipeline above
     measurement_methods: list[str] = ["pauli"],
     opt_method: str = "COBYLA",
     optimization_mode: str = "both",
-    tn_backend: str = "lightning.qubit",
+    tn_backend: str = "default.qubit",
     include_state_circuit: bool = True,
     shots_values: list[int] = [1024],
     optimization_levels: list[int] = [1],
@@ -230,7 +234,7 @@ def cebule_tn_vqe_pipeline(
 
     with dsl.ParallelFor(items=tn_layers_network_values) as n_layers_network:
         with dsl.ParallelFor(items=tn_layers_circuit_values) as n_layers_circuit:
-            with dsl.ParallelFor(items=rotation_types) as three_para_tn:
+            with dsl.ParallelFor(items=tn_ansatz_values) as tn_ansatz:
                 with dsl.ParallelFor(items=measurement_methods) as measurement_method:
                     tn_qc_opt_task = _with_cebule_credentials(
                         tn_qc_opt_component(
@@ -240,7 +244,7 @@ def cebule_tn_vqe_pipeline(
                             n_iterations=n_iterations,
                             n_layers_network=n_layers_network,
                             n_layers_circuit=n_layers_circuit,
-                            three_para_tn=three_para_tn,
+                            tn_ansatz=tn_ansatz,
                             opt_method=opt_method,
                             measurement_method=measurement_method,
                             optimization_mode=optimization_mode,

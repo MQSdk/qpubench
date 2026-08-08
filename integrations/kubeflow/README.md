@@ -29,7 +29,7 @@ exist (a component change), so it's the one thing that gets its own DAG:
 | `jw_baseline_pipeline` | `JW` | `VQE` | `jw_map_component -> execute_static_hamiltonian_component` |
 
 Every other benchmark dimension — `TN_Layers_Network`, `TN_Layers_Circuit`,
-`Rotation_Type`, `Measurement_Method`, `Shots`, `Qiskit_Opt_Level` — is a
+`TN_Ansatz`, `Measurement_Method`, `Shots`, `Optimization_Mode` — is a
 **parameter value**, not a different pipeline: it's resolved *inside* one
 of the four DAGs above via `dsl.ParallelFor` (the Cebule-task-level knobs)
 and `BenchmarkRunner.sweep()` inside the Execution components (the
@@ -107,7 +107,7 @@ Or compile all four at once: `python -m integrations.kubeflow.pipelines`
 
 Upload the YAML through the dashboard's Pipelines UI, or submit
 programmatically — e.g. running the full `TN_Layers_Network x
-TN_Layers_Circuit x Rotation_Type x Measurement_Method` sweep from
+TN_Layers_Circuit x TN_Ansatz x Measurement_Method` sweep from
 `data/IBM_VQE_Test_Benchmark.csv` as **one** pipeline run:
 
 ```python
@@ -121,7 +121,7 @@ client.create_run_from_pipeline_package(
         "symbols": ["H", "H"],
         "tn_layers_network_values": [0, 1, 2, 3],
         "tn_layers_circuit_values": [1, 2, 3, 4],
-        "rotation_types": [True, False],
+        "tn_ansatz_values": ["givens", "rotation_3param"],
         "measurement_methods": ["pauli", "grouped"],
         "shots_values": [1024],
         "optimization_levels": [1],
