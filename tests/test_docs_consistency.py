@@ -67,3 +67,126 @@ def test_schema_version_mentions_in_code_are_consistent():
                 f"{path.name} mentions schema v{m.group(1)} but "
                 f"SCHEMA_VERSION is {SCHEMA_VERSION}"
             )
+
+
+# ---------------------------------------------------------------------------
+# Benchmark matrix vs. its own documentation and the mirrored vocabularies.
+#
+# Three of the four sections of the 2026-08-07 TN-VQE review were "the CSV
+# and the docs disagree with the code". These catch that class of drift at
+# the commit that introduces it: the `qasm_gen_grouped` misnomer and the
+# `full`/`phase` rotation names would both have failed here.
+# ---------------------------------------------------------------------------
+
+CSV_PATH = REPO / "data" / "IBM_VQE_Test_Benchmark.csv"
+
+
+def _benchmark_matrix_module():
+    """Import the generator, which lives in examples/ rather than the package."""
+    import importlib.util
+
+    path = REPO / "examples" / "guides" / "build_benchmark_matrix.py"
+    spec = importlib.util.spec_from_file_location("build_benchmark_matrix", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _csv_rows():
+    import csv
+
+    with CSV_PATH.open(encoding="utf-8") as f:
+        return list(csv.DictReader(f))
+
+
+def _documented_columns() -> set[str]:
+    """Every backticked token in the first cell of data/README.md's column table.
+
+    Rows may group several columns in one cell
+    (`Mapper`, `Method`, `Ansatz`), so this collects them all.
+    """
+    doc = (REPO / "data" / "README.md").read_text(encoding="utf-8")
+    table = doc.split("## Columns", 1)[1].split("\n### ", 1)[0]
+    columns: set[str] = set()
+    for line in table.splitlines():
+        if not line.startswith("| `"):
+            continue
+        columns.update(re.findall(r"`([A-Z][A-Za-z0-9_]*)`", line.split("|")[1]))
+    return columns
+
+
+def test_csv_header_matches_generator_fieldnames():
+    """The committed CSV must be what the generator currently produces."""
+    module = _benchmark_matrix_module()
+    with CSV_PATH.open(encoding="utf-8") as f:
+        header = f.readline().strip().split(",")
+    assert header == module.FIELDNAMES, (
+        "data/IBM_VQE_Test_Benchmark.csv is stale — regenerate it with "
+        "`PYTHONPATH=src python examples/guides/build_benchmark_matrix.py`"
+    )
+
+
+def test_every_column_is_documented_and_every_documented_column_exists():
+    module = _benchmark_matrix_module()
+    documented = _documented_columns()
+    actual = set(module.FIELDNAMES)
+    assert not actual - documented, (
+        f"columns missing from data/README.md's table: {sorted(actual - documented)}"
+    )
+    assert not documented - actual, (
+        f"data/README.md documents columns the CSV does not have: "
+        f"{sorted(documented - actual)}"
+    )
+
+
+def test_tn_ansatz_column_uses_the_mirrors_vocabulary():
+    """Values must be real TNAnsatz members, not a parallel spelling.
+
+    `full` / `phase` named only the two non-entangling families and were
+    ambiguous once `givens` (also a rotation) and `number_preserving`
+    (also "full") were modelled.
+    """
+    from qpubench.schemas.mirrors.mqsdk_cebule import TNAnsatz
+
+    allowed = {a.value for a in TNAnsatz} | {"n/a (no TN layers)", "n/a (not TN-VQE)"}
+    found = {row["TN_Ansatz"] for row in _csv_rows()}
+    assert found <= allowed, f"unknown TN_Ansatz values: {sorted(found - allowed)}"
+
+
+def test_measurement_method_column_uses_cebules_vocabulary():
+    """`pauli` / `grouped`, exactly as TNQCOptInput.measurement_method defines them."""
+    allowed = {"pauli", "grouped", "n/a (network mode)"}
+    found = {row["Measurement_Method"] for row in _csv_rows()}
+    assert found <= allowed, (
+        f"unknown Measurement_Method values: {sorted(found - allowed)}"
+    )
+
+
+def test_classical_only_rows_cost_nothing_and_run_no_circuit():
+    """optimization_mode="network" takes no quantum measurements at all."""
+    controls = [r for r in _csv_rows() if r["Optimization_Mode"] == "network"]
+    assert controls, "the zero-QPU classical-only control rows are missing"
+    for row in controls:
+        assert row["Shots"] == "0"
+        assert row["Num_Opt_Params_Phi"] == "0"
+        assert row["TN_Layers_Circuit"] == "0"
+        assert not row["Qasm_Ansatz_File"]
+
+
+def test_pinned_qasm_hashes_match_the_committed_circuits():
+    """A silently edited circuit must stop matching the CSV."""
+    import hashlib
+
+    checked = 0
+    for row in _csv_rows():
+        if not row["Qasm_Ansatz_File"]:
+            continue
+        path = REPO / row["Qasm_Ansatz_File"]
+        assert path.exists(), f"{row['Qasm_Ansatz_File']} is referenced but missing"
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()[:12]
+        assert digest == row["Qasm_Ansatz_SHA256"], (
+            f"{row['Qasm_Ansatz_File']} has changed since the matrix was "
+            f"generated (expected {row['Qasm_Ansatz_SHA256']}, got {digest})"
+        )
+        checked += 1
+    assert checked, "no rows pin a QASM circuit — run pin_qasm_ansatz.py"
