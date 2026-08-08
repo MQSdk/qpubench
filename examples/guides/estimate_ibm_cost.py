@@ -16,16 +16,22 @@ Two things this script deliberately keeps separate:
    `Ansatz_Reps`, and `_ansatz_builders.py` builds that circuit rather
    than substituting a hardware-efficient stand-in, which matters a lot
    (a real Trotterized UCCSD costs ~17x EfficientSU2 at 12 qubits).
-2. **Illustrative, clearly-labeled assumptions**: the CSV's `Shots` and
-   `Qiskit_Opt_Level` columns are still blank (see `data/README.md` —
-   that's an open question back to whoever is designing the study, not
-   something this script should silently invent). To show a concrete
-   number anyway, this script assumes a fixed shot count and iteration
-   count, both printed prominently and easy to change at the top of
-   `main()`.
+2. **Recorded inputs, no longer assumptions**: `Shots` is filled per row
+   (`n_shots` is a real TNQCOptInput field), and transpilation runs at
+   `optimization_level=2` — what TN-VQE's own bare
+   `transpile(circuit, backend)` call resolves to under Qiskit 2.x. The
+   `Qiskit_Opt_Level` column is gone: TN-VQE passes no optimization_level
+   and offers no way to set one, so it was a column nothing could fill.
+3. **One remaining illustrative assumption**: 30 VQE iterations per case,
+   still an open campaign decision — printed prominently and easy to
+   change at the top of `main()`.
+
+Rows in `optimization_mode="network"` are skipped: they take no quantum
+measurements, so they have no QPU cost to estimate (see
+`split_benchmark_batches.py`, which writes them to their own file).
 
 Run:
-    python examples/guides/estimate_ibm_cost.py
+    PYTHONPATH=src python examples/guides/estimate_ibm_cost.py
 """
 from __future__ import annotations
 
@@ -48,14 +54,20 @@ from qpubench.schemas.mirrors.ibm_cost_estimator import (
 _CSV_PATH = pathlib.Path(__file__).resolve().parents[2] / "data" / "IBM_VQE_Test_Benchmark.csv"
 _BACKEND_NAME = "ibm_brisbane"   # offline FakeBrisbane snapshot -- no credentials needed
 
-# --- Illustrative assumptions (the CSV doesn't specify these yet) ---------
-_ASSUMED_SHOTS_PER_CIRCUIT = 4096
+# Shots come from each row's own Shots column now; only the iteration
+# count is still assumed.
 _ASSUMED_VQE_ITERATIONS = 30   # one circuit submission per optimizer iteration
+_DEFAULT_SHOTS = 4096          # for the minimal-case demo, which has no row
+# What TN-VQE's own transpile(circuit, backend) resolves to under Qiskit 2.x.
+_OPTIMIZATION_LEVEL = 2
 
 
 def _load_csv_cases() -> list[dict[str, str]]:
     with _CSV_PATH.open() as f:
-        return [row for row in csv.DictReader(f) if row["N_Qubit"]]
+        return [
+            row for row in csv.DictReader(f)
+            if row["N_Qubit"] and row["Optimization_Mode"] != "network"
+        ]
 
 
 def estimate_minimal_open_plan_study() -> CircuitResourceEstimate:
@@ -64,7 +76,8 @@ def estimate_minimal_open_plan_study() -> CircuitResourceEstimate:
     for."""
     spec = circuit_spec("EfficientSU2", 4, reps=1)
     return estimate_circuit_resources(
-        spec, backend_name=_BACKEND_NAME, shots=_ASSUMED_SHOTS_PER_CIRCUIT,
+        spec, backend_name=_BACKEND_NAME, shots=_DEFAULT_SHOTS,
+        optimization_level=_OPTIMIZATION_LEVEL,
         label="H2/sto-3g/JW EfficientSU2 (minimal case)",
     )
 
@@ -75,26 +88,28 @@ def estimate_full_csv_study() -> list[CircuitResourceEstimate]:
     circuit (illustrative -- see module docstring).
 
     Many rows differ only in `Measurement_Method`, `TN_Layers_Network` or
-    `Rotation_Type`, none of which change the real *quantum-circuit*
+    `TN_Ansatz`, none of which change the real *quantum-circuit*
     resource estimate (`TN_Layers_Network` runs classically, not on the
     QPU -- see `data/README.md`). So transpile calls are cached per
-    (ansatz, qubits, reps, electrons) key, which collapses all 294 rows
-    onto a much smaller number of distinct circuits.
+    (ansatz, qubits, reps, electrons, shots) key, which collapses every
+    row onto a much smaller number of distinct circuits.
     """
-    cache: dict[tuple[str, int, int, int], CircuitResourceEstimate] = {}
+    cache: dict[tuple[str, int, int, int, int], CircuitResourceEstimate] = {}
     estimates = []
     for row in _load_csv_cases():
         ansatz = row["Ansatz"]
         num_qubits = int(row["N_Qubit"])
         reps = int(row["Ansatz_Reps"])
         num_electrons = int(row["Active_Electrons"])
+        shots = int(row["Shots"])
 
-        key = (ansatz, num_qubits, reps, num_electrons)
+        key = (ansatz, num_qubits, reps, num_electrons, shots)
         if key not in cache:
             spec = circuit_spec(ansatz, num_qubits, reps=reps, num_electrons=num_electrons)
             label = f"{ansatz}, {num_qubits}q, {reps} reps"
             cache[key] = estimate_circuit_resources(
-                spec, backend_name=_BACKEND_NAME, shots=_ASSUMED_SHOTS_PER_CIRCUIT, label=label,
+                spec, backend_name=_BACKEND_NAME, shots=shots,
+                optimization_level=_OPTIMIZATION_LEVEL, label=label,
             )
         # _ASSUMED_VQE_ITERATIONS separate circuit submissions per CSV row,
         # each paying its own per-sub-job overhead -- not just one estimate x N.
@@ -113,10 +128,11 @@ def _print_plan_breakdown(total_seconds: float, rates: IBMPricingRates) -> None:
 
 
 def main() -> None:
-    print(f"Assumptions: {_ASSUMED_SHOTS_PER_CIRCUIT} shots/circuit, "
-          f"{_ASSUMED_VQE_ITERATIONS} VQE iterations/case (each = 1 circuit "
-          f"submission).\nAnsatz is not assumed: each row's own Ansatz/"
-          f"Ansatz_Reps is built and transpiled.\n")
+    print(f"Shots come from each row's own Shots column; "
+          f"{_ASSUMED_VQE_ITERATIONS} VQE iterations/case assumed (each = 1 "
+          f"circuit submission).\nAnsatz is not assumed either: each row's own "
+          f"Ansatz/Ansatz_Reps is built and transpiled, at "
+          f"optimization_level={_OPTIMIZATION_LEVEL}.\n")
 
     print("=== Minimal possible benchmark study (H2/sto-3g/JW, 1 circuit) ===")
     minimal = estimate_minimal_open_plan_study()

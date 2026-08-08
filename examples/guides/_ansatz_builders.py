@@ -20,14 +20,36 @@ qubits a real Trotterized UCCSD transpiles to roughly 17x the QPU time of
 EfficientSU2, so that substitution was the single largest error in those
 estimates.
 
-Two of the four builders are not Qiskit library calls:
+TN_QC_OPT has *two* circuit sides, one per platform, and they are
+different circuits — which is why both are here:
 
-`StronglyEntanglingLayers` is PennyLane's, and is what Cebule TN_QC_OPT
-uses on its circuit side. Rebuilt here in Qiskit to PennyLane's own
-definition: per layer, a general single-qubit rotation (Rot = RZ then RY
-then RZ) on every wire, then a ring of CNOTs whose stride varies with the
-layer index. That gives the (L, N, 3) parameter shape the benchmark
-matrix's `Num_Opt_Params_Phi` column records.
+`n_local_rzryrz_sca` is the Qiskit path (`functions_qiskit.py:36`):
+`n_local(n, ["rz","ry","rz"], "cx", entanglement="sca")`. This is the one
+that runs in an IBM campaign, so it is what the benchmark matrix names on
+its TN rows. Parameter count `3n(R+1)` — the trailing rotation layer is
+the difference from PennyLane's.
+
+`StronglyEntanglingLayers` is PennyLane's (`functions_pennylane.py:28`),
+which the task uses on `default.qubit` / `lightning.qubit`. Rebuilt here
+in Qiskit to PennyLane's own definition: per layer, a general
+single-qubit rotation (Rot = RZ then RY then RZ) on every wire, then a
+ring of CNOTs whose stride varies with the layer index. Parameter count
+`3nR`, the (L, N, 3) shape.
+
+Costing an IBM row on the PennyLane circuit is a real (if small) error:
+at stage-1 sizes it moves the estimate by under 2%, and at 8 and 12
+qubits `n_local` is the *cheaper* of the two. It is worth getting right
+because the estimate should describe the circuit that runs, and because
+the 50% understatement it caused in `Num_Opt_Params_Phi` was not small.
+
+`excitation_preserving_linear` is the in-sector alternative for stage 2:
+with `givens` or `number_preserving`, U(θ) commutes with the number
+operator, so U†HU stays in the particle-number sector and the RzRyRz/cx
+circuit spends depth on amplitude the transformed Hamiltonian cannot use.
+`entanglement="linear"`, never the default `"full"` — that is n(n−1)/2
+two-qubit gates per rep. Note `xx_plus_yy` is not a FakeBrisbane basis
+gate and decomposes into more than one `ecr`, so parity with the RzRyRz
+default cannot be assumed; measure it.
 
 `UCCSD` is built from this project's own Jordan-Wigner
 singles-and-doubles excitation generators rather than qiskit-nature, so
@@ -51,6 +73,8 @@ SUPPORTED_ANSATZE = (
     "EfficientSU2",
     "RealAmplitudes",
     "StronglyEntanglingLayers",
+    "n_local_rzryrz_sca",
+    "excitation_preserving_linear",
     "UCCSD",
 )
 
@@ -76,6 +100,10 @@ def build_ansatz(
         return real_amplitudes(num_qubits, reps=reps)
     if ansatz == "StronglyEntanglingLayers":
         return strongly_entangling_layers(num_qubits, reps=reps)
+    if ansatz == "n_local_rzryrz_sca":
+        return n_local_rzryrz_sca(num_qubits, reps=reps)
+    if ansatz == "excitation_preserving_linear":
+        return excitation_preserving_linear(num_qubits, reps=reps)
     if ansatz == "UCCSD":
         if num_electrons is None:
             raise ValueError("UCCSD needs num_electrons to place the reference determinant")
@@ -106,6 +134,34 @@ def strongly_entangling_layers(num_qubits: int, *, reps: int = 1) -> "QuantumCir
             for qubit in range(num_qubits):
                 qc.cx(qubit, (qubit + stride) % num_qubits)
     return qc
+
+
+def n_local_rzryrz_sca(num_qubits: int, *, reps: int = 1) -> "QuantumCircuit":
+    """TN_QC_OPT's Qiskit circuit side, exactly as `functions_qiskit.py:36`
+    builds it: `n_local(n, ["rz","ry","rz"], "cx", entanglement="sca")`.
+
+    'sca' is Qiskit's shifted-circular-alternating entanglement: a
+    circular CX chain whose starting qubit shifts each rep and whose
+    control/target orientation alternates.
+    """
+    from qiskit.circuit.library import n_local
+
+    return n_local(
+        num_qubits, ["rz", "ry", "rz"], "cx", reps=reps, entanglement="sca",
+    )
+
+
+def excitation_preserving_linear(num_qubits: int, *, reps: int = 1) -> "QuantumCircuit":
+    """Number-conserving circuit ansatz, for pairing with a
+    number-conserving U(θ) (`givens` / `number_preserving`).
+
+    `entanglement="linear"` is not the library default — `"full"` is, at
+    n(n-1)/2 two-qubit gates per rep, which is unaffordable at these
+    budgets.
+    """
+    from qiskit.circuit.library import excitation_preserving
+
+    return excitation_preserving(num_qubits, reps=reps, entanglement="linear")
 
 
 def uccsd(num_qubits: int, num_electrons: int, *, reps: int = 1) -> "QuantumCircuit":
@@ -170,6 +226,14 @@ def circuit_parameter_count(ansatz: str, num_qubits: int, reps: int) -> int | No
     """
     if ansatz == "StronglyEntanglingLayers":
         return 3 * reps * num_qubits            # PennyLane's (L, N, 3) shape
+    if ansatz == "n_local_rzryrz_sca":
+        return 3 * num_qubits * (reps + 1)      # Qiskit's trailing rotation layer
+    if ansatz == "excitation_preserving_linear":
+        # One RZ per qubit per rotation layer, plus one theta per linear
+        # pair per rep -- Qiskit's default mode="iswap" carries a single
+        # parameter per XX+YY gate, not two (that is mode="fsim").
+        # Verified against the built circuit's num_parameters.
+        return num_qubits * (reps + 1) + (num_qubits - 1) * reps
     if ansatz == "EfficientSU2":
         return 2 * num_qubits * (reps + 1)      # two rotation layers per block
     if ansatz == "RealAmplitudes":

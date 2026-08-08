@@ -13,23 +13,41 @@ transpilation + IBM usage formula as
 `backends.ibm_cost_estimator.estimate_circuit_resources`
 (`examples/guides/estimate_ibm_cost.py`), and builds the ansatz each row
 actually names at that row's `Ansatz_Reps` (`_ansatz_builders.py`) —
-EfficientSU2,
-RealAmplitudes, StronglyEntanglingLayers (Cebule TN_QC_OPT's circuit
-side) and a real Trotterized UCCSD all transpile to very different
-depths, so an earlier revision's "assume EfficientSU2 everywhere" was the
-single largest source of error in these estimates.
+EfficientSU2, RealAmplitudes, the `n_local` RzRyRz/sca circuit Cebule
+TN_QC_OPT runs on its Qiskit path, and a real Trotterized UCCSD all
+transpile to very different depths, so an earlier revision's "assume
+EfficientSU2 everywhere" was the single largest source of error in these
+estimates.
 
-Still assumptions, clearly carried over from `estimate_ibm_cost.py`:
-4,096 shots per circuit and 30 VQE iterations per case, both still-open
-campaign decisions — see that script's docstring and `data/README.md`.
+Two things this script pins that earlier revisions left implicit:
 
-Rows are sorted ascending by estimated per-row QPU time before batching,
-so each tranche is the cheapest calculations available at that point —
-appropriate for "run a cheap smoke test first, then scale up" campaign
-structure.
+  Shots come from each row's own `Shots` column, not a module constant.
+  `n_shots` is a real TNQCOptInput field, so the shot count is a recorded
+  campaign input now rather than an illustrative assumption.
+
+  Transpilation runs at `optimization_level=2`, matching what TN-VQE
+  really gets: it calls `transpile(circuit, backend)` with no
+  optimization_level (functions_qiskit.py:47,205), and transpile's own
+  default resolves to 2 under Qiskit 2.x. The estimator's own default is
+  1, which is a genuine estimate-vs-run mismatch — small (batch2 moves
+  398.97 -> 398.48 min) but real.
+
+Still an assumption: 30 VQE iterations per case, an open campaign
+decision — see `estimate_ibm_cost.py` and `data/README.md`.
+
+Rows in `optimization_mode="network"` take no quantum measurements at all
+(they optimise theta classically), so they cost nothing and are written
+to their own `batch0_classical_only.csv` rather than being sorted into a
+plan budget. Left in the ascending-cost sort they would fill the free
+tier with zero-cost rows and displace the smoke tests it exists for.
+
+Rows are otherwise sorted ascending by estimated per-row QPU time before
+batching, so each tranche is the cheapest calculations available at that
+point — appropriate for "run a cheap smoke test first, then scale up"
+campaign structure.
 
 Run:
-    python examples/guides/split_benchmark_batches.py
+    PYTHONPATH=src python examples/guides/split_benchmark_batches.py
 """
 from __future__ import annotations
 
@@ -50,9 +68,13 @@ _CSV_PATH = _REPO_ROOT / "data" / "IBM_VQE_Test_Benchmark.csv"
 _OUT_DIR = _REPO_ROOT / "data" / "batches"
 _BACKEND_NAME = "ibm_brisbane"
 
-# --- Illustrative assumptions, matching estimate_ibm_cost.py exactly -----
-_ASSUMED_SHOTS_PER_CIRCUIT = 4096
+# Shots come from each row's Shots column; only the iteration count is
+# still an assumption, matching estimate_ibm_cost.py exactly.
 _ASSUMED_VQE_ITERATIONS = 30
+# What TN-VQE's own transpile(circuit, backend) call resolves to under
+# Qiskit 2.x -- not the estimator's signature default of 1.
+_OPTIMIZATION_LEVEL = 2
+_CLASSICAL_ONLY_MODE = "network"
 
 # Each plan's OWN budget in seconds -- independent, not cumulative with
 # the others (a fresh Flex purchase isn't reduced by what Open already
@@ -78,32 +100,45 @@ def _row_active_electrons(row: dict[str, str]) -> int:
     return int(row["Active_Electrons"])
 
 
+def is_classical_only(row: dict[str, str]) -> bool:
+    """True for rows that take no quantum measurements at all.
+
+    optimization_mode="network" freezes phi and optimises theta by
+    classical tensor-network contraction, so the row has no QPU cost --
+    distinct from a row whose cost merely could not be *computed*.
+    """
+    return row.get("Optimization_Mode") == _CLASSICAL_ONLY_MODE
+
+
 def estimate_per_row_qpu_seconds(rows: list[dict[str, str]]) -> dict[int, float]:
     """Real per-row QPU-time estimate (at `_ASSUMED_VQE_ITERATIONS`
     iterations), keyed by `Case_ID`. Real transpile calls are cached per
-    (ansatz, qubits, reps, electrons) key -- the matrix has far more rows
-    than distinct circuits.
+    (ansatz, qubits, reps, electrons, shots) key -- the matrix has far
+    more rows than distinct circuits.
     """
-    cache: dict[tuple[str, int, int, int], CircuitResourceEstimate] = {}
+    cache: dict[tuple[str, int, int, int, int], CircuitResourceEstimate] = {}
     per_row: dict[int, float] = {}
     for row in rows:
-        if not row["N_Qubit"] or not row["Ansatz"]:
+        if not row["N_Qubit"] or not row["Ansatz"] or is_classical_only(row):
             continue
         num_qubits = int(row["N_Qubit"])
         reps = int(row["Ansatz_Reps"])
         ansatz = row["Ansatz"]
         num_electrons = _row_active_electrons(row)
-        key = (ansatz, num_qubits, reps, num_electrons)
+        shots = int(row["Shots"])
+        key = (ansatz, num_qubits, reps, num_electrons, shots)
         if key not in cache:
             spec = circuit_spec(
                 ansatz, num_qubits, reps=reps, num_electrons=num_electrons
             )
             cache[key] = estimate_circuit_resources(
-                spec, backend_name=_BACKEND_NAME, shots=_ASSUMED_SHOTS_PER_CIRCUIT,
+                spec, backend_name=_BACKEND_NAME, shots=shots,
+                optimization_level=_OPTIMIZATION_LEVEL,
                 label=f"{ansatz}, {num_qubits}q, {reps} reps",
             )
         per_row[int(row["Case_ID"])] = cache[key].estimated_qpu_time_s * _ASSUMED_VQE_ITERATIONS
-    print(f"  ({len(cache)} distinct circuits really transpiled)")
+    print(f"  ({len(cache)} distinct circuits really transpiled "
+          f"at optimization_level={_OPTIMIZATION_LEVEL})")
     return per_row
 
 
@@ -117,9 +152,16 @@ def split_into_batches(
     anything left over after all three budgets are full (empty unless the
     total workload exceeds Open+Flex+Premium combined), and
     `unestimable_rows` is every row no circuit could be built for.
+
+    Classical-only rows are excluded by the caller, not counted here as
+    unestimable: their cost is genuinely zero, which is a different fact
+    from "we could not work it out".
     """
     estimable = [r for r in rows if int(r["Case_ID"]) in per_row_seconds]
-    unestimable = [r for r in rows if int(r["Case_ID"]) not in per_row_seconds]
+    unestimable = [
+        r for r in rows
+        if int(r["Case_ID"]) not in per_row_seconds and not is_classical_only(r)
+    ]
     estimable.sort(key=lambda r: per_row_seconds[int(r["Case_ID"])])
 
     batches: list[list[dict[str, str]]] = [[] for _ in _PLAN_BUDGETS_S]
@@ -168,6 +210,13 @@ def main() -> None:
 
     per_row_seconds = estimate_per_row_qpu_seconds(rows)
     batches, overflow, unestimable = split_into_batches(rows, per_row_seconds)
+
+    classical_only = [r for r in rows if is_classical_only(r)]
+    if classical_only:
+        out_path = _OUT_DIR / "batch0_classical_only.csv"
+        _write_csv(out_path, classical_only, per_row_seconds)
+        print(f"  {out_path.name}: {len(classical_only)} rows, 0.00 min "
+              f"-- optimization_mode='network', no QPU time, no plan budget")
 
     for (name, budget_s), batch_rows in zip(_PLAN_BUDGETS_S, batches):
         total_s = sum(per_row_seconds[int(r["Case_ID"])] for r in batch_rows)
