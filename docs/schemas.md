@@ -790,6 +790,15 @@ Revised 2026-07-08 against the real SDK source
 Every row below is confirmed against that source except `MOL_MAP`/
 `QASM_GEN`, kept but flagged unconfirmed; see the linked doc for detail.
 
+The `TN_QC_OPT` models were revised again 2026-08-08 against the TN-VQE
+implementation itself (cebule-tn_vqe @ dev-kba `a760489`) rather than the
+docs page. **`TNQCOptResult.qubit_operators` was removed** — the task
+returns one `h_tn_opt_qubit` 2-tuple of (labels, coefficients), never two
+parallel keys — under the mirror exception in `AGENTS.md`. Also:
+`h_tn_opt_fermionic` added; `tn_ansatz` / `n_shots` / `opt_options` added
+as inputs; `three_para_tn` deprecated; and the `backend`, `conv_tol` and
+`n_layers_circuit` defaults corrected.
+
 | Type | Cebule task | Description |
 |---|---|---|
 | `MolecularGeometry` | shared | Flat geometry + symbols + basis |
@@ -797,6 +806,7 @@ Every row below is confirmed against that source except `MOL_MAP`/
 | `MolMapInput` / `MolMapResult` | `MOL_MAP` *(unconfirmed)* | Molecular → qubit Hamiltonian mapping |
 | `QASMGenInput` / `QASMGenResult` | `QASM_GEN` *(unconfirmed)* | Hamiltonian → OpenQASM measurement circuits |
 | `TNQCOptInput` / `TNQCOptResult` | `TN_QC_OPT` | Tensor-network + quantum circuit VQE |
+| `TNAnsatz` / `TNAnsatzProperties` | `TN_QC_OPT` | The four M-gate rotation families and their params/node, entangling and number-conserving flags |
 | `COVOInput` / `COVOResult` | `COVO` | Correlation-optimised virtual orbitals |
 | `CosmoInput` / `CosmoResult` | `COSMO` | Continuum solvation (dielectric + VDW radii) |
 | `SigmaInput` / `SigmaResult` | `SIGMA` | COSMO-SAC/-RS sigma profile, chained from `COSMO` |

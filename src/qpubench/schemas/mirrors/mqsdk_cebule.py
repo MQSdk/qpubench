@@ -49,6 +49,18 @@ documented and added here. ``TNQCOptResult`` also gained
 ``function_calls``/``cost_history``/``param_history``/``metadata``/
 ``optimize_result`` outputs not previously documented.
 
+Revised again 2026-08-08, this time against the TN-VQE *implementation*
+rather than the docs page — cebule-tn_vqe @ dev-kba a760489, with
+file:line citations in the affected docstrings. This is the first
+revision of the TN_QC_OPT models grounded in the code that actually runs,
+and it settles the ``h_tn_opt_qubit`` shape question the previous
+revision explicitly left open. Changes: ``qubit_operators`` deleted (the
+task never returned it) and ``h_tn_opt_qubit`` retyped as the 2-tuple it
+really is; ``h_tn_opt_fermionic`` added; ``tn_ansatz``/``n_shots``/
+``opt_options`` added as inputs; ``three_para_tn`` deprecated in favour
+of the four-member ``TNAnsatz``; and three wrong defaults corrected
+(``backend``, ``conv_tol``, ``n_layers_circuit``).
+
 SDK session pattern
 --------------------
     import mqsdk, os
@@ -264,8 +276,10 @@ class MolMapResult(pydantic.BaseModel):
     ) -> SparsePauliObservable:
         """Convert qubit operator strings + coefficients to a SparsePauliObservable.
 
-        operators and coefficients come from a follow-up TN_QC_OPT result
-        (qubit_operators / h_tn_opt_qubit).
+        operators and coefficients come from a follow-up TN_QC_OPT
+        result, whose ``h_tn_opt_qubit`` is one (labels, coefficients)
+        2-tuple — unpack it, or use ``TNQCOptResult.
+        to_sparse_pauli_observable()``, which does that itself.
         """
         return SparsePauliObservable.from_cebule_operators(
             operators, coefficients, num_qubits
@@ -350,6 +364,109 @@ class QASMGenResult(pydantic.BaseModel):
 # TN_QC_OPT
 # ---------------------------------------------------------------------------
 
+class TNAnsatz(str, enum.Enum):
+    """The tensor-network rotation family U(θ) is built from.
+
+    Verified against cebule-tn_vqe @ dev-kba a760489,
+    ``src/tn_vqe/functions_U.py:150-161``, whose ``M_ANSATZE`` table has
+    four members — not the two (``three_para_tn`` True/False) this mirror
+    and the benchmark matrix modelled before 2026-08-08.
+
+    ``parsers.py`` still accepts the older ``three_para_tn`` bool and
+    translates it (True -> ``rotation_3param``, False ->
+    ``rotation_1param``), so both spellings reach the task; ``tn_ansatz``
+    wins when both are given.
+
+    The distinction that matters is ``entangles``: a network built from
+    either ``rotation_*`` family factorises across the two wires of every
+    M gate, so U(θ) cannot entangle at all — it only rotates each qubit's
+    local basis. Sweeping only those two sweeps two variants of "no
+    entanglement in U(θ)".
+    """
+    ROTATION_1PARAM   = "rotation_1param"
+    ROTATION_3PARAM   = "rotation_3param"    # the task's own default
+    GIVENS            = "givens"
+    NUMBER_PRESERVING = "number_preserving"
+
+
+class TNAnsatzProperties(pydantic.BaseModel):
+    """Structural facts about one ``TNAnsatz`` family.
+
+    ``params_per_node`` / ``entangles`` / ``conserves_number`` are literal
+    fields on the corresponding ``M_ANSATZE`` entry upstream, not
+    inferences from the family's name.
+
+    Why ``conserves_number`` earns a field rather than a comment: under
+    Jordan-Wigner on adjacent spin-orbitals ``givens`` is the image of
+    exp(θ (a_p† a_q − a_q† a_p)), a single-particle orbital basis
+    rotation, so U†HU stays a two-body fermionic Hamiltonian and its
+    Pauli-string count *saturates* with the network layer count instead of
+    growing. ``number_preserving`` is a strict superset (arbitrary U(2) on
+    the singly-occupied subspace plus a free phase on |00> and |11>), is
+    not a single-particle transformation, and so picks up higher-body
+    terms and many more Pauli strings.
+    """
+    params_per_node:  int
+    entangles:        bool
+    conserves_number: bool
+
+
+TN_ANSATZ_PROPERTIES: dict[TNAnsatz, TNAnsatzProperties] = {
+    TNAnsatz.ROTATION_1PARAM:   TNAnsatzProperties(
+        params_per_node=1, entangles=False, conserves_number=False),
+    TNAnsatz.ROTATION_3PARAM:   TNAnsatzProperties(
+        params_per_node=3, entangles=False, conserves_number=False),
+    TNAnsatz.GIVENS:            TNAnsatzProperties(
+        params_per_node=1, entangles=True,  conserves_number=True),
+    TNAnsatz.NUMBER_PRESERVING: TNAnsatzProperties(
+        params_per_node=5, entangles=True,  conserves_number=True),
+}
+
+
+def tn_node_count(num_qubits: int) -> int:
+    """M-gate nodes in the tensor network over ``num_qubits`` qubits.
+
+    ``(3 * n - 2) // 2``, verbatim from ``functions_U.py:15-17``.
+    """
+    if num_qubits < 1:
+        raise ValueError(f"num_qubits must be >= 1, got {num_qubits}")
+    return (3 * num_qubits - 2) // 2
+
+
+def tn_theta_parameter_count(
+    num_qubits: int, n_layers_network: int, tn_ansatz: TNAnsatz | str,
+) -> int:
+    """Network-side (θ) parameter count — fixed by the inputs alone.
+
+    Unlike the expectation-value count per iteration, this needs no run to
+    determine: ``n_layers_network * tn_node_count(n) * params_per_node``.
+
+    It is not just bookkeeping. With COBYLA (the benchmark's optimizer)
+    the iteration count scales with the parameter count, so a
+    ``number_preserving`` row is 5x the classical optimisation work of a
+    ``givens`` row at the same layer count.
+    """
+    if n_layers_network < 0:
+        raise ValueError(f"n_layers_network must be >= 0, got {n_layers_network}")
+    props = TN_ANSATZ_PROPERTIES[TNAnsatz(tn_ansatz)]
+    return n_layers_network * tn_node_count(num_qubits) * props.params_per_node
+
+
+def tn_theta_shape(
+    num_qubits: int, n_layers_network: int, tn_ansatz: TNAnsatz | str,
+) -> tuple[int, ...]:
+    """Shape ``theta_init`` must have, per ``theta_shape_for``
+    (``functions_U.py:181-190``): ``(n_layers, n_nodes)`` for
+    one-parameter families, ``(n_layers, n_nodes, n_params)`` otherwise.
+    ``run_TNQCOpt`` raises ``ValueError`` on a mismatch.
+    """
+    props = TN_ANSATZ_PROPERTIES[TNAnsatz(tn_ansatz)]
+    nodes = tn_node_count(num_qubits)
+    if props.params_per_node == 1:
+        return (n_layers_network, nodes)
+    return (n_layers_network, nodes, props.params_per_node)
+
+
 class TNQCOptInput(pydantic.BaseModel):
     """Input for the Cebule TN_QC_OPT task.
 
@@ -378,64 +495,170 @@ class TNQCOptInput(pydantic.BaseModel):
                           matches the reference paper's own approach) |
                           "circuit" (freeze theta, plain VQE over phi
                           only) | "network" (freeze phi, classical-only
-                          parameter search over theta).
+                          parameter search over theta). A "network" run
+                          takes no quantum measurements at all, so it
+                          costs nothing against a QPU budget and is the
+                          classical-only floor a "both" run should be
+                          compared against.
+
+    Fields below verified against cebule-tn_vqe @ dev-kba a760489
+    (``src/tn_vqe/parsers.py``, ``functions_main.py``), 2026-08-08:
+
+    tn_ansatz             the four-member rotation family (see TNAnsatz).
+                          Supersedes three_para_tn, which the task still
+                          accepts and translates; tn_ansatz wins when both
+                          are given.
+    n_shots               None leaves the shot count to the backend —
+                          PennyLane simulators then evaluate analytically,
+                          Qiskit backends fall back on their own default.
+    opt_options           passed straight to scipy.optimize.minimize's
+                          ``options``. NOT routed through
+                          parse_input_TNQCOpt like the other fields:
+                          task_runner_TNQCOpt reads it separately via
+                          ``input_data.get("opt_options")``
+                          (functions_main.py:50). For COBYLA, ``rhobeg``
+                          (the initial trust radius) materially changes
+                          both convergence and the number of
+                          cost-function evaluations — i.e. the QPU cost of
+                          the run — so leaving it unset should be a
+                          recorded choice, not an unexamined one.
+
+    Three defaults were wrong before 2026-08-08 and are corrected here:
+    ``backend`` is 'default.qubit' (not "lightning.qubit"), ``conv_tol``
+    is 1e-6 (not None), and ``n_layers_circuit``'s real default is
+    conditional — 3 if ``qasm_ansatz`` is None, else 1 — which pydantic
+    cannot express as a field default. The field keeps the unconditional
+    3; use ``resolved_n_layers_circuit`` for the value the task will
+    really use.
     """
     task_type:           CebuleTaskType  = CebuleTaskType.TN_QC_OPT
     h_coeff_values:      list[float]
     h_operators:         list[Any]
-    n_iterations:        int
+    n_iterations:        int | None     = None
     n_layers_network:    int
     qasm_ansatz:         str | None     = None
-    n_layers_circuit:    int            = 3
-    three_para_tn:       bool           = True
-    theta_init:          list[float]    = []
+    n_layers_circuit:    int            = 3       # conditional upstream — see docstring
+    tn_ansatz:           TNAnsatz       = TNAnsatz.ROTATION_3PARAM
+    three_para_tn:       bool | None    = None    # DEPRECATED: use tn_ansatz
+    # theta_init is (n_layers, n_nodes) for one-parameter families and
+    # (n_layers, n_nodes, n_params) otherwise -- see tn_theta_shape().
+    # list[float] was wrong for three of the four families.
+    theta_init:          list[Any]      = []
+    # phi_init: PennyLane's StronglyEntanglingLayers wants an (L, N, 3)
+    # shape, so list[float] is likely wrong here too -- but that is an
+    # inference, and the last review round went wrong by asserting one.
+    # Left as-is pending a check against a real job response.
     phi_init:            list[float]    = []
-    conv_tol:            float | None   = None
+    conv_tol:            float | None   = 1e-6
     opt_method:          str            = "COBYLA"
-    backend:             str            = "lightning.qubit"   # or "qiskit.aer"
+    n_shots:             int | None     = None
+    opt_options:         dict[str, Any] | None = None
+    backend:             str            = "default.qubit"    # or "lightning.qubit", "qiskit.aer"
     measurement_method:  str            = "pauli"                # "pauli" | "grouped"
     optimization_mode:   str            = "both"                    # "circuit" | "network" | "both"
+
+    @property
+    def resolved_n_layers_circuit(self) -> int:
+        """``n_layers_circuit`` as the task will really default it.
+
+        A read-only view rather than a validator: rewriting a caller's
+        explicit value silently is worse than the mismatch it would hide.
+        Only meaningful when the caller left the field at its default.
+        """
+        if self.qasm_ansatz is not None and self.n_layers_circuit == 3:
+            return 1
+        return self.n_layers_circuit
+
+    @property
+    def resolved_tn_ansatz(self) -> TNAnsatz:
+        """``tn_ansatz``, falling back to the deprecated ``three_para_tn``.
+
+        Mirrors ``parsers.py``: True -> rotation_3param, False ->
+        rotation_1param, with ``tn_ansatz`` winning when both are given.
+        """
+        if self.three_para_tn is None:
+            return self.tn_ansatz
+        if "tn_ansatz" in self.model_fields_set:
+            return self.tn_ansatz
+        return TNAnsatz.ROTATION_3PARAM if self.three_para_tn else TNAnsatz.ROTATION_1PARAM
 
 
 class TNQCOptResult(pydantic.BaseModel):
     """Output of the Cebule TN_QC_OPT task.
 
-    qubit_operators uses space-separated PauliLabel+index tokens ("X0 Y1 Z3").
-    Use SparsePauliObservable.from_cebule_operators(qubit_operators,
-    h_tn_opt_qubit, num_qubits) to get a typed observable.
+    Restructured 2026-08-08 against the real return statement —
+    ``task_runner_TNQCOpt``, cebule-tn_vqe @ dev-kba a760489,
+    ``functions_main.py:59-71`` — which settles the open question this
+    docstring used to carry. There is no separate ``qubit_operators``
+    key: ``H_TN_opt_qubit`` is one 2-tuple of (labels, coefficients), and
+    the docs page's ``zip(*H_TN_opt_qubit)`` idiom was right. That field
+    is gone rather than deprecated, per AGENTS.md's mirror exception: the
+    API never emitted it.
 
-    h_tn_opt_qubit / qubit_operators — kept as two separate parallel lists
-    (matches how to_sparse_pauli_observable() already consumes them, and
-    an earlier session's direct read of the SDK-facing docs). The current
-    docs.mqs.dk table (checked 2026-07-09) instead shows a single
-    ``H_TN_opt_qubit: tuple (lists)`` output, demonstrated via
-    ``zip(*H_TN_opt_qubit)`` to get (operator, coefficient) pairs — which
-    could mean the real API returns one combined 2-tuple field rather than
-    two separate keys. Not confident enough from a docs-page fetch alone
-    to restructure this (would break to_sparse_pauli_observable() if
-    wrong) — verify field names against a real TN_QC_OPT job response
-    before relying on either shape.
+    h_tn_opt_qubit      (labels, coefficients), labels as space-separated
+                        PauliLabel+index tokens ("X0 Y1 Z3")
+    h_tn_opt_fermionic  the same operator's reverse Jordan-Wigner, labels
+                        in OpenFermion FermionOperator form. A real task
+                        output, so the OpenFermion post-processing snippet
+                        in the Cebule docs is no longer needed to get it.
+
+    metadata is ABSENT when optimization_mode="network":
+    ``optimize_network``'s callback dict (``vqe_optimization.py:359-363``)
+    carries only function_calls, cost_history and param_history, because
+    that mode makes no quantum measurements. The ``| None`` already
+    tolerates it; this is the reason.
 
     function_calls / cost_history / param_history / metadata /
-    optimize_result — added 2026-07-09, documented in the current
-    docs.mqs.dk table but not present when this module was first written;
-    all optional since it's unconfirmed whether older API versions
-    populate them.
+    optimize_result all arrive merged in from the optimizer callback
+    dict, and stay optional since it's unconfirmed whether older API
+    versions populate them.
     """
     vqe_energy:      float
-    phi:             list[float]   # optimised circuit parameters U(φ)
-    theta:           list[float]   # optimised TN parameters U(θ)
-    h_tn_opt_qubit:  list[float]   # optimised Hamiltonian coefficients
-    qubit_operators: list[str]     # "X0 Y1 Z3" format, parallel to h_tn_opt_qubit
+    phi:             list[Any]     # optimised circuit parameters U(φ)
+    theta:           list[Any]     # optimised TN parameters U(θ), nested — see tn_theta_shape
+    h_tn_opt_qubit:  tuple[list[str], list[float]]           # (labels, coefficients)
+    h_tn_opt_fermionic: tuple[list[str], list[float]] | None = None
     function_calls:  int | None            = None   # number of cost-function evaluations
     cost_history:    list[float]           = []      # energy value per function evaluation
-    param_history:   list[list[float]]     = []      # theta+phi history per evaluation
-    metadata:        dict[str, Any] | list[Any] | None = None   # backend-specific
+    param_history:   list[list[Any]]       = []      # theta+phi history per evaluation
+    metadata:        dict[str, Any] | list[Any] | None = None   # backend-specific; absent in "network" mode
     optimize_result: dict[str, Any] | None = None   # full scipy.optimize.minimize OptimizeResult, as returned by the API ("OptimizeResult" in the docs)
 
+    @property
+    def qubit_operator_labels(self) -> list[str]:
+        """Pauli labels alone, for callers that want the two lists apart."""
+        return self.h_tn_opt_qubit[0]
+
+    @property
+    def qubit_operator_coefficients(self) -> list[float]:
+        """Coefficients alone, parallel to ``qubit_operator_labels``."""
+        return self.h_tn_opt_qubit[1]
+
+    @classmethod
+    def from_task_result(cls, payload: dict[str, Any]) -> TNQCOptResult:
+        """Build from a raw TN_QC_OPT job response.
+
+        The task returns its own key spelling (``VQE_energy``,
+        ``H_TN_opt_qubit``, ``OptimizeResult``), which matches neither
+        this model's snake_case fields nor any single convention. Doing
+        that mapping here keeps every caller from re-deriving it, and
+        keeps the "metadata is missing in network mode" case in one
+        place rather than in each of them.
+        """
+        key_map = {
+            "VQE_energy": "vqe_energy",
+            "H_TN_opt_qubit": "h_tn_opt_qubit",
+            "H_TN_opt_fermionic": "h_tn_opt_fermionic",
+            "OptimizeResult": "optimize_result",
+        }
+        renamed = {key_map.get(key, key): value for key, value in payload.items()}
+        known = {key: value for key, value in renamed.items() if key in cls.model_fields}
+        return cls.model_validate(known)
+
     def to_sparse_pauli_observable(self, num_qubits: int) -> SparsePauliObservable:
+        labels, coefficients = self.h_tn_opt_qubit
         return SparsePauliObservable.from_cebule_operators(
-            self.qubit_operators, self.h_tn_opt_qubit, num_qubits
+            labels, coefficients, num_qubits
         )
 
 
@@ -1111,8 +1334,14 @@ __all__ = [
     "SigmaResult",
     "SolubilityInput",
     "SolubilityResult",
+    "TNAnsatz",
+    "TNAnsatzProperties",
+    "TN_ANSATZ_PROPERTIES",
     "TNQCOptInput",
     "TNQCOptResult",
+    "tn_node_count",
+    "tn_theta_parameter_count",
+    "tn_theta_shape",
     "CRNReaction",
     "CRNSpecies",
     "RXNOptInput",

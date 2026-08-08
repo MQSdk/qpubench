@@ -52,7 +52,7 @@ the `<maintainer>_<package>.py` schema naming: [docs/developer_guide.md](docs/de
 ## Critical constraints — never violate these
 
 - **No quantum SDK imports inside `src/qpubench/`**. Only adapters (in your project or `integrations/`) import external SDKs. The test suite must pass with `pip install .` alone.
-- **Never change a schema field name or type without bumping `schema_version`** in `src/qpubench/schemas/record.py`. Existing stored records break silently otherwise.
+- **Never change a schema field name or type without bumping `schema_version`** in `src/qpubench/schemas/record.py`. Existing stored records break silently otherwise. This applies to `schemas/mirrors/` exactly as it does to `schemas/` — a mirror field is a stored field. Adding optional fields to a mirror bumps the minor version; correcting a field's shape or default to match a *verified* upstream response bumps the minor version and gets a line in `docs/schemas.md`.
 - **Vendor-specific data goes through the extension points, never onto core models.** New vendor metadata → `VQAConfig.vendor_data`; new vendor result payloads → `QuantumResult.vendor_results[<key>]`; new vendor mitigation options → `ExecutionOptions.mitigation_options`. No top-level vendor fields in core models, and no vendor imports in core modules. Rationale: [docs/developer_guide.md](docs/developer_guide.md#why-the-models-are-hand-written).
 - **Pauli encoding is non-standard for Qrack**: I=0, X=1, **Z=2, Y=3** (Q# convention). Always use `PauliLabel.to_qrack_int()`, never raw integers.
 - **MBQC byproduct register bit order**: bit 0 = Z, bit 1 = X — reversed from gate-based convention. See `schemas/mirrors/johnrscott_mbqc_fpga.py`.
@@ -123,7 +123,7 @@ already a finding. When you apply one, close its bug *and* mark it applied in
 
 ## What not to do
 
-- Don't create migration scripts or version-conversion code — the schema is append-only; add new optional fields instead of changing existing ones.
+- Don't create migration scripts or version-conversion code — the schema is append-only; add new optional fields instead of changing existing ones. **One exception, for mirrors only**: when a mirrored field is shown not to exist upstream (a real task response, not a docs page), delete it rather than keeping it — a mirror that models a key the API never emits is not stability, it is a stored lie. Bump, and note the removal in `docs/schemas.md`.
 - Don't add `print()` statements to `src/qpubench/` core; use `logging.getLogger(__name__)`.
 - Don't commit result files (`results/*.ndjson`, `*.parquet`) — they are gitignored.
 - Don't use `git push --force` on `main`.

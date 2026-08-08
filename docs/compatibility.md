@@ -155,16 +155,25 @@ When serialising a `LayerGenome` to QASM via `to_circuit_spec()`, gate names are
 
 ## Cebule qubit operator string format
 
-Cebule's TN_QC_OPT task returns `qubit_operators` as space-separated `PauliLabel+index` tokens:
+Cebule's TN_QC_OPT task returns its optimised Hamiltonian as
+`H_TN_opt_qubit`, a single 2-tuple of (labels, coefficients), where each
+label is space-separated `PauliLabel+index` tokens:
 
 ```
 "X0 Y1 Z3"   →  X on qubit 0, Y on qubit 1, Z on qubit 3
 ```
 
-Cebule delivers the operators and their coefficients as two parallel lists, so they convert in bulk:
+`from_cebule_operators` takes the two lists separately, so unpack the
+tuple — or let `TNQCOptResult` do it:
 
 ```python
-SparsePauliObservable.from_cebule_operators(operators, coefficients, num_qubits)
+labels, coefficients = result.h_tn_opt_qubit
+SparsePauliObservable.from_cebule_operators(labels, coefficients, num_qubits)
+
+result.to_sparse_pauli_observable(num_qubits)      # same thing, unpacked for you
 ```
+
+There is no separate `qubit_operators` key; this mirror modelled one
+until 2026-08-08, when the task's real return statement settled it.
 
 For observables you write by hand, use `Pauli()`; it reads the same token format, and accepts commas as well as spaces, so `Pauli("X0 Y1 Z3")` and `Pauli("X0,Y1,Z3")` are the same observable.

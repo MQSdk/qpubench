@@ -3898,6 +3898,180 @@ def test_activity_coefficient_input_envelope_only():
     assert ac.task_type == CebuleTaskType.ACTIVITY_COEFFICIENT
 
 
+# ---------------------------------------------------------------------------
+# TN_QC_OPT — verified against cebule-tn_vqe @ dev-kba a760489, 2026-08-08.
+# These pin the *upstream* facts, so they fail if the mirror drifts back.
+# ---------------------------------------------------------------------------
+
+def test_tn_ansatz_has_four_families_not_two():
+    """functions_U.py:150-161's M_ANSATZE has four members.
+
+    The two-valued three_para_tn bool this mirror used to model can only
+    express the two non-entangling ones.
+    """
+    from qpubench.schemas.mirrors.mqsdk_cebule import TN_ANSATZ_PROPERTIES, TNAnsatz
+
+    assert {a.value for a in TNAnsatz} == {
+        "rotation_1param", "rotation_3param", "givens", "number_preserving",
+    }
+    assert set(TN_ANSATZ_PROPERTIES) == set(TNAnsatz)
+    # params/node, entangles, conserves particle number — literal M_ANSATZE fields.
+    assert [
+        (TN_ANSATZ_PROPERTIES[a].params_per_node,
+         TN_ANSATZ_PROPERTIES[a].entangles,
+         TN_ANSATZ_PROPERTIES[a].conserves_number)
+        for a in TNAnsatz
+    ] == [(1, False, False), (3, False, False), (1, True, True), (5, True, True)]
+
+
+def test_tn_node_count_matches_upstream_formula():
+    """(3 * n_qubits - 2) // 2, functions_U.py:15-17."""
+    from qpubench.schemas.mirrors.mqsdk_cebule import tn_node_count
+
+    assert [tn_node_count(n) for n in (2, 4, 8, 12)] == [2, 5, 11, 17]
+
+
+def test_tn_theta_parameter_count_at_stage1_layer_count():
+    """Theta is derivable from the inputs, unlike the expectation-value count.
+
+    Stage 1 runs TN_Layers_Network=2, giving 4/12/20 parameters at 2
+    qubits up to 34/102/170 at 12 — i.e. number_preserving is 5x the
+    classical optimisation work of givens at the same layer count.
+    """
+    from qpubench.schemas.mirrors.mqsdk_cebule import TNAnsatz, tn_theta_parameter_count
+
+    def counts(n):
+        return [
+            tn_theta_parameter_count(n, 2, a)
+            for a in (TNAnsatz.ROTATION_1PARAM, TNAnsatz.ROTATION_3PARAM,
+                      TNAnsatz.NUMBER_PRESERVING)
+        ]
+
+    assert counts(2) == [4, 12, 20]
+    assert counts(12) == [34, 102, 170]
+    # givens shares rotation_1param's one-parameter node.
+    assert tn_theta_parameter_count(12, 2, TNAnsatz.GIVENS) == 34
+    assert tn_theta_parameter_count(12, 0, TNAnsatz.GIVENS) == 0
+
+
+def test_tn_theta_shape_is_not_flat_for_multi_parameter_families():
+    """theta_shape_for, functions_U.py:181-190 — run_TNQCOpt raises on a mismatch."""
+    from qpubench.schemas.mirrors.mqsdk_cebule import TNAnsatz, tn_theta_shape
+
+    assert tn_theta_shape(12, 2, TNAnsatz.GIVENS) == (2, 17)
+    assert tn_theta_shape(12, 2, TNAnsatz.ROTATION_3PARAM) == (2, 17, 3)
+    assert tn_theta_shape(12, 2, TNAnsatz.NUMBER_PRESERVING) == (2, 17, 5)
+
+
+def test_tn_qc_opt_input_defaults_match_parsers_py():
+    """Three defaults were wrong before 2026-08-08; parsers.py settles them."""
+    from qpubench.schemas.mirrors.mqsdk_cebule import TNAnsatz, TNQCOptInput
+
+    inp = TNQCOptInput(h_coeff_values=[1.0], h_operators=["Z0"], n_layers_network=2)
+    assert inp.backend == "default.qubit"        # not "lightning.qubit"
+    assert inp.conv_tol == 1e-6                   # not None
+    assert inp.n_iterations is None               # optional, not required
+    assert inp.opt_method == "COBYLA"
+    assert inp.n_shots is None                    # backend decides
+    assert inp.opt_options is None
+    assert inp.tn_ansatz == TNAnsatz.ROTATION_3PARAM
+
+
+def test_tn_qc_opt_n_layers_circuit_default_is_conditional_on_qasm_ansatz():
+    """3 if qasm_ansatz is None else 1 — not expressible as a pydantic default."""
+    from qpubench.schemas.mirrors.mqsdk_cebule import TNQCOptInput
+
+    base = dict(h_coeff_values=[1.0], h_operators=["Z0"], n_layers_network=2)
+    assert TNQCOptInput(**base).resolved_n_layers_circuit == 3
+    assert TNQCOptInput(**base, qasm_ansatz="OPENQASM 3.0;").resolved_n_layers_circuit == 1
+    # An explicit value is never rewritten.
+    explicit = TNQCOptInput(**base, qasm_ansatz="OPENQASM 3.0;", n_layers_circuit=4)
+    assert explicit.resolved_n_layers_circuit == 4
+
+
+def test_tn_qc_opt_three_para_tn_still_translates_but_tn_ansatz_wins():
+    """parsers.py accepts the deprecated bool; the enum takes precedence."""
+    from qpubench.schemas.mirrors.mqsdk_cebule import TNAnsatz, TNQCOptInput
+
+    base = dict(h_coeff_values=[1.0], h_operators=["Z0"], n_layers_network=2)
+    assert TNQCOptInput(**base, three_para_tn=True).resolved_tn_ansatz == (
+        TNAnsatz.ROTATION_3PARAM
+    )
+    assert TNQCOptInput(**base, three_para_tn=False).resolved_tn_ansatz == (
+        TNAnsatz.ROTATION_1PARAM
+    )
+    both = TNQCOptInput(**base, three_para_tn=False, tn_ansatz=TNAnsatz.GIVENS)
+    assert both.resolved_tn_ansatz == TNAnsatz.GIVENS
+
+
+def test_tn_qc_opt_result_h_tn_opt_qubit_is_one_2_tuple():
+    """task_runner_TNQCOpt returns no separate qubit_operators key.
+
+    functions_main.py:59-71 — H_TN_opt_qubit is (labels, coefficients),
+    which is what the docs page's zip(*H_TN_opt_qubit) idiom implied.
+    """
+    from qpubench.schemas.mirrors.mqsdk_cebule import TNQCOptResult
+
+    assert "qubit_operators" not in TNQCOptResult.model_fields
+    result = TNQCOptResult(
+        vqe_energy=-1.137,
+        phi=[0.1, 0.2],
+        theta=[[0.3, 0.4]],
+        h_tn_opt_qubit=(["Z0", "X0 Z1"], [0.5, -0.3]),
+    )
+    assert result.qubit_operator_labels == ["Z0", "X0 Z1"]
+    assert result.qubit_operator_coefficients == [0.5, -0.3]
+
+    # The unpacking path: from_cebule_operators still takes two lists.
+    observable = result.to_sparse_pauli_observable(num_qubits=2)
+    assert len(observable.terms) == 2
+    assert observable.terms[0].coefficient.re == pytest.approx(0.5)
+
+
+def test_tn_qc_opt_result_from_raw_task_payload():
+    """The task's own key spelling is CamelCase; the model's is not."""
+    from qpubench.schemas.mirrors.mqsdk_cebule import TNQCOptResult
+
+    result = TNQCOptResult.from_task_result({
+        "VQE_energy": -1.137,
+        "phi": [0.1],
+        "theta": [[0.2]],
+        "H_TN_opt_qubit": (["Z0"], [0.5]),
+        "H_TN_opt_fermionic": (["0^ 0"], [1.0]),
+        "OptimizeResult": {"fun": -1.137, "nfev": 42},
+        "function_calls": 42,
+        "cost_history": [-1.0, -1.137],
+        "param_history": [[0.0], [0.1]],
+        "metadata": {"backend": "default.qubit"},
+    })
+    assert result.vqe_energy == pytest.approx(-1.137)
+    assert result.h_tn_opt_qubit == (["Z0"], [0.5])
+    assert result.h_tn_opt_fermionic == (["0^ 0"], [1.0])
+    assert result.optimize_result == {"fun": -1.137, "nfev": 42}
+    assert result.function_calls == 42
+
+
+def test_tn_qc_opt_result_tolerates_missing_metadata_in_network_mode():
+    """optimize_network's callback dict has no metadata key at all.
+
+    vqe_optimization.py:359-363 — that mode takes no quantum
+    measurements, so there is no backend metadata to report.
+    """
+    from qpubench.schemas.mirrors.mqsdk_cebule import TNQCOptResult
+
+    result = TNQCOptResult.from_task_result({
+        "VQE_energy": -1.10,
+        "phi": [],
+        "theta": [[0.2]],
+        "H_TN_opt_qubit": (["Z0"], [0.5]),
+        "function_calls": 12,
+        "cost_history": [-1.10],
+        "param_history": [[0.2]],
+    })
+    assert result.metadata is None
+    assert result.function_calls == 12
+
+
 def test_gnn_dataset_lifecycle_inputs():
     create = GNNDatasetCreateInput(
         dataset_name="ds1", includes_target_val=True, target_property="homo_lumo_gap",

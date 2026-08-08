@@ -161,11 +161,18 @@ class SparsePauliObservable(pydantic.BaseModel):
         coefficients: list[float],
         num_qubits: int,
     ) -> SparsePauliObservable:
-        """Convert Cebule TN_QC_OPT qubit_operators to a SparsePauliObservable.
+        """Convert Cebule Pauli operator strings to a SparsePauliObservable.
 
         Each operator string uses space-separated PauliLabel+index tokens,
         e.g. "X0 Y1 Z3".  The parallel coefficients list provides the weight
-        for each term (from h_coeff_values or h_tn_opt_qubit).
+        for each term.
+
+        Deliberately takes the two lists separately rather than
+        TN_QC_OPT's own ``h_tn_opt_qubit`` 2-tuple: this is a general
+        "labels + coefficients" constructor with more than one caller
+        (``h_coeff_values`` arrives as a plain parallel list).  Use
+        ``TNQCOptResult.to_sparse_pauli_observable()`` to go straight from
+        a task result, which unpacks the tuple for you.
         """
         if len(operators) != len(coefficients):
             raise ValueError(

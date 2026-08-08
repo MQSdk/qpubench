@@ -170,7 +170,7 @@ freezes θ for plain VQE over φ; `"network"` freezes φ for a classical-only
 docs.mqs.dk table.
 
 ```python
-from qpubench.schemas import TNQCOptInput, TNQCOptResult, SparsePauliObservable
+from qpubench.schemas import TNAnsatz, TNQCOptInput, TNQCOptResult, SparsePauliObservable
 
 inp = TNQCOptInput(
     h_coeff_values=[0.5, -0.3, 0.1],
@@ -178,18 +178,23 @@ inp = TNQCOptInput(
     n_iterations=100,
     n_layers_network=3,
     n_layers_circuit=3,
+    tn_ansatz=TNAnsatz.GIVENS,       # see "Four rotation families" below
     opt_method="COBYLA",
-    backend="lightning.qubit",
+    opt_options={"rhobeg": 0.5},     # straight through to scipy.optimize.minimize
+    n_shots=4096,                     # None leaves it to the backend
+    backend="default.qubit",
     measurement_method="grouped",   # or "pauli"
     optimization_mode="both",        # or "circuit" / "network"
 )
 
+# In practice you get this from the job response, not by hand:
+#     result = TNQCOptResult.from_task_result(session.get_result(task.id))
 result = TNQCOptResult(
     vqe_energy=-1.136,
     phi=[0.1, -0.2, 0.3],       # optimised circuit parameters U(φ)
-    theta=[0.5, -0.1, 0.2],     # optimised TN parameters U(θ)
-    h_tn_opt_qubit=[0.5, -0.3, 0.1],
-    qubit_operators=["Z0", "X0 Z1", "Y1"],
+    theta=[[0.5, -0.1, 0.2]],   # optimised TN parameters U(θ), nested
+    # One 2-tuple, not two parallel lists: (labels, coefficients).
+    h_tn_opt_qubit=(["Z0", "X0 Z1", "Y1"], [0.5, -0.3, 0.1]),
     function_calls=42,
     cost_history=[-0.9, -1.05, -1.136],
 )
@@ -197,6 +202,41 @@ result = TNQCOptResult(
 # Convert to SparsePauliObservable
 obs = result.to_sparse_pauli_observable(num_qubits=2)
 ```
+
+### Four rotation families, not two
+
+`tn_ansatz` supersedes the older `three_para_tn` bool, which could only
+express the two **non-entangling** families. A network built from either
+`rotation_1param` or `rotation_3param` factorises across the two wires of
+every M gate, so U(θ) only rotates each qubit's local basis:
+
+| `TNAnsatz` | params/node | entangles | conserves N |
+|---|---|---|---|
+| `rotation_1param` | 1 | no | no |
+| `rotation_3param` | 3 | no | no (the task's default) |
+| `givens` | 1 | **yes** | **yes** |
+| `number_preserving` | 5 | **yes** | **yes** |
+
+`givens` is, under Jordan-Wigner on adjacent spin-orbitals, a
+single-particle orbital basis rotation, so U†HU stays a two-body
+fermionic Hamiltonian and its Pauli-string count *saturates* with the
+network layer count rather than growing. `number_preserving` is a strict
+superset and picks up higher-body terms.
+
+The task still accepts `three_para_tn` and translates it (`True` →
+`rotation_3param`, `False` → `rotation_1param`); `tn_ansatz` wins when
+both are given, which `TNQCOptInput.resolved_tn_ansatz` implements.
+
+The network-side parameter count follows from the inputs alone —
+`tn_theta_parameter_count(n_qubits, n_layers_network, tn_ansatz)`, where
+the node count is `(3n − 2) // 2`. With COBYLA the iteration count scales
+with the parameter count, so a `number_preserving` run is ~5x the
+classical optimisation work of a `givens` run at the same layer count.
+
+`theta_init` is **not** flat: its shape is `(n_layers, n_nodes)` for the
+one-parameter families and `(n_layers, n_nodes, n_params)` otherwise —
+`tn_theta_shape()` returns it, and the task raises `ValueError` on a
+mismatch.
 
 Wire `AlgorithmSpec` fields to the TN_QC_OPT parameters:
 
