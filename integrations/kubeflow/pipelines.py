@@ -1,5 +1,5 @@
 """Four kfp DAGs — one per (`Mapper`, `Method`) pair in
-data/IBM_VQE_Test_Benchmark.csv (see data/README.md's "Mapper and method
+data/benchmarks/ibm_tn-vqe_qesem/stage1_screening_matrix.csv (see data/benchmarks/ibm_tn-vqe_qesem/README.md's "Mapper and method
 are separate columns" section):
 
     cebule_molecular_vqe_pipeline  -- mol_map, TN-VQE
@@ -96,7 +96,7 @@ def _with_cebule_credentials(task: Any) -> Any:
     description=(
         "MOL_MAP -> TN_QC_OPT -> QASM_GEN -> circuit execution, following the "
         "Cebule SDK task chain documented in schemas/mirrors/mqsdk_cebule.py. "
-        "Mapper `mol_map` + Method `TN-VQE` in data/IBM_VQE_Test_Benchmark.csv."
+        "Mapper `mol_map` + Method `TN-VQE` in data/benchmarks/ibm_tn-vqe_qesem/stage1_screening_matrix.csv."
     ),
 )
 def cebule_molecular_vqe_pipeline(
@@ -107,7 +107,7 @@ def cebule_molecular_vqe_pipeline(
     h_operators: list[str] = [],  # noqa: B006
     n_iterations: int = 100,
     # TN_Layers_Network / TN_Layers_Circuit / TN_Ansatz / Measurement_Method
-    # sweep points (data/README.md) — resolved by dsl.ParallelFor below, all
+    # sweep points (data/benchmarks/ibm_tn-vqe_qesem/README.md) — resolved by dsl.ParallelFor below, all
     # inside this one pipeline/DAG, not one pipeline per combination.
     tn_layers_network_values: list[int] = [3],
     tn_layers_circuit_values: list[int] = [3],
@@ -119,7 +119,11 @@ def cebule_molecular_vqe_pipeline(
     measurement_methods: list[str] = ["pauli"],  # "pauli" | "grouped"
     opt_method: str = "COBYLA",   # the task's own default (parsers.py, checked 2026-08-08)
     optimization_mode: str = "both",   # the task's own default (parsers.py, checked 2026-08-08)
-    tn_backend: str = "default.qubit",   # the task's own default; "lightning.qubit"/"qiskit.aer" also valid
+    # The task's own default. get_backend dispatches on the string: the
+    # four named simulators, "fake*" and "ibm*" route to Qiskit, and
+    # everything else falls through to qml.device -- so "aer_simulator"
+    # is the local Qiskit option and "ibm*" the hardware one.
+    tn_backend: str = "default.qubit",
     # Needed downstream for the "pauli" measurement_method branch
     # (execute_circuits_component reads qasm_gen_result.state_circuit) —
     # always requested regardless of Cebule's own raw default.
@@ -195,7 +199,7 @@ def cebule_molecular_vqe_pipeline(
     description=(
         "JW mapping -> TN_QC_OPT -> QASM_GEN -> circuit execution — TN-VQE "
         "applied to the plain JW-mapped Hamiltonian, no MOL_MAP. Mapper "
-        "category `tn_qc_opt` in data/IBM_VQE_Test_Benchmark.csv."
+        "category `tn_qc_opt` in data/benchmarks/ibm_tn-vqe_qesem/stage1_screening_matrix.csv."
     ),
 )
 def cebule_tn_vqe_pipeline(
@@ -280,8 +284,8 @@ def cebule_tn_vqe_pipeline(
     description=(
         "MOL_MAP -> measurement of the fixed Hartree-Fock reference state "
         "(no VQE ansatz — Ansatz is blank for this Mapper category in "
-        "data/README.md). Mapper category `mol_map` in "
-        "data/IBM_VQE_Test_Benchmark.csv."
+        "data/benchmarks/ibm_tn-vqe_qesem/README.md). Mapper category `mol_map` in "
+        "data/benchmarks/ibm_tn-vqe_qesem/stage1_screening_matrix.csv."
     ),
 )
 def mol_map_measurement_pipeline(
@@ -322,8 +326,8 @@ def mol_map_measurement_pipeline(
         "Plain Jordan-Wigner mapping -> measurement of the fixed "
         "Hartree-Fock reference state. No Cebule call at all (no VQE "
         "ansatz — Ansatz is blank for this Mapper category in "
-        "data/README.md). Mapper category `JW` in "
-        "data/IBM_VQE_Test_Benchmark.csv."
+        "data/benchmarks/ibm_tn-vqe_qesem/README.md). Mapper category `JW` in "
+        "data/benchmarks/ibm_tn-vqe_qesem/stage1_screening_matrix.csv."
     ),
 )
 def jw_baseline_pipeline(

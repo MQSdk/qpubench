@@ -140,38 +140,41 @@ estimate_all_plans(total_qpu_seconds=180.0, rates=my_rates)
 ## End-to-end example: costing the VQE benchmark CSV
 
 `examples/guides/estimate_ibm_cost.py` runs this against
-`data/IBM_VQE_Test_Benchmark.csv` end to end: the minimal case (H2/sto-3g,
+`data/benchmarks/ibm_tn-vqe_qesem/stage1_screening_matrix.csv` end to end: the minimal case (H2/sto-3g,
 4 qubits, 1 circuit) fits comfortably in the Open Plan's free quota
-(~3s of an estimated 3.04s QPU-time budget vs. 600s free). The CSV holds
-the stage-1 screening matrix: 294 rows across all 7 bases, both mappers,
-both measurement methods and four ansatz families (see `data/README.md`).
-At 30
-illustrative VQE iterations per row, that's 8,820 circuit submissions,
-~47,607s (~793 min) of QPU time: **~$76,173 on Pay-As-You-Go**, ~$57,128
-on Flex (above its $30,000 minimum), and ~15% of Premium's 5,200 min/year
-minimum commitment.
+(~3s of an estimated 3.04s QPU-time budget vs. 600s free). The matrix
+holds 336 rows across all 7 bases, both mappers, both measurement methods
+and four ansatz families, of which 294 take quantum measurements and are
+costed here; the remaining 42 are the zero-QPU classical-only control.
+Together they come to ~2,773 minutes of QPU time.
 
-**The ansatz dominates, which is why it is now built for real.** Each row
+**Iterations are per row, not a flat assumption.** Each row's
+`Iterations` column holds `max(30, n_params + 2)`, because COBYLA cannot
+take a single descent step before it has built an `n+1` simplex and scipy
+overrides a smaller `maxiter` rather than honouring it. A flat 30 both
+under-billed the widest rows by up to 4.8x and bought no optimisation on
+them.
+
+**The ansatz dominates, which is why it is built for real.** Each row
 names its own ansatz and `Ansatz_Reps`, and the estimator builds that
-circuit rather than substituting EfficientSU2 everywhere as an earlier
-revision did. The difference is not cosmetic: at 12 qubits a real
-Trotterized UCCSD transpiles to ~1,554s per row against ~92s for
-EfficientSU2, so the 14 UCCSD/12-qubit rows alone account for ~363 of the
-campaign's 793 minutes: 46% of the budget in 5% of the rows. Only 14
-distinct circuits are actually transpiled across all 294 rows, cached per
-(ansatz, qubits, reps, electrons).
+circuit rather than substituting EfficientSU2 everywhere. The difference
+is not cosmetic: at 12 qubits a real Trotterized UCCSD transpiles far
+deeper than EfficientSU2 *and* carries a 200-operator excitation pool, so
+it is billed 202 submissions rather than 30 — the 14 UCCSD/12-qubit rows
+alone account for ~2,169 of the campaign's ~2,773 minutes, 78% of the
+budget in 4% of the rows. Only 14 distinct circuits are actually
+transpiled across all 294 costed rows, cached per
+(ansatz, qubits, reps, electrons, shots).
 
-The CSV's `Qiskit_Opt_Level`/`Shots` sweep columns are still blank (see
-`data/README.md`), so the example clearly labels its shot count (4096)
-and iteration count (30) as illustrative assumptions at the top of the
-script; swap in the real choices once decided; the resource-estimation
-and cost-breakdown logic itself doesn't change.
+`Shots` (4,096) and `Iterations` are both recorded campaign inputs read
+per row, not module constants; the resource-estimation and cost-breakdown
+logic does not change if they are revised.
 
 ### Turning this into a real campaign plan
 
 `examples/guides/split_benchmark_batches.py` uses the same per-row
-estimates to split the CSV into `data/batches/batch1_open_plan.csv`
+estimates to split the CSV into `data/benchmarks/ibm_tn-vqe_qesem/batch1_open_plan.csv`
 (fits the Open Plan's free 10 min), `batch2_flex_plan.csv` (fits a fresh
 400-min Flex purchase), and `batch3_premium_plan.csv` (fits a fresh
 5,200-min Premium annual minimum); see
-[`data/batches/README.md`](../../data/batches/README.md).
+[`data/benchmarks/ibm_tn-vqe_qesem/README.md`](../../data/benchmarks/ibm_tn-vqe_qesem/README.md).

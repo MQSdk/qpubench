@@ -206,3 +206,9 @@ warn_unused_ignores = false
 # ── Pytest ────────────────────────────────────────────────────────────────────
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# A gate whose purpose is to fail the build has to run in the build.
+# Without this, `pytest` only imports qpubench where someone has already
+# installed it editable -- so the doc-consistency gate passed locally and
+# never ran in CI or in a fresh venv, which is exactly the population it
+# exists for.
+pythonpath = ["src", "."]

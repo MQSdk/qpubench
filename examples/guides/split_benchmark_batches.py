@@ -1,4 +1,4 @@
-"""Split data/IBM_VQE_Test_Benchmark.csv into sequential batch files sized
+"""Split data/benchmarks/ibm_tn-vqe_qesem/stage1_screening_matrix.csv into sequential batch files sized
 to fit each IBM access plan's QPU-time budget: a first, cheapest tranche
 that fits in the Open Plan's free 10 minutes, a next tranche sized to a
 fresh Flex Plan purchase (400 minutes), and a third tranche sized to a
@@ -32,8 +32,13 @@ Two things this script pins that earlier revisions left implicit:
   1, which is a genuine estimate-vs-run mismatch — small (batch2 moves
   398.97 -> 398.48 min) but real.
 
-Still an assumption: 30 VQE iterations per case, an open campaign
-decision — see `estimate_ibm_cost.py` and `data/README.md`.
+Iterations come from each row's own `Iterations` column too, and that is
+the largest correction this splitter has taken. A flat 30 per row was not
+a conservative assumption: COBYLA cannot start without an n+1 simplex,
+and scipy overrides a smaller maxiter rather than honouring it, so the
+widest rows were under-billed by up to 4.8x. Costing them honestly is
+what pushed the Flex tranche past its budget and forced a re-cut — which
+is the whole reason the split is *regenerated* rather than patched.
 
 Rows in `optimization_mode="network"` take no quantum measurements at all
 (they optimise theta classically), so they cost nothing and are written
@@ -64,13 +69,15 @@ from qpubench.backends.ibm_cost_estimator import estimate_circuit_resources
 from qpubench.schemas.mirrors.ibm_cost_estimator import CircuitResourceEstimate
 
 _REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
-_CSV_PATH = _REPO_ROOT / "data" / "IBM_VQE_Test_Benchmark.csv"
-_OUT_DIR = _REPO_ROOT / "data" / "batches"
+_CAMPAIGN_DIR = _REPO_ROOT / "data" / "benchmarks" / "ibm_tn-vqe_qesem"
+_CSV_PATH = _CAMPAIGN_DIR / "stage1_screening_matrix.csv"
+# The tranches sit beside the matrix they were cut from, which is where
+# a reader expects them.
+_OUT_DIR = _CAMPAIGN_DIR
 _BACKEND_NAME = "ibm_brisbane"
 
-# Shots come from each row's Shots column; only the iteration count is
-# still an assumption, matching estimate_ibm_cost.py exactly.
-_ASSUMED_VQE_ITERATIONS = 30
+# Shots and iterations both come from each row's own columns, matching
+# estimate_ibm_cost.py exactly.
 # What TN-VQE's own transpile(circuit, backend) call resolves to under
 # Qiskit 2.x -- not the estimator's signature default of 1.
 _OPTIMIZATION_LEVEL = 2
@@ -111,10 +118,15 @@ def is_classical_only(row: dict[str, str]) -> bool:
 
 
 def estimate_per_row_qpu_seconds(rows: list[dict[str, str]]) -> dict[int, float]:
-    """Real per-row QPU-time estimate (at `_ASSUMED_VQE_ITERATIONS`
-    iterations), keyed by `Case_ID`. Real transpile calls are cached per
+    """Real per-row QPU-time estimate at that row's own `Iterations`,
+    keyed by `Case_ID`. Real transpile calls are cached per
     (ansatz, qubits, reps, electrons, shots) key -- the matrix has far
     more rows than distinct circuits.
+
+    Note the cache key deliberately excludes `Iterations`: it caches the
+    per-submission transpile, and the row's own count multiplies it. Two
+    rows on the same circuit with different parameter counts share the
+    transpile and not the total.
     """
     cache: dict[tuple[str, int, int, int, int], CircuitResourceEstimate] = {}
     per_row: dict[int, float] = {}
@@ -136,7 +148,9 @@ def estimate_per_row_qpu_seconds(rows: list[dict[str, str]]) -> dict[int, float]
                 optimization_level=_OPTIMIZATION_LEVEL,
                 label=f"{ansatz}, {num_qubits}q, {reps} reps",
             )
-        per_row[int(row["Case_ID"])] = cache[key].estimated_qpu_time_s * _ASSUMED_VQE_ITERATIONS
+        per_row[int(row["Case_ID"])] = (
+            cache[key].estimated_qpu_time_s * int(row["Iterations"])
+        )
     print(f"  ({len(cache)} distinct circuits really transpiled "
           f"at optimization_level={_OPTIMIZATION_LEVEL})")
     return per_row
@@ -188,7 +202,9 @@ def split_into_batches(
 def _write_csv(path: pathlib.Path, rows: list[dict[str, str]], per_row_seconds: dict[int, float]) -> None:
     if not rows:
         return
-    fieldnames = [*rows[0].keys(), "Est_QPU_Time_S_At_30_Iter", "Est_QPU_Time_Cumulative_S"]
+    # Not "..._At_30_Iter" any more: the iteration count is per row, so
+    # the name would pin a number only some rows use.
+    fieldnames = [*rows[0].keys(), "Est_QPU_Time_S", "Est_QPU_Time_Cumulative_S"]
     cumulative = 0.0
     with path.open("w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=fieldnames, lineterminator="\n")
@@ -198,7 +214,7 @@ def _write_csv(path: pathlib.Path, rows: list[dict[str, str]], per_row_seconds: 
             if cost is not None:
                 cumulative += cost
             out = dict(row)
-            out["Est_QPU_Time_S_At_30_Iter"] = f"{cost:.3f}" if cost is not None else ""
+            out["Est_QPU_Time_S"] = f"{cost:.3f}" if cost is not None else ""
             out["Est_QPU_Time_Cumulative_S"] = f"{cumulative:.3f}" if cost is not None else ""
             w.writerow(out)
 

@@ -47,7 +47,10 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from _ansatz_builders import build_ansatz
 
 _REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
-_CSV_PATH = _REPO_ROOT / "data" / "IBM_VQE_Test_Benchmark.csv"
+_CSV_PATH = (
+    _REPO_ROOT / "data" / "benchmarks" / "ibm_tn-vqe_qesem"
+    / "stage1_screening_matrix.csv"
+)
 _QASM_DIR = _REPO_ROOT / "data" / "qasm"
 
 
@@ -65,20 +68,30 @@ def tn_circuit_shapes(rows: list[dict[str, str]]) -> set[tuple[str, int, int]]:
 
 
 def write_pinned_qasm(ansatz: str, num_qubits: int, reps: int) -> tuple[pathlib.Path, str]:
-    """Write one circuit as OpenQASM 3.0; return (path, sha256 prefix).
+    """Write one circuit as OpenQASM 3.0, parameters left free; return
+    (path, sha256 prefix).
 
-    Parameters are bound to zero: what is being pinned is the circuit's
-    structure and qubit ordering, not a particular point in parameter
-    space. The optimizer supplies the values at run time.
+    The circuit is dumped *unbound*. OpenQASM 3's `input` declarations
+    carry the free parameters through the file, so what is pinned is the
+    structure, the qubit ordering and the parameterisation together, and
+    the consumer derives `phi_shape` from the loaded circuit's
+    `num_parameters`.
+
+    Binding them away is not a neutral simplification: TN-VQE takes its
+    phi count from the QASM, so a circuit dumped at zero loads as
+    `num_parameters == 0` and the row silently optimises theta alone
+    against a frozen |0...0>, with no exception raised. That is what
+    `test_pinned_qasm_carries_the_parameters_the_matrix_claims` guards.
     """
     from qiskit import qasm3
 
     circuit = build_ansatz(ansatz, num_qubits, reps=reps)
-    if circuit.num_parameters:
-        circuit = circuit.assign_parameters([0.0] * circuit.num_parameters)
 
     path = _QASM_DIR / f"{ansatz}_{num_qubits}q_{reps}r.qasm"
-    path.write_text(qasm3.dumps(circuit) + "\n")
+    # UTF-8 explicitly, not the locale default: an unbound n_local dump
+    # names its parameters `input float[64] _{θ}_0_;`, so these files are
+    # no longer pure ASCII and must not depend on the writer's locale.
+    path.write_text(qasm3.dumps(circuit) + "\n", encoding="utf-8")
     return path, hashlib.sha256(path.read_bytes()).hexdigest()[:12]
 
 

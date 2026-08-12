@@ -10,7 +10,7 @@ offline-safe, unlike `hamlib.py`/`pennylane_qchem.py`.
 `count_basis_functions()`'s spherical-harmonic function counts
 (`2*l + 1` per shell) were cross-checked in this session against real
 `pyscf.gto.M(...).nao` values for every (molecule, basis) pair in
-`data/IBM_VQE_Test_Benchmark.csv` (sto-3g/6-31g/cc-pvdz/cc-pvtz/def2-svp/
+`data/benchmarks/ibm_tn-vqe_qesem/stage1_screening_matrix.csv` (sto-3g/6-31g/cc-pvdz/cc-pvtz/def2-svp/
 def2-tzvp on H2/Li2/H2O) — exact match in every case, e.g. O/cc-pVDZ:
 3 s-type + 2 p-type + 1 d-type contracted shells -> 3*1 + 2*3 + 1*5 = 14,
 matching PySCF's own `nao` for that atom exactly.

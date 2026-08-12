@@ -799,6 +799,18 @@ parallel keys — under the mirror exception in `AGENTS.md`. Also:
 as inputs; `three_para_tn` deprecated; and the `backend`, `conv_tol` and
 `n_layers_circuit` defaults corrected.
 
+Revised again 2026-08-11: **`TNQCOptInput.phi_init` is now
+`list[float] | None`, defaulting to `None`** rather than `list[float] =
+[]`. `None` is upstream's "unset" sentinel — `run_TNQCOpt` randomises
+(`2*pi*random`) only when `phi_init is None` — so the old default was
+neither the documented random init nor a valid vector: an empty list
+reaches the shape check as a length-0 array against a `phi_shape` of
+`(3n(R+1),)`. Callers that want a pinned initialisation now pass one
+explicitly. `backend`'s inline suggestion was corrected in the same pass:
+`get_backend` routes only the four named simulators, `fake*` and `ibm*`
+to Qiskit, so `"qiskit.aer"` selected the *PennyLane* path — use
+`aer_simulator` locally and `ibm*` for hardware.
+
 | Type | Cebule task | Description |
 |---|---|---|
 | `MolecularGeometry` | shared | Flat geometry + symbols + basis |
@@ -1677,7 +1689,7 @@ locations below are `.gitignore`d:
 
 Full documentation → [docs/integrations/basis_sets.md](integrations/basis_sets.md)
 
-Added 2026-07-09 to back `data/IBM_VQE_Test_Benchmark.csv`'s `Basis`
+Added 2026-07-09 to back `data/benchmarks/ibm_tn-vqe_qesem/stage1_screening_matrix.csv`'s `Basis`
 column with a real catalogue instead of a free-text string. Two sources,
 **both real**, corrected 2026-07-09 after actually downloading and
 parsing q-vSZP's own data files: an earlier version of this module wrongly
@@ -1775,7 +1787,7 @@ total QPU-seconds into a `PlanCostBreakdown` per plan: Open Plan's free
 $30k-minimum lump sum, Premium's $249,600/year minimum annual
 subscription. `aggregate_benchmark_cost()` rolls up a whole study's worth
 of per-job estimates. See `examples/guides/estimate_ibm_cost.py` for an
-end-to-end walkthrough costing `data/IBM_VQE_Test_Benchmark.csv`.
+end-to-end walkthrough costing `data/benchmarks/ibm_tn-vqe_qesem/stage1_screening_matrix.csv`.
 
 | Type | Verified against real data | Purpose |
 |---|---|---|

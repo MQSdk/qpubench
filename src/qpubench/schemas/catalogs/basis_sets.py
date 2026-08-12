@@ -1,7 +1,7 @@
 """Gaussian basis-set catalogue — Basis Set Exchange + q-vSZP, both real.
 
 Added 2026-07-09 to back the ``Basis`` column of ``data/
-IBM_VQE_Test_Benchmark.csv`` with something more than a free-text string:
+stage1_screening_matrix.csv`` with something more than a free-text string:
 every basis name that appears there is now a real catalogue entry, and all
 seven — including q-vSZP — are backed by real, independently-parseable
 data. This module stays free of any ``basis_set_exchange``/``requests``

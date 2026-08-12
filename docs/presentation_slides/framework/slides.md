@@ -835,7 +835,7 @@ Kubeflow can't reach a QPU directly; an Execution component does what `BackendAd
 ## Worked Example: Cebule Task Chain as Four `kfp` DAGs
 
 \footnotesize
-`integrations/kubeflow/`: one `@dsl.pipeline` per (`Mapper`, `Method`) pair in `data/IBM_VQE_Test_Benchmark.csv`, matching Cebule SDK's own documented task order:
+`integrations/kubeflow/`: one `@dsl.pipeline` per (`Mapper`, `Method`) pair in `data/benchmarks/ibm_tn-vqe_qesem/stage1_screening_matrix.csv`, matching Cebule SDK's own documented task order:
 
 ```
 mol_map, TN-VQE:  mol_map ─▶ tn_qc_opt ─▶ qasm_gen ─▶ execute_circuits

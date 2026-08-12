@@ -121,7 +121,7 @@ This is what makes larger molecules and larger basis sets tractable. The
 constraint encoding's qubit count is set by the active space, not the
 basis set, so `CAS(8,6)` needs 8 qubits whether the underlying basis is
 sto-3g or cc-pVTZ. `hamiltonian_sources.mol_map.count_qubits()` computes
-that count offline; see [`data/README.md`](../../data/README.md) for the
+that count offline; see [the campaign README](../../data/benchmarks/ibm_tn-vqe_qesem/README.md) for the
 formula and the real runs it reproduces.
 
 ---

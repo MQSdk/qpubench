@@ -1,8 +1,9 @@
-"""Build the VQE benchmark scenario matrix, in two stages.
+"""Build the VQE benchmark scenario matrix, in three stages.
 
-Writes `data/IBM_VQE_Test_Benchmark.csv` (stage 1) and, once stage-1
-results are in, a stage-2 deep-sweep file for the basis sets and ansatz
-that earned it.
+Writes the stage-1 screening matrix and, once each prior stage's results
+are in, a stage-2 deep-sweep file for the basis sets and ansatz that
+earned it, then a stage-3 QESEM refinement arm on the runs stage 2
+converged.
 
 Requires: nothing beyond the standard library.  (`importlib.metadata`
 reads the installed Qiskit *distribution metadata* for the
@@ -10,13 +11,13 @@ reads the installed Qiskit *distribution metadata* for the
 
 Why two stages
 --------------
-An earlier revision of this matrix crossed every dimension with every
-other: 3 molecules x 7 basis sets x 2 mappers x 28 TN-VQE sweep points x
-2 measurement methods = 2,436 rows, ~2,463 minutes of estimated QPU time,
-and no mechanism for *deciding* anything -- every basis set got the full
-28-point tensor-network sweep whether or not it was worth one.
+Crossing every dimension with every other -- 3 molecules x 7 basis sets x
+2 mappers x 28 TN-VQE sweep points x 2 measurement methods -- gives a
+2,436-way cross product with no mechanism for *deciding* anything: every
+basis set gets the full 28-point tensor-network sweep whether or not it
+is worth one.
 
-The sweep is now split at its natural decision point:
+So the sweep is split at its natural decision point:
 
   Stage 1 (screening) -- broad in the things you are choosing *between*
     (all 7 basis sets, several ansaetze, both mappers, both measurement
@@ -30,6 +31,13 @@ The sweep is now split at its natural decision point:
     stage-1 results; not committed in advance, because the selection is
     an output of stage 1, not an input to it.
 
+  Stage 3 (QESEM refinement) -- a mitigated final energy on the runs
+    stage 2 converged, each paired with an unmitigated submission at the
+    same parameters.  Refinement consumes CONVERGED PARAMETERS, which are
+    an output of stage 2 rather than of stage 1's screen, so it sits
+    behind stage 2 for the same reason stage 2 sits behind stage 1 --
+    and is generated on demand under the same rule.
+
 Every stage-1 row holds the active space *fixed across basis sets* for a
 given molecule, which is what makes the comparison a basis-set screen
 rather than a confound: only the basis varies, so the resulting energies
@@ -40,6 +48,9 @@ Run:
     PYTHONPATH=src python examples/guides/build_benchmark_matrix.py --stage 2 \\
         --select H2=cc-pvdz --select Li2=6-31g --select H2O=def2-svp \\
         --ansatz EfficientSU2
+    PYTHONPATH=src python examples/guides/build_benchmark_matrix.py --stage 3 \\
+        --from data/benchmarks/ibm_tn-vqe_qesem/stage2_deep_sweep.csv \\
+        --refine 17=results/converged/case_17.json --precision 0.0016
 
 `PYTHONPATH=src` (or `pip install -e .`) is required: this script imports
 `qpubench`, and the `sys.path` line below adds the repo root, not `src/`.
@@ -60,8 +71,10 @@ from qpubench.hamiltonian_sources.mol_map import count_qubits, is_confirmed
 from qpubench.schemas.mirrors.mqsdk_cebule import TNAnsatz, tn_theta_parameter_count
 
 _REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
-_STAGE1_PATH = _REPO_ROOT / "data" / "IBM_VQE_Test_Benchmark.csv"
-_STAGE2_PATH = _REPO_ROOT / "data" / "stage2_deep_sweep.csv"
+_CAMPAIGN_DIR = _REPO_ROOT / "data" / "benchmarks" / "ibm_tn-vqe_qesem"
+_STAGE1_PATH = _CAMPAIGN_DIR / "stage1_screening_matrix.csv"
+_STAGE2_PATH = _CAMPAIGN_DIR / "stage2_deep_sweep.csv"
+_STAGE3_PATH = _CAMPAIGN_DIR / "stage3_qesem_refinement.csv"
 _QASM_DIR = _REPO_ROOT / "data" / "qasm"
 
 
@@ -138,7 +151,20 @@ TN_CIRCUIT_ANSATZ_IN_SECTOR = "excitation_preserving_linear"
 # is a real TNQCOptInput field (default 'default.qubit'), and pinning it
 # is what makes Num_Opt_Params_Phi well-defined: the Qiskit path gives
 # 3n(R+1) parameters, PennyLane's StronglyEntanglingLayers 3nR.
-BACKEND_PLATFORM_TN = "qiskit.aer"      # TNQCOptInput.backend
+#
+# The value has to be a string get_backend really routes to Qiskit.  Its
+# dispatch (functions_main.py, cebule-tn_vqe @ dev-kba a760489) is: the
+# four named simulators, anything prefixed 'fake', anything prefixed
+# 'ibm' -> Qiskit; everything else -> qml.device(...), i.e. PennyLane.
+# "qiskit.aer" matched none of those, so it selected the PennyLane
+# circuit while the column claimed the Qiskit one -- exactly the
+# ambiguity this column was added to remove.  'ibm_brisbane' hits the
+# 'ibm' branch, and is what estimate_ibm_cost.py and
+# split_benchmark_batches.py already cost against.
+#
+# Note the column carries two vocabularies: TNQCOptInput.backend on TN
+# rows, qpubench's own IBMAdapter name on VQE rows.
+BACKEND_PLATFORM_TN = "ibm_brisbane"    # TNQCOptInput.backend
 BACKEND_PLATFORM_VQE = "ibm_runtime"    # qpubench's own IBMAdapter
 
 # The single TN-VQE point stage 1 runs, mid-range in both directions --
@@ -184,18 +210,98 @@ OPT_OPTIONS = "{}"
 # than the illustrative assumption it used to be.
 SHOTS = 4096
 
+# --- The optimizer budget, per row ----------------------------------------
+#
+# This was a flat 30 for every row, and that was not a conservative
+# assumption -- it was an invalid one.  COBYLA builds an initial simplex
+# of n+1 points before it can take a single descent step, and
+# scipy.optimize.minimize does NOT honour a maxiter below that: it raises
+# maxfun, warns "COBYLA: Invalid MAXFUN; it should be at least ...", and
+# runs n+2 evaluations anyway.  Measured against the repo's own scipy: at
+# n=142 a maxiter of 30 consumes 144 evaluations and moves the objective
+# by exactly zero, because all of them go into the simplex.
+#
+# So a flat 30 was wrong in both directions at once -- it under-billed the
+# QPU by ~4.8x on the widest rows, and the 30 submissions it did bill
+# would have bought no optimisation at all.
+#
+# The floor is what STAGE 1 budgets, and that is a deliberate campaign
+# decision rather than a cost dodge: stage 1 is a screen, so its job is
+# to rank rows and prove the pipeline runs end to end; the converged runs
+# are stage 2's, at a multiple set from stage-1 results.  A row at the
+# floor completes its simplex and no more, which is worth stating plainly
+# next to any stage-1 energy.
+MIN_ITERATIONS = 30       # smoke-test floor, so the small rows stay comparable
+SIMPLEX_OVERHEAD = 2      # n+1 simplex points, +1 for the first real step
+
+# --- phi_init, per optimization mode --------------------------------------
+#
+# Upstream randomises phi (2*pi*random, run_TNQCOpt) whenever phi_init is
+# None, unseeded -- so an unpinned run has an initialisation nobody can
+# reproduce.  That is the defect worth fixing.  WHICH pinned value is
+# right, though, differs by mode, and the two must not be conflated:
+#
+#   network rows want ZEROS.  All-zero RzRyRz rotations make the circuit
+#   exactly the identity, so the reference state is |0...0> = the
+#   reference determinant, and theta then performs orbital optimisation
+#   on a frozen determinant.  That is precisely the classical floor a
+#   "both" row has to beat, and it is the same identity-circuit fact that
+#   made Finding 1 silent -- used deliberately here instead of by
+#   accident.
+#
+#   "both" rows want a SEEDED RANDOM DRAW.  On a row that actually
+#   optimises phi, starting at the identity is a liability rather than a
+#   feature: the initial state is the reference determinant and the
+#   gradient with respect to many phi parameters vanishes there, which is
+#   a well-known bad start for hardware-efficient ansaetze.  Seeding the
+#   draw keeps the reproducibility win without changing the character of
+#   the initialisation, and it matches upstream's own default.
+#
+# The seed is the date the convention was settled.  The campaign draws
+# 2*pi*U(0,1) from numpy's default_rng(seed) -- upstream's distribution --
+# and passes the vector explicitly through phi_init, because upstream
+# exposes no seed of its own.
+PHI_INIT_SEED = 20260811
+PHI_INIT_ZEROS = "zeros"
+PHI_INIT_RANDOM = f"random(seed={PHI_INIT_SEED})"
+
 NOT_TN = "n/a (not TN-VQE)"
 NO_TN_LAYERS = "n/a (no TN layers)"
-NO_CIRCUIT = "n/a (no circuit executed)"
+NETWORK_MODE = "n/a (network mode)"
+
+# --- The QESEM refinement arm (stage 3) -----------------------------------
+#
+# Additive by construction: `none` is a real value, so every row that
+# exists today keeps its meaning and no committed number moves.
+MITIGATION_NONE = "none"
+MITIGATION_QESEM = "qesem"
+NOT_QESEM = "n/a (not QESEM)"
+SHOT_BASED = "n/a (shot-based)"
+# QESEM decides its own sampling from a precision target, so a shot count
+# on one of its rows would be a number nothing reads -- the same
+# distinction M1 drew between "0 shots" and "shots do not apply".
+QESEM_SHOTS = "n/a (QESEM: precision-driven)"
+# QESEM takes an observable and returns a mitigated expectation value with
+# an error bar. It never exposes the raw bitstring distribution a
+# basis-state grouping scheme needs to reconstruct expectation values
+# from, so the pauli/grouped dimension COLLAPSES on these rows -- it is
+# not a choice made in favour of `pauli`. This is a property of the
+# service, not of Cebule's integration with it: the grouping would have
+# to happen inside the mitigation, which the interface does not expose.
+QESEM_NO_GROUPING = "n/a (QESEM: no bitstring distribution)"
 
 FIELDNAMES = [
     "Case_ID", "Stage", "Molecule", "Charge", "Multiplicity", "Num_Electrons",
     "Basis", "Basis_Source", "Active_Space", "Active_Electrons", "Active_Orbitals",
     "Mapper", "N_Qubit", "N_Qubit_Source", "Method", "Ansatz", "Ansatz_Reps",
-    "Backend_Platform", "Optimizer", "Opt_Options", "Shots", "Qiskit_Version",
-    "TN_Layers_Network", "TN_Layers_Circuit", "TN_Ansatz", "Optimization_Mode",
-    "Measurement_Method", "Qasm_Ansatz_File", "Qasm_Ansatz_SHA256",
-    "Num_Opt_Params_Phi", "Num_Opt_Params_Theta", "Num_ExpVals_Per_Iter", "Notes",
+    "Backend_Platform", "Optimizer", "Opt_Options", "Iterations", "Shots",
+    "Qiskit_Version", "TN_Layers_Network", "TN_Layers_Circuit", "TN_Ansatz",
+    "Optimization_Mode", "Measurement_Method", "Qasm_Ansatz_File",
+    "Qasm_Ansatz_SHA256", "Num_Opt_Params_Phi", "Phi_Init",
+    "Num_Opt_Params_Theta", "Num_ExpVals_Per_Iter",
+    "Error_Mitigation", "Precision", "QESEM_Execution_Mode",
+    "Refines_Case_ID", "Converged_Params_File", "Converged_Params_SHA256",
+    "Notes",
 ]
 
 
@@ -226,7 +332,38 @@ def qubit_count(mapper: str, active_electrons: int, active_orbitals: int) -> tup
     return n, source
 
 
-def circuit_parameter_count(ansatz: str, num_qubits: int, reps: int) -> str:
+def uccsd_parameter_count(num_qubits: int, num_electrons: int) -> int:
+    """One variational amplitude per singles+doubles excitation.
+
+    Counted from the pool `_ansatz_builders.build_ansatz` really builds
+    (`integrations.generic_adapt_vqe.pool`) rather than from a
+    combinatorial formula written out here, so the two cannot drift
+    apart.  The pool is pure qpubench + stdlib, so this adds no
+    dependency the generator did not already have.
+
+    The count is not decoration: it is what sets a UCCSD row's optimizer
+    budget.  At 12 qubits / 8 electrons the pool is 200 operators, so
+    such a row cannot converge in fewer than 202 cost-function
+    evaluations -- 6.7x the flat 30 an earlier revision billed it.
+    """
+    from integrations.generic_adapt_vqe.pool import generate_singles_doubles_pool
+
+    return len(generate_singles_doubles_pool(num_qubits, num_electrons))
+
+
+def optimizer_iterations(num_params: int) -> int:
+    """Cost-function evaluations a row's optimizer will really consume.
+
+    `max(MIN_ITERATIONS, n + SIMPLEX_OVERHEAD)` -- COBYLA cannot do
+    anything at all below its own simplex size, and scipy overrides a
+    smaller maxiter rather than honouring it.  See MIN_ITERATIONS.
+    """
+    return max(MIN_ITERATIONS, num_params + SIMPLEX_OVERHEAD)
+
+
+def circuit_parameter_count(
+    ansatz: str, num_qubits: int, reps: int, num_electrons: int | None = None,
+) -> str:
     """Circuit-side (phi) parameter count, where the ansatz fixes it.
 
     Per platform, not per family name: the two TN circuits differ.  Qiskit's
@@ -235,9 +372,14 @@ def circuit_parameter_count(ansatz: str, num_qubits: int, reps: int) -> str:
     both is how this column came to understate every TN row by 50%.
 
     UCCSD's count depends on the excitation list its builder generates
-    from the active space, not on (qubits, reps) alone, so it is left to
-    the real run.
+    from the active space, not on (qubits, reps) alone, so it takes
+    `num_electrons` and counts the real pool -- see
+    `uccsd_parameter_count`.
     """
+    if ansatz == "UCCSD":
+        return "" if num_electrons is None else str(
+            uccsd_parameter_count(num_qubits, num_electrons) * reps
+        )
     if ansatz == "n_local_rzryrz_sca":
         return str(3 * num_qubits * (reps + 1))    # trailing rotation layer
     if ansatz == "excitation_preserving_linear":
@@ -293,6 +435,16 @@ def _qubit_note(mapper: str, source: str, molecule: str, basis: str) -> str:
 def _measurement_note(method: str) -> str:
     if method == "pauli":
         return "Standard per-Pauli-string measurement (baseline)."
+    if method == QESEM_NO_GROUPING:
+        return (
+            "The pauli/grouped dimension COLLAPSES here: QESEM returns a mitigated "
+            "expectation value, never the raw bitstring distribution a grouping "
+            "scheme reconstructs from, so there is nothing for 'grouped' to "
+            "consume. A property of the service, not of the integration. "
+            "Consequence: the campaign's most defensible headline -- 'grouped "
+            "keeps measurement cost flat while number_preserving does not' -- "
+            "cannot draw on the QESEM arm at all."
+        )
     if method.startswith("n/a"):
         return "No quantum measurements taken, so no measurement method applies."
     return (
@@ -335,6 +487,12 @@ def _row(
     ansatz: str, reps: int, measurement: str,
     layers_network: int | None, layers_circuit: int | None, tn_ansatz: str,
     optimization_mode: str = "both", extra_note: str = "",
+    shots: str | None = None,
+    error_mitigation: str = MITIGATION_NONE,
+    precision: str = SHOT_BASED,
+    qesem_execution_mode: str = NOT_QESEM,
+    refines_case_id: str = "",
+    converged_params: tuple[str, str] = ("", ""),
 ) -> dict[str, str]:
     num_qubits, source = qubit_count(mapper, active_electrons, active_orbitals)
     notes = [_qubit_note(mapper, source, mol.name, basis)]
@@ -346,10 +504,18 @@ def _row(
     notes.append(_measurement_note(measurement))
 
     is_tn = method == "TN-VQE"
-    runs_a_circuit = optimization_mode != "network"
-    qasm_file, qasm_hash = (
-        qasm_ansatz_pin(ansatz, num_qubits, reps) if runs_a_circuit else ("", "")
-    )
+    # "network" freezes phi and contracts the circuit classically; it does
+    # not mean there is no circuit.  optimize_network opens with
+    # circuit_to_mps(circuit, phi), so the circuit exists at a frozen phi
+    # and IS the reference state theta is optimised against -- which is
+    # why two network rows differing only in TN_Layers_Circuit give
+    # different floors.  So the circuit, its reps, its pinned QASM and its
+    # phi count are all recorded honestly here; what distinguishes the
+    # control is that it takes no QUANTUM MEASUREMENTS, and
+    # Optimization_Mode already carries that.
+    takes_measurements = optimization_mode != "network"
+    qasm_file, qasm_hash = qasm_ansatz_pin(ansatz, num_qubits, reps)
+    phi_params = circuit_parameter_count(ansatz, num_qubits, reps, active_electrons)
     # Theta is fixed by the inputs, unlike Num_ExpVals_Per_Iter: it is
     # n_layers_network * ((3n - 2) // 2) * params_per_node.
     theta_params = (
@@ -357,6 +523,15 @@ def _row(
         if is_tn and layers_network is not None and tn_ansatz in {a.value for a in TNAnsatz}
         else ""
     )
+    # The optimizer varies whatever the row leaves free: phi is frozen in
+    # network mode, so only theta counts there.
+    free_params = (int(phi_params) if phi_params and takes_measurements else 0) + (
+        int(theta_params) if theta_params else 0
+    )
+    if is_tn:
+        phi_init = PHI_INIT_ZEROS if not takes_measurements else PHI_INIT_RANDOM
+    else:
+        phi_init = NOT_TN
     return {
         "Case_ID": "",                       # assigned after the full list is built
         "Stage": stage,
@@ -378,7 +553,14 @@ def _row(
         "Backend_Platform": BACKEND_PLATFORM_TN if is_tn else BACKEND_PLATFORM_VQE,
         "Optimizer": OPTIMIZER,
         "Opt_Options": OPT_OPTIONS,
-        "Shots": str(SHOTS) if runs_a_circuit else "0",
+        "Iterations": str(optimizer_iterations(free_params)),
+        # 0 was a real shot count where "shots do not apply" was meant --
+        # and would be wrong the moment such a row were re-run in "both"
+        # mode. n/a, matching what Measurement_Method already says on
+        # exactly these rows.
+        "Shots": shots if shots is not None else (
+            str(SHOTS) if takes_measurements else NETWORK_MODE
+        ),
         "Qiskit_Version": qiskit_version(),
         "TN_Layers_Network": "" if layers_network is None else str(layers_network),
         "TN_Layers_Circuit": "" if layers_circuit is None else str(layers_circuit),
@@ -387,11 +569,16 @@ def _row(
         "Measurement_Method": measurement,
         "Qasm_Ansatz_File": qasm_file,
         "Qasm_Ansatz_SHA256": qasm_hash,
-        "Num_Opt_Params_Phi": (
-            circuit_parameter_count(ansatz, num_qubits, reps) if runs_a_circuit else "0"
-        ),
+        "Num_Opt_Params_Phi": phi_params,
+        "Phi_Init": phi_init,
         "Num_Opt_Params_Theta": theta_params,
         "Num_ExpVals_Per_Iter": "",
+        "Error_Mitigation": error_mitigation,
+        "Precision": precision,
+        "QESEM_Execution_Mode": qesem_execution_mode,
+        "Refines_Case_ID": refines_case_id,
+        "Converged_Params_File": converged_params[0],
+        "Converged_Params_SHA256": converged_params[1],
         "Notes": " ".join(notes),
     }
 
@@ -451,17 +638,26 @@ def build_stage1() -> list[dict[str, str]]:
                 # rows above must be compared against -- without it, a run
                 # whose correlation energy came mostly from the classical
                 # orbital rotation reads as a quantum success.
+                #
+                # It runs the SAME circuit as the "both" rows above, at the
+                # same reps, with phi frozen at zeros rather than optimised
+                # -- contracted classically instead of measured. Recording
+                # it as "no circuit executed" hid the fact that the control's
+                # floor depends on which circuit it froze.
                 rows.append(_row(
                     **common, basis=basis, mapper=mapper, method="TN-VQE",
-                    ansatz=NO_CIRCUIT, reps=0, measurement="n/a (network mode)",
-                    layers_network=tn["layers_network"], layers_circuit=0,
+                    ansatz=TN_CIRCUIT_ANSATZ, reps=tn["layers_circuit"],
+                    measurement=NETWORK_MODE,
+                    layers_network=tn["layers_network"],
+                    layers_circuit=tn["layers_circuit"],
                     tn_ansatz=tn["tn_ansatz"].value, optimization_mode="network",
                     extra_note=(
                         f"{cas_note} ZERO-QPU CONTROL: optimization_mode='network' "
-                        "freezes phi and optimises theta classically, taking no "
-                        "quantum measurements. Costs nothing against any IBM plan "
-                        "budget; this is the floor every 'both' row is measured "
-                        "against."
+                        "freezes phi at zeros and optimises theta by classical "
+                        "tensor-network contraction, taking no quantum "
+                        "measurements. Costs nothing against any IBM plan budget; "
+                        "this is the floor every 'both' row is measured against. "
+                        "Num_Opt_Params_Phi is the count held FIXED, not optimised."
                     ),
                 ))
     return rows
@@ -575,6 +771,115 @@ def build_stage2(
     return rows
 
 
+def build_stage3(
+    source_rows: list[dict[str, str]],
+    refinements: dict[str, pathlib.Path],
+    precision: float,
+    execution_mode: str,
+) -> list[dict[str, str]]:
+    """QESEM refinement rows, generated from converged stage-2 results.
+
+    Why this is a stage rather than an arm on stage 1
+    -------------------------------------------------
+    A refinement row consumes CONVERGED PARAMETERS, and those are not an
+    output of stage 1's screen -- they are an output of a converged
+    variational run, which is what stage 2 is for.  So the chain is:
+    stage 1 selects, stage 2 converges, stage 3 refines what stage 2
+    produced.  Same refusal-to-guess as stage 2: there is no defensible
+    default set of rows before the prior stage's results exist, so this
+    takes explicit `--refine CASE_ID=PARAMS_FILE` pointers and a `σ`.
+
+    Why each refinement is TWO rows
+    -------------------------------
+    A mitigated energy on its own says nothing about mitigation.  It can
+    only be read against the same circuit, at the same parameters, on the
+    same device, without QESEM -- so every refinement emits an
+    unmitigated row and a mitigated one, identical but for
+    `Error_Mitigation`.  Without the pair the arm's headline result is
+    "QESEM returned a number", which is not a benchmark finding.  Both
+    are then reported as errors against the campaign's classical
+    reference energy, which is what turns "the mitigated number is
+    different" into "the mitigated number is closer".
+
+    Why they are cheap
+    ------------------
+    Refinement submits at fixed parameters, so it is one job per row
+    rather than one job per optimizer iteration.  The arm is few, late
+    and small; it should not look like a sweep.
+    """
+    by_case_id = {row["Case_ID"]: row for row in source_rows}
+    rows: list[dict[str, str]] = []
+    for case_id, params_path in refinements.items():
+        source = by_case_id.get(case_id)
+        if source is None:
+            raise SystemExit(
+                f"--refine {case_id}=...: no Case_ID {case_id} in the source matrix"
+            )
+        if not params_path.exists():
+            raise SystemExit(
+                f"--refine {case_id}={params_path}: converged-parameter file not found. "
+                "A refinement row without a pointer to the parameters it refines "
+                "produces a number nobody can reproduce."
+            )
+        digest = hashlib.sha256(params_path.read_bytes()).hexdigest()[:12]
+        params_ref = (
+            str(params_path.relative_to(_REPO_ROOT))
+            if params_path.is_relative_to(_REPO_ROOT) else str(params_path),
+            digest,
+        )
+        for mitigation in (MITIGATION_NONE, MITIGATION_QESEM):
+            mitigated = mitigation == MITIGATION_QESEM
+            row = dict(source)
+            row.update({
+                "Case_ID": "",                    # reassigned by write_csv
+                "Stage": "3_refine",
+                # No optimizer runs: the parameters are already converged,
+                # so this is one submission, not one per iteration.
+                "Optimizer": "n/a (converged parameters)",
+                "Opt_Options": "{}",
+                "Iterations": "1",
+                "Shots": QESEM_SHOTS if mitigated else str(SHOTS),
+                # The mitigated row cannot carry a grouping scheme at all;
+                # the unmitigated pair uses `pauli` so the two differ in
+                # mitigation and nothing else.
+                "Measurement_Method": QESEM_NO_GROUPING if mitigated else "pauli",
+                "Phi_Init": "converged (see Converged_Params_File)",
+                "Error_Mitigation": mitigation,
+                "Precision": f"{precision:g}" if mitigated else SHOT_BASED,
+                "QESEM_Execution_Mode": execution_mode if mitigated else NOT_QESEM,
+                "Refines_Case_ID": case_id,
+                "Converged_Params_File": params_ref[0],
+                "Converged_Params_SHA256": params_ref[1],
+                "Notes": (
+                    f"Stage-3 refinement of stage-2 Case_ID {case_id}, submitted once "
+                    f"at its converged parameters. "
+                    + (
+                        f"QESEM error mitigation at a target precision of "
+                        f"{precision:g} Ha ({execution_mode} execution mode). "
+                        "QESEM returns a mitigated expectation value with a 1-sigma "
+                        "error bar; the ACHIEVED uncertainty is the result and is "
+                        "recorded on the job record (QESEMExpectationValue.error_bar), "
+                        "not here -- the requested precision is a target, not a "
+                        "guarantee, and a job that hits its QPU-time cap first will "
+                        "differ. Sampling cost scales as 1/sigma^2, so this column "
+                        "sets the arm's budget almost by itself."
+                        if mitigated else
+                        "UNMITIGATED PAIR: identical circuit, identical parameters, "
+                        "same device, no error mitigation. This is the only thing the "
+                        "mitigated row can be read against; report both as errors "
+                        "against the classical reference energy, not as raw values."
+                    )
+                    + " QESEM's sampling cost tracks the transformed Hamiltonian's "
+                    f"Pauli-term structure, which depends on the TN_Ansatz family "
+                    f"that produced this state ({source['TN_Ansatz']}) -- refining a "
+                    "number_preserving state is not the same price as refining a "
+                    "givens one."
+                ),
+            })
+            rows.append(row)
+    return rows
+
+
 def write_csv(path: pathlib.Path, rows: list[dict[str, str]]) -> None:
     for i, row in enumerate(rows, start=1):
         row["Case_ID"] = str(i)
@@ -602,6 +907,50 @@ def summarize(rows: list[dict[str, str]]) -> None:
         print(f"    TN families: {', '.join(families)}")
 
 
+def _read_source_matrix(path: pathlib.Path | None) -> list[dict[str, str]]:
+    """The stage-2 matrix a stage-3 arm refines."""
+    if path is None:
+        raise SystemExit(
+            "stage 3 needs --from STAGE2_CSV: a refinement row refines a specific "
+            "converged run, and there is nothing to point at until stage 2 has run"
+        )
+    with path.open(encoding="utf-8") as f:
+        return list(csv.DictReader(f))
+
+
+def _parse_refinements(pairs: list[str]) -> dict[str, pathlib.Path]:
+    if not pairs:
+        raise SystemExit(
+            "stage 3 needs at least one --refine CASE_ID=PARAMS_FILE. Which rows "
+            "deserve refinement is an output of stage 2 -- best energy, widest "
+            "spread against the classical reference, or one per molecule -- and "
+            "the criterion should be written down before stage 2 runs rather than "
+            "chosen afterwards from the results"
+        )
+    refinements: dict[str, pathlib.Path] = {}
+    for pair in pairs:
+        case_id, _, params = pair.partition("=")
+        if not params:
+            raise SystemExit(f"--refine wants CASE_ID=PARAMS_FILE; got {pair!r}")
+        refinements[case_id] = pathlib.Path(params)
+    return refinements
+
+
+def _require_precision(precision: float | None) -> float:
+    if precision is None:
+        raise SystemExit(
+            "stage 3 needs --precision SIGMA (Hartree). It is not a column to be "
+            "filled in later: sigma sets what the arm costs and what it can "
+            "conclude. Chemical accuracy is ~1.6e-3 Ha, and an energy quoted to "
+            "+/-0.1 Ha cannot distinguish basis sets, ansaetze or mappers -- which "
+            "is the campaign's whole purpose. Do not inherit a service default: "
+            "those are set for general use and are far looser than chemistry needs"
+        )
+    if precision <= 0:
+        raise SystemExit(f"--precision must be positive; got {precision}")
+    return precision
+
+
 def _parse_selection(pairs: list[str]) -> dict[str, str]:
     selection: dict[str, str] = {}
     known = {m.name for m in MOLECULES}
@@ -617,7 +966,7 @@ def _parse_selection(pairs: list[str]) -> dict[str, str]:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--stage", choices=["1", "2"], default="1")
+    parser.add_argument("--stage", choices=["1", "2", "3"], default="1")
     parser.add_argument(
         "--select", action="append", default=[], metavar="MOLECULE=BASIS",
         help="stage 2 only: basis set carried forward from stage-1 results",
@@ -628,7 +977,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--active-space", choices=["valence_cas", "full"], default="valence_cas",
-        help="stage 2 only: 'full' needs a machine that can run it (see data/README.md)",
+        help="stage 2 only: 'full' needs a machine that can run it (see data/benchmarks/ibm_tn-vqe_qesem/README.md)",
     )
     parser.add_argument(
         "--sweep-circuit-ansatz", action="store_true",
@@ -640,12 +989,46 @@ def main() -> None:
             "xx_plus_yy is not a FakeBrisbane basis gate"
         ),
     )
+    parser.add_argument(
+        "--from", dest="source", type=pathlib.Path, default=None,
+        help="stage 3 only: the stage-2 matrix whose rows are being refined",
+    )
+    parser.add_argument(
+        "--refine", action="append", default=[], metavar="CASE_ID=PARAMS_FILE",
+        help=(
+            "stage 3 only: refine this stage-2 case, using the converged "
+            "theta/phi in PARAMS_FILE. Repeatable."
+        ),
+    )
+    parser.add_argument(
+        "--precision", type=float, default=None, metavar="SIGMA",
+        help=(
+            "stage 3 only: QESEM target precision in Hartree. No default -- it "
+            "sets what the arm costs AND what it can conclude, so it has to be "
+            "chosen. Chemical accuracy is ~1.6e-3 Ha; sampling cost scales as "
+            "1/sigma^2, so a loose sigma buys a mitigation demonstration and a "
+            "tight one buys a chemistry result"
+        ),
+    )
+    parser.add_argument(
+        "--execution-mode", choices=["batch", "session"], default="batch",
+        help="stage 3 only: QESEM QPU reservation strategy (batch releases the "
+             "QPU during classical steps, and is cheaper)",
+    )
     parser.add_argument("-o", "--output", type=pathlib.Path, default=None)
     args = parser.parse_args()
 
     if args.stage == "1":
         rows = build_stage1()
         path = args.output or _STAGE1_PATH
+    elif args.stage == "3":
+        rows = build_stage3(
+            _read_source_matrix(args.source),
+            _parse_refinements(args.refine),
+            _require_precision(args.precision),
+            args.execution_mode,
+        )
+        path = args.output or _STAGE3_PATH
     else:
         selection = _parse_selection(args.select)
         if not selection:

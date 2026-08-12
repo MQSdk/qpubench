@@ -1,7 +1,7 @@
 # Basis-set library
 
 Two Gaussian basis-set sources back the `Basis` column of
-`data/IBM_VQE_Test_Benchmark.csv` (and any future VQE benchmark scenario):
+`data/benchmarks/ibm_tn-vqe_qesem/stage1_screening_matrix.csv` (and any future VQE benchmark scenario):
 the real [Basis Set Exchange](https://www.basissetexchange.org/) (BSE) for
 the six standard fixed bases, and Grimme group's
 [q-vSZP](https://github.com/grimme-lab/qvSZP) for the charge-adaptive one
@@ -43,7 +43,7 @@ n = count_basis_functions("def2-tzvp", "O")       # 31, spatial AO functions
 `count_basis_functions()` computes real spherical-harmonic AO counts from
 BSE's own shell data and was cross-checked in this session against real
 `pyscf.gto.M(...).nao` for every (element, basis) pair in
-`data/IBM_VQE_Test_Benchmark.csv`, an exact match in all 18 cases (H, Li, O
+`data/benchmarks/ibm_tn-vqe_qesem/stage1_screening_matrix.csv`, an exact match in all 18 cases (H, Li, O
 × sto-3g/6-31g/cc-pvdz/cc-pvtz/def2-svp/def2-tzvp), see
 `tests/test_basis_sets.py`. Two real BSE shell shapes are handled
 correctly, not just the simple case: general-contraction shells (one `l`,

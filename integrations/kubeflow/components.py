@@ -16,10 +16,10 @@ Two kinds of component, per the design notes in docs/integrations/kubeflow.md:
 TN_QC_OPT's n_iterations optimizer loop runs entirely inside
 tn_qc_opt_component — it is one job, never exploded into one DAG node per
 iteration. Likewise, the Shots x Qiskit_Opt_Level execution-option sweep
-(see data/README.md) runs entirely inside the Execution components via
+(see data/benchmarks/ibm_tn-vqe_qesem/README.md) runs entirely inside the Execution components via
 BenchmarkRunner.sweep() — it is one job, not one DAG node per (shots,
 opt_level) pair. Only the (`Mapper`, `Method`) pair (JW or mol_map, x
-VQE or TN-VQE — see data/README.md) changes which components exist;
+VQE or TN-VQE — see data/benchmarks/ibm_tn-vqe_qesem/README.md) changes which components exist;
 everything else in the benchmark matrix (TN_Layers_Network,
 TN_Layers_Circuit, TN_Ansatz, Measurement_Method, Shots,
 Qiskit_Opt_Level) is a parameter value swept via dsl.ParallelFor /
@@ -48,7 +48,7 @@ _QPUBENCH_IMAGE = "ghcr.io/mqsdk/qpubench-slim:latest"
 _QPUBENCH_SIM_IMAGE = "ghcr.io/mqsdk/qpubench-slim:latest"
 # jw_map_component is the only component that needs a real quantum-chemistry
 # stack (PySCF/OpenFermion) rather than just qpubench+mqsdk — it is the one
-# Mapper category (`JW`) that never calls Cebule at all (see data/README.md).
+# Mapper category (`JW`) that never calls Cebule at all (see data/benchmarks/ibm_tn-vqe_qesem/README.md).
 _QPUBENCH_CHEM_IMAGE = "ghcr.io/mqsdk/qpubench-chem:latest"
 
 
@@ -99,7 +99,7 @@ def jw_map_component(
 ) -> None:
     """Plain Jordan-Wigner mapping: molecular geometry -> qubit Hamiltonian.
 
-    The `JW` Mapper category (data/README.md) never calls Cebule at all —
+    The `JW` Mapper category (data/benchmarks/ibm_tn-vqe_qesem/README.md) never calls Cebule at all —
     this is the one component in the whole integration with no MQS
     credentials involved, computed entirely locally via
     `qpubench.hamiltonian_sources.ab_initio.build_qubit_hamiltonian`
@@ -189,7 +189,7 @@ def tn_qc_opt_component(
     upstream result can be auto-converted into TN_QC_OPT's input shape).
 
     n_layers_network/n_layers_circuit/tn_ansatz/measurement_method
-    sweep over data/README.md's TN_Layers_Network / TN_Layers_Circuit /
+    sweep over data/benchmarks/ibm_tn-vqe_qesem/README.md's TN_Layers_Network / TN_Layers_Circuit /
     TN_Ansatz / Measurement_Method columns — resolved by
     dsl.ParallelFor in pipelines.py, not by separate pipeline
     definitions, since none of these change which components run.
@@ -311,7 +311,7 @@ def execute_circuits_component(
         BackendAdapter already branches on `if circuit.observables:`,
         see e.g. backends/aer_adapter.py).
 
-    shots_values x optimization_levels (data/README.md's Shots /
+    shots_values x optimization_levels (data/benchmarks/ibm_tn-vqe_qesem/README.md's Shots /
     Qiskit_Opt_Level columns) is resolved here via
     BenchmarkRunner.sweep()'s cartesian product — one component/job, not
     one DAG node per (shots, opt_level) pair, matching the same
@@ -380,7 +380,7 @@ def execute_static_hamiltonian_component(
     records: Output[Dataset],
 ) -> None:
     """Execution-kind component for the two `VQE` pipelines, plain `JW`
-    and `mol_map` (see data/README.md). This component does not build the
+    and `mol_map` (see data/benchmarks/ibm_tn-vqe_qesem/README.md). This component does not build the
     ansatz those rows name: the "circuit" here is a fixed Hartree-Fock
     reference-state preparation (X gates on the occupied qubits of
     mapper_result's own `hf_state`) — the standard HF baseline, not a

@@ -130,7 +130,7 @@ class TestElementZ:
 class TestQvszpNetwork:
     """Live downloads from github.com/grimme-lab/qvSZP — real per-molecule
     qubit counts for every (molecule, qvSZP) row in
-    data/IBM_VQE_Test_Benchmark.csv, replacing the earlier
+    data/benchmarks/ibm_tn-vqe_qesem/stage1_screening_matrix.csv, replacing the earlier
     unverified/incorrect draft values."""
 
     def test_h2_matches_csv(self, tmp_path: object) -> None:

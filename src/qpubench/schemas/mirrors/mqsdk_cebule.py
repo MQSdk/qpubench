@@ -544,16 +544,26 @@ class TNQCOptInput(pydantic.BaseModel):
     # (n_layers, n_nodes, n_params) otherwise -- see tn_theta_shape().
     # list[float] was wrong for three of the four families.
     theta_init:          list[Any]      = []
-    # phi_init: PennyLane's StronglyEntanglingLayers wants an (L, N, 3)
-    # shape, so list[float] is likely wrong here too -- but that is an
-    # inference, and the last review round went wrong by asserting one.
-    # Left as-is pending a check against a real job response.
-    phi_init:            list[float]    = []
+    # phi_init: None is upstream's "unset" sentinel -- it randomises
+    # (2*pi*random, run_TNQCOpt) only when phi_init is None. [] is NOT
+    # that sentinel: an empty list reaches the shape check as a length-0
+    # array against a phi_shape of (3n(R+1),), which is neither the
+    # documented random init nor a valid one. So the default has to be
+    # None, with a pinned vector passed explicitly when a run wants one.
+    phi_init:            list[float] | None = None
     conv_tol:            float | None   = 1e-6
     opt_method:          str            = "COBYLA"
     n_shots:             int | None     = None
     opt_options:         dict[str, Any] | None = None
-    backend:             str            = "default.qubit"    # or "lightning.qubit", "qiskit.aer"
+    # get_backend dispatches on the string itself (functions_main.py,
+    # cebule-tn_vqe @ dev-kba a760489): the four named simulators
+    # ('qasm_simulator', 'statevector_simulator', 'unitary_simulator',
+    # 'aer_simulator'), anything prefixed 'fake', and anything prefixed
+    # 'ibm' route to Qiskit; EVERYTHING ELSE falls through to
+    # qml.device(backend_str), i.e. PennyLane. "qiskit.aer" matches none
+    # of the Qiskit branches, so it selects the PennyLane path -- use
+    # 'aer_simulator' for a local Aer run and 'ibm*' for hardware.
+    backend:             str            = "default.qubit"    # or "aer_simulator", "ibm_brisbane"
     measurement_method:  str            = "pauli"                # "pauli" | "grouped"
     optimization_mode:   str            = "both"                    # "circuit" | "network" | "both"
 
