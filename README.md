@@ -229,15 +229,9 @@ see [docs/feedback_workflow.md](docs/feedback_workflow.md).
 
 QPUBench has a single license: **LGPL-3.0-or-later**. It is not dual-licensed.
 
-The LGPL is defined as a set of extra permissions layered on top of the GPL,
-which it incorporates by reference, so the FSF asks projects to ship both
-texts under these names:
-
 | File | Contents | Role |
 | --- | --- | --- |
-| [`COPYING.LESSER`](COPYING.LESSER) | LGPLv3 | The license QPUBench is under |
-| [`COPYING`](COPYING) | GPLv3 | Base terms the LGPLv3 builds on; **not** a separate license offer |
-| [`LICENSE`](LICENSE) | LGPLv3 (same text as `COPYING.LESSER`) | Kept so GitHub and packaging tools detect the license |
+| [`LICENSE`](LICENSE) | LGPLv3 | The license QPUBench is under |
 
 In short: you may use QPUBench in proprietary or differently-licensed
 applications; modifications to QPUBench itself must be released under the LGPL.
