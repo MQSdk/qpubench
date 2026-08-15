@@ -85,12 +85,20 @@ def build_ansatz(
     *,
     reps: int = 1,
     num_electrons: int | None = None,
+    parameterize: bool = False,
 ) -> "QuantumCircuit":
     """Build `ansatz` on `num_qubits` qubits at `reps` repetitions.
 
     `num_electrons` is required by UCCSD alone, which needs a reference
     determinant and an occupied/virtual split; the hardware-efficient
     families ignore it.
+
+    `parameterize` affects UCCSD alone as well. The other families are
+    always built with free parameters; UCCSD's Trotter angles are bound
+    to a placeholder by default, because that is what the resource
+    estimate wants, and are left free when the circuit is being pinned as
+    QASM (`pin_qasm_ansatz.py`), because that is what a pinned circuit
+    has to carry.
     """
     if ansatz == "EfficientSU2":
         from qiskit.circuit.library import efficient_su2
@@ -107,7 +115,7 @@ def build_ansatz(
     if ansatz == "UCCSD":
         if num_electrons is None:
             raise ValueError("UCCSD needs num_electrons to place the reference determinant")
-        return uccsd(num_qubits, num_electrons, reps=reps)
+        return uccsd(num_qubits, num_electrons, reps=reps, parameterize=parameterize)
     raise ValueError(
         f"no builder for ansatz {ansatz!r}; supported: {', '.join(SUPPORTED_ANSATZE)}"
     )
@@ -164,14 +172,21 @@ def excitation_preserving_linear(num_qubits: int, *, reps: int = 1) -> "QuantumC
     return excitation_preserving(num_qubits, reps=reps, entanglement="linear")
 
 
-def uccsd(num_qubits: int, num_electrons: int, *, reps: int = 1) -> "QuantumCircuit":
+def uccsd(
+    num_qubits: int, num_electrons: int, *, reps: int = 1, parameterize: bool = False,
+) -> "QuantumCircuit":
     """First-order Trotterized UCCSD over a Hartree-Fock reference.
 
     `num_qubits` are spin orbitals, so this assumes a Jordan-Wigner
     mapping; the excitation operators are the JW-mapped ones the
     ADAPT-VQE pool generator produces.
+
+    With `parameterize=True` each excitation carries a free amplitude
+    `t[k]` instead of the placeholder time, giving one parameter per
+    excitation per repetition -- the count `Num_Opt_Params_Phi` records.
     """
     from qiskit import QuantumCircuit
+    from qiskit.circuit import ParameterVector
     from qiskit.circuit.library import PauliEvolutionGate
     from qiskit.quantum_info import SparsePauliOp
 
@@ -187,16 +202,19 @@ def uccsd(num_qubits: int, num_electrons: int, *, reps: int = 1) -> "QuantumCirc
         qc.x(qubit)
 
     pool = generate_singles_doubles_pool(num_qubits, num_electrons)
-    for _ in range(reps):
-        for operator in pool:
-            terms = operator.observable.to_qiskit_pauli_list(num_qubits)
-            # The excitation operators are anti-Hermitian (purely
-            # imaginary coefficients); PauliEvolutionGate wants the
-            # Hermitian generator, hence the imaginary part.
-            generator = SparsePauliOp.from_list(
-                [(label, coeff.imag) for label, coeff in terms]
-            )
-            qc.append(PauliEvolutionGate(generator, time=0.1), range(num_qubits))
+    amplitudes = (
+        ParameterVector("t", len(pool) * reps) if parameterize else None
+    )
+    for index, operator in enumerate(pool * reps):
+        terms = operator.observable.to_qiskit_pauli_list(num_qubits)
+        # The excitation operators are anti-Hermitian (purely imaginary
+        # coefficients); PauliEvolutionGate wants the Hermitian
+        # generator, hence the imaginary part.
+        generator = SparsePauliOp.from_list(
+            [(label, coeff.imag) for label, coeff in terms]
+        )
+        time = amplitudes[index] if amplitudes is not None else 0.1
+        qc.append(PauliEvolutionGate(generator, time=time), range(num_qubits))
     return qc
 
 

@@ -188,10 +188,6 @@ def test_classical_only_rows_cost_nothing_and_take_no_measurements():
         # wrong the moment such a row were re-run in "both" mode.
         assert row["Shots"].startswith("n/a"), row["Shots"]
         assert row["Measurement_Method"].startswith("n/a"), row["Measurement_Method"]
-        # phi is pinned, not optimised -- and pinned to zeros, which makes
-        # the circuit the identity and the reference state the reference
-        # determinant. That is the whole point of the control.
-        assert row["Phi_Init"] == "zeros"
         # The circuit it freezes is recorded honestly, so two controls
         # differing only in TN_Layers_Circuit are distinguishable.
         assert row["Ansatz"] == "n_local_rzryrz_sca"
@@ -199,24 +195,43 @@ def test_classical_only_rows_cost_nothing_and_take_no_measurements():
         assert int(row["Num_Opt_Params_Phi"]) > 0
 
 
-def test_phi_init_is_scoped_to_the_optimization_mode():
-    """`zeros` and a seeded random draw are different decisions.
+def test_phi_init_is_fixed_by_the_circuit_family():
+    """One circuit family, one initialisation -- whatever else differs.
 
-    On a network row phi is FROZEN, so all-zero rotations are exactly
-    right: the circuit is the identity and the reference state is the
-    reference determinant. On a "both" row phi is OPTIMISED, and that
-    same identity circuit is a liability -- the gradient with respect to
-    many phi parameters vanishes at the reference determinant. Both are
-    pinned, because an unseeded default is the actual defect; they are
-    not pinned to the same thing.
+    phi is the CIRCUIT's parameter vector, so every row has one: a plain
+    VQE row has circuit parameters exactly as a TN-VQE row does, and a
+    `network` row has them frozen rather than absent. If two rows sharing
+    an ansatz started from different phi, a difference between their
+    results would be attributable to the starting point rather than to
+    the method, which is the comparison this campaign exists to make.
+
+    So the column is keyed on `Ansatz` alone: neither `Method` nor
+    `Optimization_Mode` may move it, and no row may leave it unpinned --
+    an unseeded upstream default is the defect being fixed.
     """
+    by_ansatz: dict[str, set[str]] = {}
     for row in _csv_rows():
-        if row["Method"] != "TN-VQE":
-            assert row["Phi_Init"] == "n/a (not TN-VQE)"
-        elif row["Optimization_Mode"] == "network":
-            assert row["Phi_Init"] == "zeros"
-        else:
-            assert row["Phi_Init"].startswith("random(seed="), row["Phi_Init"]
+        assert not row["Phi_Init"].startswith("n/a"), (
+            f"Case_ID {row['Case_ID']} ({row['Ansatz']}) leaves phi "
+            f"unpinned: {row['Phi_Init']!r}"
+        )
+        by_ansatz.setdefault(row["Ansatz"], set()).add(row["Phi_Init"])
+
+    assert by_ansatz, "no rows to check"
+    for ansatz, values in by_ansatz.items():
+        assert len(values) == 1, (
+            f"{ansatz} rows start from {len(values)} different phi: "
+            f"{sorted(values)}"
+        )
+    # UCCSD's zero amplitudes ARE the Hartree-Fock reference, so zeros is
+    # its reference state rather than a barren identity; the
+    # hardware-efficient families take the seeded draw instead.
+    for ansatz, values in by_ansatz.items():
+        expected_zeros = ansatz == "UCCSD"
+        value = next(iter(values))
+        assert (value == "zeros") is expected_zeros, f"{ansatz}: {value}"
+        if not expected_zeros:
+            assert value.startswith("random(seed="), f"{ansatz}: {value}"
 
 
 def test_every_row_budgets_at_least_cobylas_simplex():
@@ -255,6 +270,23 @@ def test_error_mitigation_is_additive():
     assert found == {module.MITIGATION_NONE}, (
         f"stage 1 should be entirely unmitigated; found {sorted(found)}"
     )
+
+
+def test_every_row_pins_the_circuit_it_runs():
+    """A named ansatz is not a circuit; a pinned QASM file is.
+
+    "EfficientSU2" is whatever the installed library resolves it to, so a
+    VQE row and a TN-VQE row are comparable -- to each other, and to
+    anyone reproducing this with another method -- only once each names
+    the file it runs rather than the family it belongs to. Pinning the TN
+    rows alone left the other side of the comparison unfixed.
+    """
+    for row in _csv_rows():
+        assert row["Qasm_Ansatz_File"], (
+            f"Case_ID {row['Case_ID']} ({row['Ansatz']}, {row['N_Qubit']}q) "
+            "pins no circuit -- run pin_qasm_ansatz.py, then regenerate "
+            "the matrix"
+        )
 
 
 def test_pinned_qasm_carries_the_parameters_the_matrix_claims():

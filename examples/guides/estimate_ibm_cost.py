@@ -8,9 +8,8 @@ Two things this script deliberately keeps separate:
 
 1. **Real, verified**: per-circuit resource estimation
    (`backends.ibm_cost_estimator.estimate_circuit_resources`) — real ALAP-
-   scheduled transpilation against a real IBM calibration snapshot
-   (`FakeBrisbane`, no credentials needed) plus IBM's own documented usage
-   formula. Circuit depth/gate counts/duration are real Qiskit output, not
+   scheduled transpilation against the target device's own calibration
+   plus IBM's own documented usage formula. Circuit depth/gate counts/duration are real Qiskit output, not
    guessed. The ansatz is real too: each row names its own `Ansatz` and
    `Ansatz_Reps`, and `_ansatz_builders.py` builds that circuit rather
    than substituting a hardware-efficient stand-in, which matters a lot
@@ -48,7 +47,10 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
 from _ansatz_builders import circuit_spec
 
-from qpubench.backends.ibm_cost_estimator import estimate_circuit_resources
+from qpubench.backends.ibm_cost_estimator import (
+    estimate_circuit_resources,
+    resolve_calibration_backend,
+)
 from qpubench.schemas.mirrors.ibm_cost_estimator import (
     CircuitResourceEstimate,
     IBMPricingRates,
@@ -59,7 +61,27 @@ _CSV_PATH = (
     pathlib.Path(__file__).resolve().parents[2]
     / "data" / "benchmarks" / "ibm_tn-vqe_qesem" / "stage1_screening_matrix.csv"
 )
-_BACKEND_NAME = "ibm_brisbane"   # offline FakeBrisbane snapshot -- no credentials needed
+# IBM's European data centre, where this campaign's time is bought, does
+# not host ibm_brisbane (an Eagle device in the US, whatever the name
+# suggests).  qiskit-ibm-runtime ships no Fake* snapshot for ibm_aachen,
+# so the estimate comes from its LIVE calibration and $IBM_QUANTUM_TOKEN
+# is required to run this script.
+_BACKEND_NAME = "ibm_aachen"
+
+
+_CALIBRATION = None
+
+
+def _calibration():
+    """The live `ibm_aachen` backend, opened once and reused.
+
+    Resolved lazily, so importing this module needs no credentials; the
+    connection opens on the first transpile and is shared by the rest.
+    """
+    global _CALIBRATION
+    if _CALIBRATION is None:
+        _CALIBRATION = resolve_calibration_backend(_BACKEND_NAME)
+    return _CALIBRATION
 
 # Shots and iterations both come from each row's own columns now.
 _DEFAULT_SHOTS = 4096          # for the minimal-case demo, which has no row
@@ -81,7 +103,8 @@ def estimate_minimal_open_plan_study() -> CircuitResourceEstimate:
     for."""
     spec = circuit_spec("EfficientSU2", 4, reps=1)
     return estimate_circuit_resources(
-        spec, backend_name=_BACKEND_NAME, shots=_DEFAULT_SHOTS,
+        spec, backend_name=_BACKEND_NAME, backend=_calibration(),
+        shots=_DEFAULT_SHOTS,
         optimization_level=_OPTIMIZATION_LEVEL,
         label="H2/sto-3g/JW EfficientSU2 (minimal case)",
     )
@@ -112,7 +135,8 @@ def estimate_full_csv_study() -> list[CircuitResourceEstimate]:
             spec = circuit_spec(ansatz, num_qubits, reps=reps, num_electrons=num_electrons)
             label = f"{ansatz}, {num_qubits}q, {reps} reps"
             cache[key] = estimate_circuit_resources(
-                spec, backend_name=_BACKEND_NAME, shots=shots,
+                spec, backend_name=_BACKEND_NAME, backend=_calibration(),
+                shots=shots,
                 optimization_level=_OPTIMIZATION_LEVEL, label=label,
             )
         # One separate circuit submission per optimizer iteration, each

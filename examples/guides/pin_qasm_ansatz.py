@@ -1,6 +1,15 @@
-"""Pin the exact circuit each TN-VQE benchmark row runs, as committed QASM.
+"""Pin the exact circuit each benchmark row runs, as committed QASM.
 
 Requires: pip install 'qpubench[qiskit]'
+
+Every named family is pinned, VQE's as well as TN-VQE's. A name is not a
+circuit: "EfficientSU2" is resolved by whichever library version is
+installed, and two rows that name it are only comparable if they resolve
+it the same way. Pinning each family to a file makes the circuit part of
+the committed record, so a VQE row and a TN-VQE row that share an ansatz
+demonstrably share a circuit, and anyone reproducing either -- or
+comparing against a method this campaign does not run -- starts from the
+same file rather than from a name.
 
 Why pin it at all
 -----------------
@@ -54,27 +63,54 @@ _CSV_PATH = (
 _QASM_DIR = _REPO_ROOT / "data" / "qasm"
 
 
-def tn_circuit_shapes(rows: list[dict[str, str]]) -> set[tuple[str, int, int]]:
-    """The distinct (ansatz, qubits, reps) a TN-VQE row actually executes.
+def circuit_shapes(rows: list[dict[str, str]]) -> set[tuple[str, int, int, int]]:
+    """The distinct (ansatz, qubits, reps, electrons) the matrix executes.
 
-    Rows in `optimization_mode="network"` run no circuit at all, so they
-    have nothing to pin.
+    Every row, not only the TN-VQE ones. A comparison between VQE and
+    TN-VQE is only a comparison if both sides' circuits are fixed, and a
+    named ansatz is not a fixed circuit: it is a name that two libraries,
+    or two versions of one library, may resolve differently. So each
+    named family is pinned to a file, and each row points at the file it
+    runs.
+
+    `network` rows are included too. They freeze phi rather than running
+    no circuit -- `optimize_network` opens with `circuit_to_mps(circuit,
+    phi)` -- so the circuit they freeze is part of what defines them.
     """
     return {
-        (row["Ansatz"], int(row["N_Qubit"]), int(row["Ansatz_Reps"]))
+        (
+            row["Ansatz"], int(row["N_Qubit"]), int(row["Ansatz_Reps"]),
+            int(row["Active_Electrons"]),
+        )
         for row in rows
-        if row["Method"] == "TN-VQE" and row["Optimization_Mode"] != "network"
+        if row["Ansatz"] and row["N_Qubit"]
     }
 
 
-def write_pinned_qasm(ansatz: str, num_qubits: int, reps: int) -> tuple[pathlib.Path, str]:
+def qasm_path(ansatz: str, num_qubits: int, reps: int, num_electrons: int) -> pathlib.Path:
+    """Where one circuit's pinned QASM lives.
+
+    UCCSD carries the electron count in its name because its structure
+    depends on it -- the excitation pool follows the occupied/virtual
+    split -- whereas the hardware-efficient families are fixed by
+    (qubits, reps) alone.
+    """
+    stem = f"{ansatz}_{num_qubits}q_{reps}r"
+    if ansatz == "UCCSD":
+        stem += f"_{num_electrons}e"
+    return _QASM_DIR / f"{stem}.qasm"
+
+
+def write_pinned_qasm(
+    ansatz: str, num_qubits: int, reps: int, num_electrons: int,
+) -> tuple[pathlib.Path, str]:
     """Write one circuit as OpenQASM 3.0, parameters left free; return
     (path, sha256 prefix).
 
     The circuit is dumped *unbound*. OpenQASM 3's `input` declarations
     carry the free parameters through the file, so what is pinned is the
     structure, the qubit ordering and the parameterisation together, and
-    the consumer derives `phi_shape` from the loaded circuit's
+    the consumer derives its parameter shape from the loaded circuit's
     `num_parameters`.
 
     Binding them away is not a neutral simplification: TN-VQE takes its
@@ -85,9 +121,12 @@ def write_pinned_qasm(ansatz: str, num_qubits: int, reps: int) -> tuple[pathlib.
     """
     from qiskit import qasm3
 
-    circuit = build_ansatz(ansatz, num_qubits, reps=reps)
+    circuit = build_ansatz(
+        ansatz, num_qubits, reps=reps, num_electrons=num_electrons,
+        parameterize=True,
+    )
 
-    path = _QASM_DIR / f"{ansatz}_{num_qubits}q_{reps}r.qasm"
+    path = qasm_path(ansatz, num_qubits, reps, num_electrons)
     # UTF-8 explicitly, not the locale default: an unbound n_local dump
     # names its parameters `input float[64] _{θ}_0_;`, so these files are
     # no longer pure ASCII and must not depend on the writer's locale.
@@ -100,13 +139,13 @@ def main() -> None:
     with _CSV_PATH.open() as f:
         rows = list(csv.DictReader(f))
 
-    shapes = sorted(tn_circuit_shapes(rows))
+    shapes = sorted(circuit_shapes(rows))
     if not shapes:
-        raise SystemExit(f"no circuit-running TN-VQE rows found in {_CSV_PATH.name}")
+        raise SystemExit(f"no rows with a circuit found in {_CSV_PATH.name}")
 
-    print(f"Pinning {len(shapes)} distinct TN-VQE circuits from {_CSV_PATH.name}:")
-    for ansatz, num_qubits, reps in shapes:
-        path, digest = write_pinned_qasm(ansatz, num_qubits, reps)
+    print(f"Pinning {len(shapes)} distinct circuits from {_CSV_PATH.name}:")
+    for ansatz, num_qubits, reps, num_electrons in shapes:
+        path, digest = write_pinned_qasm(ansatz, num_qubits, reps, num_electrons)
         print(f"  {path.relative_to(_REPO_ROOT)}  sha256:{digest}")
 
     print(

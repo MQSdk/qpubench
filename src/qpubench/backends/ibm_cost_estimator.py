@@ -27,14 +27,16 @@ for planning purposes:
     to the matching `qiskit_ibm_runtime.fake_provider` `FakeBackend` —
     real calibration snapshots IBM ships for exactly this purpose (local
     testing against realistic target topology/basis-gates/durations), no
-    credentials or network needed. Confirmed real: `FakeBrisbane`,
-    `FakeTorino`, `FakeKyiv`, etc. exist for every current-generation
-    `ibm_<city>` backend name (checked against the installed
-    qiskit-ibm-runtime in this session).
+    credentials or network needed. `FakeBrisbane`, `FakeTorino`,
+    `FakeFez`, `FakeMarrakesh`, `FakeNighthawk` and about fifty others
+    exist, but the set is **not** every real backend name: it lags new
+    hardware, and the European data centre's devices have no snapshot in
+    the installed qiskit-ibm-runtime (0.45.1).
   - **Live**: pass a real backend object (e.g. from
     `IBMAdapter.get_live_backend()`) to estimate against actual current
     calibration data instead of a static Fake snapshot — more accurate,
-    needs an IBM Quantum account.
+    needs an IBM Quantum account, and the only option for a device with
+    no snapshot. `resolve_calibration_backend()` picks between the two.
 
 Real, verified in this session: transpiling a 4-qubit test circuit
 against `FakeBrisbane` with ALAP scheduling gives `depth=14`,
@@ -72,6 +74,35 @@ def _resolve_fake_backend(backend_name: str) -> Any:
             f"snapshot."
         )
     return fake_cls()
+
+
+def resolve_calibration_backend(
+    backend_name: str, *, token_ref: str = "IBM_QUANTUM_TOKEN",
+) -> Any:
+    """Calibration source for `backend_name`: the offline snapshot where
+    one exists, otherwise the live device.
+
+    qiskit-ibm-runtime does not ship a `Fake*` snapshot for every real
+    backend, and the European data centre's devices are among those it
+    does not cover. Costing such a device against another device's
+    snapshot estimates the wrong machine rather than approximating the
+    right one: Eagle's two-qubit gate is `ecr` and Heron's is `cz`, so
+    the transpiled circuit differs before any duration is read off it.
+
+    So a device with no snapshot is estimated against its live
+    calibration, which needs credentials. The tradeoff is deliberate and
+    worth stating where the numbers are used: a live estimate is accurate
+    for the device as calibrated today, and it is not reproducible
+    offline, nor stable across recalibration.
+    """
+    try:
+        return _resolve_fake_backend(backend_name)
+    except ValueError:
+        pass
+
+    from .ibm_adapter import IBMAdapter
+
+    return IBMAdapter(backend_name=backend_name, token_ref=token_ref).get_live_backend()
 
 
 def estimate_circuit_resources(

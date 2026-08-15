@@ -88,16 +88,24 @@ rather than serving only to validate the pipeline.
 | Configuration | `TNQCOptInput.backend` | What it establishes |
 |---|---|---|
 | Noiseless statevector / shot-based simulation | `aer_simulator` | The algorithmic result in the absence of device error: the energy TN-VQE and VQE reach for a given basis, ansatz and mapper, and the convergence behaviour of each. This is the reference against which every hardware result is read. |
-| Noisy simulation with an IBM device noise model | `fake_brisbane` | The energy shift and the change in convergence behaviour attributable to device error alone, at the calibration of the target device, before queue time or drift enter. |
+| Noisy simulation with an IBM device noise model | a `fake_*` snapshot, see below | The energy shift and the change in convergence behaviour attributable to device error alone, before queue time or drift enter. |
 
-Because the campaign targets IBM hardware, the local runs use IBM's own
-simulation stack, that is Qiskit Aer and the noise model carried by the
-`FakeBrisbane` calibration snapshot of `ibm_brisbane`. They do not use a
-PennyLane device. This matters beyond convention: `TN_QC_OPT` builds a
-*different circuit* on its PennyLane path than on its Qiskit path (see
-[Circuit families under test](#circuit-families-under-test)), so a local
-run on a PennyLane device would not be a simulation of the circuit that
-is subsequently submitted to hardware.
+The local runs use IBM's own simulation stack, Qiskit Aer, since the
+campaign targets IBM hardware. The circuit is not at stake in that
+choice: every row supplies its circuit as a pinned OpenQASM file (see
+[Circuit families under test](#circuit-families-under-test)), so the
+simulated circuit and the submitted circuit are the same file.
+
+**Which noise model, though, is unresolved.** `qiskit-ibm-runtime` ships
+no calibration snapshot for `ibm_aachen`, and `TN_QC_OPT` selects its
+noise model from a backend *string*, so the noisy configuration can name
+a `fake_*` snapshot of a different device or nothing at all. A snapshot
+of another device characterises that device's error, not the target's,
+which is a weaker result than the table above claims but not a useless
+one: it still separates algorithmic limitation from device error in the
+right order of magnitude. Reading it as the target device's error would
+be wrong. Resolving this is listed under
+[Open campaign decisions](#open-campaign-decisions).
 
 The 42 classical-only rows in `batch0_classical_only.csv` belong to the
 same pre-hardware phase. They take no quantum measurements at all and are
@@ -117,6 +125,17 @@ the QPU-time budget of one IBM access plan, by
 represent a separate Flex Plan purchase, not 400 minutes in addition to
 the Open Plan allocation.
 
+> **The committed batch files are superseded and must be re-cut before
+> any purchase.** Their costs were transpiled against `ibm_brisbane`,
+> which the campaign no longer targets, and the figures below are those
+> costs. The re-cost is not a rounding correction: measured against the
+> Heron-generation snapshots available offline, the 12-qubit UCCSD
+> circuit that dominates the budget falls from 51.8 s to about 10 s per
+> submission. Regenerate with
+> `PYTHONPATH=src python examples/guides/split_benchmark_batches.py`,
+> which now needs `$IBM_QUANTUM_TOKEN` and `$IBM_QUANTUM_INSTANCE`
+> because the estimate reads `ibm_aachen`'s live calibration.
+
 | File | Rows | Est. QPU time | Plan budget | Headroom |
 |---|---|---|---|---|
 | `batch0_classical_only.csv` | 42 | 0.00 min | none, since no quantum measurements are taken | n/a |
@@ -129,8 +148,8 @@ accounted for in exactly one file. The narrow headroom in batch2 is a
 property of the allocation rule rather than a coincidence: the fill is
 greedy, so a batch accepts rows until the next row would exceed its
 budget. Any change to the shot count, the evaluation budget or the target
-backend moves the batch boundary, so the partition is **regenerated
-rather than edited**.
+device moves the batch boundary, so the partition is **regenerated
+rather than edited**, and changing the device is exactly such a change.
 
 ### Per-row evaluation budget
 
@@ -153,13 +172,14 @@ A budget set below `n + 2` therefore does not reduce what the row costs;
 it only misstates it, by up to a factor of 4.8 on the widest rows in this
 matrix.
 
-| Row kind | Free parameters | Evaluations |
-|---|---|---|
-| TN-VQE, 2 qubits | 22 | 30 (at the minimum) |
-| TN-VQE, 4 qubits | 46 | 48 |
-| TN-VQE, 8 qubits | 94 | 96 |
-| TN-VQE, 12 qubits | 142 | 144 |
-| UCCSD, 12 qubits / 8 electrons | 200 | 202 |
+`n_params` is the row's own `Num_Opt_Params_Phi + Num_Opt_Params_Theta`,
+both of which are recorded per row, and neither of which follows from the
+qubit count alone: φ depends on the circuit ansatz and its repetitions, θ
+on the tensor-network family and `TN_Layers_Network`, and on a `network`
+row φ is frozen and drops out of the count entirely. Across the stage-1
+matrix the resulting budgets run from the minimum of 30 to 202, and the
+per-row value is read from the CSV rather than inferred from anything
+else in it.
 
 **What stage 1 resolves at this budget.** Stage 1 is a screen over the
 discrete experimental factors, and its observable is the *convergence
@@ -206,13 +226,28 @@ dominates.
 
 Costs are not assumed. Each estimate uses the method of
 [`backends/ibm_cost_estimator.py`](../../../docs/integrations/ibm_cost_estimator.md):
-transpilation with ALAP (as late as possible) scheduling against a
-`FakeBrisbane` calibration snapshot, which requires no credentials, and
-IBM's own documented usage formula. ALAP is the scheduling policy IBM's
+transpilation with ALAP (as late as possible) scheduling against
+`ibm_aachen`'s own live calibration, and IBM's own documented usage
+formula. ALAP is the scheduling policy IBM's
 runtime applies, so it is the policy under which the reported circuit
 duration is meaningful. Only 14 distinct circuits are transpiled across
 all 294 costed rows, cached per (ansatz, qubits, reps, electrons, shots),
-since the matrix contains many more rows than distinct circuits.
+since the matrix contains many more rows than distinct circuits. They
+are the same 14 the campaign pins as QASM.
+
+**The calibration is live, which is a tradeoff rather than a free
+upgrade.** `qiskit-ibm-runtime` ships offline `Fake*` snapshots for many
+devices but not for `ibm_aachen`, and costing one device against
+another's snapshot estimates the wrong machine rather than approximating
+the right one: the two-qubit gate differs between processor generations,
+`ecr` against `cz`, so the transpiled circuit differs before any duration
+is read off it. The estimate is therefore taken against the device's own
+calibration through `IBMAdapter.get_live_backend()`. What that buys is
+accuracy; what it costs is reproducibility. Regenerating the batches
+needs `$IBM_QUANTUM_TOKEN` and `$IBM_QUANTUM_INSTANCE`, and two
+regenerations either side of a recalibration will not agree. Any figure
+quoted from a batch file should therefore be read with the date it was
+generated.
 
 Transpilation runs at `optimization_level=2`, which is what the campaign
 will actually receive: `TN_QC_OPT` calls `transpile(circuit, backend)`
@@ -222,14 +257,12 @@ under Qiskit 1.x. The matrix therefore records `Qiskit_Version` rather
 than an optimisation level, since "the Qiskit default" is a
 version-dependent quantity and the version is the reproducible one.
 
-Each row's **own** named ansatz is constructed for the estimate, on the
-platform that row runs on, rather than a common stand-in: Qiskit's
-`efficient_su2` and `real_amplitudes`, a first-order Trotterised `UCCSD`
-over this project's Jordan-Wigner singles-and-doubles pool, and on TN
-rows `n_local` with an RzRyRz rotation block and shifted-circular
-alternating (`'sca'`) CX entanglement, which is the circuit that Cebule
-`TN_QC_OPT` builds on its **Qiskit** path. The circuits themselves are
-shown in [Circuit families under test](#circuit-families-under-test).
+Each row's **own** circuit is constructed for the estimate rather than a
+common stand-in, from the same builders that write the pinned QASM files,
+so the 14 circuits transpiled here are the 14 circuits committed under
+`data/qasm/` and the estimate describes what runs. The circuits
+themselves are shown in
+[Circuit families under test](#circuit-families-under-test).
 
 **`Measurement_Method` does not enter this estimate.** The estimator
 cannot know how many distinct circuits Cebule's basis-state-pair grouping
@@ -254,14 +287,14 @@ flowchart TD
     A["3 molecules x 7 basis sets x 2 mappers<br/>active space held FIXED per molecule"]
     A --> B["Stage-1 screening matrix<br/>336 rows<br/>build_benchmark_matrix.py"]
 
-    B --> S["Simulator characterisation<br/>aer_simulator (noiseless)<br/>fake_brisbane (IBM noise model)<br/>no plan budget"]
+    B --> S["Simulator characterisation<br/>aer_simulator (noiseless)<br/>fake_* snapshot (IBM noise model)<br/>no plan budget"]
 
     B --> Z{"Does the row take<br/>quantum measurements?"}
     Z -->|"optimization_mode = network"| Y["batch0_classical_only.csv<br/>42 rows, 0 min, no plan budget<br/>classical-only baseline"]
 
     subgraph estimate["Per-row cost estimate, transpiled not assumed"]
         C["Build the row's OWN named ansatz<br/>_ansatz_builders.py"]
-        C --> D["Transpile + ALAP schedule<br/>FakeBrisbane, optimization_level=2"]
+        C --> D["Transpile + ALAP schedule<br/>ibm_aachen live calibration<br/>optimization_level=2"]
         D --> E["IBM usage formula<br/>duration x shots + rep_delay + ~2 s per sub-job"]
         E --> F["x the row's own Iterations<br/>max(30, n_params + 2)<br/>= per-row QPU seconds"]
     end
@@ -316,12 +349,28 @@ displacing the validation runs the free tier exists to provide.
 
 ## Circuit families under test
 
-Four circuit families appear in the stage-1 matrix. The diagrams below
-are the circuits the campaign actually constructs, drawn from
+Four circuit families appear in the stage-1 matrix, and **every row
+supplies its circuit as a committed OpenQASM 3.0 file** under
+`data/qasm/`, named in `Qasm_Ansatz_File` and hashed in
+`Qasm_Ansatz_SHA256`. The name of an ansatz is not a circuit: it is a
+name that a library version resolves, and two rows naming one family are
+comparable only if they resolve it identically. A file removes that
+question: for the VQE-against-TN-VQE comparison inside the campaign, for
+anyone reproducing a row, and for anyone comparing these energies against
+a method the campaign does not run, who then starts from the circuit
+rather than from its name. The 14 files are generated by
+[`pin_qasm_ansatz.py`](../../../examples/guides/pin_qasm_ansatz.py), one
+per distinct (family, qubits, repetitions), and are dumped with their
+parameters **free**: OpenQASM 3's `input` declarations carry them, so
+what is pinned is the structure, the qubit ordering and the
+parameterisation together.
+
+The diagrams below are those circuits, drawn from
 [`_ansatz_builders.py`](../../../examples/guides/_ansatz_builders.py) and
 rendered in the `{Ry, Rz, CX}` basis. They are the same objects that the
-cost estimator transpiles, so the resource estimates and the diagrams
-describe one circuit, not two descriptions of one.
+cost estimator transpiles and that the QASM files hold, so the resource
+estimates, the diagrams and the pinned circuits describe one circuit
+rather than three descriptions of one.
 
 **`EfficientSU2`**, shown at 4 qubits with `reps = 1` (16 parameters).
 Two single-qubit rotation layers per repetition and a reverse-linear CX
@@ -341,7 +390,8 @@ q_3: ┤ Ry(θ[3]) ├┤ Rz(θ[7]) ├┤ X ├┤ Ry(θ[11]) ├┤ Rz(θ[15])
 
 **`RealAmplitudes`**, shown at 4 qubits with `reps = 1` (8 parameters).
 The same entanglement pattern with a single Ry rotation layer, giving
-real-valued amplitudes and half the parameter count.
+real-valued amplitudes and half the parameter count. Used on plain-VQE
+rows.
 
 ```text
      ┌──────────┐                             ┌──────────┐
@@ -355,14 +405,13 @@ q_3: ┤ Ry(θ[3]) ├┤ X ├┤ Ry(θ[7]) ├──────────�
      └──────────┘└───┘└──────────┘
 ```
 
-**`n_local_rzryrz_sca`**, the circuit side `U(φ)` of `TN_QC_OPT` on its
-Qiskit path, shown at 2 qubits with `reps = 2` (18 parameters, matching
-`3n(R+1)` and the pinned circuit `data/qasm/n_local_rzryrz_sca_2q_2r.qasm`).
-Each repetition applies an RzRyRz rotation block to every qubit followed
-by CX entanglement in Qiskit's shifted-circular-alternating pattern: a
-circular chain whose starting qubit shifts by one with each repetition
-and whose control/target orientation alternates, visible here as the
-reversed CX in the second repetition.
+**`n_local_rzryrz_sca`**, shown at 2 qubits with `reps = 2` (18
+parameters, `3n(R+1)`). Each repetition applies an RzRyRz rotation block
+to every qubit followed by CX entanglement in Qiskit's
+shifted-circular-alternating pattern: a circular chain whose starting
+qubit shifts by one with each repetition and whose control/target
+orientation alternates, visible here as the reversed CX in the second
+repetition. Used on TN-VQE rows.
 
 ```text
      ┌──────────┐┌──────────┐┌──────────┐     ┌──────────┐┌──────────┐┌───────────┐┌───┐┌───────────┐»
@@ -381,41 +430,46 @@ q_1: ┤ Rz(θ[1]) ├┤ Ry(θ[3]) ├┤ Rz(θ[5]) ├┤ X ├┤ Rz(θ[7]) �
 Trotterisation over the Jordan-Wigner singles-and-doubles pool: X gates
 prepare the Hartree-Fock reference, then one exponentiated excitation
 operator per amplitude, four singles and one doubles in this example. The
-amplitudes are displayed bound to a placeholder value because this
-construction is used for resource estimation; the variational parameter
-count is one amplitude per excitation, which is what
-`Num_Opt_Params_Phi` records. The number of Pauli terms per doubles
-operator, eight in the block on the right, is the reason UCCSD rows
-dominate the cost distribution at 12 qubits.
+free amplitude `t[k]` on each operator is the variational parameter, one
+per excitation, which is what `Num_Opt_Params_Phi` records. The number of
+Pauli terms per doubles operator, eight in the block on the right, is the
+reason UCCSD rows dominate the cost distribution at 12 qubits. Used on
+plain-VQE `JW` rows.
 
 ```text
-     ┌───┐┌──────────────────────────────┐┌──────────────────────────────┐┌──────────────────────────────┐»
-q_0: ┤ X ├┤0                             ├┤0                             ├┤0                             ├»
-     ├───┤│                              ││                              ││                              │»
-q_1: ┤ X ├┤1                             ├┤1                             ├┤1                             ├»
-     └───┘│  exp(-it (IXZY + IYZX))(0.1) ││  exp(-it (XZZY + YZZX))(0.1) ││  exp(-it (IXYI + IYXI))(0.1) │»
-q_2: ─────┤2                             ├┤2                             ├┤2                             ├»
-          │                              ││                              ││                              │»
-q_3: ─────┤3                             ├┤3                             ├┤3                             ├»
-          └──────────────────────────────┘└──────────────────────────────┘└──────────────────────────────┘»
-«     ┌──────────────────────────────┐┌────────────────────────────────────────────────────────────────────────┐
-«q_0: ┤0                             ├┤0                                                                       ├
-«     │                              ││                                                                        │
-«q_1: ┤1                             ├┤1                                                                       ├
-«     │  exp(-it (XZYI + YZXI))(0.1) ││  exp(-it (XXXY + XXYX + XYXX + YXXX + XYYY + YXYY + YYXY + YYYX))(0.1) │
-«q_2: ┤2                             ├┤2                                                                       ├
-«     │                              ││                                                                        │
-«q_3: ┤3                             ├┤3                                                                       ├
-«     └──────────────────────────────┘└────────────────────────────────────────────────────────────────────────┘
+     ┌───┐┌───────────────────────────────┐┌───────────────────────────────┐┌───────────────────────────────┐»
+q_0: ┤ X ├┤0                              ├┤0                              ├┤0                              ├»
+     ├───┤│                               ││                               ││                               │»
+q_1: ┤ X ├┤1                              ├┤1                              ├┤1                              ├»
+     └───┘│  exp(-it (IXZY + IYZX))(t[0]) ││  exp(-it (XZZY + YZZX))(t[1]) ││  exp(-it (IXYI + IYXI))(t[2]) │»
+q_2: ─────┤2                              ├┤2                              ├┤2                              ├»
+          │                               ││                               ││                               │»
+q_3: ─────┤3                              ├┤3                              ├┤3                              ├»
+          └───────────────────────────────┘└───────────────────────────────┘└───────────────────────────────┘»
+«     ┌───────────────────────────────┐┌─────────────────────────────────────────────────────────────────────────┐
+«q_0: ┤0                              ├┤0                                                                        ├
+«     │                               ││                                                                         │
+«q_1: ┤1                              ├┤1                                                                        ├
+«     │  exp(-it (XZYI + YZXI))(t[3]) ││  exp(-it (XXXY + XXYX + XYXX + YXXX + XYYY + YXYY + YYXY + YYYX))(t[4]) │
+«q_2: ┤2                              ├┤2                                                                        ├
+«     │                               ││                                                                         │
+«q_3: ┤3                              ├┤3                                                                        ├
+«     └───────────────────────────────┘└─────────────────────────────────────────────────────────────────────────┘
 ```
 
-`TN_QC_OPT` has two circuit implementations, and they are different
-circuits. The Qiskit path builds `n_local_rzryrz_sca` above, with
-`3n(R+1)` parameters; the PennyLane path builds `StronglyEntanglingLayers`,
-with `3nR` parameters, differing by the trailing rotation layer. Since
-this campaign targets IBM hardware and simulates it with Qiskit Aer, the
-Qiskit path is the one in scope throughout, and `Backend_Platform`
-records which implementation each row means.
+**Why the circuits are supplied rather than defaulted.** `TN_QC_OPT`
+builds a circuit of its own when no `qasm_ansatz` is given, and *which*
+circuit that is depends on the platform it dispatches to: the Qiskit path
+builds `n_local_rzryrz_sca` above, with `3n(R+1)` parameters, while the
+PennyLane path builds `StronglyEntanglingLayers`, with `3nR`, differing
+by the trailing rotation layer. A row that relied on the default would
+therefore carry a circuit, and a parameter count, that depended on where
+it ran. Supplying the QASM removes the dependency: the campaign's TN rows
+run `n_local_rzryrz_sca` because that file says so, not because a
+dispatch happened to select it. One interaction is worth knowing when
+reproducing a row: supplying `qasm_ansatz` changes `n_layers_circuit`'s
+effective default from 3 to 1, since the circuit is then fully specified,
+so pass it explicitly.
 
 ## The active space is held fixed across basis sets
 
@@ -438,10 +492,10 @@ or the local machine running MOL_MAP, can accommodate it.
 
 ## Mapper, method and ansatz are separate columns
 
-`Mapper` records the fermion-to-qubit mapping only, which is what the
-term denotes. Cebule's `TN_QC_OPT` is neither a mapping nor an ansatz; it
-is the optimisation method wrapped around one, and it therefore belongs
-in `Method`:
+`Mapper` records the fermion-to-qubit mapping. `Method` records whether
+the row runs conventional VQE or TN-VQE through Cebule's `TN_QC_OPT`.
+`Ansatz` records the circuit family. The three vary independently, so
+each has its own column:
 
 | Column | Values | Meaning |
 |---|---|---|
@@ -456,28 +510,39 @@ operators from fermionic modes and therefore requires a fermion-to-qubit
 mapping to act on, whereas mol_map's qubits index determinants rather
 than spin orbitals.
 
-### `Backend_Platform` and the two vocabularies it carries
+### `Backend_Platform` names one device, on both sides of the comparison
 
-TN rows target **real hardware** rather than a simulator, so their share
-of the Flex Plan is genuinely billed. The value must be a string that
-`TN_QC_OPT`'s own `get_backend` routes to Qiskit, and its dispatch is:
+Every hardware row reads `ibm_aachen`: one named device, for VQE and
+TN-VQE alike, so the two differ in method rather than in machine. It
+reaches the two stacks by different routes, `TNQCOptInput.backend` on
+TN-VQE rows and `IBMAdapter(backend_name=...)` on VQE rows, but it is the
+same device in both, and the per-row cost estimate transpiles against
+that device's own calibration snapshot.
 
-| `backend` string | Routes to |
-|---|---|
-| `qasm_simulator`, `statevector_simulator`, `unitary_simulator`, `aer_simulator` | Qiskit |
-| anything prefixed `fake` | Qiskit |
-| anything prefixed `ibm` | Qiskit |
-| **everything else** | `qml.device(...)`, that is PennyLane |
+`ibm_aachen` rather than `ibm_brisbane`, which earlier revisions of this
+file named throughout: the campaign's QPU time is bought in IBM's
+European data centre, and Brisbane is not there to run on, whatever the
+name suggests.
 
-`ibm_brisbane` matches the third branch, so the column asserts the same
-implementation that its `3n(R+1)` parameter count assumes. The strings
-used for the pre-hardware phase, `aer_simulator` and `fake_brisbane`,
-match the first and second branches and therefore execute the same
-Qiskit circuit.
+**A least-busy selection is deliberately not used.** Both stacks could
+take one, `QiskitRuntimeService.least_busy()` on the qpubench side and
+any `ibm`-prefixed string on Cebule's. What it would cost is the cost
+model: a row that landed on a different device would carry a duration
+describing a machine it did not run on, and the batch it was allocated to
+would be sized from that duration. Devices differ enough for that to
+matter rather than to average out, since the two-qubit gate itself
+differs between processor generations. A device chosen at submission time
+is the right tradeoff for throughput and the wrong one for a campaign
+whose budget is the measurement.
 
-The column deliberately carries two vocabularies: `TNQCOptInput.backend`
-on TN rows, and qpubench's own `IBMAdapter` name (`ibm_runtime`) on VQE
-rows. That is stated here rather than left to be inferred.
+On the TN-VQE side there is a second constraint on the string, which any
+substitution has to respect: `TN_QC_OPT`'s `get_backend` dispatches on
+it, routing the four named simulators, anything prefixed `fake` and
+anything prefixed `ibm` to Qiskit, and everything else to
+`qml.device(...)`, that is PennyLane. `ibm_aachen` matches the third
+branch. The strings used for the pre-hardware phase, `aer_simulator` and
+any `fake_*` snapshot, match the first and second and therefore run on
+Qiskit too.
 
 ## Tensor-network rotation families
 
@@ -539,7 +604,8 @@ belongs.
 `--sweep-circuit-ansatz` additionally crosses the 12-point comparison
 slice with `excitation_preserving_linear`. It is **off by default**,
 because it takes the sweep from 28 to 40 points and the file from 348 to
-492 rows, and because `xx_plus_yy` is not a `FakeBrisbane` basis gate.
+492 rows, and because `xx_plus_yy` is not an IBM basis gate on any
+current device.
 Re-cost before enabling it rather than assuming parity.
 
 ## Columns
@@ -555,7 +621,7 @@ Re-cost before enabling it rather than assuming parity.
 | `Mapper`, `Method`, `Ansatz` | See the table above |
 | `Ansatz_Reps` | Circuit repetitions; equals `TN_Layers_Circuit` on TN-VQE rows |
 | `N_Qubit`, `N_Qubit_Source` | Qubit count and its provenance: `jw_exact`, `mol_map_run` (a real MOL_MAP run) or `mol_map_inferred` (see below) |
-| `Backend_Platform` | Which platform's circuit the row denotes: `ibm_brisbane` (`TNQCOptInput.backend`) on TN rows, `ibm_runtime` (qpubench's own `IBMAdapter`) on VQE rows. Without it, `Num_Opt_Params_Phi` is ambiguous |
+| `Backend_Platform` | The device the row runs on, `ibm_aachen` throughout: `TNQCOptInput.backend` on TN-VQE rows, `IBMAdapter(backend_name=...)` on VQE rows, and the device the cost estimate is transpiled against |
 | `Optimizer`, `Opt_Options` | `COBYLA`, matching the default of `TNQCOptInput.opt_method`, and the `opt_options` dictionary passed directly to `scipy.optimize.minimize`. `{}` is a recorded choice: for COBYLA, `rhobeg` affects both convergence and the evaluation count, and therefore the row's QPU cost |
 | `Iterations` | Cost-function evaluations the row's optimizer will consume, `max(30, n_params + 2)`; per row rather than global, see the evaluation-budget section above |
 | `Shots` | 4,096, pinned via `TNQCOptInput.n_shots`; `n/a (network mode)` where no quantum measurement is taken, `n/a (QESEM: precision-driven)` on mitigated rows |
@@ -564,9 +630,9 @@ Re-cost before enabling it rather than assuming parity.
 | `TN_Ansatz` | One of the four families above, or `n/a (no TN layers)` / `n/a (not TN-VQE)` |
 | `Optimization_Mode` | `both` (jointly optimise θ and φ) or `network` (θ only, no quantum measurements: the zero-cost control, see below) |
 | `Measurement_Method` | `pauli` or `grouped`, matching `TNQCOptInput.measurement_method` exactly; `n/a` where the dimension does not apply |
-| `Qasm_Ansatz_File`, `Qasm_Ansatz_SHA256` | The pinned circuit under `data/qasm/` and a hash prefix of it, so that an edited circuit ceases to match. Generated by [`pin_qasm_ansatz.py`](../../../examples/guides/pin_qasm_ansatz.py) |
-| `Num_Opt_Params_Phi` | Circuit-side parameter count, computed per `Backend_Platform`; for `UCCSD` it is one amplitude per singles and doubles excitation, counted from the real pool. On a `network` row it is the count held **fixed** rather than optimised |
-| `Phi_Init` | `zeros` on `network` rows, `random(seed=N)` on `both` rows, `n/a (not TN-VQE)` elsewhere; see below |
+| `Qasm_Ansatz_File`, `Qasm_Ansatz_SHA256` | The pinned circuit under `data/qasm/` and a hash prefix of it, so that an edited circuit ceases to match. Set on **every** row, VQE and TN-VQE alike. Generated by [`pin_qasm_ansatz.py`](../../../examples/guides/pin_qasm_ansatz.py) |
+| `Num_Opt_Params_Phi` | Circuit-side parameter count, and the `num_parameters` the pinned QASM loads with; for `UCCSD` it is one amplitude per singles and doubles excitation, counted from the real pool. On a `network` row it is the count held **fixed** rather than optimised |
+| `Phi_Init` | How the circuit's parameters are initialised, fixed by `Ansatz` alone so that rows sharing a circuit share a starting point: `random(seed=N)` on the hardware-efficient families, `zeros` on `UCCSD`; see below |
 | `Num_Opt_Params_Theta` | Network-side parameter count, derivable from the inputs: `TN_Layers_Network x ((3n - 2) // 2) x params_per_node` |
 | `Num_ExpVals_Per_Iter` | Blank, being an output of a real run rather than derivable from the inputs |
 | `Error_Mitigation` | `none` or `qesem`. Every stage-1 and stage-2 row is genuinely `none`, so mitigation is additive |
@@ -575,34 +641,42 @@ Re-cost before enabling it rather than assuming parity.
 | `Refines_Case_ID`, `Converged_Params_File`, `Converged_Params_SHA256` | Stage-3 provenance: which run's converged parameters the row submits, and a hash of them |
 | `Notes` | Per-row provenance and caveats |
 
-### `Phi_Init` is scoped to the optimization mode
+### `Phi_Init` is fixed by the circuit family
+
+φ is the **circuit's** parameter vector, so every row has one. A plain
+VQE row has circuit parameters exactly as a TN-VQE row does, and a
+`network` row has them frozen rather than absent. The initialisation is
+therefore a property of the circuit family and not of the method or the
+optimisation mode, and the column is keyed on `Ansatz` alone: two rows
+that share a family, qubit count and repetition count start from the same
+φ whatever else differs between them. That is what makes the comparison a
+comparison: a difference in the result is attributable to the method
+rather than to where each run began.
+
+The value pinned per family:
+
+- **Hardware-efficient families** (`n_local_rzryrz_sca`,
+  `EfficientSU2`, `RealAmplitudes`) take a **seeded random draw**.
+  All-zero rotations make these circuits exactly the identity, so the
+  initial state is `|0…0⟩`, that is the reference determinant, and the
+  gradient with respect to many φ parameters vanishes there: a known poor
+  starting point. Seeding preserves reproducibility without altering the
+  character of the initialisation, and it matches the upstream default.
+- **`UCCSD`** takes **`zeros`**, because zero amplitudes *are* the
+  Hartree-Fock reference. `t = 0` is the standard start for a
+  coupled-cluster ansatz, and randomising it would be an experimental
+  choice rather than a reproducibility fix.
 
 Upstream randomises φ (`2π·random`, `run_TNQCOpt`) whenever `phi_init` is
-`None`, and does so **unseeded**, so an unpinned run has an initialisation
-that cannot be reproduced. Both modes therefore pin φ, but not to the
-same value, because the correct value differs by mode:
-
-- **`network` rows use `zeros`.** All-zero RzRyRz rotations make the
-  circuit exactly the identity, so the reference state is `|0…0⟩`, that
-  is the reference determinant, and θ then performs an orbital
-  optimisation on a frozen determinant. That is precisely the classical
-  baseline a `both` row must improve on. This rationale applies to the
-  control rows specifically and does not generalise.
-- **`both` rows use a seeded random draw.** On a row that optimises φ,
-  starting at the identity is a liability rather than an advantage: the
-  initial state is the reference determinant and the gradient with
-  respect to many φ parameters vanishes there, a known poor starting
-  point for hardware-efficient ansätze. Seeding preserves
-  reproducibility without altering the character of the initialisation,
-  and it matches the upstream default.
-
-The campaign draws `2π·U(0,1)` from `numpy.random.default_rng(seed)` and
-passes the vector explicitly through `phi_init`, since upstream exposes no
-seed of its own. The mirror's `phi_init` default is `None` rather than
-`[]`: `None` is upstream's sentinel for "unset", whereas an empty list
-reaches the shape check as a length-zero array against a `phi_shape` of
-`(3n(R+1),)`, which is neither the documented random initialisation nor a
-valid one.
+`None`, and does so **unseeded**, so an unpinned run has an
+initialisation that cannot be reproduced; that is the defect the pin
+fixes. The campaign draws `2π·U(0,1)` from `numpy.random.default_rng(seed)`
+and passes the vector explicitly through `phi_init`, since upstream
+exposes no seed of its own. The mirror's `phi_init` default is `None`
+rather than `[]`: `None` is upstream's sentinel for "unset", whereas an
+empty list reaches the shape check as a length-zero array against a
+`phi_shape` of `(3n(R+1),)`, which is neither the documented random
+initialisation nor a valid one.
 
 ### `Num_Opt_Params_Theta` and its cost implications
 
@@ -633,6 +707,12 @@ must be read. This matters most on precisely the `givens` rows that stage
 substantial part of the correlation energy on its own, so without the
 control a `both` run can appear to be a quantum success when most of the
 improvement originated in the classical half of the method.
+
+A control and the `both` row it controls begin from the **same state**,
+since [`Phi_Init`](#phi_init-is-fixed-by-the-circuit-family) follows the
+circuit family rather than the optimisation mode. The pair therefore
+differs in one thing only, whether φ is optimised alongside θ, and the
+difference between their energies measures that and nothing else.
 
 **"Network" mode does not mean "no circuit".** `optimize_network` opens
 with `circuit_to_mps(circuit, phi)`: the circuit exists at a frozen φ and
@@ -670,130 +750,102 @@ records the quantity that in fact determines the level.
 
 ## Stage 3: QESEM-mitigated final energies
 
-QESEM enters this campaign as a **refinement of final energies** rather
-than as the measurement layer inside a variational loop.
+Stage 3 takes the parameters stage 2 converged to and resubmits each one
+twice on `ibm_aachen`: once through Qedma's QESEM, once without it. Both
+values are then reported as errors against the classical reference
+energy. That is the whole of the stage. It is deliberately small, it runs
+once at the end, and it is not a sweep.
 
-### Why mitigation is applied outside the variational loop
+### What a refinement row submits
 
-The constraint is wall-clock throughput. A mitigated evaluation carries
-queue time, device characterization and the mitigation sampling itself,
-and a variational optimiser requires those strictly in sequence, since
-step `k+1` depends on the measured energy at step `k`. Across the number
-of molecule, basis and ansatz combinations this campaign screens, a
-sequence of mitigated evaluations per row does not complete in an
-acceptable calendar time, irrespective of the per-job cost.
+| | |
+|---|---|
+| Circuit | the row's pinned QASM, unchanged from the stage-2 run being refined |
+| Parameters | the converged vector, by file and hash (`Converged_Params_File`, `Converged_Params_SHA256`), since the vector is too long for a CSV cell |
+| Provenance | `Refines_Case_ID`, the stage-2 row this refines |
+| Observable | the transformed Hamiltonian of that run |
+| Target uncertainty | `Precision`, a requested σ in Hartree, which has no default |
+| Execution | `QESEM_Execution_Mode`, `batch` or `session`; one job per row, so `Optimizer` reads `n/a (converged parameters)` and `Iterations` is 1 |
 
-A second consideration follows from the same sequencing. Any scheme that
-amortises characterization across jobs depends on the jobs being close
-enough together, and a variational loop inserts a classical optimiser
-step between every pair of jobs. On the wider rows the tensor-network
-contraction in that step is not negligible, so the loop can consume the
-interval over which amortisation would apply. The limitation is therefore
-not merely that the procedure takes a long time; taking a long time is
-what removes the saving it would depend on. Any future inner-loop
-experiment should measure real per-iteration wall-clock time before
-assuming any saving applies. No per-iteration cost figure is quoted here,
-because it depends on service behaviour this campaign has not measured.
+Every `--refine` emits **two** rows, identical except for
+`Error_Mitigation`. A mitigated energy on its own says nothing about
+mitigation: it is interpretable only against the same circuit, at the
+same parameters, on the same device, unmitigated. Without the pair the
+result of the stage is "QESEM returned a number".
 
-The case in which submitting many parameter values in one job does apply
-is the one place this campaign has parameter values known in advance: a
-**dissociation curve or geometry scan**, that is several bond lengths
-with no adaptive dependency between them. That is an additional reason to
-close the open decision on geometries below.
+### What comes back, and where it is recorded
 
-### Composition of a refinement row
-
-**Two submissions, not one.** A mitigated energy in isolation says
-nothing about mitigation: it can only be interpreted against the same
-circuit, at the same parameters, on the same device, without QESEM. Every
-`--refine` therefore emits an unmitigated row and a mitigated one,
-identical except for `Error_Mitigation`. Without the pair, the result of
-this stage is "QESEM returned a number", which is not a benchmark
-finding. Both are then reported as **errors against the classical
-reference energy**, which is what converts "the mitigated value differs"
-into "the mitigated value is closer", the only form of the result that
-justifies the QPU time.
-
-**With a pointer to the parameters being refined.** `Refines_Case_ID`
-together with a converged-parameter file and its hash. The parameter
-vectors are too long for a CSV cell, the same constraint the pinned QASM
-resolves by referring to a file, and without the pointer a refinement
-result is unattributable.
-
-**One job per row** rather than one job per optimizer iteration.
-`Optimizer` reads `n/a (converged parameters)` and `Iterations` is 1.
-Stage 3 is small, late and few in number, and should not resemble a
-sweep.
-
-### Target precision determines what stage 3 costs and what it can conclude
-
-σ determines both the cost of this stage and the conclusions it can
-support, so `--precision` has no default and stage 3 refuses to generate
-without one.
-
-- Chemical accuracy is approximately **1.6 mHa**. An energy quoted to
-  ±0.1 Ha cannot distinguish basis sets, ansätze or mappers, which is the
-  entire purpose of this campaign, so a loose σ yields a result that
-  cannot support a chemistry conclusion however well mitigated it is.
-- Tightening σ is **superlinearly** expensive: sampling cost scales as
-  1/σ², so moving from 0.1 Ha to 1.6 mHa is of order 10³ to 10⁴ times
-  more sampling. QESEM's total cost is not purely sampling, so this is an
-  order-of-magnitude statement rather than a multiplier, but the
-  conclusion is unaffected by that imprecision.
-- The choice is therefore between two distinct goals. *"Mitigation runs
-  end to end in this pipeline and reduces the error by a measurable
-  amount"* is a legitimate result at a loose σ and worth reporting. It is
-  a different goal from a chemistry result, and only one of the two
-  justifies expenditure at chemical accuracy. **That choice is the
-  decision embedded in this column**, and it remains open.
-- **No default σ is inherited** from an SDK or a mirrored schema. Service
-  defaults are set for general use and are typically far looser than
-  chemistry requires.
-- The cost also depends on **which family produced the state being
-  refined**: QESEM's sampling cost tracks the Pauli-term structure of the
-  observable, and the term count of the transformed Hamiltonian depends
-  on the `TN_Ansatz` that produced the converged state. Refining a
-  `number_preserving` state is not the same cost as refining a `givens`
-  one, so each row records which it refines.
-
-### The pauli/grouped comparison is unavailable on mitigated rows
-
-QESEM accepts an observable and returns a mitigated expectation value
-with an uncertainty. It does not expose the raw bitstring distribution
-that a basis-state grouping scheme requires in order to reconstruct
-expectation values from grouped measurements. On a QESEM row there is
-therefore nothing for `grouped` to consume and the dimension
-**collapses**; it is marked `n/a (QESEM: no bitstring distribution)`
-rather than left reading `pauli` as though a choice had been made.
-
-This is a property of the service interface rather than of Cebule's
-integration with it, since the grouping would have to occur inside the
-mitigation. The consequence is worth stating explicitly: the claim that
-*`grouped` keeps measurement cost approximately flat while
-`number_preserving` does not* is among this campaign's most defensible
-conclusions, and stage 3 cannot contribute evidence to it. Whatever stage
-3 establishes, it is not that.
-
-### Achieved uncertainty is a result, not metadata
-
-QESEM returns an error bar alongside each value, and the requested σ is a
-target rather than a guarantee, since a job that reaches its QPU-time cap
-first will differ from it. Requested and achieved σ are therefore
-recorded separately, and the schema provides a home for each:
+QESEM returns a mitigated expectation value with an error bar. The
+requested σ is a target rather than a guarantee, since a job that reaches
+its QPU-time cap first will fall short of it, so requested and achieved
+are recorded separately:
 
 | Quantity | Where it is recorded |
 |---|---|
-| Requested σ | `QESEMJobSpec.precision` (and `Precision` in the matrix) |
+| Requested σ | `QESEMJobSpec.precision`, and `Precision` in the matrix |
 | Achieved 1-σ uncertainty | `QESEMExpectationValue.error_bar`, surfaced by `QESEMCircuitResult.mitigated_stds` |
 
-A refinement result without its uncertainty cannot be interpreted against
-either its unmitigated pair or the classical reference, so this gates the
-usefulness of stage 3 rather than merely tidying its records. The
-mirror's `QESEMExecutionMode` (`session` / `batch`) and
-`parameterized_values: dict[str, list[float]]` both match the API, so no
-new fields are required; the mirror should nevertheless be re-verified
-against what is actually submitted, in the same way the `TN_QC_OPT`
-mirror was verified against its implementation.
+A refinement result without its uncertainty cannot be read against either
+its unmitigated pair or the classical reference, so the achieved value
+gates whether the stage concluded anything. The mirror's
+`QESEMExecutionMode` and `parameterized_values` both match the API, but
+should be re-verified against what is actually submitted, as the
+`TN_QC_OPT` mirror was against its implementation.
+
+### What stage 3 cannot do
+
+- **It cannot contribute to the `pauli`/`grouped` comparison.** QESEM
+  returns an expectation value, never the raw bitstring distribution a
+  basis-state grouping scheme reconstructs from, so there is nothing for
+  `grouped` to consume and the dimension collapses to
+  `n/a (QESEM: no bitstring distribution)`. That matters because the
+  claim that grouping keeps measurement cost roughly flat is among the
+  campaign's most defensible conclusions, and this stage cannot support
+  it.
+- **It cannot be costed by the transpilation model**, so it needs its own
+  cost source and its own batch; see
+  [Known limitations](#known-limitations).
+- **It does not mitigate inside the variational loop.** The obstacle is
+  the sequence: queue time plus mitigated sampling, strictly in order,
+  once per optimiser step, across every combination the campaign screens.
+  The classical step between jobs is not the obstacle, since QESEM reuses
+  a characterization for 24 hours and the tensor-network contraction
+  between iterations is small against that window, the contraction path
+  being computed once and cached. An inner-loop experiment is therefore
+  not ruled out on principle, but should measure real per-iteration
+  wall-clock time first.
+
+### What is still open
+
+Stage 3 is the least settled part of the campaign, and the decisions
+below are sized from each other rather than independently. They are
+tracked with the rest under
+[Open campaign decisions](#open-campaign-decisions).
+
+- **What σ, and therefore what the stage is for.** Chemical accuracy is
+  about 1.6 mHa, and an energy quoted to ±0.1 Ha distinguishes no basis
+  set, ansatz or mapper. But sampling cost scales as 1/σ², so tightening
+  from 0.1 Ha to 1.6 mHa is of order 10³ to 10⁴ times the sampling. The
+  two ends are two different results: *"mitigation runs end to end and
+  measurably reduces the error"* is worth reporting at a loose σ, and is
+  not a chemistry result. Only one of them justifies spending at chemical
+  accuracy, and no default is inherited from the service, whose own
+  defaults are looser than chemistry needs.
+- **Which stage-2 rows are refined, and on what criterion**: best energy,
+  largest spread against the classical reference, or one per molecule.
+  The answer is an output of stage 2, but the criterion should be
+  recorded before stage 2 runs rather than chosen from its results.
+- **Whether a grouping-aware submission path exists**, which is a
+  question for Qedma.
+
+Two facts constrain those choices. Refinement cost depends on **which
+family produced the state**, since QESEM's sampling tracks the Pauli-term
+structure of the observable and the transformed Hamiltonian's term count
+follows the `TN_Ansatz`; each row therefore records what it refines. And
+submitting many parameter values in one job pays off exactly where the
+values are known in advance, which in this campaign means a
+**dissociation curve or geometry scan**: a further reason to settle the
+geometry decision.
 
 ## MOL_MAP qubit counts are computed rather than left blank
 
@@ -848,6 +900,15 @@ run.
 - **`TN_Layers_Network` is classical compute, not QPU time.** Only
   `TN_Layers_Circuit` affects IBM billing, and the two costs move
   independently.
+- **No stage-1 row runs plain VQE on the TN rows' circuit.** VQE screens
+  `EfficientSU2`, `RealAmplitudes` and `UCCSD`; TN-VQE runs
+  `n_local_rzryrz_sca`. The comparison between the two methods is
+  therefore made across circuit families rather than at a fixed one, and
+  a difference between them carries the circuit as well as the method.
+  Adding a plain-VQE row on `n_local_rzryrz_sca` would close that, at the
+  cost of more rows in a matrix that already fills batch2; the pinned
+  QASM and the family-keyed `Phi_Init` are what would make such a pair
+  match exactly, and both are in place.
 - **Stage 3 cannot be costed by the transpilation model.** QESEM's own
   estimate is either analytical (consuming no QPU, but a pessimistic
   upper bound quantised to 30-minute steps) or empirical (5-minute
@@ -856,6 +917,14 @@ run.
   in batch2's seconds of headroom, so stage 3 requires its own batch and
   its own cost source. Empirical estimation on representative rows is
   preferred.
+- **The committed batch allocation is costed for the wrong device.**
+  Its figures were transpiled against `ibm_brisbane`; the campaign
+  targets `ibm_aachen`. Re-cutting needs IBM credentials, since that
+  device has no offline calibration snapshot, and it will move every
+  batch total.
+- **Cost estimates are not reproducible offline.** They read live
+  calibration, so two regenerations either side of a recalibration
+  disagree, and any quoted figure carries the date it was produced.
 - **qvSZP qubit counts are computed offline** via
   `hamiltonian_sources.qvszp`.
 - **Geometries are unspecified.** Every row names a molecule and a basis
@@ -880,25 +949,32 @@ refining pre-optimised parameters is
 Tracked as a git-bug item; run `git bug bug --status open` and look for
 "IBM VQE campaign". Settled and recorded above: shots, transpiler
 optimisation level, the per-row evaluation budget, scale,
-`optimization_mode`, `Phi_Init`, and the backend. Still open:
+`optimization_mode`, `Phi_Init`, the pinned circuits, and the device
+(`ibm_aachen`, costed against live calibration). Still open:
 
 1. **What σ, and therefore what stage 3 is for**: a chemistry result or a
    demonstration that mitigation reduces error. Everything else in that
    stage is sized from this.
 2. **Geometries**, and whether to run the full space on the larger basis
    sets.
-3. **The stage-1 evaluation budget against the convergence behaviour it
+3. **Which noise model the noisy pre-hardware runs use**, given that
+   `ibm_aachen` has no offline calibration snapshot: a snapshot of a
+   different device, which characterises that device rather than the
+   target, or a model built from the target's live calibration, which
+   needs credentials and may not be reachable through `TNQCOptInput`'s
+   backend string.
+4. **The stage-1 evaluation budget against the convergence behaviour it
    must resolve.** At the present budget the widest rows complete simplex
    construction and little more, so the descent they expose is limited.
    Any increase raises every batch total in approximately the same
    proportion and re-cuts the plan allocation, so the two have to be
    decided together.
-4. **Which stage-2 rows are refined, and on what criterion**: best
+5. **Which stage-2 rows are refined, and on what criterion**: best
    energy, largest spread against the classical reference, or one per
    molecule. This is an output of stage 2 and so need not be answered
    now, but the criterion should be recorded *before* stage 2 runs rather
    than chosen afterwards from the results.
-5. **Whether any grouping-aware or multi-observable QESEM submission path
+6. **Whether any grouping-aware or multi-observable QESEM submission path
    exists** (a question for Qedma). If one does, it changes the
    consequence of the grouped collapse described above rather than merely
    its labelling.

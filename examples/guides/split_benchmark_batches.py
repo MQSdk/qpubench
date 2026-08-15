@@ -65,7 +65,10 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
 from _ansatz_builders import circuit_spec
 
-from qpubench.backends.ibm_cost_estimator import estimate_circuit_resources
+from qpubench.backends.ibm_cost_estimator import (
+    estimate_circuit_resources,
+    resolve_calibration_backend,
+)
 from qpubench.schemas.mirrors.ibm_cost_estimator import CircuitResourceEstimate
 
 _REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -74,7 +77,16 @@ _CSV_PATH = _CAMPAIGN_DIR / "stage1_screening_matrix.csv"
 # The tranches sit beside the matrix they were cut from, which is where
 # a reader expects them.
 _OUT_DIR = _CAMPAIGN_DIR
-_BACKEND_NAME = "ibm_brisbane"
+# The campaign runs in IBM's European data centre, which does not host
+# ibm_brisbane (an Eagle device in the US, whatever the name suggests).
+# qiskit-ibm-runtime ships no Fake* snapshot for this device, so the
+# estimate is taken against its LIVE calibration and $IBM_QUANTUM_TOKEN
+# is required to regenerate the batches -- see
+# resolve_calibration_backend.  Costing it against another device's
+# snapshot would estimate the wrong machine: the two-qubit gate differs
+# between processor generations, so the transpiled circuit differs before
+# any duration is read off it.
+_BACKEND_NAME = "ibm_aachen"
 
 # Shots and iterations both come from each row's own columns, matching
 # estimate_ibm_cost.py exactly.
@@ -105,6 +117,22 @@ def _row_active_electrons(row: dict[str, str]) -> int:
     orbitals and the count carries over directly.
     """
     return int(row["Active_Electrons"])
+
+
+_CALIBRATION = None
+
+
+def _calibration():
+    """The live `ibm_aachen` backend, opened once and reused.
+
+    Resolved lazily so that importing this module, or running anything
+    that does not cost a circuit, needs no credentials. The connection is
+    opened on the first transpile and shared by every one after it.
+    """
+    global _CALIBRATION
+    if _CALIBRATION is None:
+        _CALIBRATION = resolve_calibration_backend(_BACKEND_NAME)
+    return _CALIBRATION
 
 
 def is_classical_only(row: dict[str, str]) -> bool:
@@ -144,7 +172,8 @@ def estimate_per_row_qpu_seconds(rows: list[dict[str, str]]) -> dict[int, float]
                 ansatz, num_qubits, reps=reps, num_electrons=num_electrons
             )
             cache[key] = estimate_circuit_resources(
-                spec, backend_name=_BACKEND_NAME, shots=shots,
+                spec, backend_name=_BACKEND_NAME, backend=_calibration(),
+                shots=shots,
                 optimization_level=_OPTIMIZATION_LEVEL,
                 label=f"{ansatz}, {num_qubits}q, {reps} reps",
             )

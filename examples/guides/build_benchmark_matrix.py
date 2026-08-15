@@ -147,25 +147,30 @@ TN_CIRCUIT_ANSATZ = "n_local_rzryrz_sca"
 # (n(n-1)/2 two-qubit gates per rep is unaffordable here).
 TN_CIRCUIT_ANSATZ_IN_SECTOR = "excitation_preserving_linear"
 
-# Which platform each row's circuit is built and costed for.  `backend`
-# is a real TNQCOptInput field (default 'default.qubit'), and pinning it
-# is what makes Num_Opt_Params_Phi well-defined: the Qiskit path gives
-# 3n(R+1) parameters, PennyLane's StronglyEntanglingLayers 3nR.
+# The device every row runs on -- one named device, not a family and not
+# a least-busy selection.  Both sides of the comparison name it, so a VQE
+# row and a TN-VQE row differ in method rather than in hardware, and the
+# per-row cost estimate transpiles against that device's own calibration,
+# which a run-time device choice would leave describing a machine the row
+# did not use.
 #
-# The value has to be a string get_backend really routes to Qiskit.  Its
+# ibm_aachen, not ibm_brisbane: this campaign's QPU time is bought in
+# IBM's EUROPEAN data centre, which does not host Brisbane -- an Eagle
+# device in the US, whatever the name suggests.  qiskit-ibm-runtime ships
+# no Fake* snapshot for the European devices, so the cost estimate is
+# taken against live calibration; see split_benchmark_batches.py.
+#
+# It reaches the two stacks by different routes: TNQCOptInput.backend on
+# TN rows, IBMAdapter(backend_name=...) on VQE rows.  On the TN side the
+# string also has to be one get_backend really routes to Qiskit.  Its
 # dispatch (functions_main.py, cebule-tn_vqe @ dev-kba a760489) is: the
 # four named simulators, anything prefixed 'fake', anything prefixed
 # 'ibm' -> Qiskit; everything else -> qml.device(...), i.e. PennyLane.
 # "qiskit.aer" matched none of those, so it selected the PennyLane
-# circuit while the column claimed the Qiskit one -- exactly the
-# ambiguity this column was added to remove.  'ibm_brisbane' hits the
-# 'ibm' branch, and is what estimate_ibm_cost.py and
-# split_benchmark_batches.py already cost against.
-#
-# Note the column carries two vocabularies: TNQCOptInput.backend on TN
-# rows, qpubench's own IBMAdapter name on VQE rows.
-BACKEND_PLATFORM_TN = "ibm_brisbane"    # TNQCOptInput.backend
-BACKEND_PLATFORM_VQE = "ibm_runtime"    # qpubench's own IBMAdapter
+# circuit while the column claimed the Qiskit one.  'ibm_aachen' hits the
+# 'ibm' branch.
+BACKEND_PLATFORM_TN = "ibm_aachen"     # TNQCOptInput.backend
+BACKEND_PLATFORM_VQE = "ibm_aachen"    # IBMAdapter(backend_name=...)
 
 # The single TN-VQE point stage 1 runs, mid-range in both directions --
 # enough to tell whether TN-VQE helps for a given basis without paying
@@ -234,28 +239,34 @@ SHOTS = 4096
 MIN_ITERATIONS = 30       # smoke-test floor, so the small rows stay comparable
 SIMPLEX_OVERHEAD = 2      # n+1 simplex points, +1 for the first real step
 
-# --- phi_init, per optimization mode --------------------------------------
+# --- phi_init, per circuit family -----------------------------------------
+#
+# phi is the CIRCUIT's parameter vector, so every row has one: a plain
+# VQE row has circuit parameters exactly as a TN-VQE row does, and a
+# `network` row has them frozen rather than absent.  The initialisation
+# is therefore a property of the CIRCUIT FAMILY, not of the method and
+# not of the optimization mode.  Keying it that way is what makes the
+# comparison a comparison: two rows that share (ansatz, qubits, reps)
+# start from the same state whatever else differs between them, so a
+# difference in the result is attributable to the method.
 #
 # Upstream randomises phi (2*pi*random, run_TNQCOpt) whenever phi_init is
-# None, unseeded -- so an unpinned run has an initialisation nobody can
-# reproduce.  That is the defect worth fixing.  WHICH pinned value is
-# right, though, differs by mode, and the two must not be conflated:
+# None, and does so unseeded -- so an unpinned run has an initialisation
+# nobody can reproduce.  That is the defect the pin fixes; the value is
+# then chosen per family:
 #
-#   network rows want ZEROS.  All-zero RzRyRz rotations make the circuit
-#   exactly the identity, so the reference state is |0...0> = the
-#   reference determinant, and theta then performs orbital optimisation
-#   on a frozen determinant.  That is precisely the classical floor a
-#   "both" row has to beat, and it is the same identity-circuit fact that
-#   made Finding 1 silent -- used deliberately here instead of by
-#   accident.
+#   Hardware-efficient families (n_local RzRyRz, EfficientSU2,
+#   RealAmplitudes, ...) take a SEEDED RANDOM DRAW.  All-zero rotations
+#   make these circuits the identity, so the initial state is the
+#   reference determinant and the gradient with respect to many phi
+#   parameters vanishes there -- a well-known bad start.  Seeding keeps
+#   reproducibility without changing the character of the
+#   initialisation, and it matches upstream's own default.
 #
-#   "both" rows want a SEEDED RANDOM DRAW.  On a row that actually
-#   optimises phi, starting at the identity is a liability rather than a
-#   feature: the initial state is the reference determinant and the
-#   gradient with respect to many phi parameters vanishes there, which is
-#   a well-known bad start for hardware-efficient ansaetze.  Seeding the
-#   draw keeps the reproducibility win without changing the character of
-#   the initialisation, and it matches upstream's own default.
+#   UCCSD takes ZEROS, because zero amplitudes ARE the Hartree-Fock
+#   reference: t=0 is the standard, and the only defensible, start for a
+#   coupled-cluster ansatz, and randomising it would be an experimental
+#   choice rather than a reproducibility fix.
 #
 # The seed is the date the convention was settled.  The campaign draws
 # 2*pi*U(0,1) from numpy's default_rng(seed) -- upstream's distribution --
@@ -264,6 +275,8 @@ SIMPLEX_OVERHEAD = 2      # n+1 simplex points, +1 for the first real step
 PHI_INIT_SEED = 20260811
 PHI_INIT_ZEROS = "zeros"
 PHI_INIT_RANDOM = f"random(seed={PHI_INIT_SEED})"
+# Families for which zero is the reference state rather than a barren one.
+PHI_INIT_ZEROS_ANSATZE = {"UCCSD"}
 
 NOT_TN = "n/a (not TN-VQE)"
 NO_TN_LAYERS = "n/a (no TN layers)"
@@ -396,13 +409,21 @@ def circuit_parameter_count(
     return ""
 
 
-def qasm_ansatz_pin(ansatz: str, num_qubits: int, reps: int) -> tuple[str, str]:
+def qasm_ansatz_pin(
+    ansatz: str, num_qubits: int, reps: int, num_electrons: int,
+) -> tuple[str, str]:
     """(path, sha256 prefix) of the pinned QASM circuit, if one exists.
 
-    Pinning the exact circuit is what makes a cross-backend comparison
-    meaningful: cebule-tn_vqe commit a760489 unified all five paths to an
-    expectation value on Qiskit's `q[i] = Hamiltonian index i`
-    convention, so one pinned QASM string now gives the same energy on
+    Every family is pinned, VQE's as well as TN-VQE's.  A named ansatz is
+    not a circuit -- it is a name a library version resolves -- so two
+    rows naming one family are comparable only if they resolve it to the
+    same circuit, and a reader comparing against a method this campaign
+    does not run needs the circuit rather than the name.
+
+    Pinning the exact circuit is also what makes a cross-backend
+    comparison meaningful: cebule-tn_vqe commit a760489 unified all five
+    paths to an expectation value on Qiskit's `q[i] = Hamiltonian index
+    i` convention, so one pinned QASM string now gives the same energy on
     both platforms and both measurement methods.  It did not before.
 
     The circuit lives in a file rather than a CSV cell -- a multi-line
@@ -413,7 +434,13 @@ def qasm_ansatz_pin(ansatz: str, num_qubits: int, reps: int) -> tuple[str, str]:
     Note the interaction with TNQCOptInput.n_layers_circuit: supplying
     qasm_ansatz changes its effective default from 3 to 1.
     """
-    path = _QASM_DIR / f"{ansatz}_{num_qubits}q_{reps}r.qasm"
+    stem = f"{ansatz}_{num_qubits}q_{reps}r"
+    if ansatz == "UCCSD":
+        # UCCSD's structure follows the occupied/virtual split, so the
+        # electron count is part of its identity; the hardware-efficient
+        # families are fixed by (qubits, reps) alone.
+        stem += f"_{num_electrons}e"
+    path = _QASM_DIR / f"{stem}.qasm"
     if not path.exists():
         return "", ""
     digest = hashlib.sha256(path.read_bytes()).hexdigest()[:12]
@@ -514,7 +541,7 @@ def _row(
     # control is that it takes no QUANTUM MEASUREMENTS, and
     # Optimization_Mode already carries that.
     takes_measurements = optimization_mode != "network"
-    qasm_file, qasm_hash = qasm_ansatz_pin(ansatz, num_qubits, reps)
+    qasm_file, qasm_hash = qasm_ansatz_pin(ansatz, num_qubits, reps, active_electrons)
     phi_params = circuit_parameter_count(ansatz, num_qubits, reps, active_electrons)
     # Theta is fixed by the inputs, unlike Num_ExpVals_Per_Iter: it is
     # n_layers_network * ((3n - 2) // 2) * params_per_node.
@@ -528,10 +555,13 @@ def _row(
     free_params = (int(phi_params) if phi_params and takes_measurements else 0) + (
         int(theta_params) if theta_params else 0
     )
-    if is_tn:
-        phi_init = PHI_INIT_ZEROS if not takes_measurements else PHI_INIT_RANDOM
-    else:
-        phi_init = NOT_TN
+    # Keyed on the circuit family alone: a VQE row and a TN-VQE row that
+    # share an ansatz start from the same phi, and so does the `network`
+    # control that freezes it.  Nothing here reads `method` or
+    # `optimization_mode`, which is the point.
+    phi_init = (
+        PHI_INIT_ZEROS if ansatz in PHI_INIT_ZEROS_ANSATZE else PHI_INIT_RANDOM
+    )
     return {
         "Case_ID": "",                       # assigned after the full list is built
         "Stage": stage,
@@ -986,7 +1016,7 @@ def main() -> None:
             "excitation_preserving_linear) over the 12-point family-comparison "
             "core. Doubles the core, taking the sweep from 28 to 40 points and "
             "the file from 348 to 492 rows -- re-cost before running it, "
-            "xx_plus_yy is not a FakeBrisbane basis gate"
+            "xx_plus_yy is not an IBM basis gate on any current device"
         ),
     )
     parser.add_argument(
