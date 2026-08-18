@@ -11,7 +11,7 @@ That pair is the *only* axis that gets its own pipeline/DAG here: it's the one
 dimension in the benchmark matrix that changes which components run (a
 component change, per docs/integrations/kubeflow.md's Transform/Execution
 taxonomy). Every other benchmark dimension --
-TN_Layers_Network/TN_Layers_Circuit/TN_Ansatz/Measurement_Method/Shots/
+TN_Layers_Network/Ansatz_Reps/TN_Ansatz/Measurement_Method/Shots/
 Qiskit_Opt_Level -- is a parameter value, resolved *inside* one pipeline via
 dsl.ParallelFor (for the Cebule-task-level knobs) and
 BenchmarkRunner.sweep() inside the Execution components (for the
@@ -106,7 +106,7 @@ def cebule_molecular_vqe_pipeline(
     h_coeff_values: list[float] = [],  # noqa: B006 — kfp pipeline params, not a mutable default trap
     h_operators: list[str] = [],  # noqa: B006
     n_iterations: int = 100,
-    # TN_Layers_Network / TN_Layers_Circuit / TN_Ansatz / Measurement_Method
+    # TN_Layers_Network / Ansatz_Reps / TN_Ansatz / Measurement_Method
     # sweep points (data/benchmarks/ibm_tn-vqe_qesem/README.md) — resolved by dsl.ParallelFor below, all
     # inside this one pipeline/DAG, not one pipeline per combination.
     tn_layers_network_values: list[int] = [3],

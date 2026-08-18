@@ -127,9 +127,9 @@ def write_pinned_qasm(
     )
 
     path = qasm_path(ansatz, num_qubits, reps, num_electrons)
-    # UTF-8 explicitly, not the locale default: an unbound n_local dump
-    # names its parameters `input float[64] _{θ}_0_;`, so these files are
-    # no longer pure ASCII and must not depend on the writer's locale.
+    # UTF-8 explicitly, not the locale default: an unbound dump names its
+    # parameters `input float[64] _{θ}_0_;`, so these files are not pure
+    # ASCII and must not depend on the writer's locale.
     path.write_text(qasm3.dumps(circuit) + "\n", encoding="utf-8")
     return path, hashlib.sha256(path.read_bytes()).hexdigest()[:12]
 
@@ -144,9 +144,18 @@ def main() -> None:
         raise SystemExit(f"no rows with a circuit found in {_CSV_PATH.name}")
 
     print(f"Pinning {len(shapes)} distinct circuits from {_CSV_PATH.name}:")
+    written: set[pathlib.Path] = set()
     for ansatz, num_qubits, reps, num_electrons in shapes:
         path, digest = write_pinned_qasm(ansatz, num_qubits, reps, num_electrons)
+        written.add(path)
         print(f"  {path.relative_to(_REPO_ROOT)}  sha256:{digest}")
+
+    # The pinned set is exactly what the matrix runs. A circuit left
+    # behind by an earlier matrix is not a spare -- it is a file no row
+    # points at, which invites being read as one the campaign runs.
+    for stale in sorted(set(_QASM_DIR.glob("*.qasm")) - written):
+        stale.unlink()
+        print(f"  removed {stale.relative_to(_REPO_ROOT)} (no row runs it)")
 
     print(
         "\nRe-run build_benchmark_matrix.py to fill Qasm_Ansatz_File / "

@@ -24,10 +24,19 @@ Two things this script deliberately keeps separate:
 The iteration count used to be a flat 30 applied to every row, and that
 was not a conservative assumption but an invalid one. COBYLA needs an
 initial simplex of n+1 points before it can take a single step, and
-scipy raises a maxiter set below that rather than honouring it — so a
-12-qubit TN row billed at 30 submissions really consumed 144 and moved
-the objective by exactly zero. `Iterations` is now a per-row campaign
-input, and this script bills what the CSV says.
+scipy raises a maxiter set below that rather than honouring it, so the
+widest rows were billed for a fraction of what they would really consume.
+`Iterations` is now a per-row campaign input, proportional to the row's
+own parameter count so that every row reaches a comparable fraction of
+its achievable descent, and this script bills what the CSV says.
+
+One evaluation is billed as one circuit submission, and that is a FLOOR
+rather than an estimate: evaluating <H> takes one circuit per measurement
+basis -- one per commuting Pauli group, or per basis-state grouping --
+each at the row's full shot count, and how many that is depends on the
+Hamiltonian being measured rather than on the circuit preparing it. The
+matrix's blank Num_ExpVals_Per_Iter column is exactly that factor. Every
+total below scales with it.
 
 Rows in `optimization_mode="network"` are skipped: they take no quantum
 measurements, so they have no QPU cost to estimate (see
@@ -61,11 +70,10 @@ _CSV_PATH = (
     pathlib.Path(__file__).resolve().parents[2]
     / "data" / "benchmarks" / "ibm_tn-vqe_qesem" / "stage1_screening_matrix.csv"
 )
-# IBM's European data centre, where this campaign's time is bought, does
-# not host ibm_brisbane (an Eagle device in the US, whatever the name
-# suggests).  qiskit-ibm-runtime ships no Fake* snapshot for ibm_aachen,
-# so the estimate comes from its LIVE calibration and $IBM_QUANTUM_TOKEN
-# is required to run this script.
+# The device this campaign buys time on, in IBM's European data centre.
+# qiskit-ibm-runtime ships an offline calibration snapshot for it
+# (FakeAachen, from 0.47.0), so resolve_calibration_backend picks that up
+# and this script runs without credentials or a network.
 _BACKEND_NAME = "ibm_aachen"
 
 
@@ -73,10 +81,11 @@ _CALIBRATION = None
 
 
 def _calibration():
-    """The live `ibm_aachen` backend, opened once and reused.
+    """The `ibm_aachen` calibration source, resolved once and reused.
 
-    Resolved lazily, so importing this module needs no credentials; the
-    connection opens on the first transpile and is shared by the rest.
+    Resolved lazily and offline where a snapshot exists; if the installed
+    qiskit-ibm-runtime has none, this falls back to the live device and
+    the connection opens on the first transpile.
     """
     global _CALIBRATION
     if _CALIBRATION is None:
@@ -172,9 +181,12 @@ def main() -> None:
           "each at its own Iterations) ===")
     full_estimates = estimate_full_csv_study()
     agg = aggregate_benchmark_cost(full_estimates)
-    print(f"  {len(full_estimates)} circuit submissions, "
+    print(f"  {len(full_estimates)} cost-function evaluations, "
           f"{agg.total_shots:,} total shots, "
           f"{agg.total_qpu_seconds:,.1f}s ({agg.total_qpu_minutes:,.1f} min) total QPU time")
+    print("  (one circuit submission per evaluation -- a FLOOR: <H> needs one "
+          "circuit per\n   measurement basis, so multiply by the row's real "
+          "Num_ExpVals_Per_Iter)")
     _print_plan_breakdown(agg.total_qpu_seconds, IBMPricingRates.default())
 
 

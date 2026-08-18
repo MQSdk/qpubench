@@ -43,8 +43,9 @@ n = count_basis_functions("def2-tzvp", "O")       # 31, spatial AO functions
 `count_basis_functions()` computes real spherical-harmonic AO counts from
 BSE's own shell data and was cross-checked in this session against real
 `pyscf.gto.M(...).nao` for every (element, basis) pair in
-`data/benchmarks/ibm_tn-vqe_qesem/stage1_screening_matrix.csv`, an exact match in all 18 cases (H, Li, O
-× sto-3g/6-31g/cc-pvdz/cc-pvtz/def2-svp/def2-tzvp), see
+`data/benchmarks/ibm_tn-vqe_qesem/stage1_screening_matrix.csv` and against H, Li and O
+× sto-3g/6-31g/cc-pvdz/cc-pvtz/def2-svp/def2-tzvp, an exact match in all
+18 pinned cases (the matrix itself now screens H and O only), see
 `tests/test_basis_sets.py`. Two real BSE shell shapes are handled
 correctly, not just the simple case: general-contraction shells (one `l`,
 several contracted columns, e.g. cc-pVDZ's 3 s-type contractions on O)

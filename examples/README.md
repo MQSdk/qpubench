@@ -61,6 +61,7 @@ Requires `pip install 'qpubench[adapt_vqe]'` (scipy + numpy) for anything that r
 | Run on real quantum computers (IBM / IQM construction + run pattern; needs credentials) | `quantum_computers.py` |
 | Estimate what a benchmark costs on IBM hardware *before* submitting | `estimate_ibm_cost.py` |
 | Split a large benchmark into batches sized to IBM access-plan budgets | `split_benchmark_batches.py` |
+| Count how many circuits one cost-function evaluation really submits | `count_measurement_bases.py` |
 
 **Keep the results:**
 

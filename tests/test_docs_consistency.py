@@ -175,12 +175,12 @@ def test_classical_only_rows_cost_nothing_and_take_no_measurements():
     """optimization_mode="network" takes no quantum measurements at all.
 
     That -- not "runs no circuit" -- is what defines the control. The
-    circuit exists at a frozen phi and IS the reference state theta is
-    optimised against (optimize_network opens with
-    circuit_to_mps(circuit, phi)), so this asserts zero cost and zero
-    measurements rather than the particular cells an earlier revision
-    used to blank out.
+    circuit exists at the frozen phi_init the other arms start from and
+    IS the reference state theta is optimised against, so this asserts
+    zero cost and zero measurements rather than the particular cells an
+    earlier revision used to blank out.
     """
+    module = _benchmark_matrix_module()
     controls = [r for r in _csv_rows() if r["Optimization_Mode"] == "network"]
     assert controls, "the zero-QPU classical-only control rows are missing"
     for row in controls:
@@ -188,10 +188,10 @@ def test_classical_only_rows_cost_nothing_and_take_no_measurements():
         # wrong the moment such a row were re-run in "both" mode.
         assert row["Shots"].startswith("n/a"), row["Shots"]
         assert row["Measurement_Method"].startswith("n/a"), row["Measurement_Method"]
-        # The circuit it freezes is recorded honestly, so two controls
-        # differing only in TN_Layers_Circuit are distinguishable.
-        assert row["Ansatz"] == "n_local_rzryrz_sca"
-        assert int(row["TN_Layers_Circuit"]) > 0
+        # The circuit it freezes is recorded honestly, so a control on one
+        # family is distinguishable from a control on another.
+        assert row["Ansatz"] in module.ANSATZE, row["Ansatz"]
+        assert int(row["Ansatz_Reps"]) > 0
         assert int(row["Num_Opt_Params_Phi"]) > 0
 
 
@@ -223,15 +223,106 @@ def test_phi_init_is_fixed_by_the_circuit_family():
             f"{ansatz} rows start from {len(values)} different phi: "
             f"{sorted(values)}"
         )
-    # UCCSD's zero amplitudes ARE the Hartree-Fock reference, so zeros is
-    # its reference state rather than a barren identity; the
-    # hardware-efficient families take the seeded draw instead.
+    # Zeros where zero amplitudes ARE the reference state (UCCSD), the
+    # seeded draw on the hardware-efficient families, whose identity at
+    # zero is a barren starting point rather than a reference determinant.
+    module = _benchmark_matrix_module()
     for ansatz, values in by_ansatz.items():
-        expected_zeros = ansatz == "UCCSD"
+        expected_zeros = ansatz in module.PHI_INIT_ZEROS_ANSATZE
         value = next(iter(values))
         assert (value == "zeros") is expected_zeros, f"{ansatz}: {value}"
         if not expected_zeros:
             assert value.startswith("random(seed="), f"{ansatz}: {value}"
+
+
+def test_every_ansatz_is_run_by_all_three_methods():
+    """The comparison is only a comparison at a fixed circuit.
+
+    An earlier revision screened plain VQE on one set of families and
+    TN-VQE on another, so the two methods shared no circuit and every
+    difference between them carried the circuit as well as the method.
+    Each family must therefore appear under plain VQE, under TN-VQE's
+    `both` mode and under the classical-only `network` control -- on the
+    same Hamiltonian, and pinning the same QASM file.
+    """
+    module = _benchmark_matrix_module()
+    rows = _csv_rows()
+
+    def arm(row: dict[str, str]) -> str:
+        if row["Method"] == "VQE":
+            return "VQE"
+        return f"TN-VQE/{row['Optimization_Mode']}"
+
+    arms_by_ansatz: dict[str, set[str]] = {}
+    for row in rows:
+        arms_by_ansatz.setdefault(row["Ansatz"], set()).add(arm(row))
+    assert set(arms_by_ansatz) == set(module.ANSATZE), (
+        f"stage 1 runs {sorted(arms_by_ansatz)}, the generator lists "
+        f"{module.ANSATZE}"
+    )
+    for ansatz, arms in arms_by_ansatz.items():
+        assert arms == {"VQE", "TN-VQE/both", "TN-VQE/network"}, (
+            f"{ansatz} is run by {sorted(arms)} only"
+        )
+
+    # Same circuit, not merely the same family name: a triple that shares
+    # (molecule, basis, mapper, ansatz) must share the pinned file and the
+    # phi it starts from, or the three arms differ in more than method.
+    by_case: dict[tuple[str, ...], set[tuple[str, str, str]]] = {}
+    for row in rows:
+        key = (row["Molecule"], row["Basis"], row["Mapper"], row["Ansatz"])
+        by_case.setdefault(key, set()).add(
+            (row["Qasm_Ansatz_SHA256"], row["Phi_Init"], row["Ansatz_Reps"])
+        )
+    for key, pins in by_case.items():
+        assert len(pins) == 1, f"{key} runs {len(pins)} different circuits: {pins}"
+
+
+def test_no_column_describes_the_circuit_per_method():
+    """The circuit's repetition count is a property of the circuit.
+
+    `TN_Layers_Circuit` used to carry it, and only on TN-VQE rows, so a
+    plain-VQE row and the TN-VQE row running the identical pinned file
+    disagreed about how many repetitions that file has -- the column read
+    as though the two methods ran different circuits. `Ansatz_Reps` is
+    the one place it lives now, set on every row alike, and the pinned
+    QASM is what fixes it.
+    """
+    module = _benchmark_matrix_module()
+    assert "TN_Layers_Circuit" not in module.FIELDNAMES
+    for row in _csv_rows():
+        assert row["Ansatz_Reps"].isdigit(), row["Ansatz_Reps"]
+
+
+def test_iterations_matches_the_generators_proportional_rule():
+    """`Iterations` is the rule's output, not a number typed beside it.
+
+    The floor test below is the safety net; this one pins the column to
+    `optimizer_iterations` exactly, so a change to either multiplier has
+    to be regenerated into the CSV rather than drifting away from it.
+    """
+    module = _benchmark_matrix_module()
+    checked = 0
+    for row in _csv_rows():
+        if row["Iterations"] == "1":        # stage-3 refinement: one job, no optimizer
+            continue
+        free_params = sum(
+            int(row[column])
+            for column in ("Num_Opt_Params_Phi", "Num_Opt_Params_Theta")
+            if row[column].isdigit()
+        )
+        if row["Optimization_Mode"] == "network":       # phi is frozen
+            free_params -= int(row["Num_Opt_Params_Phi"])
+        expected = module.optimizer_iterations(
+            free_params, module.stage_evals_per_param(row["Stage"])
+        )
+        assert int(row["Iterations"]) == expected, (
+            f"Case_ID {row['Case_ID']} budgets {row['Iterations']} evaluations "
+            f"for {free_params} free parameters; the {row['Stage']} rule gives "
+            f"{expected}"
+        )
+        checked += 1
+    assert checked, "no rows carry an optimizer budget"
 
 
 def test_every_row_budgets_at_least_cobylas_simplex():

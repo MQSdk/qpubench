@@ -113,12 +113,12 @@ test of the component-boundary rule above: it has two `Mapper` values
 each of the four pairs requires a different set of components, so each
 gets its **own** `@dsl.pipeline` in
 `integrations/kubeflow/pipelines.py`. Everything else in that CSV,
-`TN_Layers_Network`, `TN_Layers_Circuit`, `TN_Ansatz`,
+`TN_Layers_Network`, `Ansatz_Reps`, `TN_Ansatz`,
 `Measurement_Method`, `Shots`, `Optimization_Mode`, is a parameter value
 that doesn't change which components run, so none of it gets its own
 pipeline:
 
-- `TN_Layers_Network`/`TN_Layers_Circuit`/`TN_Ansatz`/
+- `TN_Layers_Network`/`Ansatz_Reps`/`TN_Ansatz`/
   `Measurement_Method` are Cebule TN_QC_OPT task-call parameters, swept
   via nested `dsl.ParallelFor` inside the one relevant pipeline, so a
   single pipeline *run* fans out into every sweep point as branches of the
@@ -130,7 +130,7 @@ pipeline:
   component/job" treatment TN_QC_OPT's own `n_iterations` optimizer loop
   already gets.
 
-Running the full 336-row stage-1 matrix (or any one of its
+Running the full 220-row stage-1 matrix (or any one of its
 tranches) against real hardware means: pick the pipeline matching each
 row's (`Mapper`, `Method`) pair, then group rows by every other column
 into one `create_run_from_pipeline_package(...)` call per pair with all

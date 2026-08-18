@@ -143,28 +143,44 @@ estimate_all_plans(total_qpu_seconds=180.0, rates=my_rates)
 `data/benchmarks/ibm_tn-vqe_qesem/stage1_screening_matrix.csv` end to end: the minimal case (H2/sto-3g,
 4 qubits, 1 circuit) fits comfortably in the Open Plan's free quota
 (~3s of an estimated 3.04s QPU-time budget vs. 600s free). The matrix
-holds 336 rows across all 7 bases, both mappers, both measurement methods
-and four ansatz families, of which 294 take quantum measurements and are
-costed here; the remaining 42 are the zero-QPU classical-only control.
-Together they come to ~2,773 minutes of QPU time.
+holds 220 rows across 7 bases, both mappers, both measurement methods and
+two ansatz families crossed with three methods, of which 176 take quantum
+measurements and are costed here; the remainder are the zero-QPU
+classical-only controls. Together they come to ~462 minutes of QPU time
+across 9,112 cost-function evaluations — at one circuit submission per
+evaluation, which is a floor rather than a prediction; see below.
 
 **Iterations are per row, not a flat assumption.** Each row's
-`Iterations` column holds `max(30, n_params + 2)`, because COBYLA cannot
-take a single descent step before it has built an `n+1` simplex and scipy
-overrides a smaller `maxiter` rather than honouring it. A flat 30 both
-under-billed the widest rows by up to 4.8x and bought no optimisation on
-them.
+`Iterations` column holds `max(30, ceil(1.3 x n_params))`, a budget
+proportional to the row's own free-parameter count. Two facts make a flat
+value wrong: COBYLA cannot take a single descent step before it has built
+an `n+1` simplex, and scipy overrides a smaller `maxiter` rather than
+honouring it; and the evaluations needed to reach a given fraction of the
+achievable descent grow linearly in the parameter count, so any additive
+rule reaches a shrinking fraction as circuits widen.
 
-**The ansatz dominates, which is why it is built for real.** Each row
-names its own ansatz and `Ansatz_Reps`, and the estimator builds that
-circuit rather than substituting EfficientSU2 everywhere. The difference
-is not cosmetic: at 12 qubits a real Trotterized UCCSD transpiles far
-deeper than EfficientSU2 *and* carries a 200-operator excitation pool, so
-it is billed 202 submissions rather than 30 — the 14 UCCSD/12-qubit rows
-alone account for ~2,169 of the campaign's ~2,773 minutes, 78% of the
-budget in 4% of the rows. Only 14 distinct circuits are actually
-transpiled across all 294 costed rows, cached per
-(ansatz, qubits, reps, electrons, shots).
+**One evaluation is costed as one circuit, which is a floor.**
+`compute_qpu_time_s` costs a single circuit —
+`overhead + (rep_delay + duration) x shots` — and the campaign splitter
+multiplies it by the row's `Iterations`. But one cost-function evaluation
+of ⟨H⟩ needs one circuit per measurement basis, each at the full shot
+count, and how many bases that is depends on the Hamiltonian and the
+measurement scheme rather than on the circuit. The totals below are
+therefore a lower bound; `split_benchmark_batches.py --circuits-per-eval N`
+re-cuts them once a real run has measured the factor, and the campaign
+README's [evaluation-cost section](../../data/benchmarks/ibm_tn-vqe_qesem/README.md#what-the-estimate-leaves-out-measurement-circuits-per-evaluation)
+sets out what it does to the plan allocation.
+
+At that floor, per submission every circuit in the matrix costs between
+3.03s and 3.05s, a <1% spread from 2 to 8 qubits, because 4,096 shots at
+a 250µs `rep_delay` plus ~2s of per-sub-job overhead swamp circuit
+durations measured in microseconds. The circuit's own duration is
+therefore a small term at these widths — which is itself a measurement,
+earned by building each row's own ansatz at its own `Ansatz_Reps` instead
+of substituting a stand-in, the same machinery that showed a real
+Trotterized UCCSD transpiling to ~17x EfficientSU2 at 12 qubits when the
+campaign still screened one. Only 10 distinct circuits exist across the
+176 costed rows, cached per (ansatz, qubits, reps, electrons, shots).
 
 `Shots` (4,096) and `Iterations` are both recorded campaign inputs read
 per row, not module constants; the resource-estimation and cost-breakdown
