@@ -378,6 +378,34 @@ PHI_INIT_RANDOM = f"random(seed={PHI_INIT_SEED})"
 # Families for which zero is the reference state rather than a barren one.
 PHI_INIT_ZEROS_ANSATZE = {"UCCSD"}
 
+# --- Measurement circuits per cost-function evaluation -------------------
+#
+# Evaluating <H> costs one circuit per measurement basis, not one circuit
+# per evaluation, and that count is a property of the Hamiltonian.  It is
+# recorded per row in Num_ExpVals_Per_Iter, with its provenance in
+# Num_ExpVals_Source, because the campaign's QPU cost is proportional to
+# it.
+#
+#   measured_run    counted on a real ibm_aachen Estimator job of the same
+#                   active space (see docs/integrations/ibm_cost_estimator.md)
+#   qwc_grouping    computed offline by qubit-wise-commuting grouping of the
+#                   row's own Hamiltonian, examples/guides/count_measurement_bases.py.
+#                   Greedy and order-dependent, so an upper bound: the one
+#                   class where both numbers exist reads 34 measured against
+#                   46 computed
+#   assumed         no basis for either, so the largest value measured on
+#                   that mapper is carried across.  A LOWER bound, and the
+#                   reason those rows cannot be purchased against
+EXPVALS_PER_ITER = {
+    ("JW", "H2", 4): (5, "qwc_grouping"),
+    ("JW", "H2", 8): (34, "measured_run"),
+    ("JW", "H2O", 8): (29, "qwc_grouping"),
+    ("mol_map", "H2", 2): (2, "measured_run"),
+    ("mol_map", "H2", 4): (37, "measured_run"),
+}
+EXPVALS_ASSUMED = {"mol_map": 37, "JW": 34}
+NETWORK_NO_MEASUREMENT = "n/a (network mode)"
+
 NOT_TN = "n/a (not TN-VQE)"
 NO_TN_LAYERS = "n/a (no TN layers)"
 NETWORK_MODE = "n/a (network mode)"
@@ -411,7 +439,7 @@ FIELDNAMES = [
     "Qiskit_Version", "TN_Layers_Network", "TN_Ansatz",
     "Optimization_Mode", "Measurement_Method", "Qasm_Ansatz_File",
     "Qasm_Ansatz_SHA256", "Num_Opt_Params_Phi", "Phi_Init",
-    "Num_Opt_Params_Theta", "Num_ExpVals_Per_Iter",
+    "Num_Opt_Params_Theta", "Num_ExpVals_Per_Iter", "Num_ExpVals_Source",
     "Error_Mitigation", "Precision", "QESEM_Execution_Mode",
     "Refines_Case_ID", "Converged_Params_File", "Converged_Params_SHA256",
     "Notes",
@@ -668,6 +696,18 @@ def _row(
     free_params = (int(phi_params) if phi_params and takes_measurements else 0) + (
         int(theta_params) if theta_params else 0
     )
+    # Measurement circuits per evaluation: the row's Hamiltonian decides
+    # it, so it is keyed on (mapper, molecule, qubits) and not on the
+    # circuit or the method.  A network row takes no measurements at all.
+    if not takes_measurements:
+        expvals, expvals_source = NETWORK_NO_MEASUREMENT, NETWORK_NO_MEASUREMENT
+    else:
+        known = EXPVALS_PER_ITER.get((mapper, mol.name, num_qubits))
+        if known is None:
+            expvals, expvals_source = str(EXPVALS_ASSUMED[mapper]), "assumed"
+        else:
+            expvals, expvals_source = str(known[0]), known[1]
+
     # Keyed on the circuit family alone: a VQE row and a TN-VQE row that
     # share an ansatz start from the same phi, and so does the `network`
     # control that freezes it.  Nothing here reads `method` or
@@ -716,7 +756,8 @@ def _row(
         "Num_Opt_Params_Phi": phi_params,
         "Phi_Init": phi_init,
         "Num_Opt_Params_Theta": theta_params,
-        "Num_ExpVals_Per_Iter": "",
+        "Num_ExpVals_Per_Iter": expvals,
+        "Num_ExpVals_Source": expvals_source,
         "Error_Mitigation": error_mitigation,
         "Precision": precision,
         "QESEM_Execution_Mode": qesem_execution_mode,

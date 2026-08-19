@@ -1,7 +1,7 @@
 # `data/`
 
-This folder contains benchmark **inputs** — the specifications that say
-what to run, not the results of running it. A benchmark scenario is a set
+This folder contains benchmark **inputs**, the specifications that say
+what to run rather than the results of running them. A benchmark scenario is a set
 of cases to be executed, together with a real per-case estimate of what
 each one would cost on the hardware it targets. Results live outside this
 folder.
@@ -10,14 +10,14 @@ folder.
 
 | Path | Holds |
 |---|---|
-| [`benchmarks/`](benchmarks/) | One folder per benchmark scenario — the matrix of cases, the tranches it is split into, and a README explaining that campaign |
+| [`benchmarks/`](benchmarks/) | One folder per benchmark scenario: the matrix of cases, the tranches it is split into, and a README explaining that campaign |
 | [`qasm/`](qasm/) | The exact circuits the scenarios pin, as OpenQASM 3.0, written by [`pin_qasm_ansatz.py`](../examples/guides/pin_qasm_ansatz.py) and shared across scenarios |
 
 ### Benchmark scenarios
 
 | Scenario | What it compares |
 |---|---|
-| [`benchmarks/ibm_tn-vqe_qesem/`](benchmarks/ibm_tn-vqe_qesem/) | Tensor-network VQE (Cebule TN_QC_OPT) against plain VQE on IBM hardware, across 7 basis sets and 2 mappers, with a Qedma QESEM error-mitigation refinement arm. Read its [README](benchmarks/ibm_tn-vqe_qesem/README.md) first — the folder name reads *vendor · method · mitigation* |
+| [`benchmarks/ibm_tn-vqe_qesem/`](benchmarks/ibm_tn-vqe_qesem/) | Tensor-network VQE (Cebule TN_QC_OPT) against plain VQE on IBM hardware, across 7 basis sets and 2 mappers, with a Qedma QESEM error-mitigation stage. Read its [README](benchmarks/ibm_tn-vqe_qesem/README.md) first; the folder name reads *vendor, method, mitigation* |
 
 ### `qasm/`
 
@@ -26,10 +26,10 @@ and records the path and a SHA-256 prefix in its matrix, so a silently
 edited circuit stops matching the scenario that runs it.
 
 The circuits for variational scenarios are dumped with their parameters
-**free** — OpenQASM 3's `input` declarations carry them — because the
-file has to say which parameters the optimisation varies. A circuit
-dumped with its parameters bound describes one fixed state instead, which
-is a different thing to run.
+**free**, carried by OpenQASM 3's `input` declarations, because the file
+has to say which parameters the optimisation varies. A circuit dumped
+with its parameters bound describes one fixed state instead, which is a
+different thing to run.
 
 ## Regenerating
 

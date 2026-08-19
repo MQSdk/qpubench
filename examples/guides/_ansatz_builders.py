@@ -231,10 +231,35 @@ def uccsd(
     return qc
 
 
+# The seed the benchmark campaign initialises phi from
+# (`build_benchmark_matrix.PHI_INIT_SEED`, and the `Phi_Init` column).
+# Mirrored rather than imported, because the generator is a sibling guide
+# rather than a library; `test_phi_init_seed_matches_the_generator` fails
+# the build if the two drift apart.
+PHI_INIT_SEED = 20260811
+
+
 def circuit_spec(
     ansatz: str, num_qubits: int, *, reps: int, num_electrons: int | None = None,
+    phi_seed: int = PHI_INIT_SEED,
 ):
-    """`build_ansatz` output as a measured, parameter-bound `CircuitSpec`."""
+    """`build_ansatz` output as a measured, parameter-bound `CircuitSpec`.
+
+    Parameters are bound to the campaign's own phi_init draw
+    (`2*pi*U(0,1)` from `default_rng(phi_seed)`), which is the state a row
+    really starts from, rather than to zeros.
+
+    Zeros are not a neutral placeholder for a resource estimate. Every
+    rotation becomes the identity, so the transpiler removes it, and where
+    a family repeats an entangling block the CX pairs then cancel too: at
+    2 qubits an all-zero EfficientSU2 or RealAmplitudes transpiles to
+    `{'measure': 2}` -- no gates at all -- and the estimate describes an
+    empty circuit. At wider rows the effect is partial (single-qubit gate
+    counts roughly halve) and barely moves the duration, since `rz` is
+    virtual on IBM hardware, but the estimate should describe the circuit
+    the row runs.
+    """
+    import numpy as np
     from qiskit import qasm3
 
     from qpubench.schemas.circuit import CircuitSpec
@@ -242,7 +267,8 @@ def circuit_spec(
 
     qc = build_ansatz(ansatz, num_qubits, reps=reps, num_electrons=num_electrons)
     if qc.num_parameters:
-        qc = qc.assign_parameters([0.0] * qc.num_parameters)
+        rng = np.random.default_rng(phi_seed)
+        qc = qc.assign_parameters(2 * np.pi * rng.random(qc.num_parameters))
     qc.measure_all()
     return CircuitSpec(
         num_qubits=num_qubits, format=CircuitFormat.QASM3, serialized=qasm3.dumps(qc)

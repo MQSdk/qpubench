@@ -294,6 +294,25 @@ def test_no_column_describes_the_circuit_per_method():
         assert row["Ansatz_Reps"].isdigit(), row["Ansatz_Reps"]
 
 
+def test_phi_init_seed_matches_the_generator():
+    """The cost estimate transpiles the state the row starts from.
+
+    `_ansatz_builders.circuit_spec` binds phi to the campaign's own draw
+    so that the estimate describes the circuit the row runs; it mirrors
+    the seed rather than importing the generator, so the two must be
+    checked against each other.
+    """
+    import importlib.util
+
+    module = _benchmark_matrix_module()
+    path = REPO / "examples" / "guides" / "_ansatz_builders.py"
+    spec = importlib.util.spec_from_file_location("_ansatz_builders", path)
+    builders = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(builders)
+    assert builders.PHI_INIT_SEED == module.PHI_INIT_SEED
+    assert module.PHI_INIT_RANDOM == f"random(seed={builders.PHI_INIT_SEED})"
+
+
 def test_iterations_matches_the_generators_proportional_rule():
     """`Iterations` is the rule's output, not a number typed beside it.
 

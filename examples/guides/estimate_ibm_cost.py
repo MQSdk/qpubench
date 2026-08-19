@@ -30,13 +30,11 @@ widest rows were billed for a fraction of what they would really consume.
 own parameter count so that every row reaches a comparable fraction of
 its achievable descent, and this script bills what the CSV says.
 
-One evaluation is billed as one circuit submission, and that is a FLOOR
-rather than an estimate: evaluating <H> takes one circuit per measurement
-basis -- one per commuting Pauli group, or per basis-state grouping --
-each at the row's full shot count, and how many that is depends on the
-Hamiltonian being measured rather than on the circuit preparing it. The
-matrix's blank Num_ExpVals_Per_Iter column is exactly that factor. Every
-total below scales with it.
+This script costs ONE CIRCUIT per cost-function evaluation, which is what
+the transpilation model describes. A real evaluation of <H> submits one
+circuit per measurement basis, recorded per row in Num_ExpVals_Per_Iter,
+so the totals below are a floor. The campaign's batches are costed from a
+fit to real jobs instead; see split_benchmark_batches.py.
 
 Rows in `optimization_mode="network"` are skipped: they take no quantum
 measurements, so they have no QPU cost to estimate (see
@@ -185,8 +183,8 @@ def main() -> None:
           f"{agg.total_shots:,} total shots, "
           f"{agg.total_qpu_seconds:,.1f}s ({agg.total_qpu_minutes:,.1f} min) total QPU time")
     print("  (one circuit submission per evaluation -- a FLOOR: <H> needs one "
-          "circuit per\n   measurement basis, so multiply by the row's real "
-          "Num_ExpVals_Per_Iter)")
+          "circuit per\n   measurement basis. The batch files are costed from "
+          "measured runs instead)")
     _print_plan_breakdown(agg.total_qpu_seconds, IBMPricingRates.default())
 
 

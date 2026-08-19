@@ -1,85 +1,43 @@
-"""Split data/benchmarks/ibm_tn-vqe_qesem/stage1_screening_matrix.csv into sequential batch files sized
-to fit each IBM access plan's QPU-time budget: a first, cheapest tranche
-that fits in the Open Plan's free 10 minutes, a next tranche sized to a
-fresh Flex Plan purchase (400 minutes), and a third tranche sized to a
-fresh Premium Plan annual minimum (5,200 minutes) — each budget is
-independent (not cumulative with the others), matching the real workflow
-of exhausting one plan/purchase before moving to the next.
+"""Split the stage-1 screening matrix into batches sized to each IBM
+access plan's QPU-time budget: a first, cheapest tranche inside the Open
+Plan's free 10 minutes, a second sized to a Flex Plan purchase (400
+minutes), and a third sized to a Premium Plan annual minimum (5,200
+minutes).  Each budget is independent, matching the real workflow of
+exhausting one plan before moving to the next.
 
-Requires: pip install 'qpubench[qiskit]'
+Requires: nothing beyond the standard library.
 
-Real, not guessed: per-row QPU-time uses the same real ALAP-scheduled
-transpilation + IBM usage formula as
-`backends.ibm_cost_estimator.estimate_circuit_resources`
-(`examples/guides/estimate_ibm_cost.py`), and builds the ansatz each row
-actually names at that row's `Ansatz_Reps` (`_ansatz_builders.py`) rather
-than assuming a stand-in. In the current matrix the families transpile to
-similar per-submission cost, but that is a result of this measurement and
-not an assumption it is allowed to make: an earlier revision's "assume
-EfficientSU2 everywhere" understated a Trotterized UCCSD row by more than
-an order of magnitude.
+The per-row cost is MEASURED, not modelled.  Fitting 559 completed
+Estimator jobs on ibm_aachen at 4,096 shots, with the default options the
+campaign will submit under, gives
 
-Two things this script pins that earlier revisions left implicit:
+    billed seconds per cost-function evaluation = 12.0 + 0.70 x E
 
-  Shots come from each row's own `Shots` column, not a module constant.
-  `n_shots` is a real TNQCOptInput field, so the shot count is a recorded
-  campaign input now rather than an illustrative assumption.
+where E is the row's measurement circuits per evaluation
+(Num_ExpVals_Per_Iter).  An evaluation is not one circuit: <H> costs one
+circuit per measurement basis, and E is a property of the Hamiltonian
+rather than of the circuit preparing the state.  Rows whose E is assumed
+rather than measured are costed at a lower bound and marked in
+Num_ExpVals_Source; see build_benchmark_matrix.EXPVALS_PER_ITER.
 
-  Transpilation runs at `optimization_level=2`, matching what TN-VQE
-  really gets: it calls `transpile(circuit, backend)` with no
-  optimization_level (functions_qiskit.py:47,205), and transpile's own
-  default resolves to 2 under Qiskit 2.x. The estimator's own default is
-  1, which is a genuine estimate-vs-run mismatch — small (batch2 moves
-  398.97 -> 398.48 min) but real.
+The fixed 12.0 seconds is readout-error calibration, which the default
+Estimator options request once per job.  It dominates every small row, so
+it is the campaign's largest single lever.
 
-Iterations come from each row's own `Iterations` column too, and that is
-the largest correction this splitter has taken. A flat 30 per row was not
-a conservative assumption: COBYLA cannot start without an n+1 simplex,
-and scipy overrides a smaller maxiter rather than honouring it, so the
-widest rows were under-billed by more than an order of magnitude. The
-budget is now proportional to each row's parameter count, which makes the
-evaluation count the dominant term in every row's cost — and moves the
-batch boundary whenever it changes, which is the whole reason the split
-is *regenerated* rather than patched.
-
-What the totals do NOT include: one cost-function evaluation is costed as
-one circuit submission. Evaluating <H> really takes one circuit per
-measurement basis -- one per commuting Pauli group, or per basis-state
-grouping -- each at the row's full shot count, and that number depends on
-the Hamiltonian rather than on the circuit. So every figure here is a
-LOWER BOUND. See `_DEFAULT_CIRCUITS_PER_EVAL` and `--circuits-per-eval`.
-
-Rows in `optimization_mode="network"` take no quantum measurements at all
-(they optimise theta classically), so they cost nothing and are written
-to their own `batch0_classical_only.csv` rather than being sorted into a
-plan budget. Left in the ascending-cost sort they would fill the free
-tier with zero-cost rows and displace the smoke tests it exists for.
-
-Rows are otherwise sorted ascending by estimated per-row QPU time before
-batching, so each tranche is the cheapest calculations available at that
-point — appropriate for "run a cheap smoke test first, then scale up"
-campaign structure.
+Rows in optimization_mode="network" take no quantum measurements at all,
+so they cost nothing and are written to their own
+batch0_classical_only.csv rather than being sorted into a plan budget.
+Rows are otherwise sorted ascending by cost before batching, so each
+tranche is the cheapest work available at that point.
 
 Run:
     PYTHONPATH=src python examples/guides/split_benchmark_batches.py
 """
 from __future__ import annotations
 
-import argparse
+import collections
 import csv
 import pathlib
-import sys
-
-sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
-sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-
-from _ansatz_builders import circuit_spec
-
-from qpubench.backends.ibm_cost_estimator import (
-    estimate_circuit_resources,
-    resolve_calibration_backend,
-)
-from qpubench.schemas.mirrors.ibm_cost_estimator import CircuitResourceEstimate
 
 _REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 _CAMPAIGN_DIR = _REPO_ROOT / "data" / "benchmarks" / "ibm_tn-vqe_qesem"
@@ -113,25 +71,13 @@ _PLAN_BUDGETS_S = [
     ("batch3_premium_plan", 5200 * 60),    # Premium Plan annual minimum
 ]
 
-# Measurement circuits per cost-function evaluation.
-#
-# ONE EVALUATION IS NOT ONE CIRCUIT.  Evaluating <H> takes one circuit per
-# measurement basis -- one per commuting Pauli group under
-# measurement_method="pauli", one per basis-state-pair group under
-# "grouped" -- and each of those circuits is measured at the row's full
-# shot count.  The count depends on the Hamiltonian: on the molecule, the
-# basis, the active space and the mapper, and on TN-VQE rows on U(theta)^dag
-# H U(theta), which carries more Pauli terms than H and grows with
-# TN_Layers_Network and the TN_Ansatz family.  It is precisely what the
-# matrix's Num_ExpVals_Per_Iter column is for, and that column is blank
-# because the number is an output of a real run.
-#
-# So this default of 1 is not an estimate of the real count.  It is the
-# floor: the batch totals it produces are a LOWER BOUND that the real
-# campaign will exceed by whatever that factor turns out to be.  Pass
-# --circuits-per-eval once a real run has measured it, and re-cut.
-_DEFAULT_CIRCUITS_PER_EVAL = 1
-
+# Billed QPU seconds per cost-function evaluation, fitted to 559 completed
+# Estimator jobs on ibm_aachen (all at 4,096 shots, measure mitigation on,
+# 32 randomizations).  IBM's own pre-run estimate over those jobs reads
+# 15.04 + 0.878 x E seconds, and the jobs whose billed quantum_seconds are
+# known came in at 0.80 of it.
+_FIXED_S_PER_EVALUATION = 12.03
+_S_PER_MEASUREMENT_BASIS = 0.702
 
 def _load_rows() -> list[dict[str, str]]:
     with _CSV_PATH.open() as f:
@@ -149,81 +95,36 @@ def _row_active_electrons(row: dict[str, str]) -> int:
     return int(row["Active_Electrons"])
 
 
-_CALIBRATION = None
-
-
-def _calibration():
-    """The `ibm_aachen` calibration source, resolved once and reused.
-
-    Resolved lazily, and offline from the shipped snapshot; if the
-    installed qiskit-ibm-runtime has none for this device it falls back
-    to the live backend, which needs credentials.
-    """
-    global _CALIBRATION
-    if _CALIBRATION is None:
-        _CALIBRATION = resolve_calibration_backend(_BACKEND_NAME)
-    return _CALIBRATION
-
-
 def is_classical_only(row: dict[str, str]) -> bool:
     """True for rows that take no quantum measurements at all.
 
     optimization_mode="network" freezes phi and optimises theta by
     classical tensor-network contraction, so the row has no QPU cost --
-    distinct from a row whose cost merely could not be *computed*.
+    distinct from a row whose cost merely could not be worked out.
     """
     return row.get("Optimization_Mode") == _CLASSICAL_ONLY_MODE
 
 
-def estimate_per_row_qpu_seconds(
-    rows: list[dict[str, str]], circuits_per_eval: int = _DEFAULT_CIRCUITS_PER_EVAL,
-) -> dict[int, float]:
-    """Per-row QPU-time estimate at that row's own `Iterations`, keyed by
-    `Case_ID`. Real transpile calls are cached per
-    (ansatz, qubits, reps, electrons, shots) key -- the matrix has far
-    more rows than distinct circuits.
+def evaluation_seconds(expvals_per_iter: int) -> float:
+    """Billed QPU seconds for one cost-function evaluation."""
+    return _FIXED_S_PER_EVALUATION + _S_PER_MEASUREMENT_BASIS * expvals_per_iter
 
-    Note the cache key deliberately excludes `Iterations`: it caches the
-    per-submission transpile, and the row's own count multiplies it. Two
-    rows on the same circuit with different parameter counts share the
-    transpile and not the total.
 
-    `circuits_per_eval` is the Hamiltonian-dependent measurement cost of
-    one evaluation (see `_DEFAULT_CIRCUITS_PER_EVAL`). The shot term
-    scales with it; the per-sub-job overhead is charged once per
-    evaluation, which is the cheap end of the bracket -- if each
-    measurement circuit is dispatched as its own sub-job, the overhead
-    scales too.
+def estimate_per_row_qpu_seconds(rows: list[dict[str, str]]) -> dict[int, float]:
+    """Per-row QPU seconds, keyed by Case_ID.
+
+    The row's own Iterations times what one evaluation costs at the row's
+    own Num_ExpVals_Per_Iter.  A row whose measurement count is unknown
+    has no cost here rather than a guessed one.
     """
-    cache: dict[tuple[str, int, int, int, int], CircuitResourceEstimate] = {}
     per_row: dict[int, float] = {}
     for row in rows:
-        if not row["N_Qubit"] or not row["Ansatz"] or is_classical_only(row):
+        if is_classical_only(row) or not row["Num_ExpVals_Per_Iter"].isdigit():
             continue
-        num_qubits = int(row["N_Qubit"])
-        reps = int(row["Ansatz_Reps"])
-        ansatz = row["Ansatz"]
-        num_electrons = _row_active_electrons(row)
-        shots = int(row["Shots"])
-        key = (ansatz, num_qubits, reps, num_electrons, shots)
-        if key not in cache:
-            spec = circuit_spec(
-                ansatz, num_qubits, reps=reps, num_electrons=num_electrons
-            )
-            cache[key] = estimate_circuit_resources(
-                spec, backend_name=_BACKEND_NAME, backend=_calibration(),
-                shots=shots,
-                optimization_level=_OPTIMIZATION_LEVEL,
-                label=f"{ansatz}, {num_qubits}q, {reps} reps",
-            )
-        estimate = cache[key]
-        shot_term = estimate.estimated_qpu_time_s - estimate.per_sub_job_overhead_s
-        per_evaluation = (
-            estimate.per_sub_job_overhead_s + circuits_per_eval * shot_term
+        per_row[int(row["Case_ID"])] = (
+            evaluation_seconds(int(row["Num_ExpVals_Per_Iter"]))
+            * int(row["Iterations"])
         )
-        per_row[int(row["Case_ID"])] = per_evaluation * int(row["Iterations"])
-    print(f"  ({len(cache)} distinct circuits really transpiled "
-          f"at optimization_level={_OPTIMIZATION_LEVEL})")
     return per_row
 
 
@@ -270,12 +171,25 @@ def split_into_batches(
     return batches, overflow, unestimable
 
 
+# Appended to every batch file, in this order, immediately before Notes.
+# Notes is free prose and stays last, so a reader scrolling a row does not
+# have to cross it to reach the numbers.
+#
+# Not "..._At_30_Iter" any more: the iteration count is per row, so the
+# name would pin a number only some rows use.
+_COST_COLUMNS = [
+    "Est_QPU_Time_Per_Iter_S",      # one cost-function evaluation
+    "Est_QPU_Time_S",               # x the row's own Iterations
+    "Est_QPU_Time_Cumulative_S",    # running total within this batch
+]
+
+
 def _write_csv(path: pathlib.Path, rows: list[dict[str, str]], per_row_seconds: dict[int, float]) -> None:
     if not rows:
         return
-    # Not "..._At_30_Iter" any more: the iteration count is per row, so
-    # the name would pin a number only some rows use.
-    fieldnames = [*rows[0].keys(), "Est_QPU_Time_S", "Est_QPU_Time_Cumulative_S"]
+    fieldnames = [
+        *(name for name in rows[0] if name != "Notes"), *_COST_COLUMNS, "Notes",
+    ]
     cumulative = 0.0
     with path.open("w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=fieldnames, lineterminator="\n")
@@ -285,41 +199,31 @@ def _write_csv(path: pathlib.Path, rows: list[dict[str, str]], per_row_seconds: 
             if cost is not None:
                 cumulative += cost
             out = dict(row)
+            # Per evaluation, not per circuit: with --circuits-per-eval N
+            # this is what one evaluation of <H> costs, all N measurement
+            # circuits together.
+            out["Est_QPU_Time_Per_Iter_S"] = (
+                f"{cost / int(row['Iterations']):.3f}" if cost is not None else ""
+            )
             out["Est_QPU_Time_S"] = f"{cost:.3f}" if cost is not None else ""
             out["Est_QPU_Time_Cumulative_S"] = f"{cumulative:.3f}" if cost is not None else ""
             w.writerow(out)
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument(
-        "--circuits-per-eval", type=int, default=_DEFAULT_CIRCUITS_PER_EVAL,
-        metavar="N",
-        help=(
-            "measurement circuits per cost-function evaluation. Default 1, "
-            "which is a FLOOR rather than an estimate: evaluating <H> needs "
-            "one circuit per measurement basis, and how many that is depends "
-            "on the Hamiltonian and the measurement method. Pass a measured "
-            "value (the matrix's Num_ExpVals_Per_Iter) and re-cut"
-        ),
-    )
-    args = parser.parse_args()
-    if args.circuits_per_eval < 1:
-        raise SystemExit("--circuits-per-eval must be at least 1")
-
     _OUT_DIR.mkdir(parents=True, exist_ok=True)
     rows = _load_rows()
     print(f"Loaded {len(rows)} rows from {_CSV_PATH.name}")
 
-    per_row_seconds = estimate_per_row_qpu_seconds(rows, args.circuits_per_eval)
-    if args.circuits_per_eval == 1:
-        print("  NOTE: costed at ONE measurement circuit per cost-function "
-              "evaluation.\n        Evaluating <H> takes one circuit per "
-              "measurement basis, so these\n        totals are a lower bound; "
-              "pass --circuits-per-eval N to re-cut.")
-    else:
-        print(f"  ({args.circuits_per_eval} measurement circuits per "
-              f"cost-function evaluation)")
+    per_row_seconds = estimate_per_row_qpu_seconds(rows)
+    sources = collections.Counter(
+        row["Num_ExpVals_Source"] for row in rows if not is_classical_only(row)
+    )
+    print(f"  costed at {_FIXED_S_PER_EVALUATION:.2f} s + "
+          f"{_S_PER_MEASUREMENT_BASIS:.3f} s x Num_ExpVals_Per_Iter per evaluation")
+    for source, count in sorted(sources.items()):
+        print(f"    {count:>4} rows: {source}")
+
     batches, overflow, unestimable = split_into_batches(rows, per_row_seconds)
 
     classical_only = [r for r in rows if is_classical_only(r)]
@@ -341,16 +245,14 @@ def main() -> None:
         _write_csv(out_path, overflow, per_row_seconds)
         total_s = sum(per_row_seconds[int(r["Case_ID"])] for r in overflow)
         print(f"  {out_path.name}: {len(overflow)} rows, {total_s:.1f}s "
-              f"-- exceeds Open+Flex+Premium combined, needs a separate arrangement")
+              f"({total_s / 60:.1f} min) -- exceeds Open+Flex+Premium combined")
     else:
-        print("  No overflow -- every estimable row fits within Open+Flex+Premium.")
+        print("  No overflow -- every costed row fits within Open+Flex+Premium.")
 
     if unestimable:
-        out_path = _OUT_DIR / "batch0_unestimable.csv"
+        out_path = _OUT_DIR / "batch5_unmeasured.csv"
         _write_csv(out_path, unestimable, per_row_seconds)
-        print(f"  {out_path.name}: {len(unestimable)} rows -- no circuit could be built")
-    else:
-        print("  No unestimable rows -- every row has a qubit count and a named ansatz.")
+        print(f"  {out_path.name}: {len(unestimable)} rows -- no measurement count")
 
 
 if __name__ == "__main__":

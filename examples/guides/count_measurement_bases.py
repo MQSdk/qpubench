@@ -2,13 +2,14 @@
 
 Requires: pip install 'qpubench[qiskit]' pyscf
 
-The per-row QPU estimate in `split_benchmark_batches.py` charges one
-circuit submission per cost-function evaluation.  That is a floor, not a
-prediction: evaluating <H> takes one circuit per measurement BASIS, and
-how many bases that is follows from the Hamiltonian rather than from the
-circuit preparing the state.  This script measures that factor for the
-Jordan-Wigner rows of the stage-1 matrix, so the campaign's cost
-accounting can be corrected by a number rather than by an assumption.
+Evaluating <H> takes one circuit per measurement BASIS, and how many
+bases that is follows from the Hamiltonian rather than from the circuit
+preparing the state.  `split_benchmark_batches.py` costs every row from
+that count, so it is what the campaign's QPU time is proportional to.  This script measures that factor for the Jordan-Wigner rows of the
+stage-1 matrix.  It is where the `qwc_grouping` values in the matrix's
+`Num_ExpVals_Per_Iter` column come from, and it re-derives them so that a
+committed value can be checked against the Hamiltonian it claims to
+describe.
 
 What is counted
 ---------------
@@ -142,26 +143,21 @@ def main() -> None:
               f"{qubits:>6} {terms:>7} {groups:>6}"
               + (f"   ({proxy})" if proxy else ""))
 
-    # What that does to the committed cost estimate, which assumed E = 1.
-    floor_s = evaluations = 0.0
-    corrected_s = 0.0
-    for path in sorted(_CSV_PATH.parent.glob("batch[1-9]*.csv")):
-        with path.open(encoding="utf-8") as f:
-            for row in csv.DictReader(f):
-                cost = float(row["Est_QPU_Time_S"])
-                floor_s += cost
-                evaluations += int(row["Iterations"])
-                if row["Mapper"] != "JW":
-                    continue
-                factor = measured[(row["Molecule"], int(row["N_Qubit"]))]
-                corrected_s += cost * factor
-
-    print(f"\nCommitted estimate, at one circuit per evaluation: "
-          f"{floor_s / 60:,.0f} min over {evaluations:,.0f} evaluations")
-    print(f"Jordan-Wigner rows re-costed at the E above:       "
-          f"{corrected_s / 60:,.0f} min ({corrected_s / 3600:,.0f} hours)")
-    print("mol_map rows are not re-costed: their measurement count cannot "
-          "be computed offline.")
+    # Against what the matrix carries.  The committed column takes a
+    # measured value where a real run supplies one, so a difference here
+    # is not necessarily an error: qubit-wise grouping is greedy and
+    # order-dependent, and reads high against a real submission.
+    print(f"\n{'row class':22} {'committed':>10} {'source':>14} {'computed here':>14}")
+    for row in matrix:
+        if row["Mapper"] != "JW" or not row["Num_ExpVals_Per_Iter"].isdigit():
+            continue
+        key = (row["Molecule"], int(row["N_Qubit"]))
+        if key not in measured:
+            continue
+        label = f"{row['Molecule']}/{row['Basis']}"
+        print(f"{label:22} {row['Num_ExpVals_Per_Iter']:>10} "
+              f"{row['Num_ExpVals_Source']:>14} {measured[key]:>14}")
+        measured.pop(key)
 
 
 if __name__ == "__main__":
