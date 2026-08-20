@@ -50,7 +50,7 @@ it.
 
 | Stage | Question | File | Rows |
 |---|---|---|---|
-| **1, screening** | Which basis set, ansatz, mapper and measurement method warrant further study? | `stage1_screening_matrix.csv` | 192, committed |
+| **1, screening** | Which basis set, ansatz, mapper and measurement method warrant further study? | `stage1_screening_matrix.csv` | 166, committed |
 | **2, deep sweep** | For the selected combinations, how do the TN-VQE sweep parameters `θ` and `φ` behave? | `stage2_deep_sweep.csv` | generated on demand |
 | **3, QESEM refinement** | Does error mitigation move the converged energy closer to the classical reference? | `stage3_qesem_refinement.csv` | generated on demand |
 
@@ -60,7 +60,7 @@ PYTHONPATH=src python examples/guides/build_benchmark_matrix.py
 
 # Stage 2, once stage-1 results exist
 PYTHONPATH=src python examples/guides/build_benchmark_matrix.py --stage 2 \
-    --select H2=cc-pvdz --select H2O=def2-svp --ansatz EfficientSU2_circular
+    --select H2=cc-pvdz --select H2O=def2-tzvp --ansatz EfficientSU2_circular
 
 # Stage 3, once stage-2 runs have converged
 PYTHONPATH=src python examples/guides/build_benchmark_matrix.py --stage 3 \
@@ -128,20 +128,30 @@ many mutually commuting sets the Hamiltonian's Pauli terms fall into, and
 the campaign's QPU time is roughly proportional to it. It is recorded per
 row in `Num_ExpVals_Per_Iter`.
 
-Fitting 559 completed Estimator jobs on `ibm_aachen`, all at 4,096 shots
-with the options this campaign submits under, gives
+Three completed jobs on `ibm_aachen` have known billed `quantum_seconds`,
+all submitted at 4,096 shots with the options this campaign uses:
+
+| E | billed | job |
+| --- | --- | --- |
+| 2 | 13 s | H2/sto-3g, parity mapper, UCCSD, 37 identical jobs |
+| 8 | 20 s | TN-VQE, 35-term observable |
+| 16 | 29 s | TN-VQE, 56-term observable |
+
+The line through the last two reproduces the first to within 0.25 s:
 
 ```
-billed QPU seconds per evaluation = 12.03 + 0.702 x Num_ExpVals_Per_Iter
+billed QPU seconds per evaluation = 11.0 + 1.125 x Num_ExpVals_Per_Iter
 ```
 
-IBM's own pre-run estimate over those jobs reads `15.04 + 0.878 E`
-seconds, and the jobs whose billed `quantum_seconds` are known came in at
-0.80 of it. Two consequences carry into the design:
+IBM's own pre-run estimate reads `15.04 + 0.878 E` seconds over 559
+completed jobs, but it does not stand in a fixed ratio to what is
+actually billed, coming in at 0.99 of it at `E = 2`, 0.80 at `E = 8` and
+0.83 at `E = 16`. The fit above is therefore anchored on billing rather
+than on that estimate. Two consequences carry into the design:
 
-- **The fixed 12.03 seconds is readout-error calibration**, requested
+- **The fixed 11 seconds is readout-error calibration**, requested
   once per job by the default Estimator options. Over the campaign's
-  9,112 evaluations it is 1,827 minutes, 35% of the total, and therefore
+  6,672 evaluations it is 1,223 minutes, 24% of the total, and therefore
   the largest single lever available: submitting with
   `measure_mitigation` disabled, or amortising the calibration across a
   session, acts on a third of the budget.
@@ -169,11 +179,11 @@ measure the displacement of.
 |---|---|---|
 | `measured_run` | 24 | Counted on a real `ibm_aachen` Estimator job of the same active space |
 | `qwc_grouping` | 64 | Computed offline by qubit-wise-commuting grouping of the row's own Hamiltonian, [`count_measurement_bases.py`](../../../examples/guides/count_measurement_bases.py). Greedy and order-dependent, so an upper bound: the one class where both numbers exist reads 34 measured against 46 computed |
-| `assumed` | 60 | Neither available, so the largest value measured on that mapper is carried across. A lower bound, and the reason those rows cannot be purchased against |
+| `assumed` | 48 | Neither available, so the largest value measured on that mapper is carried across. A lower bound, and the reason those rows cannot be purchased against |
 
 The `assumed` rows are the mol_map Hamiltonians at 6, 7 and 8 qubits,
 which this repository cannot build offline because the constraint
-encoding is Cebule's. They are 44% of the campaign's estimated time, so
+encoding is Cebule's. They are 42% of the campaign's estimated time, so
 measuring them is the first thing a real run should report. TN-VQE rows
 carry the same value as the plain-VQE rows they are compared against,
 which is also a lower bound, since `U†HU` carries more terms than `H`.
@@ -196,35 +206,35 @@ for batch2, and holding a Premium allocation for batch3.
 
 | File | Rows | Est. QPU time | Plan budget | Headroom |
 |---|---|---|---|---|
-| `batch0_classical_only.csv` | 44 | 0.00 min | none, since no quantum measurements are taken | n/a |
-| `batch1_open_plan.csv` | 1 | 6.72 min | 10 min (Open Plan, free) | 3.28 min |
-| `batch2_flex_plan.csv` | 31 | 397.82 min | 400 min (Flex Plan minimum purchase) | 2.18 min |
-| `batch3_premium_plan.csv` | 116 | 3,984.09 min | 5,200 min (Premium Plan annual minimum) | 1,216 min |
+| `batch0_classical_only.csv` | 38 | 0.00 min | none, since no quantum measurements are taken | n/a |
+| `batch1_open_plan.csv` | 1 | 6.62 min | 10 min (Open Plan, free) | 3.38 min |
+| `batch2_flex_plan.csv` | 26 | 378.23 min | 400 min (Flex Plan minimum purchase) | 21.77 min |
+| `batch3_premium_plan.csv` | 101 | 4,674.67 min | 5,200 min (Premium Plan annual minimum) | 525 min |
 
-The total is 4,389 minutes over 7,782 cost-function evaluations, with
+The total is 5,060 minutes over 6,672 cost-function evaluations, with
 every row accounted for in exactly one file. The figures were generated
 on 2026-08-20. Where that time goes:
 
 | Mapper | Molecule | Qubits | `E` | Source | Evaluations | s/eval | Minutes | Share |
 |---|---|---|---|---|---|---|---|---|
-| JW | H2O | 8 | 29 | `qwc_grouping` | 3,444 | 32.4 | 1,859 | 42% |
-| mol_map | H2O | 6 | 37 | `assumed` | 1,330 | 38.0 | 842 | 19% |
-| mol_map | H2 | 7 | 37 | `assumed` | 856 | 38.0 | 542 | 12% |
-| mol_map | H2 | 8 | 37 | `assumed` | 492 | 38.0 | 312 | 7% |
-| JW | H2 | 8 | 34 | `measured_run` | 492 | 35.9 | 294 | 7% |
-| mol_map | H2 | 6 | 37 | `assumed` | 380 | 38.0 | 241 | 5% |
-| mol_map | H2 | 4 | 37 | `measured_run` | 274 | 38.0 | 174 | 4% |
-| JW | H2 | 4 | 5 | `qwc_grouping` | 274 | 15.5 | 71 | 2% |
-| mol_map | H2 | 2 | 2 | `measured_run` | 240 | 13.4 | 54 | 1% |
+| JW | H2O | 8 | 29 | `qwc_grouping` | 2,952 | 43.6 | 2,146 | 42% |
+| mol_map | H2O | 6 | 37 | `assumed` | 1,140 | 52.6 | 1,000 | 20% |
+| mol_map | H2 | 8 | 37 | `assumed` | 492 | 52.6 | 432 | 9% |
+| JW | H2 | 8 | 34 | `measured_run` | 492 | 49.2 | 404 | 8% |
+| mol_map | H2 | 7 | 37 | `assumed` | 428 | 52.6 | 375 | 7% |
+| mol_map | H2 | 6 | 37 | `assumed` | 380 | 52.6 | 333 | 7% |
+| mol_map | H2 | 4 | 37 | `measured_run` | 274 | 52.6 | 240 | 5% |
+| JW | H2 | 4 | 5 | `qwc_grouping` | 274 | 16.6 | 76 | 2% |
+| mol_map | H2 | 2 | 2 | `measured_run` | 240 | 13.2 | 53 | 1% |
 
-The campaign fits the three plan budgets with about 22% to spare. That
+The campaign fits the three plan budgets with about 10% to spare. That
 margin is not yet a purchase plan, since the `assumed` rows are lower
-bounds and cover 44% of the estimate.
+bounds and cover 42% of the estimate.
 
 **mol_map H2O is screened on `grouped` only.** Basis-state grouping is
 what the constraint encoding exists to exploit, and running the same rows
 again under `pauli` would buy the less interesting half of that
-comparison for about 840 minutes, which is a fifth of the campaign. The
+comparison for about 1,000 minutes, which is a fifth of the campaign. The
 pair is listed in `GROUPED_ONLY` in the generator.
 
 The fill is greedy, so a batch accepts rows until the next would exceed
@@ -276,18 +286,18 @@ descent.
 ```mermaid
 %%{init: {"theme": "base", "themeVariables": {"background": "#ffffff", "primaryColor": "#ffffff", "primaryBorderColor": "#000000", "primaryTextColor": "#000000", "lineColor": "#000000", "secondaryColor": "#ffffff", "tertiaryColor": "#ffffff", "clusterBkg": "#ffffff", "clusterBorder": "#000000", "edgeLabelBackground": "#ffffff", "fontFamily": "monospace"}}}%%
 flowchart TD
-    A["2 molecules x 7 basis sets x 2 mappers<br/>2 ansaetze x 3 methods"]
-    A --> B["Stage-1 screening matrix<br/>192 rows<br/>build_benchmark_matrix.py"]
+    A["2 molecules x 6 basis sets x 2 mappers<br/>2 ansaetze x 3 methods"]
+    A --> B["Stage-1 screening matrix<br/>166 rows<br/>build_benchmark_matrix.py"]
     B --> S["Every row runs on simulators<br/>aer_simulator, noiseless<br/>fake_aachen, device noise model<br/>no plan budget"]
 
     S --> Z{"Does the row take<br/>quantum measurements?"}
-    Z -->|"optimization_mode = network"| Y["batch0_classical_only.csv<br/>44 rows, no plan budget<br/>classical-only baseline"]
-    Z -->|"plain VQE, or TN-VQE in both mode"| C["Per-row cost<br/>Iterations x (12.03 s + 0.702 s x E)<br/>split_benchmark_batches.py"]
+    Z -->|"optimization_mode = network"| Y["batch0_classical_only.csv<br/>38 rows, no plan budget<br/>classical-only baseline"]
+    Z -->|"plain VQE, or TN-VQE in both mode"| C["Per-row cost<br/>Iterations x (11.0 s + 1.125 s x E)<br/>split_benchmark_batches.py"]
 
     C --> H{"Sort ascending by cost,<br/>greedy fill; each plan budget<br/>is a separate purchase"}
-    H --> I["batch1_open_plan.csv<br/>1 row, 6.72 of 10 min"]
-    H --> J["batch2_flex_plan.csv<br/>31 rows, 397.82 of 400 min"]
-    H --> K["batch3_premium_plan.csv<br/>116 rows, 3,984.09 of 5,200 min"]
+    H --> I["batch1_open_plan.csv<br/>1 row, 6.62 of 10 min"]
+    H --> J["batch2_flex_plan.csv<br/>26 rows, 378.23 of 400 min"]
+    H --> K["batch3_premium_plan.csv<br/>101 rows, 4,674.67 of 5,200 min"]
     I --> R["Run batch1 first, as a pipeline<br/>check before purchased time<br/>is committed, then batch2, batch3"]
     J --> R
     K --> R
@@ -412,7 +422,6 @@ the basis:
 | 6-31G | 4 | 8 | 4 | both mappers |
 | qvSZP | 8 | 16 | 6 | mol_map only |
 | cc-pVDZ | 10 | 20 | 7 | mol_map only |
-| def2-SVP | 10 | 20 | 7 | mol_map only |
 | def2-TZVP | 12 | 24 | 8 | mol_map only |
 
 **Above 8 Jordan-Wigner qubits a pair is screened on mol_map alone.** The
@@ -452,12 +461,12 @@ n_qubits = ceil(log2( C(n_orbitals, n_alpha) x C(n_orbitals, n_beta) ))
 The relation is inferred rather than documented by Cebule, but reproduces
 exactly all eight real MOL_MAP counts available to this project
 ([`hamiltonian_sources/mol_map.py`](../../../src/qpubench/hamiltonian_sources/mol_map.py),
-pinned by `tests/test_mol_map.py`). Five of the six screened H2 counts
+pinned by `tests/test_mol_map.py`). Four of the five screened H2 counts
 come from real runs on exactly the unrestricted space these rows use;
 H2/qvSZP and every H2O row derive from the formula and are marked
-`mol_map_inferred` in `N_Qubit_Source`. Two observations distinguish the
-relation from a coincidental fit: H2/cc-pVDZ and H2/def2-SVP are
-different basis sets with the same active space and the same reported
+`mol_map_inferred` in `N_Qubit_Source`. Two observations in that
+reference data distinguish the relation from a coincidental fit: two
+different basis sets sharing an orbital count report the same qubit
 count, which no basis-size formula predicts, and two spaces sharing 10
 orbitals but differing in electron count give the two counts the formula
 requires.
@@ -620,16 +629,16 @@ documentation covers the submission path this campaign would use.
 
 ## Known limitations
 
-- **Half the measurement counts are assumed rather than measured.** The
+- **Two fifths of the measurement counts are assumed rather than measured.** The
   mol_map Hamiltonians at 6, 7 and 8 qubits cannot be built offline, so
   those rows carry the largest value measured on that mapper, a lower
-  bound. They are 53% of the estimated time, and the campaign fits its
-  budget with 7% to spare, so the allocation is not yet a purchase plan.
+  bound. They are 42% of the estimated time, and the campaign fits its
+  budget with 10% to spare, so the allocation is not yet a purchase plan.
 - **TN-VQE rows are costed at the untransformed Hamiltonian's count.**
   `U†HU` carries more terms than `H`, so every `both`-mode row is a lower
   bound as well.
 - **H2's larger bases are screened on mol_map only**, so at qvSZP,
-  cc-pVDZ, def2-SVP and def2-TZVP there is no JW against mol_map
+  cc-pVDZ and def2-TZVP there is no JW against mol_map
   comparison. That axis exists at sto-3g and 6-31G for H2, and at every
   basis for H2O.
 - **H2O's active space is a screening space.** CAS(4,4) is chosen for
@@ -646,7 +655,7 @@ documentation covers the submission path this campaign would use.
    runs would settle Cebule's `grouped` scheme and the transformed
    Hamiltonian's term count on TN-VQE rows.
 2. **Whether to submit with readout-error calibration enabled.** It is
-   35% of the estimated time and is requested by the default Estimator
+   24% of the estimated time and is requested by the default Estimator
    options rather than by the campaign.
 3. **How far to restrict H2O**, pending expert input: freeze the core
    only, keep a valence CAS, or something between.
@@ -677,4 +686,4 @@ documentation covers the submission path this campaign would use.
    for refining pre-optimised parameters with error mitigation.
 6. Basis Set Exchange:
    [basissetexchange.org](https://www.basissetexchange.org/). The source
-   of six of the seven basis sets; the seventh, `qvSZP`, is Grimme's.
+   of five of the six basis sets; the sixth, `qvSZP`, is Grimme's.

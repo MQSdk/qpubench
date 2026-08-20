@@ -20,9 +20,9 @@ is worth one.
 So the sweep is split at its natural decision point:
 
   Stage 1 (screening) -- broad in the things you are choosing *between*
-    (7 basis sets, two ansaetze crossed with all three methods, both
+    (6 basis sets, two ansaetze crossed with all three methods, both
     mappers, both measurement methods), shallow in everything else (one
-    reference TN-VQE point, one circuit repetition count).  192 rows:
+    reference TN-VQE point, one circuit repetition count).  166 rows:
     the full crossing, less the pairs in SKIPPED_PAIRS, the Jordan-Wigner
     rows above MAX_JW_QUBITS, and the `pauli` rows of GROUPED_ONLY.
 
@@ -136,7 +136,11 @@ N_SPATIAL_ORBITALS = {
             "def2-svp": 24, "def2-tzvp": 43, "qvSZP": 17},
 }
 
-BASES = ["sto-3g", "6-31g", "cc-pvdz", "cc-pvtz", "def2-svp", "def2-tzvp", "qvSZP"]
+# def2-SVP is deliberately absent: it gives the same orbital count as
+# cc-pVDZ for both molecules (10 and 24 above), so it would have screened
+# at the same width, the same E and the same iteration budget, buying a
+# second point where the campaign already has one.
+BASES = ["sto-3g", "6-31g", "cc-pvdz", "cc-pvtz", "def2-tzvp", "qvSZP"]
 BASIS_SOURCE = {b: "basis_set_exchange" for b in BASES} | {"qvSZP": "grimme_qvszp"}
 
 # (molecule, basis) pairs stage 1 does NOT run, with the reason, because a

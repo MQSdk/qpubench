@@ -71,13 +71,22 @@ _PLAN_BUDGETS_S = [
     ("batch3_premium_plan", 5200 * 60),    # Premium Plan annual minimum
 ]
 
-# Billed QPU seconds per cost-function evaluation, fitted to 559 completed
-# Estimator jobs on ibm_aachen (all at 4,096 shots, measure mitigation on,
-# 32 randomizations).  IBM's own pre-run estimate over those jobs reads
-# 15.04 + 0.878 x E seconds, and the jobs whose billed quantum_seconds are
-# known came in at 0.80 of it.
-_FIXED_S_PER_EVALUATION = 12.03
-_S_PER_MEASUREMENT_BASIS = 0.702
+# Billed QPU seconds per cost-function evaluation, fitted to the three
+# ibm_aachen jobs whose billed quantum_seconds are known, all at 4,096
+# shots with measure mitigation on and 32 randomizations:
+#
+#     E =  2 -> 13 s   H2/sto-3g, parity mapper, UCCSD (37 identical jobs)
+#     E =  8 -> 20 s   TN-VQE, 35-term observable
+#     E = 16 -> 29 s   TN-VQE, 56-term observable
+#
+# The line through the last two reproduces the first to within 0.25 s, so
+# the fit is anchored on measured billing rather than on IBM's pre-run
+# estimate.  That estimate reads 15.04 + 0.878 x E over 559 completed jobs
+# and does NOT stand in a fixed ratio to what is billed: 0.99 of it at
+# E = 2, 0.80 at E = 8, 0.83 at E = 16.  Scaling it by any single factor
+# understates the slope, which is why it is not used here.
+_FIXED_S_PER_EVALUATION = 11.0
+_S_PER_MEASUREMENT_BASIS = 1.125
 
 def _load_rows() -> list[dict[str, str]]:
     with _CSV_PATH.open() as f:
