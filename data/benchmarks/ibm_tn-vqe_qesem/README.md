@@ -50,7 +50,7 @@ it.
 
 | Stage | Question | File | Rows |
 |---|---|---|---|
-| **1, screening** | Which basis set, ansatz, mapper and measurement method warrant further study? | `stage1_screening_matrix.csv` | 220, committed |
+| **1, screening** | Which basis set, ansatz, mapper and measurement method warrant further study? | `stage1_screening_matrix.csv` | 192, committed |
 | **2, deep sweep** | For the selected combinations, how do the TN-VQE sweep parameters `θ` and `φ` behave? | `stage2_deep_sweep.csv` | generated on demand |
 | **3, QESEM refinement** | Does error mitigation move the converged energy closer to the classical reference? | `stage3_qesem_refinement.csv` | generated on demand |
 
@@ -72,6 +72,15 @@ Each stage refuses to generate without its selection: no `--select`, no
 `--refine`, no `--precision`, no output. A silently defaulted selection
 would make the provenance of a later stage unrecoverable.
 
+**Stage 1 does not produce converged energies, and is not meant to.**
+Every row is budgeted at roughly half of its achievable descent, so what
+a stage-1 row exposes is the initial descent rather than the asymptotic
+energy. Rows are carried into stage 2 by comparing convergence trends,
+that is the cost history per evaluation and the descent achieved per unit
+of QPU time, across the factors being screened. Converged energies are
+the product of stage 2, whose budget takes the same form at a larger
+multiplier.
+
 ### Every ansatz is run by every method
 
 Both circuit families are run by all three methods, that is plain VQE,
@@ -80,13 +89,6 @@ control, on the same Hamiltonian, from the same pinned circuit file and
 at the same `Phi_Init`. The three rows of such a triple therefore differ
 in method alone, which is what makes a difference between them
 attributable to the method.
-
-`UCCSD` is not among the families. It builds excitation operators from
-fermionic modes, so it exists only on Jordan-Wigner-mapped plain VQE and
-cannot be run by the other two methods, nor under mol_map's constraint
-encoding. Its builder remains in
-[`_ansatz_builders.py`](../../../examples/guides/_ansatz_builders.py) for
-a later stage that names it explicitly.
 
 ## Simulator characterisation before hardware submission
 
@@ -120,10 +122,11 @@ attributed between algorithmic limitation and device error.
 ## What one cost-function evaluation costs
 
 Evaluating `⟨H⟩` costs one circuit per measurement basis, not one circuit
-per evaluation. That count is a property of the Hamiltonian rather than
-of the circuit preparing the state, and the campaign's QPU time is
-roughly proportional to it. It is recorded per row in
-`Num_ExpVals_Per_Iter`.
+per evaluation. Call that count `E`. It is a property of the Hamiltonian
+rather than of the circuit preparing the state, since it follows from how
+many mutually commuting sets the Hamiltonian's Pauli terms fall into, and
+the campaign's QPU time is roughly proportional to it. It is recorded per
+row in `Num_ExpVals_Per_Iter`.
 
 Fitting 559 completed Estimator jobs on `ibm_aachen`, all at 4,096 shots
 with the options this campaign submits under, gives
@@ -151,17 +154,26 @@ seconds, and the jobs whose billed `quantum_seconds` are known came in at
 The fit was made on shallow circuits at 2 to 8 qubits, the range this
 matrix occupies. A deep circuit costs more than the fit predicts.
 
+**The rows are submitted as individual jobs, not in a session.** A
+dedicated session reserves the QPU and bills the reservation, so the
+classical time between iterations is charged as QPU time. Measured on a
+32-iteration VQE session on `ibm_aachen`, the jobs themselves billed 13 s
+each while the session billed 1,284 s, so 68% of the reservation was
+idle. Sessions would also charge the tensor-network contraction as
+quantum time, which is precisely the CPU work the campaign exists to
+measure the displacement of.
+
 ### Where `Num_ExpVals_Per_Iter` comes from
 
 | `Num_ExpVals_Source` | Rows | Meaning |
 |---|---|---|
 | `measured_run` | 24 | Counted on a real `ibm_aachen` Estimator job of the same active space |
 | `qwc_grouping` | 64 | Computed offline by qubit-wise-commuting grouping of the row's own Hamiltonian, [`count_measurement_bases.py`](../../../examples/guides/count_measurement_bases.py). Greedy and order-dependent, so an upper bound: the one class where both numbers exist reads 34 measured against 46 computed |
-| `assumed` | 88 | Neither available, so the largest value measured on that mapper is carried across. A lower bound, and the reason those rows cannot be purchased against |
+| `assumed` | 60 | Neither available, so the largest value measured on that mapper is carried across. A lower bound, and the reason those rows cannot be purchased against |
 
 The `assumed` rows are the mol_map Hamiltonians at 6, 7 and 8 qubits,
 which this repository cannot build offline because the constraint
-encoding is Cebule's. They are 53% of the campaign's estimated time, so
+encoding is Cebule's. They are 44% of the campaign's estimated time, so
 measuring them is the first thing a real run should report. TN-VQE rows
 carry the same value as the plain-VQE rows they are compared against,
 which is also a lower bound, since `U†HU` carries more terms than `H`.
@@ -187,27 +199,33 @@ for batch2, and holding a Premium allocation for batch3.
 | `batch0_classical_only.csv` | 44 | 0.00 min | none, since no quantum measurements are taken | n/a |
 | `batch1_open_plan.csv` | 1 | 6.72 min | 10 min (Open Plan, free) | 3.28 min |
 | `batch2_flex_plan.csv` | 31 | 397.82 min | 400 min (Flex Plan minimum purchase) | 2.18 min |
-| `batch3_premium_plan.csv` | 144 | 4,826.51 min | 5,200 min (Premium Plan annual minimum) | 373 min |
+| `batch3_premium_plan.csv` | 116 | 3,984.09 min | 5,200 min (Premium Plan annual minimum) | 1,216 min |
 
-The total is 5,231 minutes over 9,112 cost-function evaluations, with
+The total is 4,389 minutes over 7,782 cost-function evaluations, with
 every row accounted for in exactly one file. The figures were generated
-on 2026-08-19. Where that time goes:
+on 2026-08-20. Where that time goes:
 
 | Mapper | Molecule | Qubits | `E` | Source | Evaluations | s/eval | Minutes | Share |
 |---|---|---|---|---|---|---|---|---|
-| JW | H2O | 8 | 29 | `qwc_grouping` | 3,444 | 32.4 | 1,859 | 36% |
-| mol_map | H2O | 6 | 37 | `assumed` | 2,660 | 38.0 | 1,685 | 32% |
-| mol_map | H2 | 7 | 37 | `assumed` | 856 | 38.0 | 542 | 10% |
-| mol_map | H2 | 8 | 37 | `assumed` | 492 | 38.0 | 312 | 6% |
-| JW | H2 | 8 | 34 | `measured_run` | 492 | 35.9 | 294 | 6% |
+| JW | H2O | 8 | 29 | `qwc_grouping` | 3,444 | 32.4 | 1,859 | 42% |
+| mol_map | H2O | 6 | 37 | `assumed` | 1,330 | 38.0 | 842 | 19% |
+| mol_map | H2 | 7 | 37 | `assumed` | 856 | 38.0 | 542 | 12% |
+| mol_map | H2 | 8 | 37 | `assumed` | 492 | 38.0 | 312 | 7% |
+| JW | H2 | 8 | 34 | `measured_run` | 492 | 35.9 | 294 | 7% |
 | mol_map | H2 | 6 | 37 | `assumed` | 380 | 38.0 | 241 | 5% |
-| mol_map | H2 | 4 | 37 | `measured_run` | 274 | 38.0 | 174 | 3% |
-| JW | H2 | 4 | 5 | `qwc_grouping` | 274 | 15.5 | 71 | 1% |
+| mol_map | H2 | 4 | 37 | `measured_run` | 274 | 38.0 | 174 | 4% |
+| JW | H2 | 4 | 5 | `qwc_grouping` | 274 | 15.5 | 71 | 2% |
 | mol_map | H2 | 2 | 2 | `measured_run` | 240 | 13.4 | 54 | 1% |
 
-The campaign fits the three plan budgets with about 7% to spare, which is
-not margin enough to purchase against while half of the measurement
-counts are assumed lower bounds.
+The campaign fits the three plan budgets with about 22% to spare. That
+margin is not yet a purchase plan, since the `assumed` rows are lower
+bounds and cover 44% of the estimate.
+
+**mol_map H2O is screened on `grouped` only.** Basis-state grouping is
+what the constraint encoding exists to exploit, and running the same rows
+again under `pauli` would buy the less interesting half of that
+comparison for about 840 minutes, which is a fifth of the campaign. The
+pair is listed in `GROUPED_ONLY` in the generator.
 
 The fill is greedy, so a batch accepts rows until the next would exceed
 its budget, and rows are sorted ascending by cost beforehand, so batch1
@@ -223,98 +241,74 @@ PYTHONPATH=src python examples/guides/split_benchmark_batches.py
 ## Per-row evaluation budget
 
 `Iterations` is computed per row as `max(30, ceil(1.3 x n_params))` from
-that row's own free-parameter count. A single global value cannot be
-used, and neither can a rule of the form `n_params + constant`.
+that row's own free-parameter count, where `n_params` is
+`Num_Opt_Params_Phi + Num_Opt_Params_Theta` and `φ` drops out on a
+`network` row. Across this matrix the budgets run from the floor of 30 to
+91.
 
-COBYLA constructs an initial simplex of `n + 1` points before it can take
-a descent step, and `scipy.optimize.minimize` does not honour a `maxiter`
-below that value: it raises `maxfun`, emits `COBYLA: Invalid MAXFUN`, and
-performs `n + 2` evaluations regardless. A budget set below `n + 2`
-therefore does not reduce what a row costs, it misstates it.
-
-The proportionality is what makes rows comparable. COBYLA needs
+The budget is proportional rather than additive because COBYLA needs
 evaluations in proportion to the parameter count to make a given amount
 of progress. Measured on a trigonometric-polynomial objective, the
-functional form a VQE energy takes, the evaluations needed to reach a
-fixed fraction of the achievable descent scale linearly in `n`: about
-`1.3n` for 50%, `4n` for 80% and `12n` for 95%. An additive rule
-therefore delivers a shrinking fraction as `n` grows, while a
-proportional rule delivers a constant one. Fraction of achievable descent
-reached, median over seeds:
+functional form a VQE energy takes, reaching a fixed fraction of the
+achievable descent costs about `1.3n` evaluations for 50%, `4n` for 80%
+and `12n` for 95%. A rule of the form `n + constant` therefore reaches a
+shrinking fraction as circuits widen, falling from 53% of the achievable
+descent at `n = 22` to 38% at `n = 200`, which would make the optimizer
+budget a confound correlated with the qubit count, one of the factors the
+screen exists to compare. At `1.3n` every row reaches about half, at
+every width.
 
-| `n` | `max(30, n+2)` | `n+30` | `n+100` | `1.3n` | `2n` | `4n` |
-|---|---|---|---|---|---|---|
-| 22 | 53% | 65% | 85% | 53% | 61% | 79% |
-| 46 | 41% | 54% | 75% | 47% | 64% | 81% |
-| 94 | 38% | 51% | 65% | 50% | 63% | 81% |
-| 142 | 38% | 49% | 60% | 51% | 65% | 85% |
-| 200 | 38% | 47% | 54% | 51% | 62% | 80% |
+The floor of 30 is a smoke-test minimum that also keeps the budget above
+COBYLA's own requirement: `scipy.optimize.minimize` does not honour a
+`maxiter` below the `n + 1` simplex it must build first, raising `maxfun`
+and running `n + 2` evaluations regardless, so a smaller budget would not
+make a row cheaper, only misstated.
 
-Under an `n + 2` rule a row reached 53% of its achievable descent at
-`n = 22` and 38% at `n = 200`, which made the optimizer budget a
-confound correlated with the qubit count, one of the factors the screen
-exists to compare. It also unbalanced a triple against itself, since a
-`network` control varies `θ` only while the row it controls varies `φ`
-and `θ`.
-
-The multipliers are calibrated on a synthetic objective, so they are the
-right functional form and order of magnitude rather than tuned values.
-`TN_QC_OPT` returns `cost_history`, one entry per cost-function
-evaluation, so real runs refine them with no new instrumentation.
-
-`n_params` is the row's own `Num_Opt_Params_Phi + Num_Opt_Params_Theta`,
-neither of which follows from the qubit count alone, and on a `network`
-row `φ` is frozen and drops out. Across this matrix the budgets run from
-the floor of 30 to 91.
-
-Every row therefore reaches roughly half of its own achievable descent,
-at every width, so what stage 1 exposes is the initial descent,
-comparably across rows, and not the asymptotic energy. Stage-1 energies
-are not converged energies and must not be reported as ground-state
-energies. Converged energies are the output of stage 2, whose budget
-takes the same form at a larger multiplier (`STAGE2_EVALS_PER_PARAM`,
-`4n`, about 80% of achievable descent).
+The multipliers come from a synthetic objective, so they are the right
+functional form and order of magnitude rather than tuned values.
+`TN_QC_OPT` returns `cost_history`, one entry per evaluation, so real
+runs refine them with no new instrumentation. Stage 2 uses the same rule
+at `STAGE2_EVALS_PER_PARAM`, that is `4n`, for about 80% of achievable
+descent.
 
 ## Workflow
 
 ```mermaid
 %%{init: {"theme": "base", "themeVariables": {"background": "#ffffff", "primaryColor": "#ffffff", "primaryBorderColor": "#000000", "primaryTextColor": "#000000", "lineColor": "#000000", "secondaryColor": "#ffffff", "tertiaryColor": "#ffffff", "clusterBkg": "#ffffff", "clusterBorder": "#000000", "edgeLabelBackground": "#ffffff", "fontFamily": "monospace"}}}%%
 flowchart TD
-    A["2 molecules x 7 basis sets x 2 mappers<br/>2 ansaetze x 3 methods<br/>less the skipped pairs, and less<br/>the JW rows above MAX_JW_QUBITS"]
-    A --> B["Stage-1 screening matrix<br/>220 rows<br/>build_benchmark_matrix.py"]
-
-    B --> S["EVERY row runs on simulators first<br/>aer_simulator (noiseless)<br/>fake_aachen (device noise model)<br/>no plan budget"]
+    A["2 molecules x 7 basis sets x 2 mappers<br/>2 ansaetze x 3 methods"]
+    A --> B["Stage-1 screening matrix<br/>192 rows<br/>build_benchmark_matrix.py"]
+    B --> S["Every row runs on simulators<br/>aer_simulator, noiseless<br/>fake_aachen, device noise model<br/>no plan budget"]
 
     S --> Z{"Does the row take<br/>quantum measurements?"}
-    Z -->|"optimization_mode = network"| Y["batch0_classical_only.csv<br/>44 rows, 0 min, no plan budget<br/>classical-only baseline, never submitted"]
+    Z -->|"optimization_mode = network"| Y["batch0_classical_only.csv<br/>44 rows, no plan budget<br/>classical-only baseline"]
+    Z -->|"plain VQE, or TN-VQE in both mode"| C["Per-row cost<br/>Iterations x (12.03 s + 0.702 s x E)<br/>split_benchmark_batches.py"]
 
-    Z -->|"plain VQE, or TN-VQE in both mode"| C["Per-row cost, measured not modelled<br/>Iterations x (12.03 s + 0.702 s x Num_ExpVals_Per_Iter)<br/>fitted to 559 ibm_aachen jobs"]
-    C --> G["Sort rows ascending by cost"]
-    G --> H{"Greedy fill;<br/>each plan budget is a separate purchase"}
+    C --> H{"Sort ascending by cost,<br/>greedy fill; each plan budget<br/>is a separate purchase"}
     H --> I["batch1_open_plan.csv<br/>1 row, 6.72 of 10 min"]
     H --> J["batch2_flex_plan.csv<br/>31 rows, 397.82 of 400 min"]
-    H --> K["batch3_premium_plan.csv<br/>144 rows, 4,826.51 of 5,200 min"]
+    H --> K["batch3_premium_plan.csv<br/>116 rows, 3,984.09 of 5,200 min"]
+    I --> R["Run batch1 first, as a pipeline<br/>check before purchased time<br/>is committed, then batch2, batch3"]
+    J --> R
+    K --> R
 
-    I --> M["Run the cheapest batch first:<br/>pipeline validation before<br/>purchased QPU time is committed"]
-    J --> M
-    K --> M
+    R --> N["Stage-1 analysis: convergence trend per row,<br/>hardware against the noiseless and<br/>noise-model simulations, and against<br/>the classical-only baseline"]
     Y --> N
-    M --> N{"Which basis set, ansatz, mapper<br/>and measurement method performed best?<br/>Did the hardware run improve on<br/>the classical-only baseline?"}
-    N --> O["Stage-2 deep sweep<br/>28-point TN-VQE grid on the<br/>selected combinations only"]
-    O --> C
-    O --> P["Stage-3 QESEM refinement<br/>converged parameters, submitted once<br/>mitigated and unmitigated pair"]
+    S --> N
+    N --> O["Stage-2 deep sweep on the selected<br/>combinations: 28-point TN-VQE grid,<br/>converged energies"]
+    O --> P["Stage-3 QESEM refinement<br/>converged parameters, submitted once,<br/>mitigated and unmitigated pair"]
 
     classDef bw fill:#ffffff,stroke:#000000,stroke-width:1px,color:#000000
-    class A,B,C,G,H,I,J,K,M,N,O,P,S,Y,Z bw
+    class A,B,C,H,I,J,K,N,O,P,R,S,Y,Z bw
 ```
 
-Three features carry experimental weight. Everything is simulated before
+Two features carry experimental weight. Everything is simulated before
 anything is submitted, so the split that follows is only about which rows
-consume purchased hardware time. The loop back into the cost estimate is
-the purpose of the staged design, since stage 2 is costed by the same
-machinery on the combinations stage 1 selects. And stage 3 depends on
-stage 2 rather than on the screen, because refinement consumes converged
-parameters.
+consume purchased hardware time, and every hardware result has a
+noiseless value, a noise-model value and a classical-only value to be
+read against. And each stage depends on the one before it: stage 2 sweeps
+what stage 1's convergence trends selected, and stage 3 refines
+parameters only a converged stage-2 run produces.
 
 ## Circuit families under test
 
@@ -420,36 +414,25 @@ the basis:
 | cc-pVDZ | 10 | 20 | 7 | mol_map only |
 | def2-SVP | 10 | 20 | 7 | mol_map only |
 | def2-TZVP | 12 | 24 | 8 | mol_map only |
-| cc-pVTZ | 28 | 56 | 10 | not screened |
 
 **Above 8 Jordan-Wigner qubits a pair is screened on mol_map alone.** The
 limit is `MAX_JW_QUBITS` in the generator, and it is a measurement limit
 rather than a circuit one: the number of qubit-wise-commuting measurement
 bases of a JW-mapped Hamiltonian grows as roughly N³, measured on these
 rows at 5 bases for 4 qubits and 34 for 8, then 325, 762 and 1,444 at 16,
-20 and 24. Screening H2's larger bases under Jordan-Wigner would have
-cost about 40 times the campaign's plan budget. mol_map holds the same
+20 and 24. Screening H2's larger bases under Jordan-Wigner would cost
+about 40 times the campaign's plan budget. mol_map holds the same
 active spaces at 6 to 8 qubits, so the basis series survives there. What
 is given up is the JW against mol_map comparison at those bases, recorded
 under [Known limitations](#known-limitations).
 
-**H2/cc-pVTZ is not screened at all**, being 56 Jordan-Wigner qubits
-unrestricted. The pair is recorded in `SKIPPED_PAIRS`, and
-`--select H2=cc-pvtz` is refused at stage 2. Its mol_map rows alone would
-now be affordable, so restoring triple-zeta coverage on that side is a
-one-line change if it is wanted.
-
-**H2O keeps a fixed valence CAS, provisionally, and a small one.**
-CAS(4,4) with the O 1s frozen, that is 8 Jordan-Wigner qubits and 6 under
-mol_map. The standard water valence space is CAS(8,6); it was cut because
-measurement cost grows steeply with qubit count and because stage 1 ranks
-experimental factors rather than quoting water's correlation energy. It
-is a screening space, not a converged-chemistry one, and how far to
-restrict this molecule is an open decision awaiting expert input.
-
-**Li2 is not screened.** At any fixed valence CAS it is the same small
-active space in every basis, so its rows would have repeated one
-Hamiltonian across seven bases.
+**H2O is screened at CAS(4,4)**, provisionally, with the O 1s frozen:
+8 Jordan-Wigner qubits and 6 under mol_map. It is smaller than water's
+standard CAS(8,6) valence space because measurement cost grows steeply
+with qubit count and because stage 1 ranks experimental factors rather
+than quoting water's correlation energy. It is therefore a screening
+space rather than a converged-chemistry one, and how far to restrict this
+molecule is an open decision awaiting expert input.
 
 | Molecule | Electrons | Active space | Frozen | JW qubits | mol_map qubits |
 |---|---|---|---|---|---|
@@ -645,17 +628,10 @@ documentation covers the submission path this campaign would use.
 - **TN-VQE rows are costed at the untransformed Hamiltonian's count.**
   `U†HU` carries more terms than `H`, so every `both`-mode row is a lower
   bound as well.
-- **The two ansatz families differ in two factors at once.**
-  `RealAmplitudes` is Ry rotations on a reverse-linear chain and
-  `EfficientSU2_circular` is Ry+Rz rotations on a ring, so a difference
-  between them is attributable to the ansatz but not divisible between
-  the rotation set and the entangler topology.
 - **H2's larger bases are screened on mol_map only**, so at qvSZP,
   cc-pVDZ, def2-SVP and def2-TZVP there is no JW against mol_map
   comparison. That axis exists at sto-3g and 6-31G for H2, and at every
   basis for H2O.
-- **Stage-1 energies are not converged energies**, every row being
-  budgeted at roughly half of its own achievable descent by design.
 - **H2O's active space is a screening space.** CAS(4,4) is chosen for
   measurement cost, not water's valence space, so an H2O energy here is
   not a chemistry result.

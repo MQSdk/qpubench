@@ -130,7 +130,7 @@ pipeline:
   component/job" treatment TN_QC_OPT's own `n_iterations` optimizer loop
   already gets.
 
-Running the full 220-row stage-1 matrix (or any one of its
+Running the full 192-row stage-1 matrix (or any one of its
 tranches) against real hardware means: pick the pipeline matching each
 row's (`Mapper`, `Method`) pair, then group rows by every other column
 into one `create_run_from_pipeline_package(...)` call per pair with all

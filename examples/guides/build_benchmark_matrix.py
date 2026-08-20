@@ -22,9 +22,9 @@ So the sweep is split at its natural decision point:
   Stage 1 (screening) -- broad in the things you are choosing *between*
     (7 basis sets, two ansaetze crossed with all three methods, both
     mappers, both measurement methods), shallow in everything else (one
-    reference TN-VQE point, one circuit repetition count).  220 rows:
-    the full crossing, less the pairs in SKIPPED_PAIRS and less the
-    Jordan-Wigner rows above MAX_JW_QUBITS.
+    reference TN-VQE point, one circuit repetition count).  192 rows:
+    the full crossing, less the pairs in SKIPPED_PAIRS, the Jordan-Wigner
+    rows above MAX_JW_QUBITS, and the `pauli` rows of GROUPED_ONLY.
 
   Stage 2 (deep sweep) -- the full 28-point TN_Layers_Network x
     Ansatz_Reps x TN_Ansatz sweep, run only on the (molecule,
@@ -174,6 +174,13 @@ MAX_JW_QUBITS = 8
 
 MAPPERS = ["JW", "mol_map"]
 MEASUREMENT_METHODS = ["pauli", "grouped"]
+
+# (molecule, mapper) pairs screened on `grouped` alone.  mol_map H2O is
+# the campaign's second most expensive class, and basis-state grouping is
+# what the constraint encoding exists to exploit, so running the same
+# rows again under `pauli` buys the less interesting half of the
+# comparison at about 840 minutes of QPU time.
+GROUPED_ONLY = {("H2O", "mol_map")}
 
 # --- Ansaetze -------------------------------------------------------------
 #
@@ -842,6 +849,9 @@ def build_stage1() -> list[dict[str, str]]:
                 if skips_mapper(mapper, active_electrons, active_orbitals):
                     continue
                 for measurement in MEASUREMENT_METHODS:
+                    if (measurement == "pauli"
+                            and (mol.name, mapper) in GROUPED_ONLY):
+                        continue
                     for ansatz in ANSATZE:
                         rows.append(_row(
                             **common, mapper=mapper, method="VQE",
