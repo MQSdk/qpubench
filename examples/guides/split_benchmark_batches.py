@@ -7,20 +7,21 @@ exhausting one plan before moving to the next.
 
 Requires: nothing beyond the standard library.
 
-The per-row cost is MEASURED, not modelled.  Fitting 559 completed
-Estimator jobs on ibm_aachen at 4,096 shots, with the default options the
-campaign will submit under, gives
+The per-row cost is MEASURED, not modelled.  Seven completed Estimator
+jobs on ibm_aachen at 4,096 shots, with the default options the campaign
+will submit under, have known billed quantum_seconds, and give
 
-    billed seconds per cost-function evaluation = 12.0 + 0.70 x E
+    billed seconds per cost-function evaluation = 11.0 + 1.125 x E
 
-where E is the row's measurement circuits per evaluation
+to within 4% at every point, over E = 2 to 81 (see the constants below).
+E is the row's measurement circuits per evaluation
 (Num_ExpVals_Per_Iter).  An evaluation is not one circuit: <H> costs one
 circuit per measurement basis, and E is a property of the Hamiltonian
 rather than of the circuit preparing the state.  Rows whose E is assumed
 rather than measured are costed at a lower bound and marked in
 Num_ExpVals_Source; see build_benchmark_matrix.EXPVALS_PER_ITER.
 
-The fixed 12.0 seconds is readout-error calibration, which the default
+The fixed 11.0 seconds is readout-error calibration, which the default
 Estimator options request once per job.  It dominates every small row, so
 it is the campaign's largest single lever.
 
@@ -71,20 +72,28 @@ _PLAN_BUDGETS_S = [
     ("batch3_premium_plan", 5200 * 60),    # Premium Plan annual minimum
 ]
 
-# Billed QPU seconds per cost-function evaluation, fitted to the three
+# Billed QPU seconds per cost-function evaluation, fitted to the seven
 # ibm_aachen jobs whose billed quantum_seconds are known, all at 4,096
-# shots with measure mitigation on and 32 randomizations:
+# shots with measure mitigation on and 32 randomizations.  Columns are
+# E, transpiled depth, billed, and what this line predicts:
 #
-#     E =  2 -> 13 s   H2/sto-3g, parity mapper, UCCSD (37 identical jobs)
-#     E =  8 -> 20 s   TN-VQE, 35-term observable
-#     E = 16 -> 29 s   TN-VQE, 56-term observable
+#      2   215   13 s   13.2      8   215   20 s   20.0
+#      2    32   13 s   13.2     16   215   29 s   29.0
+#      5    32   16 s   16.6     37    40   52 s   52.6
+#                               81   215  104 s  102.1
 #
-# The line through the last two reproduces the first to within 0.25 s, so
-# the fit is anchored on measured billing rather than on IBM's pre-run
-# estimate.  That estimate reads 15.04 + 0.878 x E over 559 completed jobs
-# and does NOT stand in a fixed ratio to what is billed: 0.99 of it at
-# E = 2, 0.80 at E = 8, 0.83 at E = 16.  Scaling it by any single factor
-# understates the slope, which is why it is not used here.
+# Every point within 4%, over a fortyfold range of E bracketing the 2 to
+# 37 the matrix occupies.  The fit is anchored on billing, not on IBM's
+# pre-run estimate: that reads 15.04 + 0.878 x E over 559 completed jobs
+# but stands in no fixed ratio to billing, 0.77 to 1.19 of it across
+# these seven, so scaling it by any single factor misstates the slope.
+#
+# Depth does not enter up to 215 -- the two E = 2 jobs bill identically
+# at depth 32 and 215.  Far outside that range it does: one depth-2389
+# job on 120 qubits billed 704 s against 49 s predicted.  That job also
+# ran on ibm_berlin and no shallow ibm_berlin job exists to separate
+# depth from device.  The campaign's deepest circuit is 120 and every
+# row is costed against ibm_aachen, so both stay inside what is verified.
 _FIXED_S_PER_EVALUATION = 11.0
 _S_PER_MEASUREMENT_BASIS = 1.125
 

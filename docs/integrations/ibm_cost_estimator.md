@@ -149,18 +149,22 @@ one circuit once: `overhead + (rep_delay + duration) x shots`. One
 cost-function evaluation of `<H>` submits one circuit *per measurement
 basis*, and that count is a property of the Hamiltonian. The campaign
 therefore no longer sizes its batches from this estimate. It costs them
-from a fit to 559 completed Estimator jobs on the target device,
+from the seven completed Estimator jobs on the target device whose billed
+quantum_seconds are known,
 
-    billed seconds per evaluation = 12.03 + 0.702 x measurement bases
+    billed seconds per evaluation = 11.0 + 1.125 x measurement bases
 
-which puts a 4-qubit evaluation at 13 to 20 s against the 3.04 s a single
-transpiled submission suggests. See
+which holds to within 4% from 2 measurement bases to 81, and puts a
+4-qubit evaluation at 13 to 20 s against the 3.04 s a single transpiled
+submission suggests. See
 [the campaign README](../../data/benchmarks/ibm_tn-vqe_qesem/README.md#what-one-cost-function-evaluation-costs).
 Two facts from those jobs are worth carrying into any use of this module:
-the fixed 12 s is readout-error calibration requested once per job by the
-default Estimator options, and at 4,096 shots the transpiled circuit
-duration is under 1% of an evaluation, so it is the Hamiltonian rather
-than the ansatz depth that sets cost at these widths.
+the fixed 11 s is readout-error calibration requested once per job by the
+default Estimator options, and up to a transpiled depth of about 215 the
+circuit duration does not enter at all, so it is the Hamiltonian rather
+than the ansatz depth that sets cost at these widths. Well beyond that
+depth it does enter, and steeply: one depth-2389 job billed fourteen
+times what this line predicts.
 
 **Iterations are per row, not a flat assumption.** Each row's
 `Iterations` column holds `max(30, ceil(1.3 x n_params))`, a budget
