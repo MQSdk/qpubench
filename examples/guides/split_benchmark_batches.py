@@ -88,12 +88,11 @@ _PLAN_BUDGETS_S = [
 # but stands in no fixed ratio to billing, 0.77 to 1.19 of it across
 # these seven, so scaling it by any single factor misstates the slope.
 #
-# Depth does not enter up to 215 -- the two E = 2 jobs bill identically
-# at depth 32 and 215.  Far outside that range it does: one depth-2389
-# job on 120 qubits billed 704 s against 49 s predicted.  That job also
-# ran on ibm_berlin and no shallow ibm_berlin job exists to separate
-# depth from device.  The campaign's deepest circuit is 120 and every
-# row is costed against ibm_aachen, so both stay inside what is verified.
+# Depth does not enter across the range measured -- the two E = 2 jobs
+# bill identically at depth 32 and 215 -- but the line holds only for
+# shallow circuits: three jobs at depth 2389 each billed 704 s against
+# 49 s predicted.  The campaign's deepest circuit is 120, inside the
+# verified range.
 _FIXED_S_PER_EVALUATION = 11.0
 _S_PER_MEASUREMENT_BASIS = 1.125
 

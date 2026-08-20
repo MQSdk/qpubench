@@ -156,7 +156,7 @@ IBM's own pre-run estimate is not a substitute. It reads `15.04 + 0.878 E`
 seconds over 559 completed jobs but stands in no fixed ratio to what is
 billed, ranging from 0.77 to 1.19 of it across the table above, and at
 `E = 2` it disagrees with itself: 13.11 s for the 4-qubit circuit against
-16.99 s for the 2-qubit one, where both billed 13 s. Three consequences
+16.99 s for the 2-qubit one, where both billed 13 s. Two consequences
 carry into the design:
 
 - **The fixed 11 seconds is readout-error calibration**, requested
@@ -165,20 +165,15 @@ carry into the design:
   the largest single lever available: submitting with
   `measure_mitigation` disabled, or amortising the calibration across a
   session, acts on a third of the budget.
-- **Circuit depth does not enter, up to about 215.** The two `E = 2` rows
-  above bill identically at depth 32 and depth 215, so within that range
-  cost is set by the Hamiltonian's measurement count and the row's
-  evaluation count, not by the ansatz. The ansatz still enters through
-  `Iterations`, since parameter count sets the evaluation budget.
-- **Far beyond that range the model fails badly.** One job at depth 2389
-  on 120 qubits billed 704 s against a predicted 49 s, fourteen times
-  over. It also ran on `ibm_berlin` rather than `ibm_aachen`, and no
-  shallow `ibm_berlin` job exists to separate the two causes, so whether
-  the penalty is the depth or the device is unresolved.
-
-The campaign is inside the verified envelope on both counts: its deepest
-transpiled circuit is 120, against 215 where the model is confirmed, and
-every row is costed against `ibm_aachen`, the device it buys time on.
+- **Circuit depth does not enter, but only up to a point.** The two
+  `E = 2` rows above bill identically at depth 32 and depth 215, so
+  across that range cost is set by the Hamiltonian's measurement count
+  and the row's evaluation count rather than by the ansatz. Deep
+  circuits break the line badly: three jobs at depth 2389 each billed
+  704 s against a predicted 49 s. The campaign's deepest transpiled
+  circuit is 120, inside the verified range. The ansatz still enters
+  through `Iterations`, since parameter count sets the evaluation
+  budget.
 
 **The rows are submitted as individual jobs, not in a session.** A
 dedicated session reserves the QPU and bills the reservation, so the

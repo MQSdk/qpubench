@@ -160,11 +160,11 @@ submission suggests. See
 [the campaign README](../../data/benchmarks/ibm_tn-vqe_qesem/README.md#what-one-cost-function-evaluation-costs).
 Two facts from those jobs are worth carrying into any use of this module:
 the fixed 11 s is readout-error calibration requested once per job by the
-default Estimator options, and up to a transpiled depth of about 215 the
-circuit duration does not enter at all, so it is the Hamiltonian rather
-than the ansatz depth that sets cost at these widths. Well beyond that
-depth it does enter, and steeply: one depth-2389 job billed fourteen
-times what this line predicts.
+default Estimator options, and across the depths measured the circuit
+duration does not enter at all, so it is the Hamiltonian rather than the
+ansatz depth that sets cost at these widths. That holds for shallow
+circuits only: three depth-2389 jobs each billed fourteen times what this
+line predicts.
 
 **Iterations are per row, not a flat assumption.** Each row's
 `Iterations` column holds `max(30, ceil(1.3 x n_params))`, a budget
