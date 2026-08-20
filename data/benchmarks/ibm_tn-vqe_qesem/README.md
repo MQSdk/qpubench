@@ -439,6 +439,13 @@ molecule is an open decision awaiting expert input.
 | `H2` | 2 | none: all orbitals of the basis | nothing | 4 and 8 screened | 2 to 8 |
 | `H2O` | 10 | CAS(4,4), provisional | O 1s and the outer valence | 8 | 6 |
 
+**Every row is at the experimental equilibrium geometry**, given in
+Angstrom in the `Geometry` column: H2 at `r = 0.74144`, H2O at
+`r = 0.9572` and `104.52` degrees. Stage 1 varies discrete factors at a
+single fixed geometry, so what matters is less the value than that it is
+stated in the row: an energy is comparable against a classical reference
+only when both are computed at the same nuclear positions.
+
 ### mol_map qubit counts
 
 Cebule's MOL_MAP encoding indexes only those determinants satisfying the
@@ -538,6 +545,7 @@ basis gate on any current device.
 | `Case_ID` | Row index |
 | `Stage` | `1_screen`, `2_deep` or `3_refine` |
 | `Molecule`, `Charge`, `Multiplicity`, `Num_Electrons` | `H2` and `H2O`, both neutral closed-shell singlets |
+| `Geometry` | Nuclear positions in Angstrom, the experimental equilibrium geometry in every row; see [Active spaces and qubit counts](#active-spaces-and-qubit-counts) |
 | `Basis`, `Basis_Source` | 6 Basis Set Exchange [6] names or `qvSZP` |
 | `Active_Space` | `full` (no restriction, every H2 row) or `valence_cas` (core frozen, every H2O row) |
 | `Active_Electrons`, `Active_Orbitals` | The space the Hamiltonian is built in |
@@ -635,8 +643,6 @@ documentation covers the submission path this campaign would use.
 - **H2O's active space is a screening space.** CAS(4,4) is chosen for
   measurement cost, not water's valence space, so an H2O energy here is
   not a chemistry result.
-- **Geometries are unspecified.** Every row names a molecule and a basis
-  set but no bond length.
 
 ## Open campaign decisions
 
@@ -650,8 +656,7 @@ documentation covers the submission path this campaign would use.
    options rather than by the campaign.
 3. **How far to restrict H2O**, pending expert input: freeze the core
    only, keep a valence CAS, or something between.
-4. **Geometries**, and whether to run the full space on the larger basis
-   sets.
+4. **Whether to run the full space on the larger basis sets.**
 5. **The evaluation-budget multipliers against real convergence data.**
    The functional form is settled and the constants are not: 1.3 and 4.0
    come from a synthetic objective, and `cost_history` from a handful of

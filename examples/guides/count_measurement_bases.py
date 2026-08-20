@@ -57,13 +57,23 @@ _CSV_PATH = (
     / "stage1_screening_matrix.csv"
 )
 
-# Equilibrium geometries, in Angstrom.  The campaign pins no bond length
-# (an open decision), and it does not need one here: the term count is a
-# property of which integrals are non-zero, not of their values.
+# Experimental equilibrium geometries, in Angstrom:
+#
+#   H2   r_e = 0.74144            Huber & Herzberg, via NIST CCCBDB
+#   H2O  r_e = 0.9572, 104.52 deg Benedict, Gailar & Plyler (1956)
+#
+# H2O's hydrogens are placed in the yz-plane with the oxygen at the
+# origin, so y = r sin(theta/2) and z = r cos(theta/2) reproduce that
+# bond length and angle exactly.
+#
+# The counts this module produces do not actually depend on these values,
+# since a term count is a property of which integrals are non-zero rather
+# than of their magnitudes.  They are pinned at equilibrium so that the
+# campaign names one geometry everywhere it names a molecule.
 GEOMETRIES = {
-    "H2": "H 0 0 0; H 0 0 0.735",
-    "Li2": "Li 0 0 0; Li 0 0 2.673",
-    "H2O": "O 0 0 0; H 0 0.757 0.587; H 0 -0.757 0.587",
+    "H2": "H 0 0 0; H 0 0 0.74144",
+    "Li2": "Li 0 0 0; Li 0 0 2.6729",
+    "H2O": "O 0 0 0; H 0 0.75695 0.58588; H 0 -0.75695 0.58588",
 }
 
 # Campaign basis name -> PySCF's spelling.

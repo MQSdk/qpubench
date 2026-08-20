@@ -90,14 +90,34 @@ _QASM_DIR = _REPO_ROOT / "data" / "qasm"
 
 class Molecule:
     def __init__(self, name: str, num_electrons: int, core_orbitals: int,
-                 valence_cas: tuple[int, int] | None) -> None:
+                 valence_cas: tuple[int, int] | None, geometry: str) -> None:
         self.name = name
         self.num_electrons = num_electrons
         self.core_orbitals = core_orbitals      # frozen in `valence_cas`
         # (active electrons, active orbitals), or None for a molecule whose
         # stage-1 rows carry NO active-space restriction at all.
         self.valence_cas = valence_cas
+        # Experimental equilibrium geometry, in Angstrom, written into
+        # every row so a reader never has to guess which one was meant.
+        self.geometry = geometry
 
+
+# Experimental equilibrium geometries, in Angstrom.  Stage 1 screens
+# discrete factors at a single fixed geometry, so the value matters less
+# than its being stated: an energy is only comparable against a classical
+# reference computed at the same nuclear positions.
+#
+#   H2   r_e = 0.74144            Huber & Herzberg, via NIST CCCBDB
+#   H2O  r_e = 0.9572, 104.52 deg Benedict, Gailar & Plyler (1956)
+#
+# H2O's hydrogens sit in the yz-plane with the oxygen at the origin, so
+# y = r sin(theta/2) and z = r cos(theta/2) reproduce that bond length
+# and angle exactly.  examples/guides/count_measurement_bases.py pins the
+# same values.
+GEOMETRIES = {
+    "H2":  "H 0 0 0; H 0 0 0.74144",
+    "H2O": "O 0 0 0; H 0 0.75695 0.58588; H 0 -0.75695 0.58588",
+}
 
 MOLECULES = [
     # H2 runs UNRESTRICTED: 2 electrons in every orbital the basis
@@ -106,7 +126,8 @@ MOLECULES = [
     # a screen-destroying one, because a fixed CAS(2,2) is the same two
     # orbitals in every basis, which is precisely the factor stage 1 is
     # screening.  The price is that H2's qubit count follows the basis.
-    Molecule("H2",  num_electrons=2,  core_orbitals=0, valence_cas=None),
+    Molecule("H2",  num_electrons=2,  core_orbitals=0, valence_cas=None,
+             geometry=GEOMETRIES["H2"]),
     # H2O: freeze O 1s and take CAS(4,4).  The standard water valence
     # space is CAS(8,6), and that is what an earlier revision screened,
     # but measurement cost grows as roughly the cube of the qubit count:
@@ -115,7 +136,8 @@ MOLECULES = [
     # converged-chemistry one, and it remains PROVISIONAL -- how far to
     # restrict this molecule is an open campaign decision awaiting expert
     # input.  Only H2's answer is settled.
-    Molecule("H2O", num_electrons=10, core_orbitals=1, valence_cas=(4, 4)),
+    Molecule("H2O", num_electrons=10, core_orbitals=1, valence_cas=(4, 4),
+             geometry=GEOMETRIES["H2O"]),
 ]
 
 # Li2 is not screened.  At any fixed valence CAS it is the same small
@@ -443,7 +465,8 @@ QESEM_SHOTS = "n/a (QESEM: precision-driven)"
 QESEM_NO_GROUPING = "n/a (QESEM: no bitstring distribution)"
 
 FIELDNAMES = [
-    "Case_ID", "Stage", "Molecule", "Charge", "Multiplicity", "Num_Electrons",
+    "Case_ID", "Stage", "Molecule", "Geometry", "Charge", "Multiplicity",
+    "Num_Electrons",
     "Basis", "Basis_Source", "Active_Space", "Active_Electrons", "Active_Orbitals",
     "Mapper", "N_Qubit", "N_Qubit_Source", "Method", "Ansatz", "Ansatz_Reps",
     "Backend_Platform", "Optimizer", "Opt_Options", "Iterations", "Shots",
@@ -730,6 +753,7 @@ def _row(
         "Case_ID": "",                       # assigned after the full list is built
         "Stage": stage,
         "Molecule": mol.name,
+        "Geometry": mol.geometry,
         "Charge": "0",
         "Multiplicity": "1",
         "Num_Electrons": str(mol.num_electrons),
