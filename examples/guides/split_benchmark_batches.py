@@ -72,27 +72,19 @@ _PLAN_BUDGETS_S = [
     ("batch3_premium_plan", 5200 * 60),    # Premium Plan annual minimum
 ]
 
-# Billed QPU seconds per cost-function evaluation, fitted to the seven
+# Billed QPU seconds per cost-function evaluation, fitted to completed
 # ibm_aachen jobs whose billed quantum_seconds are known, all at 4,096
-# shots with measure mitigation on and 32 randomizations.  Columns are
-# E, transpiled depth, billed, and what this line predicts:
+# shots with measure mitigation on and 32 randomizations.  Every one
+# falls within 4% of this line, over E = 2 to 81, which brackets the 2
+# to 37 the matrix occupies.
 #
-#      2   215   13 s   13.2      8   215   20 s   20.0
-#      2    32   13 s   13.2     16   215   29 s   29.0
-#      5    32   16 s   16.6     37    40   52 s   52.6
-#                               81   215  104 s  102.1
+# The fit is anchored on billing rather than on IBM's pre-run estimate,
+# which stands in no fixed ratio to what is billed, so scaling it by any
+# single factor misstates the slope.
 #
-# Every point within 4%, over a fortyfold range of E bracketing the 2 to
-# 37 the matrix occupies.  The fit is anchored on billing, not on IBM's
-# pre-run estimate: that reads 15.04 + 0.878 x E over 559 completed jobs
-# but stands in no fixed ratio to billing, 0.77 to 1.19 of it across
-# these seven, so scaling it by any single factor misstates the slope.
-#
-# Depth does not enter across the range measured -- the two E = 2 jobs
-# bill identically at depth 32 and 215 -- but the line holds only for
-# shallow circuits: three jobs at depth 2389 each billed 704 s against
-# 49 s predicted.  The campaign's deepest circuit is 120, inside the
-# verified range.
+# Circuit depth does not enter across the range measured, but the line
+# holds for shallow circuits only.  The campaign's deepest circuit is
+# 120, inside that range.
 _FIXED_S_PER_EVALUATION = 11.0
 _S_PER_MEASUREMENT_BASIS = 1.125
 

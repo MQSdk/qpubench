@@ -128,52 +128,32 @@ many mutually commuting sets the Hamiltonian's Pauli terms fall into, and
 the campaign's QPU time is roughly proportional to it. It is recorded per
 row in `Num_ExpVals_Per_Iter`.
 
-Seven completed jobs on `ibm_aachen` have known billed `quantum_seconds`,
-all submitted at 4,096 shots with the options this campaign uses:
-
-| E | Transpiled depth | Billed | Model | Job |
-| --- | --- | --- | --- | --- |
-| 2 | 215 | 13 s | 13.2 | H2/sto-3g, parity mapper, UCCSD |
-| 2 | 32 | 13 s | 13.2 | mol_map, 2 qubits |
-| 5 | 32 | 16 s | 16.6 | mol_map, 2 qubits |
-| 8 | 215 | 20 s | 20.0 | TN-VQE, 35 terms |
-| 16 | 215 | 29 s | 29.0 | TN-VQE, 56 terms |
-| 37 | 40 | 52 s | 52.6 | mol_map, 4 qubits |
-| 81 | 215 | 104 s | 102.1 | TN-VQE, 186 terms |
-
-giving
+Rows are costed from what earlier runs on `ibm_aachen` were actually
+billed, at the shot count and options this campaign submits under:
 
 ```
 billed QPU seconds per evaluation = 11.0 + 1.125 x Num_ExpVals_Per_Iter
 ```
 
-Every point lands within 4%, over a fortyfold range of `E` that brackets
-the 2 to 37 the matrix occupies, so the campaign's dominant rows are
-interpolated rather than extrapolated. A least-squares refit over the
-same points gives `10.49 + 1.149 E`, which is the same line.
-
-IBM's own pre-run estimate is not a substitute. It reads `15.04 + 0.878 E`
-seconds over 559 completed jobs but stands in no fixed ratio to what is
-billed, ranging from 0.77 to 1.19 of it across the table above, and at
-`E = 2` it disagrees with itself: 13.11 s for the 4-qubit circuit against
-16.99 s for the 2-qubit one, where both billed 13 s. Two consequences
-carry into the design:
+The line holds to within 4% from `E = 2` to `E = 81`, which brackets the
+2 to 37 the matrix occupies, so no row is costed by extrapolation. The
+fit lives in
+[`split_benchmark_batches.py`](../../../examples/guides/split_benchmark_batches.py).
+IBM's own pre-run estimate is not used, since it stands in no fixed ratio
+to what is billed. Two consequences carry into the design:
 
 - **The fixed 11 seconds is readout-error calibration**, requested
   once per job by the default Estimator options. Over the campaign's
   6,672 evaluations it is 1,223 minutes, 24% of the total, and therefore
   the largest single lever available: submitting with
   `measure_mitigation` disabled, or amortising the calibration across a
-  session, acts on a third of the budget.
-- **Circuit depth does not enter, but only up to a point.** The two
-  `E = 2` rows above bill identically at depth 32 and depth 215, so
-  across that range cost is set by the Hamiltonian's measurement count
-  and the row's evaluation count rather than by the ansatz. Deep
-  circuits break the line badly: three jobs at depth 2389 each billed
-  704 s against a predicted 49 s. The campaign's deepest transpiled
-  circuit is 120, inside the verified range. The ansatz still enters
-  through `Iterations`, since parameter count sets the evaluation
-  budget.
+  session, acts on a quarter of the budget.
+- **Circuit depth does not enter, but only up to a point.** Cost is set
+  by the Hamiltonian's measurement count and the row's evaluation count
+  rather than by the ansatz, until circuits run far deeper than anything
+  screened here. The campaign's deepest transpiled circuit is 120, well
+  inside the range the fit covers. The ansatz still enters through
+  `Iterations`, since parameter count sets the evaluation budget.
 
 **The rows are submitted as individual jobs, not in a session.** A
 dedicated session reserves the QPU and bills the reservation, so the
