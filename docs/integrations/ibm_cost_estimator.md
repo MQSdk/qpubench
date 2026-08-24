@@ -139,7 +139,7 @@ estimate_all_plans(total_qpu_seconds=180.0, rates=my_rates)
 
 ## End-to-end example: costing the VQE benchmark CSV
 
-`examples/guides/estimate_ibm_cost.py` runs this against
+`utils/estimate_ibm_cost.py` runs this against
 `data/benchmarks/ibm_tn-vqe_qesem/stage1_screening_matrix.csv` end to end: the minimal case (H2/sto-3g,
 4 qubits, 1 circuit) fits comfortably in the Open Plan's free quota
 (~3s of an estimated 3.04s QPU-time budget vs. 600s free).
@@ -177,7 +177,7 @@ rule reaches a shrinking fraction as circuits widen.
 
 ### Turning this into a real campaign plan
 
-`examples/guides/split_benchmark_batches.py` uses the same per-row
+`utils/split_benchmark_batches.py` uses the same per-row
 estimates to split the CSV into `data/benchmarks/ibm_tn-vqe_qesem/batch1_open_plan.csv`
 (fits the Open Plan's free 10 min), `batch2_flex_plan.csv` (fits a fresh
 400-min Flex purchase), and `batch3_premium_plan.csv` (fits a fresh

@@ -48,11 +48,11 @@ a row's space came from is recorded in `Active_Space` and in `Notes`
 rather than assumed campaign-wide.
 
 Run:
-    PYTHONPATH=src python examples/guides/build_benchmark_matrix.py
-    PYTHONPATH=src python examples/guides/build_benchmark_matrix.py --stage 2 \\
+    PYTHONPATH=src python utils/build_benchmark_matrix.py
+    PYTHONPATH=src python utils/build_benchmark_matrix.py --stage 2 \\
         --select H2=cc-pvdz --select H2O=def2-svp \\
         --ansatz EfficientSU2
-    PYTHONPATH=src python examples/guides/build_benchmark_matrix.py --stage 3 \\
+    PYTHONPATH=src python utils/build_benchmark_matrix.py --stage 3 \\
         --from data/benchmarks/ibm_tn-vqe_qesem/stage2_deep_sweep.csv \\
         --refine 17=results/converged/case_17.json --precision 0.0016
 
@@ -69,13 +69,13 @@ import math
 import pathlib
 import sys
 
-sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2] / "src"))
-sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "src"))
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
 from qpubench.hamiltonian_sources.mol_map import count_qubits, is_confirmed
 from qpubench.schemas.mirrors.mqsdk_cebule import TNAnsatz, tn_theta_parameter_count
 
-_REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
+_REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 _CAMPAIGN_DIR = _REPO_ROOT / "data" / "benchmarks" / "ibm_tn-vqe_qesem"
 _STAGE1_PATH = _CAMPAIGN_DIR / "stage1_screening_matrix.csv"
 _STAGE2_PATH = _CAMPAIGN_DIR / "stage2_deep_sweep.csv"
@@ -112,7 +112,7 @@ class Molecule:
 #
 # H2O's hydrogens sit in the yz-plane with the oxygen at the origin, so
 # y = r sin(theta/2) and z = r cos(theta/2) reproduce that bond length
-# and angle exactly.  examples/guides/count_measurement_bases.py pins the
+# and angle exactly.  utils/count_measurement_bases.py pins the
 # same values.
 GEOMETRIES = {
     "H2":  "H 0 0 0; H 0 0 0.74144",
@@ -186,7 +186,7 @@ SKIPPED_PAIRS = {
 # circuit per measurement basis, and for a JW-mapped Hamiltonian the
 # number of qubit-wise-commuting bases grows as roughly N^3: measured on
 # this matrix's own rows, 5 bases at 4 qubits, 46 at 8, 325 at 16, 762 at
-# 20 and 1,444 at 24 (examples/guides/count_measurement_bases.py).  Since
+# 20 and 1,444 at 24 (utils/count_measurement_bases.py).  Since
 # H2 carries no active-space restriction its JW width follows the basis,
 # so its large-basis rows were 97% of the campaign's real QPU time.
 #
@@ -422,7 +422,7 @@ PHI_INIT_ZEROS_ANSATZE = {"UCCSD"}
 #   measured_run    counted on a real ibm_aachen Estimator job of the same
 #                   active space (see docs/integrations/ibm_cost_estimator.md)
 #   qwc_grouping    computed offline by qubit-wise-commuting grouping of the
-#                   row's own Hamiltonian, examples/guides/count_measurement_bases.py.
+#                   row's own Hamiltonian, utils/count_measurement_bases.py.
 #                   Greedy and order-dependent, so an upper bound: the one
 #                   class where both numbers exist reads 34 measured against
 #                   46 computed

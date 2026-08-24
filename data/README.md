@@ -11,7 +11,7 @@ folder.
 | Path | Holds |
 |---|---|
 | [`benchmarks/`](benchmarks/) | One folder per benchmark scenario: the matrix of cases, the tranches it is split into, and a README explaining that campaign |
-| [`qasm/`](qasm/) | The exact circuits the scenarios pin, as OpenQASM 3.0, written by [`pin_qasm_ansatz.py`](../examples/guides/pin_qasm_ansatz.py) and shared across scenarios |
+| [`qasm/`](qasm/) | The exact circuits the scenarios pin, as OpenQASM 3.0, written by [`pin_qasm_ansatz.py`](../utils/pin_qasm_ansatz.py) and shared across scenarios |
 
 ### Benchmark scenarios
 
@@ -36,9 +36,9 @@ different thing to run.
 Everything here is generated, and the generators are the source of truth:
 
 ```sh
-PYTHONPATH=src python examples/guides/build_benchmark_matrix.py   # the matrix
-PYTHONPATH=src python examples/guides/pin_qasm_ansatz.py          # the circuits
-PYTHONPATH=src python examples/guides/split_benchmark_batches.py  # the tranches
+PYTHONPATH=src python utils/build_benchmark_matrix.py   # the matrix
+PYTHONPATH=src python utils/pin_qasm_ansatz.py          # the circuits
+PYTHONPATH=src python utils/split_benchmark_batches.py  # the tranches
 ```
 
 Run them in that order after a change to the matrix: the circuits are

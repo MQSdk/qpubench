@@ -40,7 +40,7 @@ What is NOT counted
     but need entangling basis-change circuits.
 
 Run:
-    PYTHONPATH=src python examples/guides/count_measurement_bases.py
+    PYTHONPATH=src python utils/count_measurement_bases.py
 """
 from __future__ import annotations
 
@@ -48,10 +48,10 @@ import csv
 import pathlib
 import sys
 
-sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2] / "src"))
-sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "src"))
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
-_REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
+_REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 _CSV_PATH = (
     _REPO_ROOT / "data" / "benchmarks" / "ibm_tn-vqe_qesem"
     / "stage1_screening_matrix.csv"

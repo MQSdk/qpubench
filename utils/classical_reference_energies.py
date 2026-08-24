@@ -15,14 +15,14 @@ exact for a 2-electron system), which is itself a real cross-check, not a
 coincidence to explain away.
 
 Run:
-    python examples/guides/classical_reference_energies.py
+    python utils/classical_reference_energies.py
 """
 from __future__ import annotations
 
 import pathlib
 import sys
 
-sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
 from qpubench.schemas.mirrors.molssi_qcschema import QCEnergyComponents
 from qpubench.schemas.mirrors.pyscf_pyscf import PySCFAtomSpec, PySCFMoleculeSpec

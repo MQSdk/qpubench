@@ -41,7 +41,7 @@ measurements, so they have no QPU cost to estimate (see
 `split_benchmark_batches.py`, which writes them to their own file).
 
 Run:
-    PYTHONPATH=src python examples/guides/estimate_ibm_cost.py
+    PYTHONPATH=src python utils/estimate_ibm_cost.py
 """
 from __future__ import annotations
 
@@ -49,7 +49,7 @@ import csv
 import pathlib
 import sys
 
-sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
 from _ansatz_builders import circuit_spec
@@ -65,7 +65,7 @@ from qpubench.schemas.mirrors.ibm_cost_estimator import (
 )
 
 _CSV_PATH = (
-    pathlib.Path(__file__).resolve().parents[2]
+    pathlib.Path(__file__).resolve().parents[1]
     / "data" / "benchmarks" / "ibm_tn-vqe_qesem" / "stage1_screening_matrix.csv"
 )
 # The device this campaign buys time on, in IBM's European data centre.

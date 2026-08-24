@@ -66,7 +66,7 @@ import pathlib
 import sys
 from typing import TYPE_CHECKING
 
-sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
 if TYPE_CHECKING:
     from qiskit import QuantumCircuit

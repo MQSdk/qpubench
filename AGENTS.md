@@ -40,6 +40,8 @@ src/qpubench/
 
 integrations/      ← NOT installed; copy into your project
 examples/          ← Runnable demos
+utils/             ← Campaign machinery: builds, pins and costs a benchmark
+                     campaign's runs. NOT installed, run directly.
 tests/             ← Schema-only unit tests
 ```
 

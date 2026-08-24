@@ -41,7 +41,7 @@ is fully specified by the QASM, so the task stops building reps of its
 own). Pass it explicitly whenever you pin a circuit.
 
 Run:
-    PYTHONPATH=src python examples/guides/pin_qasm_ansatz.py
+    PYTHONPATH=src python utils/pin_qasm_ansatz.py
 """
 from __future__ import annotations
 
@@ -50,12 +50,12 @@ import hashlib
 import pathlib
 import sys
 
-sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2] / "src"))
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "src"))
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
 from _ansatz_builders import build_ansatz
 
-_REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
+_REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 _CSV_PATH = (
     _REPO_ROOT / "data" / "benchmarks" / "ibm_tn-vqe_qesem"
     / "stage1_screening_matrix.csv"

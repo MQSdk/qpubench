@@ -1786,7 +1786,7 @@ total QPU-seconds into a `PlanCostBreakdown` per plan: Open Plan's free
 10-min/28-day quota, Pay-As-You-Go's per-second billing, Flex's prepaid
 $30k-minimum lump sum, Premium's $249,600/year minimum annual
 subscription. `aggregate_benchmark_cost()` rolls up a whole study's worth
-of per-job estimates. See `examples/guides/estimate_ibm_cost.py` for an
+of per-job estimates. See `utils/estimate_ibm_cost.py` for an
 end-to-end walkthrough costing `data/benchmarks/ibm_tn-vqe_qesem/stage1_screening_matrix.csv`.
 
 | Type | Verified against real data | Purpose |

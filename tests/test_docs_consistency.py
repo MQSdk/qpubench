@@ -85,10 +85,10 @@ CSV_PATH = CAMPAIGN_DIR / "stage1_screening_matrix.csv"
 
 
 def _benchmark_matrix_module():
-    """Import the generator, which lives in examples/ rather than the package."""
+    """Import the generator, which lives in utils/ rather than the package."""
     import importlib.util
 
-    path = REPO / "examples" / "guides" / "build_benchmark_matrix.py"
+    path = REPO / "utils" / "build_benchmark_matrix.py"
     spec = importlib.util.spec_from_file_location("build_benchmark_matrix", path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -130,7 +130,7 @@ def test_csv_header_matches_generator_fieldnames():
         header = f.readline().strip().split(",")
     assert header == module.FIELDNAMES, (
         f"{CSV_PATH.relative_to(REPO)} is stale — regenerate it with "
-        "`PYTHONPATH=src python examples/guides/build_benchmark_matrix.py`"
+        "`PYTHONPATH=src python utils/build_benchmark_matrix.py`"
     )
 
 
@@ -305,7 +305,7 @@ def test_phi_init_seed_matches_the_generator():
     import importlib.util
 
     module = _benchmark_matrix_module()
-    path = REPO / "examples" / "guides" / "_ansatz_builders.py"
+    path = REPO / "utils" / "_ansatz_builders.py"
     spec = importlib.util.spec_from_file_location("_ansatz_builders", path)
     builders = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(builders)
@@ -496,6 +496,8 @@ def test_row_counts_stated_in_prose_are_counts_that_really_exist():
     searched = [
         *(REPO / "docs").rglob("*.md"),
         *(REPO / "examples").rglob("*.py"),
+        *(REPO / "utils").rglob("*.py"),
+        *(REPO / "utils").rglob("*.md"),
         *(REPO / "data").rglob("*.md"),
         *(REPO / "integrations").rglob("*.md"),
         *(REPO / "integrations").rglob("*.py"),

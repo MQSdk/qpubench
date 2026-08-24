@@ -32,7 +32,7 @@ Rows are otherwise sorted ascending by cost before batching, so each
 tranche is the cheapest work available at that point.
 
 Run:
-    PYTHONPATH=src python examples/guides/split_benchmark_batches.py
+    PYTHONPATH=src python utils/split_benchmark_batches.py
 """
 from __future__ import annotations
 
@@ -40,7 +40,7 @@ import collections
 import csv
 import pathlib
 
-_REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
+_REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 _CAMPAIGN_DIR = _REPO_ROOT / "data" / "benchmarks" / "ibm_tn-vqe_qesem"
 _CSV_PATH = _CAMPAIGN_DIR / "stage1_screening_matrix.csv"
 # The tranches sit beside the matrix they were cut from, which is where
