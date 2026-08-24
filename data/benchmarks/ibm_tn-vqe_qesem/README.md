@@ -65,6 +65,12 @@ file, generates the campaign, costs it and cuts the batches, and carries the
 commands for all three stages. It needs only the standard library and
 this repository, uses no IBM credentials and submits nothing.
 
+[`run_campaign_batch.ipynb`](run_campaign_batch.ipynb) executes one batch,
+submitting each run to Cebule's `TN_QC_OPT` task and checkpointing results
+so an interrupted batch resumes rather than re-spending purchased time. It
+submits nothing until told to, and it reads credentials from the
+environment rather than from the notebook.
+
 Each stage prohibits generation without its selection: no `--select`, no
 `--refine`, no `--precision`, no output. A silently defaulted selection
 would make the provenance of a later stage unrecoverable.
