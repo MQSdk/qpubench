@@ -54,6 +54,7 @@ qibo    = ["qibo", "qibo-cloud-backends"]   # Qibo simulator / Qibolab hardware 
 classiq = ["classiq"]
 mitiq   = ["mitiq", "ply"]   # Mitiq ZNE error-mitigation adapter (backends/unitaryfund_mitiq_adapter.py) — ply works around a real cirq-core QASM-import gap, see that module's docstring
 pyscf   = ["pyscf"]   # mean-field/DFT, PCM/COSMO solvation, periodic pbc — schemas/pyscf_pyscf.py
+cebule  = ["mqsdk @ git+https://gitlab.com/mqsdk/python-sdk.git"]   # Cebule (MQS) task submission — TN_QC_OPT, MOL_MAP, COSMO; needed only to RUN tasks (data/benchmarks/ibm_tn-vqe_qesem/run_campaign_batch.ipynb), not to use the schemas/mirrors/mqsdk_cebule.py mirror. Not on PyPI, hence the direct reference and the allow-direct-references below
 hamlib  = ["h5py", "requests"]   # HamLib Chemistry loader (hamiltonian_sources/hamlib.py)
 bse     = ["basis_set_exchange"]   # Basis Set Exchange basis-function-count loader (hamiltonian_sources/basis_set_exchange.py)
 qubo    = ["requests"]   # QUBO Hamiltonian loaders (hamiltonian_sources/qubo.py) — OR-Library + MQLib downloads
@@ -113,6 +114,13 @@ dev = [
 ]
 
 # ── Hatchling ─────────────────────────────────────────────────────────────────
+# mqsdk is distributed from GitLab rather than PyPI, so the [cebule] extra
+# has to name it by URL, and hatchling rejects a direct reference unless
+# this is set. PyPI rejects direct references on upload too, so publishing
+# qpubench there would mean dropping that extra or vendoring the SDK.
+[tool.hatch.metadata]
+allow-direct-references = true
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/qpubench"]
 
