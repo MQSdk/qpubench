@@ -34,7 +34,6 @@ Requires `pip install 'qpubench[adapt_vqe]'` (scipy + numpy) for anything that r
 |---|---|
 | Construct a ground-state energy problem and solve it with ADAPT-VQE | `ground_state_energy_problem.py` |
 | Select an active space with real PySCF AVAS | `active_space_spec.py` |
-| Compute classical reference energies (HF / MP2 / CCSD / FCI) to score quantum results against | `classical_reference_energies.py` |
 | Load or build a real molecular Hamiltonian (HamLib, PennyLane qchem, ab initio) | `hamiltonian_library.py` |
 | Add a solvent environment (real PySCF PCM-solvated HF) | `create_solvent_model.py` |
 | Choose an electron-repulsion-integral builder (standard 4-center vs RI/DF) | `choose_integrals.py` |
@@ -61,6 +60,7 @@ Requires `pip install 'qpubench[adapt_vqe]'` (scipy + numpy) for anything that r
 | Run on real quantum computers (IBM / IQM construction + run pattern; needs credentials) | `quantum_computers.py` |
 | Estimate what a benchmark costs on IBM hardware *before* submitting | `estimate_ibm_cost.py` |
 | Split a large benchmark into batches sized to IBM access-plan budgets | `split_benchmark_batches.py` |
+| Count how many circuits one cost-function evaluation really submits | `count_measurement_bases.py` |
 
 **Keep the results:**
 

@@ -28,7 +28,7 @@ exist (a component change), so it's the one thing that gets its own DAG:
 | `mol_map_measurement_pipeline` | `mol_map` | `VQE` | `mol_map_component -> execute_static_hamiltonian_component` |
 | `jw_baseline_pipeline` | `JW` | `VQE` | `jw_map_component -> execute_static_hamiltonian_component` |
 
-Every other benchmark dimension — `TN_Layers_Network`, `TN_Layers_Circuit`,
+Every other benchmark dimension — `TN_Layers_Network`, `Ansatz_Reps`,
 `TN_Ansatz`, `Measurement_Method`, `Shots`, `Optimization_Mode` — is a
 **parameter value**, not a different pipeline: it's resolved *inside* one
 of the four DAGs above via `dsl.ParallelFor` (the Cebule-task-level knobs)
@@ -107,7 +107,7 @@ Or compile all four at once: `python -m integrations.kubeflow.pipelines`
 
 Upload the YAML through the dashboard's Pipelines UI, or submit
 programmatically — e.g. running the full `TN_Layers_Network x
-TN_Layers_Circuit x TN_Ansatz x Measurement_Method` sweep from
+Ansatz_Reps x TN_Ansatz x Measurement_Method` sweep from
 `data/benchmarks/ibm_tn-vqe_qesem/stage1_screening_matrix.csv` as **one** pipeline run:
 
 ```python

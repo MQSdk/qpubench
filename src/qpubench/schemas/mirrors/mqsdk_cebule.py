@@ -61,6 +61,23 @@ really is; ``h_tn_opt_fermionic`` added; ``tn_ansatz``/``n_shots``/
 of the four-member ``TNAnsatz``; and three wrong defaults corrected
 (``backend``, ``conv_tol``, ``n_layers_circuit``).
 
+Revised again 2026-08-24 against cebule-tn_vqe @ **main** ``07dacfb``.
+Note the branch: the 2026-08-08 pass cited ``dev-kba a760489``, which is
+now an ancestor of main, and main has since gained ~930 lines across nine
+files including a new ``mapped_hamiltonian`` module. Changes here:
+``mapping_matrix`` added as a TN_QC_OPT input (it was modelled only as
+MOL_MAP's *output* before, so the mirror described both ends of the
+hand-off and not the hand-off itself); ``n_layers_network`` made optional
+with default 1; ``theta_init``'s default corrected from ``[]`` to
+``None``, the same "unset" sentinel ``phi_init`` was corrected to on
+2026-08-11; and ``h_tn_opt_fermionic`` **deleted**, upstream having
+withdrawn it — the 2026-08-08 revision had modelled an unfinished
+upstream, and no run has recorded the field, so there is nothing for the
+append-only rule to protect. The new ``rotates_orbitals``
+property carries the condition under which a mapping matrix changes θ's
+shape, the Hamiltonian route, the grouped-measurement path and the
+network optimizer all at once.
+
 SDK session pattern
 --------------------
     import mqsdk, os
@@ -87,6 +104,13 @@ import pydantic
 from ..circuit import CircuitSpec
 from ..observable import SparsePauliObservable
 from ..primitives import CircuitFormat
+
+# Every form ``parse_mapping_matrix`` accepts for TN_QC_OPT's optional
+# ``mapping_matrix`` input: a path to a mol_map "row,column,value" CSV, the
+# triples themselves, or a mapping with 'rows'/'cols' (and optionally
+# 'values') keys. Kept wide on purpose -- narrowing it here would reject
+# inputs the task takes.
+MappingMatrix = str | list[list[float]] | dict[str, list[float]]
 
 # ---------------------------------------------------------------------------
 # Task types
@@ -530,12 +554,69 @@ class TNQCOptInput(pydantic.BaseModel):
     cannot express as a field default. The field keeps the unconditional
     3; use ``resolved_n_layers_circuit`` for the value the task will
     really use.
+
+    Verified against cebule-tn_vqe @ main ``07dacfb``, 2026-08-24:
+
+    mapping_matrix        NEW input (upstream ``1c0ba84``/``8259dce``).
+                          MOL_MAP's mapping operator D, handed back to
+                          TN_QC_OPT. Optional, and its presence is not
+                          cosmetic — with a mapping matrix AND
+                          ``tn_ansatz="givens"`` the run becomes an
+                          orbital rotation on the reduced register, which
+                          changes four things at once (see
+                          ``rotates_orbitals``):
+
+                            * θ is a FLAT vector of ``m(m-1)/2`` angles on
+                              ``m`` spatial orbitals, with NO layer axis,
+                              so ``n_layers_network`` has no effect —
+                              composing two rotations is another rotation.
+                              ``tn_theta_shape()`` does not describe this
+                              case.
+                            * U†HU comes from an exterior power on the
+                              reduced space, not from the one- and
+                              two-body integral route.
+                            * ``measurement_method="grouped"`` is served
+                              the dense operator rather than Pauli terms,
+                              which is what keeps it tractable: mol_map's
+                              water Hamiltonian is ~131k Pauli strings,
+                              while grouping needs at most 2**n circuits.
+                            * ``optimization_mode="network"`` uses a
+                              different optimizer path.
+
+                          Without it a mol_map Hamiltonian is read as-is,
+                          so ``givens`` is applied as an ordinary qubit
+                          transformation rather than an orbital rotation.
+                          Both are runnable; they are not the same
+                          calculation, and only one matches what the
+                          ``givens`` family is documented to mean.
+
+    n_layers_network      now optional, default 1 (upstream ``b0085c9``);
+                          this mirror previously declared it required.
+                          Ignored entirely when ``rotates_orbitals``.
+
+    n_iterations          upstream now REJECTS a budget COBYLA would
+                          silently overrule (``_check_iteration_budget``,
+                          ``e44d32a``): for ``opt_method="COBYLA"`` it
+                          raises ValueError unless the budget is at least
+                          ``varied + 2``, counting only the parameters the
+                          chosen ``optimization_mode`` varies — φ+θ for
+                          "both", φ for "circuit", θ for "network".
+                          ``opt_options["maxiter"]`` wins over
+                          ``n_iterations`` in that check, the same way
+                          ``_scipy_options`` merges them. Not enforced
+                          here, because φ's shape is not known until the
+                          backend has built the circuit.
+
+    An explicit null is passed through rather than replaced, so
+    ``"opt_method": null`` means "let scipy choose" upstream. This mirror
+    types the field ``str`` and cannot express that; pass the key only
+    when a method is wanted.
     """
     task_type:           CebuleTaskType  = CebuleTaskType.TN_QC_OPT
     h_coeff_values:      list[float]
     h_operators:         list[Any]
     n_iterations:        int | None     = None
-    n_layers_network:    int
+    n_layers_network:    int            = 1
     qasm_ansatz:         str | None     = None
     n_layers_circuit:    int            = 3       # conditional upstream — see docstring
     tn_ansatz:           TNAnsatz       = TNAnsatz.ROTATION_3PARAM
@@ -543,7 +624,14 @@ class TNQCOptInput(pydantic.BaseModel):
     # theta_init is (n_layers, n_nodes) for one-parameter families and
     # (n_layers, n_nodes, n_params) otherwise -- see tn_theta_shape().
     # list[float] was wrong for three of the four families.
-    theta_init:          list[Any]      = []
+    #
+    # None is upstream's "unset" sentinel, exactly as for phi_init:
+    # parse_input_TNQCOpt reads input_data.get("theta_init") and only
+    # np.array()s it when it is not None, and run_TNQCOpt then zero-fills
+    # to theta_shape. [] is NOT that sentinel -- an empty list reaches the
+    # shape check as a length-0 array and raises. On a mol_map-reduced
+    # register the shape is different again; see mapping_matrix below.
+    theta_init:          list[Any] | None = None
     # phi_init: None is upstream's "unset" sentinel -- it randomises
     # (2*pi*random, run_TNQCOpt) only when phi_init is None. [] is NOT
     # that sentinel: an empty list reaches the shape check as a length-0
@@ -566,6 +654,29 @@ class TNQCOptInput(pydantic.BaseModel):
     backend:             str            = "default.qubit"    # or "aer_simulator", "ibm_brisbane"
     measurement_method:  str            = "pauli"                # "pauli" | "grouped"
     optimization_mode:   str            = "both"                    # "circuit" | "network" | "both"
+    # MOL_MAP's own mapping operator D, handed back to TN_QC_OPT. Supplying
+    # it is what tells the task its qubits index configurations rather than
+    # spin-orbitals -- see the docstring's "mol_map-reduced register" note
+    # for what it changes. parse_mapping_matrix accepts a path to a
+    # mol_map "row,column,value" CSV, a sequence of such triples, or a
+    # mapping with 'rows'/'cols' (and optionally 'values') keys;
+    # MolMapResult.mapping_matrix is the dense form of the same operator.
+    mapping_matrix:      MappingMatrix | None = None
+
+    @property
+    def rotates_orbitals(self) -> bool:
+        """Whether this run is an orbital rotation on a reduced register.
+
+        Mirrors ``functions_main._rotates_orbitals``: true only when a
+        mapping matrix is supplied *and* the family is ``givens``. It is
+        the switch behind every behavioural difference the docstring
+        lists, so callers that need to branch should read this rather
+        than re-deriving the condition.
+        """
+        return (
+            self.mapping_matrix is not None
+            and self.resolved_tn_ansatz is TNAnsatz.GIVENS
+        )
 
     @property
     def resolved_n_layers_circuit(self) -> int:
@@ -607,10 +718,6 @@ class TNQCOptResult(pydantic.BaseModel):
 
     h_tn_opt_qubit      (labels, coefficients), labels as space-separated
                         PauliLabel+index tokens ("X0 Y1 Z3")
-    h_tn_opt_fermionic  the same operator's reverse Jordan-Wigner, labels
-                        in OpenFermion FermionOperator form. A real task
-                        output, so the OpenFermion post-processing snippet
-                        in the Cebule docs is no longer needed to get it.
 
     metadata is ABSENT when optimization_mode="network":
     ``optimize_network``'s callback dict (``vqe_optimization.py:359-363``)
@@ -627,7 +734,6 @@ class TNQCOptResult(pydantic.BaseModel):
     phi:             list[Any]     # optimised circuit parameters U(φ)
     theta:           list[Any]     # optimised TN parameters U(θ), nested — see tn_theta_shape
     h_tn_opt_qubit:  tuple[list[str], list[float]]           # (labels, coefficients)
-    h_tn_opt_fermionic: tuple[list[str], list[float]] | None = None
     function_calls:  int | None            = None   # number of cost-function evaluations
     cost_history:    list[float]           = []      # energy value per function evaluation
     param_history:   list[list[Any]]       = []      # theta+phi history per evaluation
@@ -658,7 +764,6 @@ class TNQCOptResult(pydantic.BaseModel):
         key_map = {
             "VQE_energy": "vqe_energy",
             "H_TN_opt_qubit": "h_tn_opt_qubit",
-            "H_TN_opt_fermionic": "h_tn_opt_fermionic",
             "OptimizeResult": "optimize_result",
         }
         renamed = {key_map.get(key, key): value for key, value in payload.items()}

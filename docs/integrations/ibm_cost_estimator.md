@@ -139,40 +139,45 @@ estimate_all_plans(total_qpu_seconds=180.0, rates=my_rates)
 
 ## End-to-end example: costing the VQE benchmark CSV
 
-`examples/guides/estimate_ibm_cost.py` runs this against
+`utils/estimate_ibm_cost.py` runs this against
 `data/benchmarks/ibm_tn-vqe_qesem/stage1_screening_matrix.csv` end to end: the minimal case (H2/sto-3g,
 4 qubits, 1 circuit) fits comfortably in the Open Plan's free quota
-(~3s of an estimated 3.04s QPU-time budget vs. 600s free). The matrix
-holds 336 rows across all 7 bases, both mappers, both measurement methods
-and four ansatz families, of which 294 take quantum measurements and are
-costed here; the remaining 42 are the zero-QPU classical-only control.
-Together they come to ~2,773 minutes of QPU time.
+(~3s of an estimated 3.04s QPU-time budget vs. 600s free).
+
+**What this transpiled figure is, and is not.** It is the cost of running
+one circuit once: `overhead + (rep_delay + duration) x shots`. One
+cost-function evaluation of `<H>` submits one circuit *per measurement
+basis*, and that count is a property of the Hamiltonian. The campaign
+therefore no longer sizes its batches from this estimate. It costs them
+from the seven completed Estimator jobs on the target device whose billed
+quantum_seconds are known,
+
+    billed seconds per evaluation = 11.0 + 1.125 x measurement bases
+
+which holds to within 4% from 2 measurement bases to 81, and puts a
+4-qubit evaluation at 13 to 20 s against the 3.04 s a single transpiled
+submission suggests. See
+[the campaign README](../../data/benchmarks/ibm_tn-vqe_qesem/README.md#what-one-cost-function-evaluation-costs).
+Two facts from those jobs are worth carrying into any use of this module:
+the fixed 11 s is readout-error calibration requested once per job by the
+default Estimator options, and across the depths measured the circuit
+duration does not enter at all, so it is the Hamiltonian rather than the
+ansatz depth that sets cost at these widths. That holds for shallow
+circuits only: three depth-2389 jobs each billed fourteen times what this
+line predicts.
 
 **Iterations are per row, not a flat assumption.** Each row's
-`Iterations` column holds `max(30, n_params + 2)`, because COBYLA cannot
-take a single descent step before it has built an `n+1` simplex and scipy
-overrides a smaller `maxiter` rather than honouring it. A flat 30 both
-under-billed the widest rows by up to 4.8x and bought no optimisation on
-them.
-
-**The ansatz dominates, which is why it is built for real.** Each row
-names its own ansatz and `Ansatz_Reps`, and the estimator builds that
-circuit rather than substituting EfficientSU2 everywhere. The difference
-is not cosmetic: at 12 qubits a real Trotterized UCCSD transpiles far
-deeper than EfficientSU2 *and* carries a 200-operator excitation pool, so
-it is billed 202 submissions rather than 30 — the 14 UCCSD/12-qubit rows
-alone account for ~2,169 of the campaign's ~2,773 minutes, 78% of the
-budget in 4% of the rows. Only 14 distinct circuits are actually
-transpiled across all 294 costed rows, cached per
-(ansatz, qubits, reps, electrons, shots).
-
-`Shots` (4,096) and `Iterations` are both recorded campaign inputs read
-per row, not module constants; the resource-estimation and cost-breakdown
-logic does not change if they are revised.
+`Iterations` column holds `max(30, ceil(1.3 x n_params))`, a budget
+proportional to the row's own free-parameter count. Two facts make a flat
+value wrong: COBYLA cannot take a single descent step before it has built
+an `n+1` simplex, and scipy overrides a smaller `maxiter` rather than
+honouring it; and the evaluations needed to reach a given fraction of the
+achievable descent grow linearly in the parameter count, so any additive
+rule reaches a shrinking fraction as circuits widen.
 
 ### Turning this into a real campaign plan
 
-`examples/guides/split_benchmark_batches.py` uses the same per-row
+`utils/split_benchmark_batches.py` uses the same per-row
 estimates to split the CSV into `data/benchmarks/ibm_tn-vqe_qesem/batch1_open_plan.csv`
 (fits the Open Plan's free 10 min), `batch2_flex_plan.csv` (fits a fresh
 400-min Flex purchase), and `batch3_premium_plan.csv` (fits a fresh

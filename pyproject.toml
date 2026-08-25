@@ -45,7 +45,7 @@ Repository      = "https://github.com/mqsdk/qpubench"
 #   uv pip install "qpubench[qiskit]"
 #   poetry add "qpubench[qiskit]"
 [project.optional-dependencies]
-qiskit  = ["qiskit>=2.0", "qiskit-aer", "qiskit-ibm-runtime", "qiskit-nature>=0.7", "qiskit_qasm3_import"]
+qiskit  = ["qiskit>=2.0", "qiskit-aer", "qiskit-ibm-runtime>=0.47", "qiskit-nature>=0.7", "qiskit_qasm3_import"]   # >=0.47 ships the FakeAachen calibration snapshot the IBM campaign costs against offline
 qrack   = ["pyqrack", "qiskit>=2.0", "qiskit_qasm3_import"]   # Qrack simulator adapter (backends/qrack_adapter.py) — PyQrack has no QASM parser, so qiskit loads the CircuitSpec and QrackCircuit.in_from_qiskit_circuit() lowers it
 braket  = ["amazon-braket-sdk", "qiskit-braket-provider"]   # generic gate-based AWS Braket adapter (backends/braket_adapter.py)
 iqm     = ["iqm-client[qiskit]"]   # IQM hardware adapter (backends/iqm_adapter.py) — standalone qiskit-iqm is obsolete, bundled here instead
@@ -75,7 +75,7 @@ adapt_vqe = ["scipy", "numpy"]
 # and submit pipelines, not by the container images the pipeline runs.
 kubeflow = ["kfp>=2.0", "kfp-kubernetes"]
 all     = [
-    "qiskit>=2.0", "qiskit-aer", "qiskit-ibm-runtime", "qiskit-nature>=0.7", "qiskit_qasm3_import",
+    "qiskit>=2.0", "qiskit-aer", "qiskit-ibm-runtime>=0.47", "qiskit-nature>=0.7", "qiskit_qasm3_import",
     "pyqrack",
     "amazon-braket-sdk", "qiskit-braket-provider",
     "iqm-client[qiskit]",

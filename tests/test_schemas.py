@@ -4037,7 +4037,6 @@ def test_tn_qc_opt_result_from_raw_task_payload():
         "phi": [0.1],
         "theta": [[0.2]],
         "H_TN_opt_qubit": (["Z0"], [0.5]),
-        "H_TN_opt_fermionic": (["0^ 0"], [1.0]),
         "OptimizeResult": {"fun": -1.137, "nfev": 42},
         "function_calls": 42,
         "cost_history": [-1.0, -1.137],
@@ -4046,9 +4045,33 @@ def test_tn_qc_opt_result_from_raw_task_payload():
     })
     assert result.vqe_energy == pytest.approx(-1.137)
     assert result.h_tn_opt_qubit == (["Z0"], [0.5])
-    assert result.h_tn_opt_fermionic == (["0^ 0"], [1.0])
     assert result.optimize_result == {"fun": -1.137, "nfev": 42}
     assert result.function_calls == 42
+
+
+def test_tn_qc_opt_result_ignores_keys_the_task_no_longer_returns():
+    """A withdrawn output must not resurrect itself as a model field.
+
+    ``H_TN_opt_fermionic`` was returned when this mirror was first
+    written and was removed upstream before any run used it, so the
+    field is gone rather than deprecated. ``from_task_result`` filters
+    to known fields, so an old payload still parses -- it just drops
+    the key instead of failing.
+    """
+    from qpubench.schemas.mirrors.mqsdk_cebule import TNQCOptResult
+
+    assert "h_tn_opt_fermionic" not in TNQCOptResult.model_fields
+
+    result = TNQCOptResult.from_task_result({
+        "VQE_energy": -1.137,
+        "phi": [0.1],
+        "theta": [[0.2]],
+        "H_TN_opt_qubit": (["Z0"], [0.5]),
+        "H_TN_opt_fermionic": (["0^ 0"], [1.0]),
+        "OptimizeResult": {"fun": -1.137},
+    })
+    assert result.vqe_energy == pytest.approx(-1.137)
+    assert not hasattr(result, "h_tn_opt_fermionic")
 
 
 def test_tn_qc_opt_result_tolerates_missing_metadata_in_network_mode():

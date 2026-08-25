@@ -15,14 +15,14 @@ exact for a 2-electron system), which is itself a real cross-check, not a
 coincidence to explain away.
 
 Run:
-    python examples/guides/classical_reference_energies.py
+    python utils/classical_reference_energies.py
 """
 from __future__ import annotations
 
 import pathlib
 import sys
 
-sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
 from qpubench.schemas.mirrors.molssi_qcschema import QCEnergyComponents
 from qpubench.schemas.mirrors.pyscf_pyscf import PySCFAtomSpec, PySCFMoleculeSpec
@@ -38,7 +38,10 @@ def main() -> None:
     spec = PySCFMoleculeSpec(
         atoms=[
             PySCFAtomSpec(symbol="H", x=0.0, y=0.0, z=0.0),
-            PySCFAtomSpec(symbol="H", x=0.0, y=0.0, z=0.7414),
+            # The equilibrium bond length the IBM campaign pins in its
+            # Geometry column; a reference energy is only comparable
+            # against a row computed at the same nuclear positions.
+            PySCFAtomSpec(symbol="H", x=0.0, y=0.0, z=0.74144),
         ],
         basis="sto-3g",
     )
@@ -58,7 +61,7 @@ def main() -> None:
         fci_total_energy=e_fci,
     )
 
-    print(f"Molecule: H2/{spec.basis}, bond length 0.7414 A")
+    print(f"Molecule: H2/{spec.basis}, bond length 0.74144 A")
     print(f"  HF     energy = {mf.e_tot:.6f} Ha")
     print(f"  MP2    energy = {components.mp2_total_energy:.6f} Ha "
           f"(corr {components.mp2_correlation_energy:.6f})")

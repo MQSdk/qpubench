@@ -23,11 +23,13 @@ estimates.
 TN_QC_OPT has *two* circuit sides, one per platform, and they are
 different circuits — which is why both are here:
 
-`n_local_rzryrz_sca` is the Qiskit path (`functions_qiskit.py:36`):
-`n_local(n, ["rz","ry","rz"], "cx", entanglement="sca")`. This is the one
-that runs in an IBM campaign, so it is what the benchmark matrix names on
-its TN rows. Parameter count `3n(R+1)` — the trailing rotation layer is
-the difference from PennyLane's.
+`n_local_rzryrz_sca` is TN_QC_OPT's Qiskit path (`functions_qiskit.py:36`):
+`n_local(n, ["rz","ry","rz"], "cx", entanglement="sca")` — the circuit the
+task builds for itself when no QASM is supplied. Parameter count
+`3n(R+1)`, the trailing rotation layer being the difference from
+PennyLane's. No current benchmark scenario names it; it is kept here so
+that a caller who wants the task's own default circuit can build the same
+object the task would.
 
 `StronglyEntanglingLayers` is PennyLane's (`functions_pennylane.py:28`),
 which the task uses on `default.qubit` / `lightning.qubit`. Rebuilt here
@@ -36,11 +38,11 @@ single-qubit rotation (Rot = RZ then RY then RZ) on every wire, then a
 ring of CNOTs whose stride varies with the layer index. Parameter count
 `3nR`, the (L, N, 3) shape.
 
-Costing an IBM row on the PennyLane circuit is a real (if small) error:
-at stage-1 sizes it moves the estimate by under 2%, and at 8 and 12
-qubits `n_local` is the *cheaper* of the two. It is worth getting right
-because the estimate should describe the circuit that runs, and because
-the 50% understatement it caused in `Num_Opt_Params_Phi` was not small.
+Costing a row on the wrong platform's circuit is a real (if small)
+error: at stage-1 sizes it moves the estimate by under 2%. It is worth
+getting right because the estimate should describe the circuit that
+runs, and because the 50% understatement it caused in
+`Num_Opt_Params_Phi` was not small.
 
 `excitation_preserving_linear` is the in-sector alternative for stage 2:
 with `givens` or `number_preserving`, U(θ) commutes with the number
@@ -64,13 +66,14 @@ import pathlib
 import sys
 from typing import TYPE_CHECKING
 
-sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
 if TYPE_CHECKING:
     from qiskit import QuantumCircuit
 
 SUPPORTED_ANSATZE = (
     "EfficientSU2",
+    "EfficientSU2_circular",
     "RealAmplitudes",
     "StronglyEntanglingLayers",
     "n_local_rzryrz_sca",
@@ -103,6 +106,13 @@ def build_ansatz(
     if ansatz == "EfficientSU2":
         from qiskit.circuit.library import efficient_su2
         return efficient_su2(num_qubits, reps=reps)
+    if ansatz == "EfficientSU2_circular":
+        # Same rotations as EfficientSU2, ring entanglement instead of the
+        # library default reverse-linear chain: one extra CX per rep (the
+        # wrap-around), same parameter count.  At 2 qubits a ring is the
+        # linear chain, so the two coincide there.
+        from qiskit.circuit.library import efficient_su2
+        return efficient_su2(num_qubits, reps=reps, entanglement="circular")
     if ansatz == "RealAmplitudes":
         from qiskit.circuit.library import real_amplitudes
         return real_amplitudes(num_qubits, reps=reps)
@@ -151,6 +161,9 @@ def n_local_rzryrz_sca(num_qubits: int, *, reps: int = 1) -> "QuantumCircuit":
     'sca' is Qiskit's shifted-circular-alternating entanglement: a
     circular CX chain whose starting qubit shifts each rep and whose
     control/target orientation alternates.
+
+    Note that the leading Rz layer acts on |0...0>, where Rz is a global
+    phase, so `n` of the `3n(R+1)` parameters cannot affect the state.
     """
     from qiskit.circuit.library import n_local
 
@@ -218,10 +231,35 @@ def uccsd(
     return qc
 
 
+# The seed the benchmark campaign initialises phi from
+# (`build_benchmark_matrix.PHI_INIT_SEED`, and the `Phi_Init` column).
+# Mirrored rather than imported, because the generator is a sibling guide
+# rather than a library; `test_phi_init_seed_matches_the_generator` fails
+# the build if the two drift apart.
+PHI_INIT_SEED = 20260811
+
+
 def circuit_spec(
     ansatz: str, num_qubits: int, *, reps: int, num_electrons: int | None = None,
+    phi_seed: int = PHI_INIT_SEED,
 ):
-    """`build_ansatz` output as a measured, parameter-bound `CircuitSpec`."""
+    """`build_ansatz` output as a measured, parameter-bound `CircuitSpec`.
+
+    Parameters are bound to the campaign's own phi_init draw
+    (`2*pi*U(0,1)` from `default_rng(phi_seed)`), which is the state a row
+    really starts from, rather than to zeros.
+
+    Zeros are not a neutral placeholder for a resource estimate. Every
+    rotation becomes the identity, so the transpiler removes it, and where
+    a family repeats an entangling block the CX pairs then cancel too: at
+    2 qubits an all-zero EfficientSU2 or RealAmplitudes transpiles to
+    `{'measure': 2}` -- no gates at all -- and the estimate describes an
+    empty circuit. At wider rows the effect is partial (single-qubit gate
+    counts roughly halve) and barely moves the duration, since `rz` is
+    virtual on IBM hardware, but the estimate should describe the circuit
+    the row runs.
+    """
+    import numpy as np
     from qiskit import qasm3
 
     from qpubench.schemas.circuit import CircuitSpec
@@ -229,7 +267,8 @@ def circuit_spec(
 
     qc = build_ansatz(ansatz, num_qubits, reps=reps, num_electrons=num_electrons)
     if qc.num_parameters:
-        qc = qc.assign_parameters([0.0] * qc.num_parameters)
+        rng = np.random.default_rng(phi_seed)
+        qc = qc.assign_parameters(2 * np.pi * rng.random(qc.num_parameters))
     qc.measure_all()
     return CircuitSpec(
         num_qubits=num_qubits, format=CircuitFormat.QASM3, serialized=qasm3.dumps(qc)
@@ -252,7 +291,7 @@ def circuit_parameter_count(ansatz: str, num_qubits: int, reps: int) -> int | No
         # parameter per XX+YY gate, not two (that is mode="fsim").
         # Verified against the built circuit's num_parameters.
         return num_qubits * (reps + 1) + (num_qubits - 1) * reps
-    if ansatz == "EfficientSU2":
+    if ansatz in ("EfficientSU2", "EfficientSU2_circular"):
         return 2 * num_qubits * (reps + 1)      # two rotation layers per block
     if ansatz == "RealAmplitudes":
         return num_qubits * (reps + 1)          # one rotation layer per block

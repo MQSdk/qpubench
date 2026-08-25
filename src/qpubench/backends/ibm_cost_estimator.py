@@ -27,16 +27,18 @@ for planning purposes:
     to the matching `qiskit_ibm_runtime.fake_provider` `FakeBackend` —
     real calibration snapshots IBM ships for exactly this purpose (local
     testing against realistic target topology/basis-gates/durations), no
-    credentials or network needed. `FakeBrisbane`, `FakeTorino`,
-    `FakeFez`, `FakeMarrakesh`, `FakeNighthawk` and about fifty others
-    exist, but the set is **not** every real backend name: it lags new
-    hardware, and the European data centre's devices have no snapshot in
-    the installed qiskit-ibm-runtime (0.45.1).
+    credentials or network needed. `FakeBrisbane`, `FakeAachen`,
+    `FakeTorino`, `FakeFez`, `FakeMarrakesh` and sixty-odd others exist,
+    including the European data centre's devices, though the set does lag
+    new hardware and grows release by release (`FakeAachen` arrived in
+    qiskit-ibm-runtime 0.47.0), so it is not guaranteed to cover every
+    real backend name.
   - **Live**: pass a real backend object (e.g. from
     `IBMAdapter.get_live_backend()`) to estimate against actual current
-    calibration data instead of a static Fake snapshot — more accurate,
-    needs an IBM Quantum account, and the only option for a device with
-    no snapshot. `resolve_calibration_backend()` picks between the two.
+    calibration data instead of a static Fake snapshot — more accurate
+    for the device as calibrated today, needs an IBM Quantum account, and
+    the only option for a device the installed release has no snapshot
+    for. `resolve_calibration_backend()` picks between the two.
 
 Real, verified in this session: transpiling a 4-qubit test circuit
 against `FakeBrisbane` with ALAP scheduling gives `depth=14`,
@@ -83,17 +85,19 @@ def resolve_calibration_backend(
     one exists, otherwise the live device.
 
     qiskit-ibm-runtime does not ship a `Fake*` snapshot for every real
-    backend, and the European data centre's devices are among those it
-    does not cover. Costing such a device against another device's
-    snapshot estimates the wrong machine rather than approximating the
-    right one: Eagle's two-qubit gate is `ecr` and Heron's is `cz`, so
-    the transpiled circuit differs before any duration is read off it.
+    backend, and which devices it covers depends on the installed
+    release. Costing a device against *another* device's snapshot
+    estimates the wrong machine rather than approximating the right one:
+    Eagle's two-qubit gate is `ecr` and Heron's is `cz`, so the
+    transpiled circuit differs before any duration is read off it. That
+    substitution is therefore never made here.
 
-    So a device with no snapshot is estimated against its live
-    calibration, which needs credentials. The tradeoff is deliberate and
-    worth stating where the numbers are used: a live estimate is accurate
-    for the device as calibrated today, and it is not reproducible
-    offline, nor stable across recalibration.
+    So a device the installed release has no snapshot for is estimated
+    against its live calibration, which needs credentials. The tradeoff
+    is worth stating where the numbers are used: a snapshot is
+    reproducible offline but frozen at the release that shipped it, while
+    a live estimate describes the device as calibrated today and is
+    reproducible by nobody, including a later run of the same code.
     """
     try:
         return _resolve_fake_backend(backend_name)

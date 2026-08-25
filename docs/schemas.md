@@ -811,6 +811,41 @@ explicitly. `backend`'s inline suggestion was corrected in the same pass:
 to Qiskit, so `"qiskit.aer"` selected the *PennyLane* path — use
 `aer_simulator` locally and `ibm*` for hardware.
 
+Revised again 2026-08-24, against cebule-tn_vqe @ **main** `07dacfb` —
+the earlier passes cited `dev-kba a760489`, now an ancestor of main, and
+main has since gained a `mapped_hamiltonian` module.
+
+- **`TNQCOptInput.mapping_matrix` added.** MOL_MAP's mapping operator D,
+  now accepted back by TN_QC_OPT (upstream `1c0ba84` / `8259dce`). It was
+  modelled only as `MolMapResult.mapping_matrix`, so the mirror described
+  both ends of the hand-off but not the hand-off. Supplying it *with*
+  `tn_ansatz="givens"` makes the run an orbital rotation on the reduced
+  register, and that changes four things at once: θ becomes a flat
+  `m(m-1)/2` vector with **no layer axis** (so `n_layers_network` has no
+  effect, and `tn_theta_shape()` does not describe the case), U†HU comes
+  from an exterior power rather than the integral route, `grouped` is
+  served the dense operator instead of Pauli terms, and `network` mode
+  takes a different optimizer. The new `TNQCOptInput.rotates_orbitals`
+  property carries that condition so callers need not re-derive it.
+- **`TNQCOptInput.n_layers_network` is now optional, default 1**
+  (upstream `b0085c9`); it was declared required.
+- **`TNQCOptInput.theta_init` defaults to `None`, not `[]`** — the same
+  "unset" sentinel correction `phi_init` got on 2026-08-11, for the same
+  reason: an empty list reaches the shape check as a length-0 array.
+- **`TNQCOptResult.h_tn_opt_fermionic` removed.** Upstream withdrew the
+  output (`f5ab81e` / `cdaf59e`, "Stop computing the fermionic
+  Hamiltonian nobody reads"). The 2026-08-08 revision had added it
+  against an unfinished upstream rather than a settled contract, and no
+  qpubench run has recorded the field, so the append-only rule has no
+  stored records to protect and the field is deleted outright rather
+  than deprecated. `from_task_result` drops the key if an older payload
+  still carries it; `tests/test_schemas.py` pins that behaviour.
+- Not enforced here, but new upstream and worth knowing: `n_iterations`
+  is now **rejected** for COBYLA when below `varied + 2`, counting only
+  the parameters the chosen `optimization_mode` varies
+  (`_check_iteration_budget`, `e44d32a`). `opt_options["maxiter"]` wins
+  over `n_iterations` in that check.
+
 | Type | Cebule task | Description |
 |---|---|---|
 | `MolecularGeometry` | shared | Flat geometry + symbols + basis |
@@ -1786,7 +1821,7 @@ total QPU-seconds into a `PlanCostBreakdown` per plan: Open Plan's free
 10-min/28-day quota, Pay-As-You-Go's per-second billing, Flex's prepaid
 $30k-minimum lump sum, Premium's $249,600/year minimum annual
 subscription. `aggregate_benchmark_cost()` rolls up a whole study's worth
-of per-job estimates. See `examples/guides/estimate_ibm_cost.py` for an
+of per-job estimates. See `utils/estimate_ibm_cost.py` for an
 end-to-end walkthrough costing `data/benchmarks/ibm_tn-vqe_qesem/stage1_screening_matrix.csv`.
 
 | Type | Verified against real data | Purpose |

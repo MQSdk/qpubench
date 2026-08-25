@@ -21,7 +21,7 @@ BenchmarkRunner.sweep() — it is one job, not one DAG node per (shots,
 opt_level) pair. Only the (`Mapper`, `Method`) pair (JW or mol_map, x
 VQE or TN-VQE — see data/benchmarks/ibm_tn-vqe_qesem/README.md) changes which components exist;
 everything else in the benchmark matrix (TN_Layers_Network,
-TN_Layers_Circuit, TN_Ansatz, Measurement_Method, Shots,
+Ansatz_Reps, TN_Ansatz, Measurement_Method, Shots,
 Qiskit_Opt_Level) is a parameter value swept via dsl.ParallelFor /
 BenchmarkRunner.sweep() inside a *single* pipeline definition — see
 pipelines.py and docs/integrations/kubeflow.md.
@@ -189,7 +189,7 @@ def tn_qc_opt_component(
     upstream result can be auto-converted into TN_QC_OPT's input shape).
 
     n_layers_network/n_layers_circuit/tn_ansatz/measurement_method
-    sweep over data/benchmarks/ibm_tn-vqe_qesem/README.md's TN_Layers_Network / TN_Layers_Circuit /
+    sweep over data/benchmarks/ibm_tn-vqe_qesem/README.md's TN_Layers_Network / Ansatz_Reps /
     TN_Ansatz / Measurement_Method columns — resolved by
     dsl.ParallelFor in pipelines.py, not by separate pipeline
     definitions, since none of these change which components run.

@@ -24,17 +24,24 @@ Two things this script deliberately keeps separate:
 The iteration count used to be a flat 30 applied to every row, and that
 was not a conservative assumption but an invalid one. COBYLA needs an
 initial simplex of n+1 points before it can take a single step, and
-scipy raises a maxiter set below that rather than honouring it — so a
-12-qubit TN row billed at 30 submissions really consumed 144 and moved
-the objective by exactly zero. `Iterations` is now a per-row campaign
-input, and this script bills what the CSV says.
+scipy raises a maxiter set below that rather than honouring it, so the
+widest rows were billed for a fraction of what they would really consume.
+`Iterations` is now a per-row campaign input, proportional to the row's
+own parameter count so that every row reaches a comparable fraction of
+its achievable descent, and this script bills what the CSV says.
+
+This script costs ONE CIRCUIT per cost-function evaluation, which is what
+the transpilation model describes. A real evaluation of <H> submits one
+circuit per measurement basis, recorded per row in Num_ExpVals_Per_Iter,
+so the totals below are a floor. The campaign's batches are costed from a
+fit to real jobs instead; see split_benchmark_batches.py.
 
 Rows in `optimization_mode="network"` are skipped: they take no quantum
 measurements, so they have no QPU cost to estimate (see
 `split_benchmark_batches.py`, which writes them to their own file).
 
 Run:
-    PYTHONPATH=src python examples/guides/estimate_ibm_cost.py
+    PYTHONPATH=src python utils/estimate_ibm_cost.py
 """
 from __future__ import annotations
 
@@ -42,7 +49,7 @@ import csv
 import pathlib
 import sys
 
-sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
 from _ansatz_builders import circuit_spec
@@ -58,14 +65,13 @@ from qpubench.schemas.mirrors.ibm_cost_estimator import (
 )
 
 _CSV_PATH = (
-    pathlib.Path(__file__).resolve().parents[2]
+    pathlib.Path(__file__).resolve().parents[1]
     / "data" / "benchmarks" / "ibm_tn-vqe_qesem" / "stage1_screening_matrix.csv"
 )
-# IBM's European data centre, where this campaign's time is bought, does
-# not host ibm_brisbane (an Eagle device in the US, whatever the name
-# suggests).  qiskit-ibm-runtime ships no Fake* snapshot for ibm_aachen,
-# so the estimate comes from its LIVE calibration and $IBM_QUANTUM_TOKEN
-# is required to run this script.
+# The device this campaign buys time on, in IBM's European data centre.
+# qiskit-ibm-runtime ships an offline calibration snapshot for it
+# (FakeAachen, from 0.47.0), so resolve_calibration_backend picks that up
+# and this script runs without credentials or a network.
 _BACKEND_NAME = "ibm_aachen"
 
 
@@ -73,10 +79,11 @@ _CALIBRATION = None
 
 
 def _calibration():
-    """The live `ibm_aachen` backend, opened once and reused.
+    """The `ibm_aachen` calibration source, resolved once and reused.
 
-    Resolved lazily, so importing this module needs no credentials; the
-    connection opens on the first transpile and is shared by the rest.
+    Resolved lazily and offline where a snapshot exists; if the installed
+    qiskit-ibm-runtime has none, this falls back to the live device and
+    the connection opens on the first transpile.
     """
     global _CALIBRATION
     if _CALIBRATION is None:
@@ -172,9 +179,12 @@ def main() -> None:
           "each at its own Iterations) ===")
     full_estimates = estimate_full_csv_study()
     agg = aggregate_benchmark_cost(full_estimates)
-    print(f"  {len(full_estimates)} circuit submissions, "
+    print(f"  {len(full_estimates)} cost-function evaluations, "
           f"{agg.total_shots:,} total shots, "
           f"{agg.total_qpu_seconds:,.1f}s ({agg.total_qpu_minutes:,.1f} min) total QPU time")
+    print("  (one circuit submission per evaluation -- a FLOOR: <H> needs one "
+          "circuit per\n   measurement basis. The batch files are costed from "
+          "measured runs instead)")
     _print_plan_breakdown(agg.total_qpu_seconds, IBMPricingRates.default())
 
 
