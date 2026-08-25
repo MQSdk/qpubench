@@ -49,7 +49,7 @@ chain into a DAG via `connected_task_id` (e.g. `GEOMETRY_OPT` →
 ```python
 import mqsdk, os
 
-session = mqsdk.Cebule(os.environ["EMAIL"], os.environ["PASSWORD"])
+session = mqsdk.Cebule(os.environ["CEBULE_EMAIL"], os.environ["CEBULE_PASSWORD"])
 
 # Most tasks: kwargs become the task's JSON input.
 task = session.cebule.create_task(
@@ -74,7 +74,7 @@ Set credentials in `.env` and reference them via `BackendSpec.cebule()`:
 
 ```python
 from qpubench.schemas import BackendSpec
-backend = BackendSpec.cebule(email_ref="EMAIL", password_ref="PASSWORD")
+backend = BackendSpec.cebule(email_ref="CEBULE_EMAIL", password_ref="CEBULE_PASSWORD")
 ```
 
 ---

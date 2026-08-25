@@ -31,6 +31,7 @@ requirements:
 # Conda does not have a native "extras" concept.  Install quantum backends
 # separately after activating the environment:
 #
+#   conda install -c conda-forge python-dotenv               # .env credentials
 #   conda install -c conda-forge qiskit qiskit-aer          # Qiskit stack
 #   pip install pyqrack                                       # Qrack (PyPI only)
 #   conda install -c conda-forge pyarrow pandas              # Storage extras

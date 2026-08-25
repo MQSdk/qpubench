@@ -81,7 +81,7 @@ network optimizer all at once.
 SDK session pattern
 --------------------
     import mqsdk, os
-    session = mqsdk.Cebule(os.environ['EMAIL'], os.environ['PASSWORD'])
+    session = mqsdk.Cebule(os.environ['CEBULE_EMAIL'], os.environ['CEBULE_PASSWORD'])
     task = session.cebule.create_task(name, TaskType.*, **kwargs)
     # or, for BORN_OPPENHEIMER_MD / CAR_PARRINELLO_MD specifically:
     task = session.cebule.create_task(name, TaskType.*, input=qe_input_text)

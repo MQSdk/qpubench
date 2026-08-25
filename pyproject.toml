@@ -45,6 +45,12 @@ Repository      = "https://github.com/mqsdk/qpubench"
 #   uv pip install "qpubench[qiskit]"
 #   poetry add "qpubench[qiskit]"
 [project.optional-dependencies]
+# Shared, not tied to a backend: every path that authenticates reads its
+# credentials from the environment, and this loads them from a gitignored
+# .env (see .env.example). Extras that need it pull it in by self-reference
+# rather than each repeating the requirement.
+dotenv  = ["python-dotenv"]
+
 qiskit  = ["qiskit>=2.0", "qiskit-aer", "qiskit-ibm-runtime>=0.47", "qiskit-nature>=0.7", "qiskit_qasm3_import"]   # >=0.47 ships the FakeAachen calibration snapshot the IBM campaign costs against offline
 qrack   = ["pyqrack", "qiskit>=2.0", "qiskit_qasm3_import"]   # Qrack simulator adapter (backends/qrack_adapter.py) — PyQrack has no QASM parser, so qiskit loads the CircuitSpec and QrackCircuit.in_from_qiskit_circuit() lowers it
 braket  = ["amazon-braket-sdk", "qiskit-braket-provider"]   # generic gate-based AWS Braket adapter (backends/braket_adapter.py)
@@ -54,7 +60,7 @@ qibo    = ["qibo", "qibo-cloud-backends"]   # Qibo simulator / Qibolab hardware 
 classiq = ["classiq"]
 mitiq   = ["mitiq", "ply"]   # Mitiq ZNE error-mitigation adapter (backends/unitaryfund_mitiq_adapter.py) — ply works around a real cirq-core QASM-import gap, see that module's docstring
 pyscf   = ["pyscf"]   # mean-field/DFT, PCM/COSMO solvation, periodic pbc — schemas/pyscf_pyscf.py
-cebule  = ["mqsdk @ git+https://gitlab.com/mqsdk/python-sdk.git"]   # Cebule (MQS) task submission — TN_QC_OPT, MOL_MAP, COSMO; needed only to RUN tasks (data/benchmarks/ibm_tn-vqe_qesem/run_campaign_batch.ipynb), not to use the schemas/mirrors/mqsdk_cebule.py mirror. Not on PyPI, hence the direct reference and the allow-direct-references below
+cebule  = ["mqsdk @ git+https://gitlab.com/mqsdk/python-sdk.git", "qpubench[dotenv]"]   # Cebule (MQS) task submission — TN_QC_OPT, MOL_MAP, COSMO; needed only to RUN tasks (data/benchmarks/ibm_tn-vqe_qesem/run_campaign_batch.ipynb), not to use the schemas/mirrors/mqsdk_cebule.py mirror. Not on PyPI, hence the direct reference and the allow-direct-references below
 hamlib  = ["h5py", "requests"]   # HamLib Chemistry loader (hamiltonian_sources/hamlib.py)
 bse     = ["basis_set_exchange"]   # Basis Set Exchange basis-function-count loader (hamiltonian_sources/basis_set_exchange.py)
 qubo    = ["requests"]   # QUBO Hamiltonian loaders (hamiltonian_sources/qubo.py) — OR-Library + MQLib downloads
