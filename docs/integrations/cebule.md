@@ -228,15 +228,23 @@ The task still accepts `three_para_tn` and translates it (`True` →
 both are given, which `TNQCOptInput.resolved_tn_ansatz` implements.
 
 The network-side parameter count follows from the inputs alone —
-`tn_theta_parameter_count(n_qubits, n_layers_network, tn_ansatz)`, where
-the node count is `(3n − 2) // 2`. With COBYLA the iteration count scales
-with the parameter count, so a `number_preserving` run is ~5x the
-classical optimisation work of a `givens` run at the same layer count.
+`tn_theta_parameter_count(n_qubits, n_layers_network, tn_ansatz)`. U is one
+even row of adjacent pairs followed by `n_layers_network` repetitions of
+(odd row, even row), so it is `2·n_layers + 1` staggered rows and
+`even + n_layers·(odd + even)` gates, with `even = n//2` and
+`odd = (n−1)//2`. With COBYLA the iteration count scales with the parameter
+count, so a `number_preserving` run is ~5x the classical optimisation work
+of a `givens` run at the same layer count.
 
-`theta_init` is **not** flat: its shape is `(n_layers, n_nodes)` for the
-one-parameter families and `(n_layers, n_nodes, n_params)` otherwise —
+`theta_init`'s shape is `(n_gates,)` for the one-parameter families and
+`(n_gates, n_params)` otherwise — one entry per gate of the whole network,
+with **no layer axis**, since the layers compose into a single network.
 `tn_theta_shape()` returns it, and the task raises `ValueError` on a
 mismatch.
+
+For `givens` on a mol_map register the width is the spatial-orbital count
+rather than the qubit count, since the transformation is an orbital
+rotation; pass it as `n_spatial=`.
 
 Wire `AlgorithmSpec` fields to the TN_QC_OPT parameters:
 

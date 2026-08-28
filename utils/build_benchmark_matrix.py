@@ -718,10 +718,20 @@ def _row(
     takes_measurements = optimization_mode != "network"
     qasm_file, qasm_hash = qasm_ansatz_pin(ansatz, num_qubits, reps, active_electrons)
     phi_params = circuit_parameter_count(ansatz, num_qubits, reps, active_electrons)
-    # Theta is fixed by the inputs, unlike Num_ExpVals_Per_Iter: it is
-    # n_layers_network * ((3n - 2) // 2) * params_per_node.
+    # Theta is fixed by the inputs, unlike Num_ExpVals_Per_Iter: the
+    # network is E (O E)^n_layers, so the node count is
+    # even + n_layers * (odd + even) over the width U is built on.
+    #
+    # That width is the register's qubit count everywhere EXCEPT givens on a
+    # mol_map row, where the transformation is an orbital rotation over the
+    # spatial orbitals instead (functions_main._theta_shape).  Passing the
+    # active orbital count there is what makes a mol_map row's theta match
+    # the rotation it actually performs rather than its configuration index.
+    rotates_orbitals = mapper == "mol_map"
     theta_params = (
-        str(tn_theta_parameter_count(num_qubits, layers_network, tn_ansatz))
+        str(tn_theta_parameter_count(
+            num_qubits, layers_network, tn_ansatz,
+            n_spatial=active_orbitals if rotates_orbitals else None))
         if is_tn and layers_network is not None and tn_ansatz in {a.value for a in TNAnsatz}
         else ""
     )

@@ -587,7 +587,7 @@ basis gate on any current device.
 | `Qasm_Ansatz_File`, `Qasm_Ansatz_SHA256` | The pinned circuit and a hash prefix of it, so that an edited circuit ceases to match |
 | `Num_Opt_Params_Phi` | Circuit-side parameter count, and the `num_parameters` the pinned QASM loads with. On a `network` row it is the count held fixed |
 | `Phi_Init` | How the circuit's parameters are initialised, fixed by `Ansatz` alone so that rows sharing a circuit share a starting point |
-| `Num_Opt_Params_Theta` | Network-side parameter count, `TN_Layers_Network x ((3n - 2) // 2) x params_per_node` |
+| `Num_Opt_Params_Theta` | Network-side parameter count. U is one even row of adjacent pairs then `TN_Layers_Network` repetitions of (odd, even), so `even + layers x (odd + even)` gates times `params_per_node`, with `even = w // 2` and `odd = (w - 1) // 2`. The width `w` is the qubit count, except for `givens` on a mol_map run, where the transformation is an orbital rotation and `w` is `Active_Orbitals` |
 | `Num_ExpVals_Per_Iter`, `Num_ExpVals_Source` | Measurement circuits one evaluation submits, and where that number came from; see [What one cost-function evaluation costs](#what-one-cost-function-evaluation-costs) |
 | `Error_Mitigation` | `none` or `qesem`. Every stage-1 and stage-2 row is genuinely `none` |
 | `Precision` | QESEM target σ in Hartree on mitigated rows; `n/a (shot-based)` elsewhere |

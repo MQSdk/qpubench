@@ -3925,18 +3925,24 @@ def test_tn_ansatz_has_four_families_not_two():
 
 
 def test_tn_node_count_matches_upstream_formula():
-    """(3 * n_qubits - 2) // 2, functions_U.py:15-17."""
+    """even + n_layers * (odd + even), n_nodes_for in functions_U.py:15-25."""
     from qpubench.schemas.mirrors.mqsdk_cebule import tn_node_count
 
-    assert [tn_node_count(n) for n in (2, 4, 8, 12)] == [2, 5, 11, 17]
+    # One even row of n // 2 pairs, then n_layers of (odd, even).
+    assert [tn_node_count(n, 1) for n in (2, 4, 8, 12)] == [2, 5, 11, 17]
+    assert [tn_node_count(n, 2) for n in (2, 4, 8, 12)] == [3, 8, 18, 28]
+    # n_layers=0 is the leading even row alone, not an empty network.
+    assert [tn_node_count(n, 0) for n in (2, 4, 8, 12)] == [1, 2, 4, 6]
+    # Odd registers have equal rows, so the count is exactly rows * pairs.
+    assert tn_node_count(7, 2) == (2 * 2 + 1) * 3
 
 
 def test_tn_theta_parameter_count_at_stage1_layer_count():
     """Theta is derivable from the inputs, unlike the expectation-value count.
 
-    Stage 1 runs TN_Layers_Network=2, giving 4/12/20 parameters at 2
-    qubits up to 34/102/170 at 12 — i.e. number_preserving is 5x the
-    classical optimisation work of givens at the same layer count.
+    Stage 1 runs TN_Layers_Network=2, so a 12-qubit network is 28 gates:
+    number_preserving is 5x the classical optimisation work of givens at
+    the same layer count.
     """
     from qpubench.schemas.mirrors.mqsdk_cebule import TNAnsatz, tn_theta_parameter_count
 
@@ -3947,20 +3953,41 @@ def test_tn_theta_parameter_count_at_stage1_layer_count():
                       TNAnsatz.NUMBER_PRESERVING)
         ]
 
-    assert counts(2) == [4, 12, 20]
-    assert counts(12) == [34, 102, 170]
+    assert counts(2) == [3, 9, 15]
+    assert counts(12) == [28, 84, 140]
     # givens shares rotation_1param's one-parameter node.
-    assert tn_theta_parameter_count(12, 2, TNAnsatz.GIVENS) == 34
-    assert tn_theta_parameter_count(12, 0, TNAnsatz.GIVENS) == 0
+    assert tn_theta_parameter_count(12, 2, TNAnsatz.GIVENS) == 28
 
 
-def test_tn_theta_shape_is_not_flat_for_multi_parameter_families():
-    """theta_shape_for, functions_U.py:181-190 — run_TNQCOpt raises on a mismatch."""
+def test_givens_on_a_mol_map_register_is_sized_by_spatial_orbitals():
+    """functions_main._theta_shape passes mapped.n_spatial, not n_qubits.
+
+    A Givens network on a reduced register is an orbital rotation, so it is
+    built over the spatial orbitals. The campaign's H2O rows are the case
+    that matters: 6 mol_map qubits indexing configurations of a CAS(4,4),
+    which is 4 orbitals, not 6 wires.
+    """
+    from qpubench.schemas.mirrors.mqsdk_cebule import (
+        TNAnsatz,
+        tn_theta_parameter_count,
+        tn_transformation_width,
+    )
+
+    assert tn_theta_parameter_count(6, 2, TNAnsatz.GIVENS, n_spatial=4) == 8
+    assert tn_theta_parameter_count(6, 2, TNAnsatz.GIVENS) == 13
+    # Only givens switches; the other families stay on the register.
+    assert tn_transformation_width(6, TNAnsatz.GIVENS, 4) == 4
+    assert tn_transformation_width(6, TNAnsatz.ROTATION_3PARAM, 4) == 6
+
+
+def test_tn_theta_shape_has_no_layer_axis():
+    """theta_shape_for, functions_U.py:353-367 — one entry per gate of the
+    whole network, since the layers compose into a single network."""
     from qpubench.schemas.mirrors.mqsdk_cebule import TNAnsatz, tn_theta_shape
 
-    assert tn_theta_shape(12, 2, TNAnsatz.GIVENS) == (2, 17)
-    assert tn_theta_shape(12, 2, TNAnsatz.ROTATION_3PARAM) == (2, 17, 3)
-    assert tn_theta_shape(12, 2, TNAnsatz.NUMBER_PRESERVING) == (2, 17, 5)
+    assert tn_theta_shape(12, 2, TNAnsatz.GIVENS) == (28,)
+    assert tn_theta_shape(12, 2, TNAnsatz.ROTATION_3PARAM) == (28, 3)
+    assert tn_theta_shape(12, 2, TNAnsatz.NUMBER_PRESERVING) == (28, 5)
 
 
 def test_tn_qc_opt_input_defaults_match_parsers_py():

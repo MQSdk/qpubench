@@ -447,48 +447,102 @@ TN_ANSATZ_PROPERTIES: dict[TNAnsatz, TNAnsatzProperties] = {
 }
 
 
-def tn_node_count(num_qubits: int) -> int:
-    """M-gate nodes in the tensor network over ``num_qubits`` qubits.
+def tn_node_count(num_qubits: int, n_layers: int = 1) -> int:
+    """M tensors in a U of ``n_layers`` over ``num_qubits`` qubits.
 
-    ``(3 * n - 2) // 2``, verbatim from ``functions_U.py:15-17``.
+    ``even + n_layers * (odd + even)``, verbatim from ``n_nodes_for``
+    (``functions_U.py:15-25``), where ``even`` and ``odd`` are the disjoint
+    adjacent pairs starting at qubit 0 and at qubit 1, so ``num_qubits // 2``
+    and ``(num_qubits - 1) // 2``.
+
+    The network is one even row followed by ``n_layers`` repetitions of
+    (odd, even) -- ``E (O E)^n_layers`` -- and is therefore
+    ``2 * n_layers + 1`` rows, staggered so that no two rows of the same
+    alignment ever meet.
+
+    REVISED: an earlier layout repeated ``(E O E)`` per layer, i.e.
+    ``3 * n_layers`` rows and ``(3n - 2) // 2`` nodes per layer.  That put
+    two even rows back to back at every layer boundary, and a second gate on
+    the same pair is redundant for Givens and one-parameter rotations (both
+    close under composition), so those parameters were pruned.  Reaching all
+    of SO(8) took 44 angles under the old layout against 32 under this one.
+    A given ``n_layers`` remains as valid a choice as it was.
+
+    Note ``n_layers = 0`` is not an empty network: the leading even row
+    stands alone, giving ``num_qubits // 2`` nodes.
     """
     if num_qubits < 1:
         raise ValueError(f"num_qubits must be >= 1, got {num_qubits}")
-    return (3 * num_qubits - 2) // 2
+    if n_layers < 0:
+        raise ValueError(f"n_layers must be >= 0, got {n_layers}")
+    even, odd = num_qubits // 2, (num_qubits - 1) // 2
+    return even + n_layers * (odd + even)
 
 
 def tn_theta_parameter_count(
     num_qubits: int, n_layers_network: int, tn_ansatz: TNAnsatz | str,
+    n_spatial: int | None = None,
 ) -> int:
-    """Network-side (θ) parameter count — fixed by the inputs alone.
+    """Network-side (θ) parameter count -- fixed by the inputs alone.
 
     Unlike the expectation-value count per iteration, this needs no run to
-    determine: ``n_layers_network * tn_node_count(n) * params_per_node``.
+    determine: ``tn_node_count(n, n_layers) * params_per_node``.
 
     It is not just bookkeeping. With COBYLA (the benchmark's optimizer)
     the iteration count scales with the parameter count, so a
     ``number_preserving`` row is 5x the classical optimisation work of a
     ``givens`` row at the same layer count.
+
+    ``n_spatial`` is the spatial-orbital count, and applies to ``givens`` on a
+    mol_map-reduced register only: there the transformation is an orbital
+    rotation rather than a network of M tensors, so the width is the one the
+    rotation needs rather than the one the register would give
+    (``functions_main._theta_shape``, which passes ``mapped.n_spatial``).
+    Leave it None for Jordan-Wigner rows, which use the register width even
+    under ``givens``.
     """
     if n_layers_network < 0:
         raise ValueError(f"n_layers_network must be >= 0, got {n_layers_network}")
     props = TN_ANSATZ_PROPERTIES[TNAnsatz(tn_ansatz)]
-    return n_layers_network * tn_node_count(num_qubits) * props.params_per_node
+    width = tn_transformation_width(num_qubits, tn_ansatz, n_spatial)
+    return tn_node_count(width, n_layers_network) * props.params_per_node
+
+
+def tn_transformation_width(
+    num_qubits: int, tn_ansatz: TNAnsatz | str, n_spatial: int | None = None,
+) -> int:
+    """The wire count U is built over, which is not always the register's.
+
+    ``functions_main._theta_shape`` switches on ``mapped is not None and
+    tn_ansatz == 'givens'``: a Givens network on a mol_map register is an
+    orbital rotation over ``mapped.n_spatial`` spatial orbitals, while every
+    other combination is a network of M tensors over the qubits themselves.
+    """
+    if n_spatial is not None and TNAnsatz(tn_ansatz) is TNAnsatz.GIVENS:
+        return n_spatial
+    return num_qubits
 
 
 def tn_theta_shape(
     num_qubits: int, n_layers_network: int, tn_ansatz: TNAnsatz | str,
+    n_spatial: int | None = None,
 ) -> tuple[int, ...]:
     """Shape ``theta_init`` must have, per ``theta_shape_for``
-    (``functions_U.py:181-190``): ``(n_layers, n_nodes)`` for
-    one-parameter families, ``(n_layers, n_nodes, n_params)`` otherwise.
-    ``run_TNQCOpt`` raises ``ValueError`` on a mismatch.
+    (``functions_U.py:353-367``): ``(n_gates,)`` for one-parameter families
+    and ``(n_gates, n_params)`` otherwise, where ``n_gates`` counts the M
+    gates of the WHOLE network.  ``run_TNQCOpt`` raises ``ValueError`` on a
+    mismatch.
+
+    REVISED: there is no longer a layer axis.  The layers compose into one
+    network, so a gate's entry is at its node number and the old
+    ``(n_layers, n_nodes[, n_params])`` shape no longer applies.
     """
     props = TN_ANSATZ_PROPERTIES[TNAnsatz(tn_ansatz)]
-    nodes = tn_node_count(num_qubits)
+    width = tn_transformation_width(num_qubits, tn_ansatz, n_spatial)
+    gates = tn_node_count(width, n_layers_network)
     if props.params_per_node == 1:
-        return (n_layers_network, nodes)
-    return (n_layers_network, nodes, props.params_per_node)
+        return (gates,)
+    return (gates, props.params_per_node)
 
 
 class TNQCOptInput(pydantic.BaseModel):
@@ -566,12 +620,18 @@ class TNQCOptInput(pydantic.BaseModel):
                           changes four things at once (see
                           ``rotates_orbitals``):
 
-                            * θ is a FLAT vector of ``m(m-1)/2`` angles on
-                              ``m`` spatial orbitals, with NO layer axis,
-                              so ``n_layers_network`` has no effect —
-                              composing two rotations is another rotation.
-                              ``tn_theta_shape()`` does not describe this
-                              case.
+                            * θ is sized by the SPATIAL ORBITALS rather
+                              than the register: the rotation is a network
+                              of nearest-neighbour Givens gates over ``m``
+                              orbitals, so θ is
+                              ``tn_theta_shape(n, L, "givens", n_spatial=m)``.
+                              REVISED: an earlier revision of this mirror
+                              had θ as a flat ``m(m-1)/2`` vector with no
+                              layer dependence. Depth does matter — one
+                              layer does not span the rotation group, and
+                              roughly ``m/2`` layers reach all of it, so a
+                              shallower network is a restricted, cheaper
+                              ansatz rather than an equivalent one.
                             * U†HU comes from an exterior power on the
                               reduced space, not from the one- and
                               two-body integral route.
@@ -592,7 +652,9 @@ class TNQCOptInput(pydantic.BaseModel):
 
     n_layers_network      now optional, default 1 (upstream ``b0085c9``);
                           this mirror previously declared it required.
-                          Ignored entirely when ``rotates_orbitals``.
+                          It is NOT ignored when ``rotates_orbitals``: it
+                          sets how much of the rotation group the network
+                          spans (see above).
 
     n_iterations          upstream now REJECTS a budget COBYLA would
                           silently overrule (``_check_iteration_budget``,

@@ -820,9 +820,10 @@ main has since gained a `mapped_hamiltonian` module.
   modelled only as `MolMapResult.mapping_matrix`, so the mirror described
   both ends of the hand-off but not the hand-off. Supplying it *with*
   `tn_ansatz="givens"` makes the run an orbital rotation on the reduced
-  register, and that changes four things at once: θ becomes a flat
-  `m(m-1)/2` vector with **no layer axis** (so `n_layers_network` has no
-  effect, and `tn_theta_shape()` does not describe the case), U†HU comes
+  register, and that changes four things at once: θ is sized by the **spatial
+  orbitals** rather than the register, as a network of nearest-neighbour
+  Givens gates over them (`tn_theta_shape(..., n_spatial=m)`; depth still
+  matters, since roughly `m/2` layers span the rotation group), U†HU comes
   from an exterior power rather than the integral route, `grouped` is
   served the dense operator instead of Pauli terms, and `network` mode
   takes a different optimizer. The new `TNQCOptInput.rotates_orbitals`
