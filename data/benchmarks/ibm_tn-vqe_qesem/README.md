@@ -68,11 +68,34 @@ file, generates the campaign, costs it and cuts the batches, and carries the
 commands for all three stages. It needs only the standard library and
 this repository, uses no IBM credentials and submits nothing.
 
-[`run_campaign_batch.ipynb`](run_campaign_batch.ipynb) executes one batch,
-submitting each run to Cebule's `TN_QC_OPT` task and checkpointing results
-so an interrupted batch resumes rather than re-spending purchased time. It
-submits nothing until told to, and it reads credentials from the
-environment rather than from the notebook.
+Two things execute the campaign, and they build their runs through the
+same module ([`_campaign_runner.py`](../../../utils/_campaign_runner.py)),
+so neither can drift from the other. Both submit nothing until told to,
+both checkpoint per run so an interrupted pass resumes rather than
+re-spending purchased time, and both read credentials from the environment
+rather than from a notebook cell or a command line.
+
+[`run_campaign.py`](../../../utils/run_campaign.py) runs a stage in
+batches from the command line, selected with `--where` filters and resumed
+by repeating the command. This is how stage 0 is run, since 1008 runs is
+not something to start in one go:
+
+```sh
+PYTHONPATH=src python utils/run_campaign.py --group-by Molecule,Basis,Mapper
+PYTHONPATH=src python utils/run_campaign.py --submit \
+    --where Molecule=H2 --where Basis=6-31g --where Mapper=JW
+```
+
+[`run_campaign_batch.ipynb`](run_campaign_batch.ipynb) executes one batch
+whole and shows its working, which suits the twelve stage-1 runs.
+
+**Which backend a run uses is the run's own `Backend_Platform`**, not a
+choice made at submission time. Stage 0 crosses the backend as a factor,
+half its runs on `aer_simulator` and half on `fake_aachen`, so overriding
+it would run one arm twice and the other never. The override exists for
+the one case the column cannot express, executing a hardware-targeted
+stage-1 run on a simulator first, and the script refuses a hardware
+backend unless `--allow-hardware` says otherwise.
 
 Each stage prohibits generation without its selection: no `--select`, no
 `--refine`, no `--precision`, no output. A silently defaulted selection
