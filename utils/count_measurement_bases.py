@@ -20,7 +20,8 @@ circuit, hence one submission at the row's full shot count.
 
   terms       distinct Pauli strings in the mapped Hamiltonian; the
               identity is excluded, since it costs no measurement
-  E           qubit-wise-commuting groups, i.e. circuits per evaluation
+  E           qubit-wise-commuting groups, i.e. circuits per evaluation,
+              or "-" where the term count exceeds MAX_GROUPING_TERMS
 
 Both are structural: they follow from which integrals are non-zero, so
 they barely move with bond length.  The equilibrium geometries below are
@@ -85,12 +86,32 @@ PYSCF_BASIS = {
 # space with the same orbital count, which is what fixes the term count.
 QVSZP_PROXY = ("ccpvdz", "shape proxy: same orbital count, different basis")
 
+# group_commuting builds a DENSE n x n adjacency matrix and then
+# materialises one Python tuple per edge (PauliList._noncommutation_graph:
+# list(zip(*np.where(np.triu(adj, k=1))))), so its peak memory is
+# quadratic in the term count.  Measured on this repository's own files:
+#
+#     2,064 terms  0.43 GB     6,401 terms  3.68 GB
+#     2,951 terms  0.80 GB     8,240 terms  5.46 GB
+#
+# which extrapolates to ~80 GB at h2_def2-tzvp_mapped's 32,000 terms.  On
+# a 16 GB machine that does not fail cleanly: it invokes the OOM killer,
+# which takes the whole parent process group with it.
+#
+# The campaign's own rows top out at 2,064 terms (qvSZP), so this ceiling
+# never binds on a real row.  It exists so that pointing this script at a
+# larger basis reports the term count and declines, rather than dying.
+MAX_GROUPING_TERMS = 4_000
+
 
 def measurement_bases(
     molecule: str, basis: str, active_electrons: int, active_orbitals: int,
     full_space: bool,
-) -> tuple[int, int, int]:
-    """(qubits, Pauli terms, qubit-wise-commuting groups) for one row."""
+) -> tuple[int, int, int | None, str]:
+    """(qubits, Pauli terms, qubit-wise-commuting groups, proxy note).
+
+    groups is None where the term count exceeds MAX_GROUPING_TERMS.
+    """
     from qiskit_nature.second_q.drivers import PySCFDriver
     from qiskit_nature.second_q.mappers import JordanWignerMapper
     from qiskit_nature.second_q.transformers import ActiveSpaceTransformer
@@ -114,7 +135,10 @@ def measurement_bases(
     ).simplify()
     identity = "I" * operator.num_qubits
     terms = sum(1 for pauli in operator.paulis if str(pauli) != identity)
-    groups = len(operator.group_commuting(qubit_wise=True))
+    if terms > MAX_GROUPING_TERMS:
+        groups = None
+    else:
+        groups = len(operator.group_commuting(qubit_wise=True))
     return operator.num_qubits, terms, groups, proxy_note
 
 
@@ -148,10 +172,18 @@ def main() -> None:
             f"{molecule}/{basis}: built {qubits} qubits, matrix says "
             f"{row['N_Qubit']}"
         )
-        measured[(molecule, qubits)] = groups
+        # Left out of `measured` when the grouping was declined, so the
+        # comparison below reports the row as uncomputed rather than
+        # against a value this run never produced.
+        if groups is not None:
+            measured[(molecule, qubits)] = groups
+        note = proxy
+        if groups is None:
+            note = (f"{terms:,} terms > MAX_GROUPING_TERMS "
+                    f"({MAX_GROUPING_TERMS:,}): grouping skipped")
         print(f"{molecule + '/' + basis:22} {row['Active_Space']:12} "
-              f"{qubits:>6} {terms:>7} {groups:>6}"
-              + (f"   ({proxy})" if proxy else ""))
+              f"{qubits:>6} {terms:>7} {'-' if groups is None else groups:>6}"
+              + (f"   ({note})" if note else ""))
 
     # Against what the matrix carries.  The committed column takes a
     # measured value where a real run supplies one, so a difference here
