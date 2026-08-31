@@ -119,7 +119,7 @@ def to_cebule_operators(observable: Any) -> tuple[list[float], list[str]]:
 # source: that encoding is Cebule's, so this repository cannot derive it.
 # File basis spellings differ from the campaign's, hence the table.
 _FILE_MOLECULE = {"H2": "h2", "H2O": "water"}
-_FILE_BASIS = {"sto-3g": "sto3g", "6-31g": "631G", "cc-pvdz": "cc-pvdz",
+_FILE_BASIS = {"sto-3g": "sto3g", "6-31g": "6-31G", "cc-pvdz": "cc-pvdz",
                "cc-pvtz": "cc-pvtz", "def2-tzvp": "def2-tzvp", "qvSZP": "qvSZP"}
 _FILE_MAPPER = {"JW": "JW", "mol_map": "mapped"}
 
