@@ -58,7 +58,7 @@ method and evaluation budget.
 
 | Stage | Question | File | Runs |
 |---|---|---|---|
-| **0, simulation** | What does each combination really cost, which ansatz and which optimizer are worth hardware, and does the pipeline run? | `stage0_simulator_screen.csv` | 1008, generated on demand |
+| **0, simulation** | What does each combination really cost, which ansatz and which optimizer are worth hardware, and does the pipeline run? | `stage0_simulator_screen.csv` | 1152, generated on demand |
 | **1, screening** | Which mapper, method and basis warrant converged runs? | `stage1_screening_matrix.csv` | 12, committed |
 | **2, deep sweep** | For the selected combinations, how do the TN-VQE sweep parameters `θ` and `φ` behave? | `stage2_deep_sweep.csv` | generated on demand |
 | **3, QESEM refinement** | Does error mitigation move the converged energy closer to the classical reference? | `stage3_qesem_refinement.csv` | generated on demand |
@@ -77,7 +77,7 @@ rather than from a notebook cell or a command line.
 
 [`run_campaign.py`](../../../utils/run_campaign.py) runs a stage in
 batches from the command line, selected with `--where` filters and resumed
-by repeating the command. This is how stage 0 is run, since 1008 runs is
+by repeating the command. This is how stage 0 is run, since 1152 runs is
 not something to start in one go:
 
 ```sh
@@ -126,7 +126,7 @@ on hardware.
 
 Stage 0 is where the campaign's breadth lives. It buys no QPU time, so it
 is not constrained by the 900 minutes, and it carries every axis hardware
-cannot afford. **1008 runs**, regenerated with
+cannot afford. **1152 runs**, regenerated with
 
 ```sh
 PYTHONPATH=src python utils/build_benchmark_matrix.py --stage 0
@@ -134,7 +134,7 @@ PYTHONPATH=src python utils/build_benchmark_matrix.py --stage 0
 
 ### What it varies
 
-Six factors, fully crossed, with one deliberate hole.
+Six factors, fully crossed, with nothing missing.
 
 | Factor | Levels | |
 |---|---:|---|
@@ -145,18 +145,10 @@ Six factors, fully crossed, with one deliberate hole.
 | **Measurement** | 2 | `pauli`, `grouped` |
 | **Backend** | 2 | `aer_simulator`, `fake_aachen` |
 
-`8 × 4 × 3 × 3 × 2 × 2 = 1152`, less the 144 runs of the hole: **UCCSD
-has no mol_map circuit**. It builds excitation operators from fermionic
-modes and needs qubits that index spin orbitals, whereas mol_map's qubits
-index determinants under a constraint encoding, where the
-occupied/virtual split UCCSD works from does not exist. A mol_map UCCSD
-is to be supplied; when it is, `UCCSD_MAPPERS` in the generator grows by
-one entry and the crossing closes.
-
-Everything else is complete, which is the point of a factorial design: an
-optimizer effect can be read at every ansatz, a mapper effect at both
-bases and both molecules, and an interaction between any two can be seen
-at all.
+`8 × 4 × 3 × 3 × 2 × 2 = 1152`, complete, which is the point of a
+factorial design: an optimizer effect can be read at every ansatz, a
+mapper effect at both bases and both molecules, and an interaction
+between any two can be seen at all.
 
 ### The chemistry cells
 
@@ -203,7 +195,7 @@ comparison is really about.
 | `RealAmplitudes` | `n(R+1)` | Ry only, reverse-linear entangler. Real amplitudes only; the cheapest circuit in the set, and stage 1's |
 | `EfficientSU2_circular` | `2n(R+1)` | Ry+Rz, ring entangler. Complex amplitudes and twice the parameters |
 | `n_local_rzryrz_sca` | `3n(R+1)` | Rz+Ry+Rz, shifted-circular-alternating entangler |
-| `UCCSD` | one per excitation | Singles and doubles from the reference determinant |
+| `UCCSD` | 15, 63 or 26 — see below | A restricted singles-and-doubles ansatz out of the reference determinant, supplied as pinned QASM rather than built here |
 
 `n_local_rzryrz_sca` is the third family for a specific reason: it is the
 circuit `TN_QC_OPT` builds for itself when no `qasm_ansatz` is supplied.
@@ -211,11 +203,36 @@ Putting the vendor's own default into the comparison is better than
 leaving it as the unmeasured thing every other run is implicitly read
 against.
 
-`UCCSD` is not hardware-efficient and not cheap — 238 parameters at 16
-qubits against RealAmplitudes' 48 — and that is its role: it is the
-chemistry baseline the other three are trying to beat per unit of QPU
-time. All four reach TN-VQE the same way, as a pinned QASM file through
-`TNQCOptInput.qasm_ansatz`, so each is run by all three methods.
+`UCCSD` is the chemistry baseline the other three are trying to beat per
+unit of QPU time. All four reach TN-VQE the same way, as a pinned QASM
+file through `TNQCOptInput.qasm_ansatz`, so each is run by all three
+methods.
+
+**UCCSD is supplied, not generated.** The other three families are built
+from `_ansatz_builders.py` and pinned; UCCSD's six files are written by
+hand and this repository never overwrites them. It is a *restricted*
+ansatz rather than the generalized singles-and-doubles pool the builder
+here can produce — 15 parameters at H2/6-31g against the pool's 40 — and
+the two encodings are matched parameter for parameter:
+
+| Cell | JW | mol_map | Parameters |
+|---|---|---|---:|
+| H2 / 6-31G | `UCCSD_JW_8q_2r_2e` | `UCCSD_molmap_4q_2r_2e_4o` | 15 |
+| H2 / qvSZP | `UCCSD_JW_16q_2r_2e` | `UCCSD_molmap_6q_2r_2e_8o` | 63 |
+| H2O CAS(4,4) | `UCCSD_JW_8q_2r_4e` | `UCCSD_molmap_6q_2r_4e_4o` | 26 |
+
+That matching is what makes the mapper comparison a comparison on these
+runs: a JW row and its mol_map counterpart differ in the encoding and not
+in the ansatz, so a difference between them is attributable to the
+encoding. `Num_Opt_Params_Phi` is therefore **read off the pinned file**
+for UCCSD rather than derived from (qubits, electrons), since a derived
+count would describe a circuit the campaign does not run.
+
+The mol_map circuits are deep — 8,565 gates at H2O and 18,523 at
+H2/qvSZP, against 17 to 65 operations for the JW files, which are pinned
+at a higher gate level. Nothing here reaches hardware: stage 1 runs
+`RealAmplitudes` alone, so the cost model's shallow-circuit range is not
+being relied on for any UCCSD row.
 
 Note that RealAmplitudes against EfficientSU2_circular moves the rotation
 set **and** the entangler at once, so a difference between those two
@@ -279,7 +296,7 @@ Four things come out of it, none of which needs purchased time:
   measured at all.
 - **That the pipeline runs end to end**, before it costs anything.
 
-A caution on its own cost: 1008 runs is free of the QPU allocation but
+A caution on its own cost: 1152 runs is free of the QPU allocation but
 not of CPU time, and the widest cells are 16 qubits with 1,177 Pauli
 terms in 538 groups. If it proves too slow to run whole, the optimizer
 axis is the one to cut back first — it is a question about the classical
@@ -504,7 +521,7 @@ PYTHONPATH=src python utils/split_benchmark_batches.py
 %%{init: {"theme": "base", "themeVariables": {"background": "#ffffff", "primaryColor": "#ffffff", "primaryBorderColor": "#000000", "primaryTextColor": "#000000", "lineColor": "#000000", "secondaryColor": "#ffffff", "tertiaryColor": "#ffffff", "clusterBkg": "#ffffff", "clusterBorder": "#000000", "edgeLabelBackground": "#ffffff", "fontFamily": "monospace"}}}%%
 flowchart TD
     A["SCREENED chemistry cells<br/>2 molecules x 2 basis sets x 2 mappers<br/>a closed 2x2x2, none missing"]
-    A --> S["Stage 0: simulator screen<br/>1008 runs, aer_simulator + fake_aachen<br/>4 ansaetze x 3 optimizers<br/>x 3 methods x 2 measurement methods<br/>NO QPU TIME"]
+    A --> S["Stage 0: simulator screen<br/>1152 runs, aer_simulator + fake_aachen<br/>4 ansaetze x 3 optimizers<br/>x 3 methods x 2 measurement methods<br/>NO QPU TIME"]
     S --> M["Measures what was assumed:<br/>E as the runtime groups it,<br/>evaluations to converge,<br/>which ansatz and optimizer win,<br/>classical wall clock"]
     M --> B["Stage-1 hardware screen<br/>12 runs, one ansatz, one optimizer,<br/>one measurement method per mapper<br/>build_benchmark_matrix.py"]
 
@@ -626,24 +643,28 @@ vendor's own default is measured rather than assumed. Note that its
 leading Rz layer acts on `|0…0⟩`, where Rz is a global phase, so 4 of its
 36 parameters at this width do nothing.
 
-**`UCCSD`**, one variational amplitude per singles-and-doubles excitation
-out of the reference determinant: 104 parameters at 8 qubits with 2
-electrons, 238 at 16. Not hardware-efficient, and far larger than the
-other three, which is the point — it is the chemistry baseline the
-hardware-efficient families are trying to beat per unit of QPU time. It
-alone starts from `Phi_Init = zeros`, since zero amplitudes *are* the
-Hartree-Fock reference.
+**`UCCSD`**, a restricted singles-and-doubles ansatz out of the reference
+determinant: 15 parameters at H2/6-31G, 26 at H2O, 63 at H2/qvSZP, under
+either mapper. It is the chemistry baseline the hardware-efficient
+families are trying to beat per unit of QPU time, and it alone starts
+from `Phi_Init = zeros`, since zero amplitudes *are* the Hartree-Fock
+reference.
 
-Neither is drawn here: at 4 qubits `n_local_rzryrz_sca` is three times the
-width of the RealAmplitudes diagram, and a Trotterised UCCSD circuit does
-not fit a page at any width the campaign runs. Both are in `data/qasm/`,
-where the pinned file is the authority anyway.
+Its six files are **written by hand and never regenerated**. That is not
+a convenience: mol_map's qubits index determinants and have no
+occupied/virtual split for excitation operators to be built from, so no
+mol_map UCCSD could be generated here at all; and the JW files are the
+same restricted ansatz rather than the generalized pool
+`_ansatz_builders.uccsd` produces, so regenerating them would silently
+replace 15 parameters with 40. `pin_qasm_ansatz.py` reports these six as
+`supplied externally` and leaves them alone —
+`_ansatz_builders.UCCSD_BUILDABLE_MAPPERS` is empty, which is what
+enforces it.
 
-`UCCSD` is run on Jordan-Wigner rows only. It builds excitation operators
-from fermionic modes and needs qubits that index spin orbitals, whereas
-mol_map's qubits index determinants and have no occupied/virtual split to
-work from. A mol_map UCCSD is to be supplied; the generator holds the
-restriction in `UCCSD_MAPPERS`, so adding one entry closes the crossing.
+Neither `n_local_rzryrz_sca` nor `UCCSD` is drawn here: at 4 qubits the
+first is three times the width of the RealAmplitudes diagram, and the
+mol_map UCCSD circuits run to thousands of gates. All are in
+`data/qasm/`, where the pinned file is the authority anyway.
 
 **Why the circuits are supplied rather than defaulted.** A run that let
 its stack build a circuit for it would carry a circuit defined by the
@@ -920,10 +941,10 @@ documentation covers the submission path this campaign would use.
   They are Cebule additions rather than scipy methods, and the spellings
   used here are the ones supplied by hand. Confirm them against
   upstream's dispatch before a batch is submitted.
-- **UCCSD has no mol_map circuit**, so 144 of the 1,152 stage-0 cells are
-  absent and the ansatz axis is complete on Jordan-Wigner only. A mol_map
-  UCCSD is expected; until it arrives, an ansatz effect on mol_map is
-  read across three families rather than four.
+- **The UCCSD circuits are outside this repository's reach.** All six are
+  supplied by hand, so nothing here can regenerate or verify them beyond
+  the SHA256 pin and the parameter count read off the file. A change to
+  one is detectable but not reproducible from this repository alone.
 - **`TN_Layers_Network` is 2 everywhere.** A Givens network spans the
   rotation group only after roughly `n_spatial/2` layers, so at 4 orbitals
   the ansatz is complete and at more it is restricted. Nothing in the

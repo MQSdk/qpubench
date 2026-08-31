@@ -25,7 +25,7 @@ So the sweep is split at its natural decision point:
     one circuit repetition count).  12 rows: the combinations in
     STAGE1_HARDWARE crossed with plain VQE, TN-VQE and the classical-only
     control.  The axes hardware cannot afford are carried by stage 0,
-    which simulates 1008 rows for no QPU time at all.
+    which simulates 1152 rows for no QPU time at all.
 
   Stage 2 (deep sweep) -- the full 28-point TN_Layers_Network x
     Ansatz_Reps x TN_Ansatz sweep, run only on the (molecule,
@@ -72,6 +72,12 @@ import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "src"))
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+
+# _ansatz_builders defers every quantum-SDK import into the function that
+# needs one, so naming a circuit costs this module no dependency it did
+# not already have.
+from _ansatz_builders import qasm_stem
 
 from qpubench.hamiltonian_sources.mol_map import count_qubits, is_confirmed
 from qpubench.schemas.mirrors.mqsdk_cebule import TNAnsatz, tn_theta_parameter_count
@@ -355,17 +361,22 @@ ANSATZE = [
     "RealAmplitudes", "EfficientSU2_circular", "n_local_rzryrz_sca", "UCCSD",
 ]
 
-# UCCSD builds excitation operators from FERMIONIC MODES, so it needs
-# qubits that index spin orbitals.  mol_map's qubits index determinants
-# under a constraint encoding, and the occupied/virtual split UCCSD works
-# from does not exist there, so `_ansatz_builders.uccsd` cannot build a
-# mol_map circuit and none is pinned.
+# Both, so stage 0's crossing is complete: 1152 rows with no hole.
 #
-# PENDING: a mol_map UCCSD is to be supplied, at which point this set
-# grows to include "mol_map" and stage 0's UCCSD arm closes the crossing.
-# Until then the omission is here rather than in a comment, so the row
-# count and the README both follow it automatically.
-UCCSD_MAPPERS = {"JW"}
+# Neither is built here.  Both are SUPPLIED as pinned QASM, and both are a
+# RESTRICTED UCCSD rather than the generalized singles-and-doubles pool
+# this repository can generate -- 15 parameters at H2/6-31g against the
+# pool's 40.  The two encodings are matched parameter for parameter (15,
+# 63 and 26 for the three chemistry cells), which is what the comparison
+# needs: a JW row and its mol_map counterpart then differ in the encoding
+# and not in the ansatz, so a difference between them is attributable to
+# the encoding.
+#
+# mol_map could not have been built here regardless: UCCSD's excitation
+# operators come from FERMIONIC MODES and need qubits indexing spin
+# orbitals, while mol_map's index determinants under a constraint
+# encoding with no occupied/virtual split to work from.
+UCCSD_MAPPERS = {"JW", "mol_map"}
 
 # The in-sector alternative, swept only under --sweep-circuit-ansatz; see
 # build_stage2().  entanglement="linear", never the default "full"
@@ -720,24 +731,32 @@ def qubit_count(mapper: str, active_electrons: int, active_orbitals: int) -> tup
     return n, source
 
 
-def uccsd_parameter_count(num_qubits: int, num_electrons: int) -> int:
-    """One variational amplitude per singles+doubles excitation.
+def pinned_parameter_count(path: pathlib.Path) -> int | None:
+    """Free parameters a pinned OpenQASM 3 circuit declares, or None.
 
-    Counted from the pool `_ansatz_builders.build_ansatz` really builds
-    (`integrations.generic_adapt_vqe.pool`) rather than from a
-    combinatorial formula written out here, so the two cannot drift
-    apart.  The pool is pure qpubench + stdlib, so this adds no
-    dependency the generator did not already have.
+    THE FILE IS THE AUTHORITY, and for UCCSD it is the only one.  The
+    campaign's UCCSD circuits are supplied rather than built here (see
+    `_ansatz_builders.UCCSD_BUILDABLE_MAPPERS`): they are a restricted
+    ansatz, not the generalized singles-and-doubles pool this repository
+    can generate, and matched between the two encodings so that a JW row
+    and a mol_map row differ in the encoding rather than in the ansatz.
+    Deriving the count from (qubits, electrons) would therefore describe
+    a circuit the campaign does not run -- it reads 40 where the pinned
+    file declares 15.
 
-    No stage-1 row uses this: UCCSD runs only on JW-mapped plain VQE, so
-    it cannot be crossed with the other two methods and is out of the
-    screen.  It is kept for a later stage that names UCCSD explicitly,
-    where the count is what sets the row's optimizer budget -- at 12
-    qubits / 8 electrons the pool is 200 operators.
+    Counted off the `input` declarations rather than by loading the
+    circuit, so this module keeps its standard-library-only requirement.
+    An unbound OpenQASM 3 dump declares exactly one `input` per free
+    parameter, which is the property `pin_qasm_ansatz` exists to
+    preserve and `test_pinned_qasm_carries_the_parameters_the_matrix_claims`
+    checks against a real Qiskit load.
     """
-    from integrations.generic_adapt_vqe.pool import generate_singles_doubles_pool
-
-    return len(generate_singles_doubles_pool(num_qubits, num_electrons))
+    if not path.exists():
+        return None
+    return sum(
+        1 for line in path.read_text(encoding="utf-8").splitlines()
+        if line.startswith("input ")
+    )
 
 
 def optimizer_iterations(
@@ -766,6 +785,7 @@ def stage_evals_per_param(stage: str) -> float:
 
 def circuit_parameter_count(
     ansatz: str, num_qubits: int, reps: int, num_electrons: int | None = None,
+    mapper: str = "JW", num_orbitals: int = 0,
 ) -> str:
     """Circuit-side (phi) parameter count, where the ansatz fixes it.
 
@@ -774,15 +794,18 @@ def circuit_parameter_count(
     recording one number for both is how this column came to understate
     every TN row by 50%.
 
-    UCCSD's count depends on the excitation list its builder generates
-    from the active space, not on (qubits, reps) alone, so it takes
-    `num_electrons` and counts the real pool -- see
-    `uccsd_parameter_count`.
+    UCCSD is read off its pinned file rather than derived, because its
+    circuit is supplied rather than built -- see `pinned_parameter_count`.
+    The hardware-efficient families are derived, and every formula below
+    was verified against the built circuit's own `num_parameters`.
     """
     if ansatz == "UCCSD":
-        return "" if num_electrons is None else str(
-            uccsd_parameter_count(num_qubits, num_electrons) * reps
+        stem = qasm_stem(
+            ansatz, num_qubits, reps, mapper=mapper,
+            num_electrons=num_electrons or 0, num_orbitals=num_orbitals,
         )
+        count = pinned_parameter_count(_QASM_DIR / f"{stem}.qasm")
+        return "" if count is None else str(count)
     if ansatz == "excitation_preserving_linear":
         # One RZ per qubit per rotation layer, plus one theta per linear
         # pair per rep (Qiskit's default mode="iswap"). Verified against
@@ -804,6 +827,7 @@ def circuit_parameter_count(
 
 def qasm_ansatz_pin(
     ansatz: str, num_qubits: int, reps: int, num_electrons: int,
+    mapper: str = "JW", num_orbitals: int = 0,
 ) -> tuple[str, str]:
     """(path, sha256 prefix) of the pinned QASM circuit, if one exists.
 
@@ -827,12 +851,15 @@ def qasm_ansatz_pin(
     Note the interaction with TNQCOptInput.n_layers_circuit: supplying
     qasm_ansatz changes its effective default from 3 to 1.
     """
-    stem = f"{ansatz}_{num_qubits}q_{reps}r"
-    if ansatz == "UCCSD":
-        # UCCSD's structure follows the occupied/virtual split, so the
-        # electron count is part of its identity; the hardware-efficient
-        # families are fixed by (qubits, reps) alone.
-        stem += f"_{num_electrons}e"
+    # The stem lists exactly what the circuit depends on: (qubits, reps)
+    # for the hardware-efficient families, and mapper plus electrons --
+    # plus orbitals under mol_map, whose qubit count does not invert --
+    # for UCCSD.  Defined once, in _ansatz_builders, so this and
+    # pin_qasm_ansatz.py cannot name the same circuit differently.
+    stem = qasm_stem(
+        ansatz, num_qubits, reps, mapper=mapper,
+        num_electrons=num_electrons, num_orbitals=num_orbitals,
+    )
     path = _QASM_DIR / f"{stem}.qasm"
     if not path.exists():
         return "", ""
@@ -970,8 +997,12 @@ def _row(
     # takes no QUANTUM MEASUREMENTS, and Optimization_Mode already carries
     # that.
     takes_measurements = optimization_mode != "network"
-    qasm_file, qasm_hash = qasm_ansatz_pin(ansatz, num_qubits, reps, active_electrons)
-    phi_params = circuit_parameter_count(ansatz, num_qubits, reps, active_electrons)
+    qasm_file, qasm_hash = qasm_ansatz_pin(
+        ansatz, num_qubits, reps, active_electrons, mapper, active_orbitals,
+    )
+    phi_params = circuit_parameter_count(
+        ansatz, num_qubits, reps, active_electrons, mapper, active_orbitals,
+    )
     # Theta is fixed by the inputs, unlike Num_ExpVals_Per_Iter: the
     # network is E (O E)^n_layers, so the node count is
     # even + n_layers * (odd + even) over the width U is built on.
@@ -1154,7 +1185,7 @@ def build_stage0() -> list[dict[str, str]]:
 
     What it crosses
     ---------------
-    Six factors, fully crossed, with one deliberate hole:
+    Six factors, fully crossed, with nothing missing:
 
       chemistry  the closed 2x2x2 in SCREENED -- {H2, H2O(4,4)} x
                  {6-31g, qvSZP} x {JW, mol_map}, 8 cells, none missing
@@ -1168,10 +1199,9 @@ def build_stage0() -> list[dict[str, str]]:
       backend    both simulators in SIMULATOR_BACKENDS, noiseless and the
                  target device's noise model
 
-    The hole is UCCSD on mol_map, which has no builder and no pinned
-    circuit: see UCCSD_MAPPERS.  Everything else is a complete crossing,
-    which is what lets a factor's effect be read at every level of the
-    others rather than at one.
+    A complete crossing is what lets a factor's effect be read at every
+    level of the others rather than at one.  1152 rows: 8 x 4 x 3 x 3 x 2
+    x 2, with no cell absent.
 
     It therefore carries the axes hardware cannot afford: all four
     ansaetze against stage 1's one, all three optimizers against stage 1's

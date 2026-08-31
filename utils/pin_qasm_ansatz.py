@@ -53,7 +53,7 @@ import sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "src"))
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
-from _ansatz_builders import build_ansatz
+from _ansatz_builders import build_ansatz, can_build, qasm_stem
 
 _REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 _CAMPAIGN_DIR = _REPO_ROOT / "data" / "benchmarks" / "ibm_tn-vqe_qesem"
@@ -67,8 +67,10 @@ _STAGE0_PATH = _CAMPAIGN_DIR / "stage0_simulator_screen.csv"
 _QASM_DIR = _REPO_ROOT / "data" / "qasm"
 
 
-def circuit_shapes(rows: list[dict[str, str]]) -> set[tuple[str, int, int, int]]:
-    """The distinct (ansatz, qubits, reps, electrons) the matrix executes.
+def circuit_shapes(
+    rows: list[dict[str, str]],
+) -> set[tuple[str, int, int, str, int, int]]:
+    """The distinct (ansatz, qubits, reps, mapper, electrons, orbitals) run.
 
     Every row, not only the TN-VQE ones. A comparison between VQE and
     TN-VQE is only a comparison if both sides' circuits are fixed, and a
@@ -81,37 +83,40 @@ def circuit_shapes(rows: list[dict[str, str]]) -> set[tuple[str, int, int, int]]
     no circuit -- `optimize_network` opens with `circuit_to_mps(circuit,
     phi)` -- so the circuit they freeze is part of what defines them.
 
-    Electrons are zeroed off UCCSD, matching `qasm_path`: the
-    hardware-efficient families are fixed by (qubits, reps) alone, so
-    carrying the electron count would make one circuit look like several
+    Mapper, electrons and orbitals are zeroed off the mapper-independent
+    families, matching `qasm_stem`: they are fixed by (qubits, reps)
+    alone, so carrying the rest would make one circuit look like several
     and write the same file once per molecule that reaches that width.
     """
-    return {
-        (
+    shapes = set()
+    for row in rows:
+        if not (row["Ansatz"] and row["N_Qubit"]):
+            continue
+        chemistry = row["Ansatz"] == "UCCSD"
+        shapes.add((
             row["Ansatz"], int(row["N_Qubit"]), int(row["Ansatz_Reps"]),
-            int(row["Active_Electrons"]) if row["Ansatz"] == "UCCSD" else 0,
-        )
-        for row in rows
-        if row["Ansatz"] and row["N_Qubit"]
-    }
+            row["Mapper"] if chemistry else "JW",
+            int(row["Active_Electrons"]) if chemistry else 0,
+            int(row["Active_Orbitals"]) if chemistry else 0,
+        ))
+    return shapes
 
 
-def qasm_path(ansatz: str, num_qubits: int, reps: int, num_electrons: int) -> pathlib.Path:
-    """Where one circuit's pinned QASM lives.
-
-    UCCSD carries the electron count in its name because its structure
-    depends on it -- the excitation pool follows the occupied/virtual
-    split -- whereas the hardware-efficient families are fixed by
-    (qubits, reps) alone.
-    """
-    stem = f"{ansatz}_{num_qubits}q_{reps}r"
-    if ansatz == "UCCSD":
-        stem += f"_{num_electrons}e"
+def qasm_path(
+    ansatz: str, num_qubits: int, reps: int, mapper: str = "JW",
+    num_electrons: int = 0, num_orbitals: int = 0,
+) -> pathlib.Path:
+    """Where one circuit's pinned QASM lives.  See `qasm_stem`."""
+    stem = qasm_stem(
+        ansatz, num_qubits, reps, mapper=mapper,
+        num_electrons=num_electrons, num_orbitals=num_orbitals,
+    )
     return _QASM_DIR / f"{stem}.qasm"
 
 
 def write_pinned_qasm(
-    ansatz: str, num_qubits: int, reps: int, num_electrons: int,
+    ansatz: str, num_qubits: int, reps: int, mapper: str = "JW",
+    num_electrons: int = 0, num_orbitals: int = 0,
 ) -> tuple[pathlib.Path, str]:
     """Write one circuit as OpenQASM 3.0, parameters left free; return
     (path, sha256 prefix).
@@ -135,7 +140,7 @@ def write_pinned_qasm(
         parameterize=True,
     )
 
-    path = qasm_path(ansatz, num_qubits, reps, num_electrons)
+    path = qasm_path(ansatz, num_qubits, reps, mapper, num_electrons, num_orbitals)
     # UTF-8 explicitly, not the locale default: an unbound dump names its
     # parameters `input float[64] _{θ}_0_;`, so these files are not pure
     # ASCII and must not depend on the writer's locale.
@@ -157,16 +162,32 @@ def main() -> None:
 
     names = ", ".join(p.name for p in sources)
     print(f"Pinning {len(shapes)} distinct circuits from {names}:")
-    written: set[pathlib.Path] = set()
-    for ansatz, num_qubits, reps, num_electrons in shapes:
-        path, digest = write_pinned_qasm(ansatz, num_qubits, reps, num_electrons)
-        written.add(path)
+    # Every file some row points at, whether this script wrote it or not.
+    # The stale sweep below deletes against THIS set rather than against
+    # what was written, because a circuit this repository cannot build --
+    # a mol_map UCCSD, supplied from outside -- is still a circuit the
+    # campaign runs, and deleting it would be the worst kind of tidying.
+    expected: set[pathlib.Path] = set()
+    supplied: list[pathlib.Path] = []
+    for ansatz, num_qubits, reps, mapper, num_electrons, num_orbitals in shapes:
+        path = qasm_path(ansatz, num_qubits, reps, mapper, num_electrons, num_orbitals)
+        expected.add(path)
+        if not can_build(ansatz, mapper):
+            supplied.append(path)
+            continue
+        _, digest = write_pinned_qasm(
+            ansatz, num_qubits, reps, mapper, num_electrons, num_orbitals,
+        )
         print(f"  {path.relative_to(_REPO_ROOT)}  sha256:{digest}")
+
+    for path in sorted(supplied):
+        state = "present" if path.exists() else "MISSING"
+        print(f"  {path.relative_to(_REPO_ROOT)}  supplied externally, {state}")
 
     # The pinned set is exactly what the matrix runs. A circuit left
     # behind by an earlier matrix is not a spare -- it is a file no row
     # points at, which invites being read as one the campaign runs.
-    for stale in sorted(set(_QASM_DIR.glob("*.qasm")) - written):
+    for stale in sorted(set(_QASM_DIR.glob("*.qasm")) - expected):
         stale.unlink()
         print(f"  removed {stale.relative_to(_REPO_ROOT)} (no row runs it)")
 

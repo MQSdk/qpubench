@@ -81,6 +81,82 @@ SUPPORTED_ANSATZE = (
     "UCCSD",
 )
 
+# Families whose circuit is fixed by (qubits, reps) alone, so that two rows
+# reaching the same width share one pinned file however they got there.
+_MAPPER_INDEPENDENT = tuple(a for a in SUPPORTED_ANSATZE if a != "UCCSD")
+
+# THE CAMPAIGN'S UCCSD CIRCUITS ARE SUPPLIED, NOT BUILT HERE -- under
+# either mapper.  `uccsd()` below builds the GENERALIZED ansatz, one
+# amplitude per singles-and-doubles excitation out of the reference
+# determinant; the campaign runs a restricted version with materially
+# fewer parameters (15 against 40 at 8 qubits / 2 electrons), matched
+# between the two encodings so that a JW row and a mol_map row differ in
+# the encoding rather than in the ansatz.
+#
+# mol_map could never have been built here in any case: UCCSD's
+# excitation operators are built from FERMIONIC MODES and need qubits
+# that index spin orbitals, while mol_map's index determinants under a
+# constraint encoding and have no occupied/virtual split to work from.
+#
+# So `pin_qasm_ansatz` names these files and reports whether they are
+# present, and never writes or deletes one.  Overwriting a supplied
+# circuit with this module's generalized one would change what the
+# campaign runs without changing anything that says so.
+UCCSD_BUILDABLE_MAPPERS: tuple[str, ...] = ()
+
+
+def can_build(ansatz: str, mapper: str = "JW") -> bool:
+    """Whether `build_ansatz` may construct this circuit for the campaign.
+
+    False for UCCSD under every mapper -- see UCCSD_BUILDABLE_MAPPERS.
+    `uccsd()` itself still works, and `estimate_ibm_cost.py` still uses
+    it; what this governs is whether a pinned campaign file may be
+    generated from it.
+    """
+    if ansatz == "UCCSD":
+        return mapper in UCCSD_BUILDABLE_MAPPERS
+    return ansatz in SUPPORTED_ANSATZE
+
+
+def qasm_stem(
+    ansatz: str, num_qubits: int, reps: int, *, mapper: str = "JW",
+    num_electrons: int = 0, num_orbitals: int = 0,
+) -> str:
+    """The filename stem identifying one pinned circuit.
+
+    The stem lists exactly what the circuit depends on, and nothing else,
+    so that two rows share a file when and only when they share a circuit.
+
+    The hardware-efficient families depend on (qubits, reps): a ring of CX
+    and a stack of rotation layers is the same object whichever mapper
+    produced the register, so their stem carries neither the mapper nor the
+    electron count.
+
+    UCCSD depends on more, and on different things per mapper:
+
+      JW       qubits are spin orbitals, so (qubits, electrons) fixes the
+               occupied/virtual split and therefore the excitation pool.
+               The orbital count is qubits/2 and would be redundant.
+      mol_map  qubits index DETERMINANTS, and the qubit count is
+               ceil(log2(C(m, n_alpha) * C(m, n_beta))), which does not
+               invert: 6 qubits is CAS(2,8) for H2/qvSZP and CAS(4,4) for
+               H2O.  So the orbital count is load-bearing here and is in
+               the stem.
+
+    The mapper is named on every UCCSD file even where the orbital count
+    would already separate them.  A JW UCCSD and a mol_map UCCSD are not
+    the same kind of object -- one acts on spin orbitals, the other on a
+    determinant index -- and a stem that let them collide would surface as
+    a spurious "the pinned circuit changed" from the SHA256 check rather
+    than as the name clash it is.
+    """
+    if ansatz in _MAPPER_INDEPENDENT:
+        return f"{ansatz}_{num_qubits}q_{reps}r"
+    stem = f"{ansatz}_{mapper.replace('_', '')}_{num_qubits}q_{reps}r_{num_electrons}e"
+    if mapper != "JW":
+        stem += f"_{num_orbitals}o"
+    return stem
+
 
 def build_ansatz(
     ansatz: str,

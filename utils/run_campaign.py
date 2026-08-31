@@ -1,6 +1,6 @@
 """Run a campaign stage in batches, checkpointing after every run.
 
-Built for stage 0, which is 1008 simulated runs and therefore not
+Built for stage 0, which is 1152 simulated runs and therefore not
 something to start in one go and hope: batches let a slice be run,
 inspected and resumed.  It takes any of the campaign's CSV files, so the
 stage-1 batches go through the same path.
