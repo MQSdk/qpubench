@@ -56,10 +56,14 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from _ansatz_builders import build_ansatz
 
 _REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
-_CSV_PATH = (
-    _REPO_ROOT / "data" / "benchmarks" / "ibm_tn-vqe_qesem"
-    / "stage1_screening_matrix.csv"
-)
+_CAMPAIGN_DIR = _REPO_ROOT / "data" / "benchmarks" / "ibm_tn-vqe_qesem"
+_CSV_PATH = _CAMPAIGN_DIR / "stage1_screening_matrix.csv"
+# Stage 0 runs on simulators, which is exactly why its circuits have to be
+# pinned too: a simulated result is only a baseline for a hardware result
+# if the two ran the SAME circuit, and stage 0 carries three ansatz
+# families and a 16-qubit width that stage 1 never reaches.  Pinned when
+# the file exists, so the generator can be re-run in either order.
+_STAGE0_PATH = _CAMPAIGN_DIR / "stage0_simulator_screen.csv"
 _QASM_DIR = _REPO_ROOT / "data" / "qasm"
 
 
@@ -76,11 +80,16 @@ def circuit_shapes(rows: list[dict[str, str]]) -> set[tuple[str, int, int, int]]
     `network` rows are included too. They freeze phi rather than running
     no circuit -- `optimize_network` opens with `circuit_to_mps(circuit,
     phi)` -- so the circuit they freeze is part of what defines them.
+
+    Electrons are zeroed off UCCSD, matching `qasm_path`: the
+    hardware-efficient families are fixed by (qubits, reps) alone, so
+    carrying the electron count would make one circuit look like several
+    and write the same file once per molecule that reaches that width.
     """
     return {
         (
             row["Ansatz"], int(row["N_Qubit"]), int(row["Ansatz_Reps"]),
-            int(row["Active_Electrons"]),
+            int(row["Active_Electrons"]) if row["Ansatz"] == "UCCSD" else 0,
         )
         for row in rows
         if row["Ansatz"] and row["N_Qubit"]
@@ -136,14 +145,18 @@ def write_pinned_qasm(
 
 def main() -> None:
     _QASM_DIR.mkdir(parents=True, exist_ok=True)
-    with _CSV_PATH.open() as f:
-        rows = list(csv.DictReader(f))
+    sources = [p for p in (_CSV_PATH, _STAGE0_PATH) if p.exists()]
+    rows: list[dict[str, str]] = []
+    for path in sources:
+        with path.open() as f:
+            rows.extend(csv.DictReader(f))
 
     shapes = sorted(circuit_shapes(rows))
     if not shapes:
         raise SystemExit(f"no rows with a circuit found in {_CSV_PATH.name}")
 
-    print(f"Pinning {len(shapes)} distinct circuits from {_CSV_PATH.name}:")
+    names = ", ".join(p.name for p in sources)
+    print(f"Pinning {len(shapes)} distinct circuits from {names}:")
     written: set[pathlib.Path] = set()
     for ansatz, num_qubits, reps, num_electrons in shapes:
         path, digest = write_pinned_qasm(ansatz, num_qubits, reps, num_electrons)

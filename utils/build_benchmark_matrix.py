@@ -20,11 +20,12 @@ is worth one.
 So the sweep is split at its natural decision point:
 
   Stage 1 (screening) -- broad in the things you are choosing *between*
-    (6 basis sets, two ansaetze crossed with all three methods, both
-    mappers, both measurement methods), shallow in everything else (one
-    reference TN-VQE point, one circuit repetition count).  166 rows:
-    the full crossing, less the pairs in SKIPPED_PAIRS, the Jordan-Wigner
-    rows above MAX_JW_QUBITS, and the `pauli` rows of GROUPED_ONLY.
+    (the combinations in SCREENED, one ansatz, one measurement method
+    per mapper), shallow in everything else (one reference TN-VQE point,
+    one circuit repetition count).  12 rows: the combinations in
+    STAGE1_HARDWARE crossed with plain VQE, TN-VQE and the classical-only
+    control.  The axes hardware cannot afford are carried by stage 0,
+    which simulates 1008 rows for no QPU time at all.
 
   Stage 2 (deep sweep) -- the full 28-point TN_Layers_Network x
     Ansatz_Reps x TN_Ansatz sweep, run only on the (molecule,
@@ -77,6 +78,7 @@ from qpubench.schemas.mirrors.mqsdk_cebule import TNAnsatz, tn_theta_parameter_c
 
 _REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 _CAMPAIGN_DIR = _REPO_ROOT / "data" / "benchmarks" / "ibm_tn-vqe_qesem"
+_STAGE0_PATH = _CAMPAIGN_DIR / "stage0_simulator_screen.csv"
 _STAGE1_PATH = _CAMPAIGN_DIR / "stage1_screening_matrix.csv"
 _STAGE2_PATH = _CAMPAIGN_DIR / "stage2_deep_sweep.csv"
 _STAGE3_PATH = _CAMPAIGN_DIR / "stage3_qesem_refinement.csv"
@@ -158,44 +160,133 @@ N_SPATIAL_ORBITALS = {
             "def2-svp": 24, "def2-tzvp": 43, "qvSZP": 17},
 }
 
+# The campaign screens TWO of these, 6-31g and qvSZP, and the rest are
+# kept here only so that `--select` can reject them with a reason (see
+# SKIPPED_PAIRS) rather than with "unknown basis".
+#
+# Why those two.  They are the two ENDS of the basis axis, not two points
+# along it: 6-31g is a fixed Pople split-valence set, qvSZP is Grimme's
+# charge-adaptive one whose exponents depend on the molecular environment,
+# and it is the campaign's only non-Basis-Set-Exchange basis.  A
+# difference between them is the largest difference the axis can show, so
+# two points buy most of what four would.
+#
 # def2-SVP is deliberately absent: it gives the same orbital count as
 # cc-pVDZ for both molecules (10 and 24 above), so it would have screened
 # at the same width, the same E and the same iteration budget, buying a
 # second point where the campaign already has one.
-BASES = ["sto-3g", "6-31g", "cc-pvdz", "cc-pvtz", "def2-tzvp", "qvSZP"]
+#
+# sto-3g is absent too, on information rather than cost: 2 measurement
+# bases under mol_map and 5 under Jordan-Wigner, which is small enough
+# that neither the mapper nor the method comparison has room to show a
+# difference.
+BASES = ["6-31g", "cc-pvdz", "def2-tzvp", "qvSZP"]
+SCREENED_BASES = ["6-31g", "qvSZP"]
 BASIS_SOURCE = {b: "basis_set_exchange" for b in BASES} | {"qvSZP": "grimme_qvszp"}
 
-# (molecule, basis) pairs stage 1 does NOT run, with the reason, because a
-# gap in an otherwise full crossing has to be a recorded decision rather
-# than something a reader has to infer from a missing row.
+# WHAT THE CAMPAIGN SCREENS, as (molecule, basis, mapper) with the reason.
 #
-# H2/cc-pVTZ is 28 spatial orbitals unrestricted, i.e. 56 Jordan-Wigner
-# qubits: the widest rows in the matrix by a factor of two, and the ones
-# the measurement cost punishes hardest.
+# The budget is 900 QPU minutes for everything, and the measured
+# measurement counts price one stage-1 run at anywhere from 21 minutes to
+# 749.  A full crossing costs 21,643.  So scope is chosen rather than
+# derived: each entry earns its place, and each omission is recorded.
+#
+# The shape of the cost is the thing to understand.  mol_map trades qubits
+# for density -- H2/cc-pVDZ is 10,069 Pauli terms on 7 qubits -- so its
+# cost climbs with the ORBITAL count while its width stays flat.  H2O is
+# the opposite: a fixed CAS(4,4) means every basis has identical width,
+# identical E and identical cost, and only the orbitals themselves differ.
+#
+# The chemistry axis is a CLOSED 2x2x2: two molecules, two bases, two
+# mappers, fully crossed with nothing missing.  That is what makes stage 0
+# analysable as a factorial design rather than as a list of runs -- a
+# mapper effect can be read at both bases and both molecules, and a basis
+# effect at both mappers, because every cell exists.
+SCREENED: dict[tuple[str, str, str], str] = {
+    # H2, unrestricted, so the basis really moves the width: 4 spatial
+    # orbitals under 6-31g against 8 under qvSZP.
+    ("H2", "6-31g", "JW"): "2x2x2 chemistry cell: H2 / Pople / JW",
+    ("H2", "6-31g", "mol_map"): "2x2x2 chemistry cell: H2 / Pople / mol_map",
+    ("H2", "qvSZP", "JW"): "2x2x2 chemistry cell: H2 / Grimme / JW",
+    ("H2", "qvSZP", "mol_map"): "2x2x2 chemistry cell: H2 / Grimme / mol_map",
+    # H2O at a fixed CAS(4,4), so width, E and cost are identical across
+    # its two bases and only the orbitals themselves differ -- the basis
+    # effect here is a chemistry effect with the cost held constant, which
+    # is the complement of what H2's unrestricted rows show.
+    ("H2O", "6-31g", "JW"): "2x2x2 chemistry cell: H2O(4,4) / Pople / JW",
+    ("H2O", "6-31g", "mol_map"): "2x2x2 chemistry cell: H2O(4,4) / Pople / mol_map",
+    ("H2O", "qvSZP", "JW"): "2x2x2 chemistry cell: H2O(4,4) / Grimme / JW",
+    ("H2O", "qvSZP", "mol_map"): "2x2x2 chemistry cell: H2O(4,4) / Grimme / mol_map",
+}
+
+# Screened on the simulator but never bought on hardware, with the
+# stage-1 minutes that buys nothing else.  Every cell of the 2x2x2 that
+# STAGE1_HARDWARE does not name appears here with its price, so the
+# omission is a recorded number rather than a silent gap.
+SIMULATOR_ONLY: dict[tuple[str, str, str], str] = {
+    ("H2", "qvSZP", "JW"): "538 bases, ~10 min per EVALUATION -- unaffordable at any budget",
+    ("H2", "qvSZP", "mol_map"): "210 min a run, 23% of the campaign for one point",
+    ("H2O", "6-31g", "mol_map"): "137 min a run, 15% of the campaign for one point",
+    ("H2O", "qvSZP", "mol_map"): "137 min a run; identical width and E to its 6-31g twin",
+}
+
+# STAGE 1 ON HARDWARE, and the reduction that makes it fit.
+#
+# Stage 0 simulates the whole crossing for nothing, so hardware buys only
+# what simulation cannot answer: the device error, and the QPU time a
+# method actually consumes.  Everything that is a question about circuit
+# structure rather than about the device stays in stage 0.
+#
+# One ansatz, because RealAmplitudes against EfficientSU2 is a question
+# about circuits, which a simulator answers honestly and for free.  One
+# measurement method per mapper, because `pauli` is the baseline
+# Jordan-Wigner wants and `grouped` is the feature mol_map exists to
+# exploit; the other diagonal of that square is stage 0's.
+STAGE1_ANSATZ = "RealAmplitudes"
+STAGE1_MEASUREMENT = {"JW": "pauli", "mol_map": "grouped"}
+
+# The four combinations hardware buys, at 237 of the 250 minutes stage 1
+# is allotted.  H2/6-31g carries the mapper comparison, the only size both
+# encodings can afford; H2O carries the basis axis at its two extremes, a
+# Pople split-valence against Grimme's adaptive basis, at a fixed CAS(4,4)
+# that holds everything else equal.
+STAGE1_HARDWARE = {
+    ("H2", "6-31g", "JW"),
+    ("H2", "6-31g", "mol_map"),
+    ("H2O", "6-31g", "JW"),
+    ("H2O", "qvSZP", "JW"),
+}
+
+# (molecule, basis) pairs no stage runs at all, with the reason.
 SKIPPED_PAIRS = {
+    ("H2O", "cc-pvdz"): (
+        "at a fixed CAS(4,4) it has the same width, the same 25 measurement "
+        "bases and the same cost as the two bases screened, so it is a third "
+        "point on an axis whose two ends are already bought"
+    ),
+    ("H2O", "def2-tzvp"): (
+        "same as cc-pVDZ at CAS(4,4): identical width, E and cost, so it "
+        "buys a third interior point on a two-point axis"
+    ),
     ("H2", "cc-pvtz"): (
         "56 Jordan-Wigner qubits unrestricted -- the widest and by far the "
         "most measurement-expensive rows in the screen"
     ),
+    ("H2", "cc-pvdz"): (
+        "mol_map counts 1,322 measurement bases at 7 qubits, i.e. 749 "
+        "minutes for one run against a 900 minute campaign; the JW arm is "
+        "20 qubits and worse"
+    ),
+    ("H2", "def2-tzvp"): (
+        "12 orbitals under mol_map, so denser again than cc-pVDZ's 1,322 "
+        "bases; the JW arm is 24 qubits"
+    ),
+    ("H2O", "cc-pvtz"): (
+        "no committed Hamiltonian, and at a fixed CAS(4,4) it would cost "
+        "and measure exactly as the other H2O bases do"
+    ),
 }
 
-# Widest Jordan-Wigner row the screen runs.  Above this, a (molecule,
-# basis) pair is screened on mol_map alone.
-#
-# The driver is measurement, not the circuit.  Evaluating <H> costs one
-# circuit per measurement basis, and for a JW-mapped Hamiltonian the
-# number of qubit-wise-commuting bases grows as roughly N^3: measured on
-# this matrix's own rows, 5 bases at 4 qubits, 46 at 8, 325 at 16, 762 at
-# 20 and 1,444 at 24 (utils/count_measurement_bases.py).  Since
-# H2 carries no active-space restriction its JW width follows the basis,
-# so its large-basis rows were 97% of the campaign's real QPU time.
-#
-# mol_map's constraint encoding indexes determinants rather than spin
-# orbitals, so it holds those same bases at 6 to 8 qubits.  Screening the
-# wide bases there keeps every basis in the study at a cost the plans can
-# carry.  What it gives up is the JW/mol_map comparison at exactly those
-# bases -- a real loss, recorded in the campaign README rather than
-# hidden.
 MAX_JW_QUBITS = 8
 
 MAPPERS = ["JW", "mol_map"]
@@ -206,6 +297,10 @@ MEASUREMENT_METHODS = ["pauli", "grouped"]
 # what the constraint encoding exists to exploit, so running the same
 # rows again under `pauli` buys the less interesting half of the
 # comparison at about 840 minutes of QPU time.
+# It is a HARDWARE reduction, so it applies to stage 1 and stage 2 only.
+# Stage 0 buys no QPU time, and the pauli/grouped comparison on mol_map
+# H2O is precisely the comparison this campaign exists to make, so
+# simulating both halves of it costs nothing but classical wall clock.
 GROUPED_ONLY = {("H2O", "mol_map")}
 
 # --- Ansaetze -------------------------------------------------------------
@@ -222,21 +317,55 @@ GROUPED_ONLY = {("H2O", "mol_map")}
 # a confound across it, and it is what lets a row and its classical-only
 # control differ in one thing only.
 #
-# UCCSD is not in the list: it builds excitation operators from fermionic
-# modes, so it exists only on JW-mapped plain VQE and could never be run
-# by the other two methods or under mol_map's constraint encoding (whose
-# qubits index determinants, not spin orbitals).  A row no other row can
-# be compared against does not earn its place in a screen; the builder in
-# _ansatz_builders.py is untouched, so a later stage can still name it.
+# Four families: three hardware-efficient, one chemistry-motivated.  They
+# are ordered here by how much structure they assume, which is the axis
+# the comparison is really about -- a hardware-efficient circuit is cheap
+# and expressive in the wrong directions, UCCSD is expensive and expressive
+# only inside the physical sector.
 #
-# Two families, not three.  They differ in the rotation set -- Ry alone
-# against Ry+Rz, so real amplitudes against complex, and n(R+1)
-# parameters against 2n(R+1) -- and in the entangler, reverse-linear
-# against a ring.  Note that this is TWO factors at once, so an ansatz
-# effect cannot be attributed to either on its own; that is a recorded
-# choice, and the alternative (a common entangler) is a one-word change
-# to the builder call.
-ANSATZE = ["RealAmplitudes", "EfficientSU2_circular"]
+#   RealAmplitudes         Ry only, reverse-linear entangler.  n(R+1)
+#                          parameters, real amplitudes only.  The cheapest
+#                          circuit in the set, and stage 1's.
+#   EfficientSU2_circular  Ry+Rz, ring entangler.  2n(R+1) parameters, so
+#                          complex amplitudes and twice the parameters --
+#                          note this moves the rotation set AND the
+#                          entangler at once, so an EfficientSU2-against-
+#                          RealAmplitudes difference cannot be attributed
+#                          to either alone.
+#   n_local_rzryrz_sca     Rz+Ry+Rz, shifted-circular-alternating
+#                          entangler.  3n(R+1) parameters.  This is the
+#                          circuit TN_QC_OPT builds for itself when no
+#                          qasm_ansatz is supplied (functions_qiskit.py:36),
+#                          which is the reason it is the third family: it
+#                          puts the vendor's own default in the comparison
+#                          instead of leaving it as the unmeasured thing
+#                          every other row is implicitly read against.
+#   UCCSD                  Singles and doubles from the reference
+#                          determinant, one amplitude per excitation.
+#                          Not hardware-efficient and not cheap; it is the
+#                          chemistry baseline the other three are trying
+#                          to beat per unit of QPU time.
+#
+# All four are run by all three methods.  UCCSD's circuit reaches TN-VQE
+# the same way the others do -- as a pinned QASM file through
+# TNQCOptInput.qasm_ansatz -- so the earlier claim that it could only run
+# under plain VQE was about the MAPPER, not the method.  That part still
+# holds: see UCCSD_MAPPERS.
+ANSATZE = [
+    "RealAmplitudes", "EfficientSU2_circular", "n_local_rzryrz_sca", "UCCSD",
+]
+
+# UCCSD builds excitation operators from FERMIONIC MODES, so it needs
+# qubits that index spin orbitals.  mol_map's qubits index determinants
+# under a constraint encoding, and the occupied/virtual split UCCSD works
+# from does not exist there, so `_ansatz_builders.uccsd` cannot build a
+# mol_map circuit and none is pinned.
+#
+# PENDING: a mol_map UCCSD is to be supplied, at which point this set
+# grows to include "mol_map" and stage 0's UCCSD arm closes the crossing.
+# Until then the omission is here rather than in a comment, so the row
+# count and the README both follow it automatically.
+UCCSD_MAPPERS = {"JW"}
 
 # The in-sector alternative, swept only under --sweep-circuit-ansatz; see
 # build_stage2().  entanglement="linear", never the default "full"
@@ -302,6 +431,64 @@ STAGE2_CORE_NETWORK = [1, 3]
 STAGE2_CORE_REPS = [1, 2]
 
 OPTIMIZER = "COBYLA"
+
+# --- The optimizer axis (stage 0) -----------------------------------------
+#
+# Three optimizers, all reached through TNQCOptInput.opt_method.  Stage 1
+# runs COBYLA alone, because the optimizer is a question about the
+# classical half of the loop and a simulator answers it for nothing.
+#
+#   COBYLA          derivative-free trust region, scipy.  The campaign's
+#                   incumbent and the value every committed cost estimate
+#                   was made under.
+#   SPSA            stochastic two-point gradient estimate: two
+#                   evaluations per step whatever n is, which is the
+#                   property that matters here -- its per-step cost does
+#                   NOT grow with the parameter count, so it is the one
+#                   candidate whose QPU cost per step is flat across the
+#                   width axis the campaign varies.
+#   ExcitationSolve reconstructs the energy's exact dependence on one
+#                   parameter (a low-order trigonometric polynomial, for
+#                   the Pauli-rotation and excitation gates all four
+#                   ansaetze are built from) and jumps to that
+#                   parameter's global minimum, rather than stepping
+#                   toward it.  Its evaluations therefore buy exact
+#                   coordinate minima instead of descent steps.
+#
+# All three are given THE SAME EVALUATION BUDGET, not a budget tuned per
+# optimizer.  The budget is what the QPU is billed for -- E measurement
+# circuits per evaluation, at 11.0 + 1.125E seconds -- so holding it fixed
+# is what makes the axis a fair comparison: the observable is descent per
+# evaluation, which is descent per QPU-second, which is the thing the
+# campaign is choosing between.  A per-optimizer budget would compare
+# three different purchases.
+#
+# The consequence is that each optimizer spends the same budget its own
+# way, and that is a recorded property rather than a defect:
+#
+#   COBYLA           n+1 simplex points, then descent steps.
+#   SPSA             floor(budget/2) steps, at two evaluations each.
+#   ExcitationSolve  reconstruction costs a fixed number of evaluations
+#                    per parameter, so a budget of ~1.3n does not complete
+#                    one full sweep over n parameters.  Stage 0 is where
+#                    that is measured rather than assumed; if it turns out
+#                    to need a full sweep to say anything, the finding is
+#                    that ExcitationSolve is not affordable at stage 1's
+#                    multiplier, which is itself a result.
+#
+# The three names are the strings Cebule dispatches on.  COBYLA is
+# scipy's; SPSA and ExcitationSolve are Cebule's own additions and do not
+# go through scipy.optimize.minimize, so CONFIRM THE EXACT SPELLINGS
+# against upstream's dispatch before submitting a batch -- an unrecognised
+# opt_method is the kind of thing that fails after the queue, not before.
+OPTIMIZERS = ["COBYLA", "SPSA", "ExcitationSolve"]
+
+# Only COBYLA has an upstream budget check (_check_iteration_budget
+# rejects n_iterations < varied + 2 for opt_method="COBYLA"), so only
+# COBYLA rows are constrained by it; the proportional rule clears it
+# everywhere anyway.  See optimizer_iterations.
+STAGE1_OPTIMIZER = "COBYLA"
+
 # Recorded, not assumed: opt_options goes straight to
 # scipy.optimize.minimize's `options`.  Empty is a defensible choice, but
 # it has to be a visible one -- for COBYLA, rhobeg changes both
@@ -426,17 +613,43 @@ PHI_INIT_ZEROS_ANSATZE = {"UCCSD"}
 #                   Greedy and order-dependent, so an upper bound: the one
 #                   class where both numbers exist reads 34 measured against
 #                   46 computed
-#   assumed         no basis for either, so the largest value measured on
-#                   that mapper is carried across.  A LOWER bound, and the
-#                   reason those rows cannot be purchased against
+#   hamiltonian_file  counted on the committed operator the run actually
+#                   optimises (data/benchmarks/.../hamiltonian_data), by
+#                   qubit-wise-commuting grouping.  Greedy, so an upper
+#                   bound on what the runtime's own grouping achieves.
+#
+# There is no longer an `assumed` class.  Every screened combination has a
+# committed Hamiltonian, and the assumption it replaced was wrong by up to
+# 36x: mol_map H2/cc-pVDZ was carried at 37 and counts 1,322, because the
+# constraint encoding trades qubits for density -- 10,069 Pauli terms on 7
+# qubits.  That single correction is why the campaign was rescoped.
+#
+# Where both a measurement and a count exist they disagree by about 2x
+# (H2/6-31g JW: 34 billed against 68 counted), the runtime grouping being
+# better than greedy.  The measured value is used where there is one, and
+# the counted value is an upper bound everywhere else -- which is what
+# stage 0 exists to replace with measurement.
+#
+# Keyed on (mapper, molecule, qubits) rather than on the basis, because
+# the basis does not move the count where both are screened: water's
+# committed Hamiltonians at CAS(4,4) are 105 Pauli strings under JW and
+# 1,328 under mol_map in EVERY basis, the same structure with different
+# coefficients, so its two bases group identically.  H2 is unrestricted,
+# so its two bases land at different widths and are keyed apart by the
+# qubit count already.
 EXPVALS_PER_ITER = {
-    ("JW", "H2", 4): (5, "qwc_grouping"),
     ("JW", "H2", 8): (34, "measured_run"),
-    ("JW", "H2O", 8): (29, "qwc_grouping"),
-    ("mol_map", "H2", 2): (2, "measured_run"),
+    # H2/qvSZP unrestricted: 8 spatial orbitals, 16 JW qubits, 1,177 Pauli
+    # strings.  538 bases is ~10 minutes of billed QPU time per EVALUATION,
+    # so this cell is simulator-only by a wide margin -- see SIMULATOR_ONLY.
+    ("JW", "H2", 16): (538, "hamiltonian_file"),
+    ("JW", "H2O", 8): (25, "hamiltonian_file"),
     ("mol_map", "H2", 4): (37, "measured_run"),
+    ("mol_map", "H2", 6): (364, "hamiltonian_file"),
+    ("mol_map", "H2", 7): (1322, "hamiltonian_file"),
+    ("mol_map", "H2O", 6): (233, "hamiltonian_file"),
 }
-EXPVALS_ASSUMED = {"mol_map": 37, "JW": 34}
+
 NETWORK_NO_MEASUREMENT = "n/a (network mode)"
 
 NOT_TN = "n/a (not TN-VQE)"
@@ -575,6 +788,11 @@ def circuit_parameter_count(
         # pair per rep (Qiskit's default mode="iswap"). Verified against
         # the built circuit's num_parameters, not derived on paper.
         return str(num_qubits * (reps + 1) + (num_qubits - 1) * reps)
+    if ansatz == "n_local_rzryrz_sca":
+        # Three rotation layers per block, R+1 blocks -- TN_QC_OPT's own
+        # n_local(n, ["rz","ry","rz"], "cx", "sca"). Verified against the
+        # built circuit's num_parameters, not derived on paper.
+        return str(3 * num_qubits * (reps + 1))
     if ansatz == "StronglyEntanglingLayers":
         return str(3 * reps * num_qubits)          # PennyLane's (L, N, 3) shape
     if ansatz in ("EfficientSU2", "EfficientSU2_circular"):
@@ -658,6 +876,39 @@ def _measurement_note(method: str) -> str:
     )
 
 
+def _optimizer_note(optimizer: str) -> str:
+    """How this optimizer spends the row's evaluation budget.
+
+    Every optimizer on a given row gets the SAME budget, because the
+    budget is what the QPU is billed for; what differs is what each one
+    buys with it, which is the note.
+    """
+    if optimizer == "SPSA":
+        return (
+            "SPSA spends the budget as floor(Iterations/2) steps at two "
+            "evaluations each (a stochastic two-point gradient estimate), so "
+            "its cost per step does NOT grow with the parameter count -- the "
+            "one property that could make a wide row affordable."
+        )
+    if optimizer == "ExcitationSolve":
+        return (
+            "ExcitationSolve reconstructs the energy's exact trigonometric "
+            "dependence on one parameter and jumps to that parameter's global "
+            "minimum, so its evaluations buy exact coordinate minima rather "
+            "than descent steps. Reconstruction costs a fixed number of "
+            "evaluations per parameter, so this budget does not complete a "
+            "full sweep over all of them; whether it says anything useful "
+            "inside a screening budget is what stage 0 measures."
+        )
+    return (
+        "COBYLA builds an n+1 point simplex before its first descent step; "
+        "the budget is proportional to the row's own free-parameter count so "
+        "that every row reaches a comparable fraction of its achievable "
+        "descent. This is the campaign's incumbent and the optimizer every "
+        "committed cost estimate was made under."
+    )
+
+
 def _tn_ansatz_note(tn_ansatz: str) -> str:
     if tn_ansatz == TNAnsatz.NUMBER_PRESERVING.value:
         return (
@@ -689,6 +940,8 @@ def _row(
     ansatz: str, reps: int, measurement: str,
     layers_network: int | None, tn_ansatz: str,
     optimization_mode: str = "both", extra_note: str = "",
+    backend_platform: str | None = None,
+    optimizer: str = OPTIMIZER,
     shots: str | None = None,
     error_mitigation: str = MITIGATION_NONE,
     precision: str = SHOT_BASED,
@@ -703,6 +956,7 @@ def _row(
     family_note = _tn_ansatz_note(tn_ansatz)
     if family_note:
         notes.append(family_note)
+    notes.append(_optimizer_note(optimizer))
     notes.append(_measurement_note(measurement))
 
     is_tn = method == "TN-VQE"
@@ -748,9 +1002,16 @@ def _row(
     else:
         known = EXPVALS_PER_ITER.get((mapper, mol.name, num_qubits))
         if known is None:
-            expvals, expvals_source = str(EXPVALS_ASSUMED[mapper]), "assumed"
-        else:
-            expvals, expvals_source = str(known[0]), known[1]
+            # Deliberately fatal.  A guessed count is what put the previous
+            # campaign 24x over budget, so a combination with no counted
+            # Hamiltonian has no business being in scope: either add the
+            # count or take the combination out of SCREENED.
+            raise KeyError(
+                f"no measurement count for {mapper}/{mol.name} at "
+                f"{num_qubits} qubits; add it to EXPVALS_PER_ITER or remove "
+                f"the combination from SCREENED"
+            )
+        expvals, expvals_source = str(known[0]), known[1]
 
     # Keyed on the circuit family alone: a VQE row and a TN-VQE row that
     # share an ansatz start from the same phi, and so does the `network`
@@ -778,8 +1039,11 @@ def _row(
         "Method": method,
         "Ansatz": ansatz,
         "Ansatz_Reps": str(reps),
-        "Backend_Platform": BACKEND_PLATFORM_TN if is_tn else BACKEND_PLATFORM_VQE,
-        "Optimizer": OPTIMIZER,
+        "Backend_Platform": (
+            backend_platform
+            or (BACKEND_PLATFORM_TN if is_tn else BACKEND_PLATFORM_VQE)
+        ),
+        "Optimizer": optimizer,
         "Opt_Options": OPT_OPTIONS,
         "Iterations": str(
             optimizer_iterations(free_params, stage_evals_per_param(stage))
@@ -841,7 +1105,10 @@ def stage1_active_space(mol: Molecule, basis: str) -> tuple[str, int, int, str]:
     return "valence_cas", active_electrons, active_orbitals, note
 
 
-def skips_mapper(mapper: str, active_electrons: int, active_orbitals: int) -> bool:
+def skips_mapper(
+    mapper: str, active_electrons: int, active_orbitals: int,
+    on_hardware: bool = True,
+) -> bool:
     """True where a row is too wide for the screen to measure.
 
     Jordan-Wigner only, and by qubit count: a JW row above
@@ -849,11 +1116,126 @@ def skips_mapper(mapper: str, active_electrons: int, active_orbitals: int) -> bo
     encoding holds the same active space at far fewer qubits.  See
     MAX_JW_QUBITS for why the limit is a measurement limit rather than a
     circuit one.
+
+    Which is why it does not apply to stage 0 (`on_hardware=False`).  The
+    limit exists because measurement circuits cost purchased QPU seconds,
+    and a simulator buys none: H2/qvSZP under JW is 16 qubits, far past
+    anything hardware will run here, and simulating it is what tells the
+    campaign what that width would have cost.
     """
-    if mapper != "JW":
+    if mapper != "JW" or not on_hardware:
         return False
     num_qubits, _ = qubit_count(mapper, active_electrons, active_orbitals)
     return num_qubits > MAX_JW_QUBITS
+
+
+SIMULATOR_BACKENDS = ["aer_simulator", "fake_aachen"]
+
+
+def build_stage0() -> list[dict[str, str]]:
+    """Simulator screen: the whole crossing, at no QPU cost.
+
+    Stage 0 exists because the campaign cannot afford to guess.  Measurement
+    counts carried as assumptions put the previous revision 24x over budget,
+    and the counts this one uses are greedy upper bounds that a real run
+    beats by about 2x.  A simulated run reports what the pipeline actually
+    submits, so stage 1 can be budgeted on measurement.
+
+    Four things come out of it, none of which needs purchased time:
+
+      * E as the runtime really groups it, per combination;
+      * evaluations actually needed to converge, against the 1.3n and 4n
+        multipliers, which come from a synthetic objective and have never
+        been checked on a real VQE surface;
+      * the classical wall clock of the tensor-network contraction, which
+        is the other half of the displacement TN-VQE claims and has never
+        been measured at all;
+      * whether the pipeline runs end to end, before it costs anything.
+
+    What it crosses
+    ---------------
+    Six factors, fully crossed, with one deliberate hole:
+
+      chemistry  the closed 2x2x2 in SCREENED -- {H2, H2O(4,4)} x
+                 {6-31g, qvSZP} x {JW, mol_map}, 8 cells, none missing
+      ansatz     all four families in ANSATZE, from the cheapest
+                 hardware-efficient circuit to UCCSD
+      optimizer  all three in OPTIMIZERS, at one shared evaluation budget
+      method     plain VQE, TN-VQE `both`, and the `network` control
+      measurement  pauli and grouped, on every cell -- GROUPED_ONLY is a
+                 hardware reduction and does not apply where nothing is
+                 billed
+      backend    both simulators in SIMULATOR_BACKENDS, noiseless and the
+                 target device's noise model
+
+    The hole is UCCSD on mol_map, which has no builder and no pinned
+    circuit: see UCCSD_MAPPERS.  Everything else is a complete crossing,
+    which is what lets a factor's effect be read at every level of the
+    others rather than at one.
+
+    It therefore carries the axes hardware cannot afford: all four
+    ansaetze against stage 1's one, all three optimizers against stage 1's
+    one, both measurement methods on every cell, and the four chemistry
+    cells whose single hardware runs would be 15% to 23% of the whole
+    campaign each -- or, for H2/qvSZP under JW at 16 qubits and 538
+    measurement bases, more than the campaign has.
+    """
+    rows: list[dict[str, str]] = []
+    tn = STAGE1_TN_REFERENCE
+    reps = tn["ansatz_reps"]
+    for mol in MOLECULES:
+        for basis in SCREENED_BASES:
+            if (mol.name, basis) in SKIPPED_PAIRS:
+                continue
+            space, active_electrons, active_orbitals, space_note = (
+                stage1_active_space(mol, basis)
+            )
+            for mapper in MAPPERS:
+                if (mol.name, basis, mapper) not in SCREENED:
+                    continue
+                if skips_mapper(mapper, active_electrons, active_orbitals,
+                                on_hardware=False):
+                    continue
+                only = SIMULATOR_ONLY.get((mol.name, basis, mapper))
+                reason = SCREENED[(mol.name, basis, mapper)]
+                for backend in SIMULATOR_BACKENDS:
+                    for measurement in MEASUREMENT_METHODS:
+                        for ansatz in ANSATZE:
+                            if (ansatz == "UCCSD"
+                                    and mapper not in UCCSD_MAPPERS):
+                                continue
+                            for optimizer in OPTIMIZERS:
+                                for method, mode in (("VQE", "circuit"),
+                                                     ("TN-VQE", "both"),
+                                                     ("TN-VQE", "network")):
+                                    note = (
+                                        f"{space_note} Stage-0 simulator screen "
+                                        f"on {backend}: {reason}. No QPU time "
+                                        f"and no plan budget."
+                                    )
+                                    if only:
+                                        note += (
+                                            f" NEVER REACHES HARDWARE: {only}.")
+                                    rows.append(_row(
+                                        stage="0_simulate", mol=mol, basis=basis,
+                                        active_space=space,
+                                        active_electrons=active_electrons,
+                                        active_orbitals=active_orbitals,
+                                        mapper=mapper, method=method,
+                                        ansatz=ansatz,
+                                        reps=reps, measurement=measurement,
+                                        optimizer=optimizer,
+                                        layers_network=(
+                                            None if method == "VQE"
+                                            else tn["layers_network"]),
+                                        tn_ansatz=(
+                                            NOT_TN if method == "VQE"
+                                            else tn["tn_ansatz"].value),
+                                        optimization_mode=mode,
+                                        backend_platform=backend,
+                                        extra_note=note,
+                                    ))
+    return rows
 
 
 def build_stage1() -> list[dict[str, str]]:
@@ -873,7 +1255,7 @@ def build_stage1() -> list[dict[str, str]]:
     tn = STAGE1_TN_REFERENCE
     reps = tn["ansatz_reps"]
     for mol in MOLECULES:
-        for basis in BASES:
+        for basis in SCREENED_BASES:
             if (mol.name, basis) in SKIPPED_PAIRS:
                 continue
             space, active_electrons, active_orbitals, space_note = (
@@ -884,13 +1266,16 @@ def build_stage1() -> list[dict[str, str]]:
                 active_electrons=active_electrons, active_orbitals=active_orbitals,
             )
             for mapper in MAPPERS:
+                if (mol.name, basis, mapper) not in STAGE1_HARDWARE:
+                    continue
                 if skips_mapper(mapper, active_electrons, active_orbitals):
                     continue
                 for measurement in MEASUREMENT_METHODS:
-                    if (measurement == "pauli"
-                            and (mol.name, mapper) in GROUPED_ONLY):
+                    if measurement != STAGE1_MEASUREMENT[mapper]:
                         continue
                     for ansatz in ANSATZE:
+                        if ansatz != STAGE1_ANSATZ:
+                            continue
                         rows.append(_row(
                             **common, mapper=mapper, method="VQE",
                             ansatz=ansatz, reps=reps, measurement=measurement,
@@ -924,6 +1309,8 @@ def build_stage1() -> list[dict[str, str]]:
                 # One per ansatz, because the control freezes a circuit and
                 # the floor it establishes depends on which circuit that is.
                 for ansatz in ANSATZE:
+                    if ansatz != STAGE1_ANSATZ:
+                        continue
                     rows.append(_row(
                         **common, mapper=mapper, method="TN-VQE",
                         ansatz=ansatz, reps=reps, measurement=NETWORK_MODE,
@@ -1205,6 +1592,20 @@ def summarize(rows: list[dict[str, str]]) -> None:
     families = sorted({r["TN_Ansatz"] for r in rows if not r["TN_Ansatz"].startswith("n/a")})
     if families:
         print(f"    TN families: {', '.join(families)}")
+    # The factorial axes, so a change to one of them shows up in the run
+    # output rather than only in the file.
+    for label, column in (
+        ("chemistry cells", None), ("ansaetze", "Ansatz"),
+        ("optimizers", "Optimizer"), ("measurement", "Measurement_Method"),
+        ("backends", "Backend_Platform"),
+    ):
+        if column is None:
+            cells = {(r["Molecule"], r["Basis"], r["Mapper"]) for r in rows}
+            print(f"    {len(cells)} {label}: "
+                  + ", ".join("/".join(c) for c in sorted(cells)))
+            continue
+        values = sorted({r[column] for r in rows if not r[column].startswith("n/a")})
+        print(f"    {len(values)} {label}: {', '.join(values)}")
 
 
 def _read_source_matrix(path: pathlib.Path | None) -> list[dict[str, str]]:
@@ -1272,7 +1673,7 @@ def _parse_selection(pairs: list[str]) -> dict[str, str]:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--stage", choices=["1", "2", "3"], default="1")
+    parser.add_argument("--stage", choices=["0", "1", "2", "3"], default="1")
     parser.add_argument(
         "--select", action="append", default=[], metavar="MOLECULE=BASIS",
         help="stage 2 only: basis set carried forward from stage-1 results",
@@ -1324,7 +1725,10 @@ def main() -> None:
     parser.add_argument("-o", "--output", type=pathlib.Path, default=None)
     args = parser.parse_args()
 
-    if args.stage == "1":
+    if args.stage == "0":
+        rows = build_stage0()
+        path = args.output or _STAGE0_PATH
+    elif args.stage == "1":
         rows = build_stage1()
         path = args.output or _STAGE1_PATH
     elif args.stage == "3":

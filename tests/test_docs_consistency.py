@@ -256,9 +256,18 @@ def test_every_ansatz_is_run_by_all_three_methods():
     arms_by_ansatz: dict[str, set[str]] = {}
     for row in rows:
         arms_by_ansatz.setdefault(row["Ansatz"], set()).add(arm(row))
-    assert set(arms_by_ansatz) == set(module.ANSATZE), (
-        f"stage 1 runs {sorted(arms_by_ansatz)}, the generator lists "
-        f"{module.ANSATZE}"
+    # Stage 1 buys ONE ansatz on hardware: RealAmplitudes against
+    # EfficientSU2 is a question about circuits, which stage 0 answers on a
+    # simulator for nothing. What must still hold is that whatever stage 1
+    # does run, it runs under all three methods.
+    assert set(arms_by_ansatz) == {module.STAGE1_ANSATZ}, (
+        f"stage 1 runs {sorted(arms_by_ansatz)}, expected only "
+        f"{module.STAGE1_ANSATZ}"
+    )
+    stage0_ansatze = {row["Ansatz"] for row in module.build_stage0()}
+    assert stage0_ansatze == set(module.ANSATZE), (
+        f"stage 0 simulates {sorted(stage0_ansatze)}, the generator lists "
+        f"{module.ANSATZE} -- the ansatz axis has to live somewhere"
     )
     for ansatz, arms in arms_by_ansatz.items():
         assert arms == {"VQE", "TN-VQE/both", "TN-VQE/network"}, (
@@ -482,9 +491,16 @@ def _true_row_counts() -> set[int]:
         with path.open(encoding="utf-8") as f:
             counts.add(len(list(csv.DictReader(f))))
 
+    # Stage 0 is generated on demand like stage 2, so its size is only ever
+    # a number in prose unless it is counted here.
+    counts.add(len(module.build_stage0()))
+    counts.add(len(module.build_stage1()))
+
     # Stage 2 is not committed, so its size only exists as a projection in
     # prose -- which is exactly the kind of number that goes stale.
-    selection = {molecule.name: "sto-3g" for molecule in module.MOLECULES}
+    # 6-31g, not sto-3g: the campaign no longer screens the minimal basis,
+    # and a selection outside SCREENED has no measurement count to cost.
+    selection = {molecule.name: "6-31g" for molecule in module.MOLECULES}
     for sweep in (False, True):
         counts.add(len(module.build_stage2(
             selection, "EfficientSU2", "valence_cas", sweep,

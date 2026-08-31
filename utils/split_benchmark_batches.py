@@ -1,9 +1,16 @@
-"""Split the stage-1 screening matrix into batches sized to each IBM
-access plan's QPU-time budget: a first, cheapest tranche inside the Open
-Plan's free 10 minutes, a second sized to a Flex Plan purchase (400
-minutes), and a third sized to a Premium Plan annual minimum (5,200
-minutes).  Each budget is independent, matching the real workflow of
-exhausting one plan before moving to the next.
+"""Cost the stage-1 screening matrix and cut it into batches.
+
+Batches are NOT sized to a budget.  The campaign used to be cut against
+IBM's access plans -- 10 free minutes, a 400-minute Flex purchase, a
+5,200-minute Premium minimum -- because each was a separate purchase that
+had to be filled before the next.  The campaign now holds one allocation
+of 900 minutes, so filling tranches to a cap would be arithmetic without
+a referent.
+
+What the batches are for now is ORDER.  One cheap row runs first and
+proves the path end to end; the rest of the screen follows once it has.
+That is a real distinction -- before and after the pipeline is known to
+work -- and it is the only one worth cutting the file on.
 
 Requires: nothing beyond the standard library.
 
@@ -63,14 +70,25 @@ _BACKEND_NAME = "ibm_aachen"
 _OPTIMIZATION_LEVEL = 2
 _CLASSICAL_ONLY_MODE = "network"
 
-# Each plan's OWN budget in seconds -- independent, not cumulative with
-# the others (a fresh Flex purchase isn't reduced by what Open already
-# gave you for free).
-_PLAN_BUDGETS_S = [
-    ("batch1_open_plan", 10 * 60),        # Open Plan free quota
-    ("batch2_flex_plan", 400 * 60),        # Flex Plan minimum purchase
-    ("batch3_premium_plan", 5200 * 60),    # Premium Plan annual minimum
-]
+# The campaign's whole allocation, and what each phase is meant to take.
+# Reported against, never filled to: nothing here caps a batch.
+#
+#   stage 1  a screen at ~1.3 evaluations per parameter, reaching about
+#            half the achievable descent -- enough to rank factors, not
+#            enough to answer what the campaign asks.
+#   stage 2  the same rows at 4n, where converged energies live.  The
+#            larger share, because a ranking of combinations that were
+#            never converged answers nothing.
+#   reserve  not slack for its own sake.  Two things have already come in
+#            far off estimate on this device: a job billed 14x what it was
+#            estimated at, and counted measurement bases run about 2x what
+#            the runtime actually groups into.  At 900 minutes, one such
+#            surprise without a reserve ends the campaign mid-run.
+CAMPAIGN_BUDGET_MIN = 900
+STAGE_ALLOCATION_MIN = {"stage 1": 250, "stage 2": 450, "reserve": 200}
+
+# How many of the cheapest rows run before the rest, to prove the path.
+_PIPELINE_CHECK_ROWS = 1
 
 # Billed QPU seconds per cost-function evaluation, fitted to completed
 # ibm_aachen jobs whose billed quantum_seconds are known, all at 4,096
@@ -139,14 +157,13 @@ def estimate_per_row_qpu_seconds(rows: list[dict[str, str]]) -> dict[int, float]
 
 def split_into_batches(
     rows: list[dict[str, str]], per_row_seconds: dict[int, float],
-) -> tuple[list[list[dict[str, str]]], list[dict[str, str]], list[dict[str, str]]]:
-    """Ascending-cost greedy fill into the three plan-sized tranches.
+) -> tuple[list[dict[str, str]], list[dict[str, str]], list[dict[str, str]]]:
+    """Cost-ordered split into (pipeline_check, screen, unestimable).
 
-    Returns (batches, overflow_rows, unestimable_rows) where `batches`
-    has one list per entry in `_PLAN_BUDGETS_S`, `overflow_rows` is
-    anything left over after all three budgets are full (empty unless the
-    total workload exceeds Open+Flex+Premium combined), and
-    `unestimable_rows` is every row no circuit could be built for.
+    The cheapest `_PIPELINE_CHECK_ROWS` go first, so the run that proves
+    the submission path costs the least it can.  Everything else follows
+    in ascending cost, which is an execution order rather than a budget:
+    no row is dropped for not fitting, because there is no cap to fit.
 
     Classical-only rows are excluded by the caller, not counted here as
     unestimable: their cost is genuinely zero, which is a different fact
@@ -158,26 +175,8 @@ def split_into_batches(
         if int(r["Case_ID"]) not in per_row_seconds and not is_classical_only(r)
     ]
     estimable.sort(key=lambda r: per_row_seconds[int(r["Case_ID"])])
-
-    batches: list[list[dict[str, str]]] = [[] for _ in _PLAN_BUDGETS_S]
-    batch_totals = [0.0] * len(_PLAN_BUDGETS_S)
-    overflow: list[dict[str, str]] = []
-
-    row_iter = iter(estimable)
-    row = next(row_iter, None)
-    for i, (_, budget_s) in enumerate(_PLAN_BUDGETS_S):
-        while row is not None:
-            cost = per_row_seconds[int(row["Case_ID"])]
-            if batch_totals[i] + cost > budget_s:
-                break
-            batches[i].append(row)
-            batch_totals[i] += cost
-            row = next(row_iter, None)
-    while row is not None:
-        overflow.append(row)
-        row = next(row_iter, None)
-
-    return batches, overflow, unestimable
+    return (estimable[:_PIPELINE_CHECK_ROWS], estimable[_PIPELINE_CHECK_ROWS:],
+            unestimable)
 
 
 # Appended to every batch file, in this order, immediately before Notes.
@@ -233,33 +232,43 @@ def main() -> None:
     for source, count in sorted(sources.items()):
         print(f"    {count:>4} rows: {source}")
 
-    batches, overflow, unestimable = split_into_batches(rows, per_row_seconds)
+    pipeline_check, screen, unestimable = split_into_batches(rows, per_row_seconds)
 
     classical_only = [r for r in rows if is_classical_only(r)]
     if classical_only:
         out_path = _OUT_DIR / "batch0_classical_only.csv"
         _write_csv(out_path, classical_only, per_row_seconds)
         print(f"  {out_path.name}: {len(classical_only)} rows, 0.00 min "
-              f"-- optimization_mode='network', no QPU time, no plan budget")
+              f"-- optimization_mode='network', no quantum measurements")
 
-    for (name, budget_s), batch_rows in zip(_PLAN_BUDGETS_S, batches):
-        total_s = sum(per_row_seconds[int(r["Case_ID"])] for r in batch_rows)
+    total_s = 0.0
+    for name, batch_rows, purpose in (
+        ("batch1_pipeline_check", pipeline_check,
+         "cheapest row, run first to prove the submission path"),
+        ("batch2_screen", screen, "the rest of the stage-1 screen"),
+    ):
+        if not batch_rows:
+            continue
+        batch_s = sum(per_row_seconds[int(r["Case_ID"])] for r in batch_rows)
+        total_s += batch_s
         out_path = _OUT_DIR / f"{name}.csv"
         _write_csv(out_path, batch_rows, per_row_seconds)
         print(f"  {out_path.name}: {len(batch_rows)} rows, "
-              f"{total_s:.1f}s ({total_s / 60:.2f} min) of {budget_s / 60:.0f} min budget")
+              f"{batch_s / 60:.2f} min -- {purpose}")
 
-    if overflow:
-        out_path = _OUT_DIR / "batch4_overflow.csv"
-        _write_csv(out_path, overflow, per_row_seconds)
-        total_s = sum(per_row_seconds[int(r["Case_ID"])] for r in overflow)
-        print(f"  {out_path.name}: {len(overflow)} rows, {total_s:.1f}s "
-              f"({total_s / 60:.1f} min) -- exceeds Open+Flex+Premium combined")
-    else:
-        print("  No overflow -- every costed row fits within Open+Flex+Premium.")
+    stage1 = STAGE_ALLOCATION_MIN["stage 1"]
+    print(f"\n  stage 1 costs {total_s / 60:.2f} min of the {stage1} allotted it, "
+          f"and {100 * total_s / 60 / CAMPAIGN_BUDGET_MIN:.0f}% of the "
+          f"{CAMPAIGN_BUDGET_MIN} minute campaign")
+    if total_s / 60 > stage1:
+        print(f"  OVER its allocation by {total_s / 60 - stage1:.2f} min -- "
+              f"either take a combination out of STAGE1_HARDWARE or move the "
+              f"minutes from stage 2 deliberately")
+    for phase, minutes in STAGE_ALLOCATION_MIN.items():
+        print(f"    {phase:9} {minutes:>4} min")
 
     if unestimable:
-        out_path = _OUT_DIR / "batch5_unmeasured.csv"
+        out_path = _OUT_DIR / "batch3_unmeasured.csv"
         _write_csv(out_path, unestimable, per_row_seconds)
         print(f"  {out_path.name}: {len(unestimable)} rows -- no measurement count")
 

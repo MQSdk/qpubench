@@ -2,7 +2,7 @@
 
 The code a benchmarking campaign is built from: it generates the runs,
 pins the circuit each one executes, counts what a measurement costs, and
-partitions the result into batches sized to a hardware access plan.
+partitions the result into batches ordered by what each one proves.
 
 These are not demonstrations of the `qpubench` library. They are the
 tools that produce the committed campaign files under `data/benchmarks/`,
@@ -12,12 +12,12 @@ the library itself.
 
 | Module | What it does |
 |---|---|
-| [`build_benchmark_matrix.py`](build_benchmark_matrix.py) | Crosses the experimental factors into a campaign's runs, in three stages. Writes `stage1_screening_matrix.csv`; stages 2 and 3 are generated on demand from the stage before |
+| [`build_benchmark_matrix.py`](build_benchmark_matrix.py) | Crosses the experimental factors into a campaign's runs, in four stages. Writes `stage1_screening_matrix.csv`; stage 0's simulator screen comes from `--stage 0`, and stages 2 and 3 are generated on demand from the stage before |
 | [`_ansatz_builders.py`](_ansatz_builders.py) | Builds the named ansatz circuits the runs ask for, as real Qiskit circuits. Imported by the two modules below rather than run |
 | [`pin_qasm_ansatz.py`](pin_qasm_ansatz.py) | Writes each distinct circuit to committed OpenQASM under `data/qasm/`, so a run's circuit is part of the record rather than whatever the installed library versions resolve to |
 | [`count_measurement_bases.py`](count_measurement_bases.py) | Counts the measurement bases one cost-function evaluation submits, which is what the QPU cost is proportional to |
 | [`classical_reference_energies.py`](classical_reference_energies.py) | Computes the HF, MP2, CCSD and FCI energies a quantum result is scored against, at the same geometry the campaign pins |
-| [`split_benchmark_batches.py`](split_benchmark_batches.py) | Costs every run against measured hardware billing and cuts the campaign into per-plan batches |
+| [`split_benchmark_batches.py`](split_benchmark_batches.py) | Costs every run against measured hardware billing and cuts the campaign into batches ordered by cost, with no budget caps |
 | [`estimate_ibm_cost.py`](estimate_ibm_cost.py) | Prices a campaign under each IBM access plan, from real transpilation against the target device's calibration |
 
 Each runs directly and needs no arguments for the committed campaign:
