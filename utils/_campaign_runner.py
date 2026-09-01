@@ -323,12 +323,124 @@ def open_session() -> Any:
     return mqsdk.Cebule(email, password)
 
 
+def _case_ids(path: pathlib.Path) -> set[str]:
+    if not path.exists():
+        return set()
+    with path.open() as f:
+        return {json.loads(line)["Case_ID"] for line in f if line.strip()}
+
+
 def completed_case_ids(results_path: pathlib.Path) -> set[str]:
     """Case_IDs already in the checkpoint file, so a resumed pass skips them."""
-    if not results_path.exists():
-        return set()
-    with results_path.open() as f:
-        return {json.loads(line)["Case_ID"] for line in f if line.strip()}
+    return _case_ids(results_path)
+
+
+def failed_case_ids(results_path: pathlib.Path) -> set[str]:
+    """Case_IDs whose task came back with status 'error'."""
+    return _case_ids(failed_path(results_path))
+
+
+# --- Submitting without waiting -------------------------------------------
+#
+# Cebule dispatches to outside HPC infrastructure, so a task spends most of
+# its life queued rather than running, and a submit-and-block loop spends
+# that time doing nothing while holding the only process that could be
+# submitting the next one.  Submission and collection are therefore
+# separate: `submit_task` returns as soon as the task exists, its id goes
+# to a pending file, and `poll_task` harvests whatever has finished
+# whenever the collector is next run.
+#
+# The pending file is what makes that safe across processes.  Without it a
+# second submit pass would have no way to know a run is already in flight
+# -- it is not in the results file yet -- and would submit it again.
+
+def pending_path(results_path: pathlib.Path) -> pathlib.Path:
+    """Where in-flight task ids live, beside the results they will become."""
+    return results_path.with_suffix(".pending.ndjson")
+
+
+def failed_path(results_path: pathlib.Path) -> pathlib.Path:
+    """Where tasks that came back with status 'error' are recorded.
+
+    Kept apart from the results so a failure is never mistaken for a
+    measurement, and kept at all so a deterministic failure is not
+    resubmitted on every pass.
+    """
+    return results_path.with_suffix(".failed.ndjson")
+
+
+def read_pending(path: pathlib.Path) -> list[dict[str, Any]]:
+    if not path.exists():
+        return []
+    with path.open() as f:
+        return [json.loads(line) for line in f if line.strip()]
+
+
+def write_pending(path: pathlib.Path, records: list[dict[str, Any]]) -> None:
+    """Rewrite the pending file, dropping what has been collected.
+
+    Written to a temporary file and moved into place, because this is the
+    only file whose loss would strand tasks that are already running and
+    cannot be found again except by name.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if not records:
+        path.unlink(missing_ok=True)
+        return
+    temporary = path.with_suffix(".tmp")
+    with temporary.open("w") as f:
+        for record in records:
+            f.write(json.dumps(record) + "\n")
+    temporary.replace(path)
+
+
+def submit_task(
+    session: Any, run: dict[str, str], task_input: TNQCOptInput, task_name: str,
+    results_path: pathlib.Path, batch: str, backend_override: str | None = None,
+) -> str:
+    """Create one task and record it as pending; return its id.
+
+    Does NOT wait.  The pending entry is appended before anything else can
+    fail, so a task that exists on Cebule is always recoverable from this
+    file even if the submitting process dies immediately afterwards.
+    """
+    from qpubench.schemas.mirrors.mqsdk_cebule import CebuleTaskType
+
+    task = session.cebule.create_task(
+        task_name, CebuleTaskType.TN_QC_OPT, **task_payload(task_input),
+    )
+    path = pending_path(results_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a") as f:
+        f.write(json.dumps({
+            "Case_ID": run["Case_ID"], "task_id": task.id, "task_name": task_name,
+            "Batch": batch, "Backend": backend_for(run, backend_override),
+            "label": run_label(run, backend_override),
+            "submitted_at": time.time(),
+        }) + "\n")
+    return task.id
+
+
+# The two terminal statuses, matching what mqsdk's own wait_for_done polls
+# for (`status in ["done", "error"]`).  Anything else means still queued or
+# still running, and is left pending.
+TERMINAL_STATUSES = ("done", "error")
+
+
+def poll_task(session: Any, task_id: str) -> tuple[str, Any, str | None]:
+    """(status, result or None, error message or None) for one task id.
+
+    Never blocks.  A task that is neither done nor errored comes back with
+    its status verbatim, so an unexpected one is reported rather than
+    silently treated as still-running.
+    """
+    from qpubench.schemas.mirrors.mqsdk_cebule import TNQCOptResult
+
+    task = session.cebule.task_status(task_id)
+    if task.status != "done":
+        return task.status, None, task.error_message
+    result = TNQCOptResult.from_task_result(session.cebule.get_result(task_id, "result"))
+    return task.status, result, None
 
 
 def submit_run(
@@ -336,11 +448,11 @@ def submit_run(
 ) -> tuple[Any, float, str]:
     """Submit one run, wait for it, return (result, wall-clock seconds, task id).
 
-    The task id comes back because it is the only handle on the submission
-    afterwards -- it is what a result record is traced through to Cebule --
-    and the caller never sees the task object.
+    The blocking form, for a caller that runs a small batch and watches it
+    -- the stage-1 notebook.  `submit_task` plus `poll_task` is the form
+    that scales, and is what utils/run_campaign.py uses.
     """
-    from qpubench.schemas.mirrors.mqsdk_cebule import CebuleTaskType, TNQCOptResult
+    from qpubench.schemas.mirrors.mqsdk_cebule import CebuleTaskType
 
     started = time.time()
     task = session.cebule.create_task(
@@ -349,22 +461,28 @@ def submit_run(
     # create_task returns immediately with a CebuleTask; the result is
     # fetched by id, under the result type the task uploads ('result').
     session.cebule.wait_for_result(task.id, "result")
-    status = session.cebule.task_status(task.id)
-    if status.status != "done":
+    status, result, error = poll_task(session, task.id)
+    if result is None:
         raise RuntimeError(f"run {run['Case_ID']} finished with status "
-                           f"{status.status!r}: {status.error_message}")
-    result = TNQCOptResult.from_task_result(session.cebule.get_result(task.id, "result"))
+                           f"{status!r}: {error}")
     return result, time.time() - started, task.id
 
 
 def append_record(
     results_path: pathlib.Path, run: dict[str, str], result: Any,
     task_id: str, wall_s: float, batch: str, backend_override: str | None = None,
+    submitted_at: float | None = None,
 ) -> None:
     """Append one finished run to the checkpoint, written and closed per run.
 
     Per run rather than per batch, so an interrupt loses at most the run in
     flight and the next pass reads this file and skips everything in it.
+
+    `wall_clock_s` is ELAPSED TIME, not compute time: it spans the queue on
+    the far side as well as the run, and under batch submission most of it
+    may be queueing.  TNQCOptResult carries no timing field, so this is the
+    only measure available, and `function_calls` is the quantity to compare
+    runs on.
     """
     results_path.parent.mkdir(parents=True, exist_ok=True)
     with results_path.open("a") as f:
@@ -379,6 +497,22 @@ def append_record(
             "vqe_energy": result.vqe_energy,
             "function_calls": result.function_calls,
             "cost_history": result.cost_history,
+            "submitted_at": submitted_at,
+            "collected_at": time.time(),
             "wall_clock_s": round(wall_s, 3),
             "estimated_qpu_s": float(run.get("Est_QPU_Time_S") or 0),
+        }) + "\n")
+
+
+def append_failure(
+    results_path: pathlib.Path, entry: dict[str, Any], status: str,
+    error_message: str | None,
+) -> None:
+    """Record a task that came back 'error', apart from the results."""
+    path = failed_path(results_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a") as f:
+        f.write(json.dumps({
+            **entry, "status": status, "error_message": error_message,
+            "failed_at": time.time(),
         }) + "\n")

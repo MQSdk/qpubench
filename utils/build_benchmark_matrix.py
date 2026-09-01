@@ -700,6 +700,15 @@ EXPVALS_PER_ITER = {
 NETWORK_NO_MEASUREMENT = "n/a (network mode)"
 
 NOT_TN = "n/a (not TN-VQE)"
+
+# What a plain-VQE row's Optimization_Mode says.  "circuit" rather than
+# "n/a": TNQCOptInput.optimization_mode="circuit" is exactly what such a
+# row is SUBMITTED with -- it freezes theta and varies phi, which is what
+# plain VQE is -- so the column now records what is sent instead of
+# declaring the field inapplicable to a row that does in fact set it.
+# TN_Ansatz keeps NOT_TN, because there a VQE row really does name no
+# family.
+VQE_MODE = "circuit"
 NO_TN_LAYERS = "n/a (no TN layers)"
 NETWORK_MODE = "n/a (network mode)"
 
@@ -1155,7 +1164,7 @@ def _row(
         "Qiskit_Version": qiskit_version(),
         "TN_Layers_Network": "" if layers_network is None else str(layers_network),
         "TN_Ansatz": tn_ansatz,
-        "Optimization_Mode": optimization_mode if is_tn else NOT_TN,
+        "Optimization_Mode": optimization_mode if is_tn else VQE_MODE,
         "Measurement_Method": measurement,
         "Qasm_Ansatz_File": qasm_file,
         "Qasm_Ansatz_SHA256": qasm_hash,

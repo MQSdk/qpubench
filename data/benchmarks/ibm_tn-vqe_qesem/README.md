@@ -76,18 +76,35 @@ re-spending purchased time, and both read credentials from the environment
 rather than from a notebook cell or a command line.
 
 [`run_campaign.py`](../../../utils/run_campaign.py) runs a stage in
-batches from the command line, selected with `--where` filters and resumed
-by repeating the command. This is how stage 0 is run, since 1152 runs is
-not something to start in one go:
+batches from the command line, selected with `--where` filters. This is
+how stage 0 is run, since 1152 runs is not something to start in one go:
 
 ```sh
 PYTHONPATH=src python utils/run_campaign.py --group-by Molecule,Basis,Mapper
 PYTHONPATH=src python utils/run_campaign.py --submit \
     --where Molecule=H2 --where Basis=6-31g --where Mapper=JW
+PYTHONPATH=src python utils/run_campaign.py --collect
 ```
 
+**Submission and collection are separate**, which is what makes stage 0
+tractable. Cebule dispatches to outside HPC infrastructure, so a task
+spends most of its life queued rather than running; submitting one and
+blocking until it returns spends that queue time doing nothing, in the
+one process that could have been submitting the rest. `--submit` creates
+tasks and returns, `--collect` harvests whatever has finished since, and
+`--max-in-flight N` keeps a steady queue rather than sending everything
+at once.
+
+Three files carry the state, beside each other under `results/`:
+`<stem>.ndjson` holds finished runs, `<stem>.pending.ndjson` the task ids
+submitted and not yet collected, `<stem>.failed.ndjson` the tasks that
+came back with status `error`. A run is skipped if it appears in any of
+them, so repeating a command never double-submits and never re-collects,
+and a failure stays failed until `--retry-failed` says otherwise.
+
 [`run_campaign_batch.ipynb`](run_campaign_batch.ipynb) executes one batch
-whole and shows its working, which suits the twelve stage-1 runs.
+whole, submitting and waiting per run, which suits the twelve stage-1
+runs and shows its working.
 
 **Which backend a run uses is the run's own `Backend_Platform`**, not a
 choice made at submission time. Stage 0 crosses the backend as a factor,
@@ -882,7 +899,7 @@ basis gate on any current device.
 | `Qiskit_Version` | The installed Qiskit, which fixes the transpiler optimisation level the run receives |
 | `TN_Layers_Network` | Layers of θ on the classical tensor-network side, 0 to 3, where 0 is the circuit-only reference; range follows [1]. The φ side of that sweep is `Ansatz_Reps` |
 | `TN_Ansatz` | One of the four families above, or `n/a (no TN layers)` / `n/a (not TN-VQE)` |
-| `Optimization_Mode` | `both` (jointly optimise θ and φ) or `network` (θ only, no quantum measurements) |
+| `Optimization_Mode` | `circuit` (φ only — plain VQE), `both` (jointly optimise θ and φ) or `network` (θ only, no quantum measurements). All three are real `TNQCOptInput.optimization_mode` values, so the column records what the run is submitted with rather than declaring the field inapplicable to a plain-VQE row that does in fact set it |
 | `Measurement_Method` | `pauli` or `grouped`, matching `TNQCOptInput.measurement_method` |
 | `Qasm_Ansatz_File`, `Qasm_Ansatz_SHA256` | The pinned circuit and a hash prefix of it, so that an edited circuit ceases to match |
 | `Num_Opt_Params_Phi` | Circuit-side parameter count, and the `num_parameters` the pinned QASM loads with. On a `network` row it is the count held fixed |
