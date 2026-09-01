@@ -132,6 +132,15 @@ def is_classical_only(row: dict[str, str]) -> bool:
     return row.get("Optimization_Mode") == _CLASSICAL_ONLY_MODE
 
 
+def _eval_budget(row: dict[str, str]) -> int:
+    """Cost-function evaluations the row is budgeted, from its own column.
+
+    Falls back to Iterations for a matrix generated before Eval_Budget
+    existed, where the two were the same number.
+    """
+    return int(row.get("Quantum_Eval_Budget") or row["Iterations"])
+
+
 def evaluation_seconds(expvals_per_iter: int) -> float:
     """Billed QPU seconds for one cost-function evaluation."""
     return _FIXED_S_PER_EVALUATION + _S_PER_MEASUREMENT_BASIS * expvals_per_iter
@@ -140,9 +149,15 @@ def evaluation_seconds(expvals_per_iter: int) -> float:
 def estimate_per_row_qpu_seconds(rows: list[dict[str, str]]) -> dict[int, float]:
     """Per-row QPU seconds, keyed by Case_ID.
 
-    The row's own Iterations times what one evaluation costs at the row's
+    The row's own EVAL_BUDGET times what one evaluation costs at the row's
     own Num_ExpVals_Per_Iter.  A row whose measurement count is unknown
     has no cost here rather than a guessed one.
+
+    Eval_Budget, not Iterations.  The two coincide under COBYLA and only
+    under COBYLA: n_iterations is an iteration count, and an SPSA
+    iteration is 2 evaluations while an ExcitationSolve iteration is a
+    sweep costing 3n.  Costing on Iterations would understate those rows
+    by exactly the conversion factor.
     """
     per_row: dict[int, float] = {}
     for row in rows:
@@ -150,7 +165,7 @@ def estimate_per_row_qpu_seconds(rows: list[dict[str, str]]) -> dict[int, float]
             continue
         per_row[int(row["Case_ID"])] = (
             evaluation_seconds(int(row["Num_ExpVals_Per_Iter"]))
-            * int(row["Iterations"])
+            * _eval_budget(row)
         )
     return per_row
 
@@ -187,7 +202,7 @@ def split_into_batches(
 # name would pin a number only some rows use.
 _COST_COLUMNS = [
     "Est_QPU_Time_Per_Iter_S",      # one cost-function evaluation
-    "Est_QPU_Time_S",               # x the row's own Iterations
+    "Est_QPU_Time_S",               # x the row's own Eval_Budget
     "Est_QPU_Time_Cumulative_S",    # running total within this batch
 ]
 
@@ -211,7 +226,7 @@ def _write_csv(path: pathlib.Path, rows: list[dict[str, str]], per_row_seconds: 
             # this is what one evaluation of <H> costs, all N measurement
             # circuits together.
             out["Est_QPU_Time_Per_Iter_S"] = (
-                f"{cost / int(row['Iterations']):.3f}" if cost is not None else ""
+                f"{cost / _eval_budget(row):.3f}" if cost is not None else ""
             )
             out["Est_QPU_Time_S"] = f"{cost:.3f}" if cost is not None else ""
             out["Est_QPU_Time_Cumulative_S"] = f"{cumulative:.3f}" if cost is not None else ""

@@ -258,30 +258,72 @@ entangler is a one-word change to the builder.
 
 ### The optimizers
 
-| Optimizer | How it spends the budget |
-|---|---|
-| `COBYLA` | An `n+1` point simplex, then descent steps. The campaign's incumbent, and the optimizer every committed cost estimate was made under |
-| `SPSA` | `⌊budget/2⌋` steps at two evaluations each — a stochastic two-point gradient estimate whose per-step cost does **not** grow with the parameter count |
-| `ExcitationSolve` | Reconstructs the energy's exact trigonometric dependence on one parameter and jumps to that parameter's global minimum, so its evaluations buy exact coordinate minima rather than descent steps |
+| Optimizer | Quantum evals per **iteration** | What an iteration buys |
+|---|---|---|
+| `COBYLA` | 1 | A step of the simplex. The campaign's incumbent, and the optimizer every committed cost estimate was made under |
+| `SPSA` | 2 | A stochastic two-point gradient estimate, whose per-step cost does **not** grow with the parameter count |
+| `ExcitationSolve` | `3 × n_φ` | A full sweep: it reconstructs the energy's exact trigonometric dependence on each parameter in turn and jumps to that parameter's global minimum, so a sweep is a coordinate descent with an exact minimisation per coordinate |
 
-**All three are given the same evaluation budget.** That is deliberate:
-the budget is what the QPU is billed for, so holding it fixed makes the
-observable *descent per evaluation*, which is descent per QPU-second,
-which is the quantity the campaign is choosing between. A per-optimizer
-budget would compare three different purchases.
+**All three are given the same quantum-evaluation budget, converted into
+each one's own iteration unit.** `TNQCOptInput.n_iterations` is *not*
+that budget — it is an iteration count, and an iteration means a
+different amount of work in each optimizer. Passing one number to all
+three was a real error rather than a rounding one: it would have given
+the ExcitationSolve arm 22.7 million evaluations against COBYLA's
+145,344, a factor of 156, concentrated on exactly the widest rows.
 
-The consequence is that each spends it differently, and one of those
-differences is a real risk worth stating: ExcitationSolve's
-reconstruction costs a fixed number of evaluations per parameter, so a
-budget of `~1.3n` does not complete one full sweep over `n` parameters.
-If it turns out to need a full sweep before it says anything, the finding
-is that ExcitationSolve is not affordable at a screening multiplier —
-which is itself a result, and one that costs nothing to establish here.
+### Why the budget is in *quantum* evaluations
 
-SPSA and ExcitationSolve are Cebule's own additions and do not go through
-`scipy.optimize.minimize`. **Confirm the exact `opt_method` spellings
-against upstream's dispatch before submitting**, since an unrecognised
-optimizer name fails after the queue rather than before it.
+Cebule **caches the quantum results**. The measurement depends on the
+circuit state `U(φ)|0⟩`, so an evaluation that changes only `θ` is served
+from the cached `φ` results and recombined classically, costing nothing
+on the QPU or in simulation.
+
+That splits "an evaluation" into two quantities, and they are not
+interchangeable:
+
+- **Quantum evaluations** are the resource — billed seconds on hardware,
+  wall clock in stage 0. This is what is held equal across optimizers.
+- **Cost-function evaluations** are what `cost_history` counts, and the
+  axis convergence curves are aligned on.
+
+A coordinate-wise optimizer gets its whole `θ` sweep free on the quantum
+side; COBYLA and SPSA move every parameter at once, so they never hit the
+cache. Across the matrix that comes to:
+
+| Optimizer | `n_iterations` | Quantum evals | Cost evals |
+|---|---:|---:|---:|
+| `COBYLA` | 145,344 | 119,616 | 145,344 |
+| `SPSA` | 72,672 | 119,616 | 145,344 |
+| `ExcitationSolve` | 1,276 | 107,688 | **173,608** |
+
+ExcitationSolve buys 19% more cost-function evaluations for the same
+quantum spend. **That asymmetry is a property of the method, not a
+confound to correct away** — budgeting in the resource is precisely what
+lets it show up as what it is.
+
+The reconstruction cost is per parameter and depends on the gate:
+`3` evaluations for a **single-frequency** `φ` parameter, where the
+energy along one angle is `a·cos + b·sin + c`, and `5` for a
+**two-frequency** `θ` parameter. Both confirmed against Cebule.
+
+The visible consequence is that **ExcitationSolve completes fewer sweeps
+as the circuit widens** — 6 on a small `both`-mode row, 1 at `n_φ = 144`.
+That is not a defect in the budget. It is the measured answer to whether
+an exact-coordinate-minimisation method is affordable at a screening
+budget, which is worth knowing before any of it reaches hardware.
+
+**The fair comparison is still made at analysis time.** `cost_history`
+carries one entry per cost-function evaluation, so truncating all three
+curves to the smallest shared count compares them at any depth, whatever
+budget each was given. `Quantum_Eval_Budget`,
+`Quantum_Evals_Per_Iteration` and `Cost_Evals_Per_Iteration` are recorded
+per row so either axis can be reconstructed from the files alone.
+
+`SPSA` and `ExcitationSolve` are Cebule's own additions and do not go
+through `scipy.optimize.minimize`. Both names are confirmed against its
+dispatch; `ExcitationSolve` matches agnostically of capitalisation and of
+an underscore between the words.
 
 ### The backends
 
@@ -464,9 +506,17 @@ realistic simulation: `n` runs to 182 here, so `12n` would be 2,184
 evaluations for one run and 550,656 across the matrix. 600 is `12n` at
 `n = 50`, and the median row is `n = 34`, so the typical row is uncapped
 and gets the full `12n`; the ceiling binds on the widest 300 of 1,152 and
-takes the matrix to **436,032 evaluations**. Even a capped row is not
-shortchanged — at `n = 182`, 600 evaluations is `3.3n`, between stage 1's
-budget and stage 2's.
+takes the matrix to **436,032 evaluations** of budget — 346,920 quantum
+evaluations and 464,296 cost-function ones once each optimizer's budget
+is converted into whole iterations of its own unit. Even a capped row is
+not shortchanged: at `n = 182`, 600 evaluations is `3.3n`, between stage
+1's budget and stage 2's.
+
+The budget above is in **quantum evaluations**, which is neither what
+`TNQCOptInput.n_iterations` takes nor what `cost_history` counts. See
+[The optimizers](#the-optimizers) for the conversion, which is the
+difference between a manageable ExcitationSolve arm and one 156× the size
+of the COBYLA arm.
 
 Note that this is a **ceiling, not a cost**: `conv_tol` (`1e-6`) stops a
 converged run early, so a generous budget is free on every row that
@@ -894,7 +944,10 @@ basis gate on any current device.
 | `N_Qubit`, `N_Qubit_Source` | Qubit count and its provenance: `jw_exact`, `mol_map_run` or `mol_map_inferred` |
 | `Backend_Platform` | The device the row runs on, `ibm_aachen` throughout |
 | `Optimizer`, `Opt_Options` | `COBYLA` on every stage-1 row, matching the default of `TNQCOptInput.opt_method`; stage 0 also runs `SPSA` and `ExcitationSolve`, at the same evaluation budget. `Opt_Options` is the dictionary passed to `scipy.optimize.minimize`, and `{}` is a recorded choice, since `rhobeg` affects the evaluation count and therefore the row's cost |
-| `Iterations` | Cost-function evaluations the row's optimizer will consume, `max(30, ceil(1.3 x n_params))` on stage-1 rows |
+| `Quantum_Eval_Budget` | Quantum evaluations the row is allowed, held equal across optimizers. This is the **resource**: what the QPU bills and what simulation wall clock tracks. `max(30, ceil(1.3 x n_params))` on stage-1 rows |
+| `Quantum_Evals_Per_Iteration` | What one iteration of this row's optimizer spends of it: 1 for COBYLA, 2 for SPSA, `3 x n_phi` for ExcitationSolve — and 0 wherever φ is frozen, since a θ-only change is served from cache |
+| `Cost_Evals_Per_Iteration` | Entries one iteration adds to `cost_history`, which is the axis convergence curves are aligned on. Differs from the column above by exactly the cached θ evaluations |
+| `Iterations` | What `TNQCOptInput.n_iterations` receives: `Quantum_Eval_Budget // Quantum_Evals_Per_Iteration`, floored at 1. Equal to the budget under COBYLA and only under COBYLA |
 | `Shots` | 4,096, pinned via `TNQCOptInput.n_shots`; `n/a (network mode)` where no quantum measurement is taken |
 | `Qiskit_Version` | The installed Qiskit, which fixes the transpiler optimisation level the run receives |
 | `TN_Layers_Network` | Layers of θ on the classical tensor-network side, 0 to 3, where 0 is the circuit-only reference; range follows [1]. The φ side of that sweep is `Ansatz_Reps` |
@@ -995,10 +1048,11 @@ documentation covers the submission path this campaign would use.
   one of each. So whichever circuit and optimizer stage 0 picks, the
   claim that it also wins *under device error* is untested — stage 1
   inherits the choice rather than checking it.
-- **`SPSA` and `ExcitationSolve` are unverified as `opt_method` strings.**
-  They are Cebule additions rather than scipy methods, and the spellings
-  used here are the ones supplied by hand. Confirm them against
-  upstream's dispatch before a batch is submitted.
+- **ExcitationSolve's per-parameter cost is modelled, not measured.**
+  `3` evaluations for a single-frequency `φ` and `5` for a two-frequency
+  `θ` are what Cebule's implementation uses, but how many *sweeps* the
+  method needs before it beats COBYLA at equal quantum spend is exactly
+  what stage 0 is run to find out — and on the widest rows it gets one.
 - **The UCCSD circuits are outside this repository's reach.** All six are
   supplied by hand, so nothing here can regenerate or verify them beyond
   the SHA256 pin and the parameter count read off the file. A change to

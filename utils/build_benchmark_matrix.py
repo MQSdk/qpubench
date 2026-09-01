@@ -487,11 +487,12 @@ OPTIMIZER = "COBYLA"
 #                    that ExcitationSolve is not affordable at stage 1's
 #                    multiplier, which is itself a result.
 #
-# The three names are the strings Cebule dispatches on.  COBYLA is
+# All three names are confirmed against Cebule's dispatch.  COBYLA is
 # scipy's; SPSA and ExcitationSolve are Cebule's own additions and do not
-# go through scipy.optimize.minimize, so CONFIRM THE EXACT SPELLINGS
-# against upstream's dispatch before submitting a batch -- an unrecognised
-# opt_method is the kind of thing that fails after the queue, not before.
+# go through scipy.optimize.minimize.  ExcitationSolve's match is
+# agnostic to capitalisation and to an underscore between the words, so
+# "excitation_solve" would serve equally; the spelling here is the one
+# that reads as a name.
 OPTIMIZERS = ["COBYLA", "SPSA", "ExcitationSolve"]
 
 # Only COBYLA has an upstream budget check (_check_iteration_budget
@@ -602,6 +603,101 @@ STAGE0_EVALS_PER_PARAM = 12.0
 # budget, and ExcitationSolve's behaviour here is unmeasured -- which is
 # itself something stage 0 reports.
 STAGE0_MAX_ITERATIONS = 600
+
+# --- Evaluations against iterations ---------------------------------------
+#
+# The budgets above are in COST-FUNCTION EVALUATIONS, which is the common
+# currency: an evaluation is what the QPU is billed for and what
+# cost_history records one entry of.  `TNQCOptInput.n_iterations` is not
+# that.  It is an ITERATION count, and an iteration means a different
+# amount of work in each optimizer:
+#
+#   COBYLA           1 evaluation per iteration.  scipy's COBYLA takes
+#                    maxiter as a cap on function evaluations, so the two
+#                    coincide and this is the case the budgets were
+#                    written for.
+#   SPSA             2, a plus- and a minus-perturbation per step.  Flat
+#                    in n, which is the property that makes SPSA
+#                    interesting on the wide rows.
+#   ExcitationSolve  3n.  It reconstructs the energy's exact dependence on
+#                    ONE parameter and jumps to that parameter's minimum,
+#                    so an iteration is a sweep over all n of them.
+#
+# Passing one number to all three was a real error, not a rounding one:
+# the same n_iterations gave the ExcitationSolve arm 22.7 MILLION
+# evaluations against COBYLA's 145,344, a factor of 156, concentrated on
+# exactly the widest rows.  Converting instead -- same evaluation budget,
+# each optimizer's own unit -- brings the three arms within 7% of each
+# other and the matrix to 426,372 evaluations.
+#
+# ExcitationSolve's reconstruction cost is PER PARAMETER and depends on
+# the gate that parameter drives, confirmed against Cebule:
+#
+#   phi    single-frequency.  The energy along one circuit angle is
+#          a cos + b sin + c, so three points determine it.
+#   theta  two-frequency.  The network's gates carry two harmonics, so
+#          five points are needed.
+EXCITATIONSOLVE_EVALS_PER_PHI = 3
+EXCITATIONSOLVE_EVALS_PER_THETA = 5
+
+# What COBYLA and SPSA cost per iteration.  Both move EVERY parameter at
+# once -- COBYLA steps the whole vector, SPSA perturbs all coordinates
+# simultaneously -- which is what makes the caching below useless to them.
+EVALS_PER_ITERATION_FIXED = {"COBYLA": 1, "SPSA": 2}
+
+
+def evals_per_iteration(
+    optimizer: str, num_phi: int, num_theta: int,
+) -> tuple[int, int]:
+    """(quantum evaluations, cost-function evaluations) per iteration.
+
+    THE TWO DIFFER BECAUSE CEBULE CACHES.  The quantum measurement depends
+    on the circuit state U(phi)|0>, so an evaluation that changes only
+    theta is served from the cached phi results and recombined
+    classically, costing nothing on the QPU or in simulation.  A
+    coordinate-wise optimizer therefore gets its whole theta sweep free
+    on the quantum side; COBYLA and SPSA move phi on every iteration and
+    never hit the cache.
+
+    That asymmetry is not a confound to be corrected away.  It is a real
+    property of the method, and budgeting in QUANTUM evaluations is what
+    lets it show up as what it is: more descent per unit of the resource
+    actually being spent.
+
+    num_phi is passed as 0 for a `network` row, where phi is frozen by
+    construction, so such a row reports no quantum cost at all -- which is
+    the same statement the campaign already makes about it elsewhere.
+    """
+    if optimizer == "ExcitationSolve":
+        quantum = EXCITATIONSOLVE_EVALS_PER_PHI * num_phi
+        cost = quantum + EXCITATIONSOLVE_EVALS_PER_THETA * num_theta
+        return quantum, max(1, cost)
+    per = EVALS_PER_ITERATION_FIXED[optimizer]
+    return (per if num_phi else 0), per
+
+
+def iteration_budget(
+    budget: int, optimizer: str, num_phi: int, num_theta: int,
+) -> int:
+    """`n_iterations` for an optimizer, given a QUANTUM evaluation budget.
+
+    Spent in the currency that binds: billed seconds on hardware, and
+    simulation wall clock in stage 0, both of which track quantum
+    evaluations rather than cost-function calls.  A row with no quantum
+    cost at all -- `network` mode, where phi is frozen -- is budgeted on
+    its cost-function evaluations instead, since otherwise nothing would
+    bound it.
+
+    Floored at 1: ExcitationSolve's sweep costs 3 x n_phi, so at the
+    widest rows the budget buys barely one, and a single sweep -- a full
+    coordinate descent with an exact minimisation per coordinate -- is
+    still a run worth having.  That it gets several sweeps on a narrow row
+    and one on a wide one is not a defect in the budget; it is the
+    measured answer to whether the method is affordable at a screening
+    budget, which is what stage 0 is for.
+    """
+    quantum, cost = evals_per_iteration(optimizer, num_phi, num_theta)
+    return max(1, budget // (quantum or cost))
 
 # --- phi_init, per circuit family -----------------------------------------
 #
@@ -738,7 +834,9 @@ FIELDNAMES = [
     "Num_Electrons",
     "Basis", "Basis_Source", "Active_Space", "Active_Electrons", "Active_Orbitals",
     "Mapper", "N_Qubit", "N_Qubit_Source", "Method", "Ansatz", "Ansatz_Reps",
-    "Backend_Platform", "Optimizer", "Opt_Options", "Iterations", "Shots",
+    "Backend_Platform", "Optimizer", "Opt_Options",
+    "Quantum_Eval_Budget", "Quantum_Evals_Per_Iteration",
+    "Cost_Evals_Per_Iteration", "Iterations", "Shots",
     "Qiskit_Version", "TN_Layers_Network", "TN_Ansatz",
     "Optimization_Mode", "Measurement_Method", "Qasm_Ansatz_File",
     "Qasm_Ansatz_SHA256", "Num_Opt_Params_Phi", "Phi_Init",
@@ -1094,9 +1192,19 @@ def _row(
     )
     # The optimizer varies whatever the row leaves free: phi is frozen in
     # network mode, so only theta counts there.
-    free_params = (int(phi_params) if phi_params and takes_measurements else 0) + (
-        int(theta_params) if theta_params else 0
+    # Split, because the two halves cost differently under a caching
+    # backend: a theta-only change reuses the circuit's measured results.
+    # phi counts as zero in `network` mode, where it is frozen.
+    n_phi = int(phi_params) if phi_params and takes_measurements else 0
+    n_theta = int(theta_params) if theta_params else 0
+    free_params = n_phi + n_theta
+    eval_budget = optimizer_iterations(
+        free_params, stage_evals_per_param(stage), stage_max_iterations(stage),
     )
+    quantum_per_iter, cost_per_iter = evals_per_iteration(
+        optimizer, n_phi, n_theta,
+    )
+    iterations = iteration_budget(eval_budget, optimizer, n_phi, n_theta)
     # Measurement circuits per evaluation: the row's Hamiltonian decides
     # it, so it is keyed on (mapper, molecule, qubits) and not on the
     # circuit or the method.  A network row takes no measurements at all.
@@ -1148,12 +1256,25 @@ def _row(
         ),
         "Optimizer": optimizer,
         "Opt_Options": OPT_OPTIONS,
-        "Iterations": str(
-            optimizer_iterations(
-                free_params, stage_evals_per_param(stage),
-                stage_max_iterations(stage),
-            )
-        ),
+        # Three columns where there used to be one, because a caching
+        # backend makes "an evaluation" two different quantities.
+        #
+        #   Quantum_Eval_Budget         the RESOURCE, held equal across
+        #                               optimizers: what the QPU bills and
+        #                               what simulation wall clock tracks
+        #   Quantum_Evals_Per_Iteration what one iteration spends of it
+        #   Cost_Evals_Per_Iteration    entries one iteration adds to
+        #                               cost_history, which is the axis
+        #                               convergence curves are aligned on
+        #
+        # Iterations is what TNQCOptInput.n_iterations receives, in the
+        # chosen optimizer's own unit.  The conversions are recorded
+        # rather than assumed so the analysis can reconstruct either axis
+        # from the file alone.
+        "Quantum_Eval_Budget": str(eval_budget),
+        "Quantum_Evals_Per_Iteration": str(quantum_per_iter),
+        "Cost_Evals_Per_Iteration": str(cost_per_iter),
+        "Iterations": str(iterations),
         # 0 was a real shot count where "shots do not apply" was meant --
         # and would be wrong the moment such a row were re-run in "both"
         # mode. n/a, matching what Measurement_Method already says on
