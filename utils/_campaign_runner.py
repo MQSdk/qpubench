@@ -496,7 +496,23 @@ def append_record(
             "Measurement_Method": run["Measurement_Method"],
             "vqe_energy": result.vqe_energy,
             "function_calls": result.function_calls,
+            # All three convergence traces, because they are indexed
+            # differently and the campaign needs both axes.  cost_history
+            # is per EVALUATION, which is the resource axis;
+            # iteration_history is per ITERATION, which is what makes two
+            # optimizers comparable per step without modelling either
+            # one's internals; iteration_boundaries is the evaluations
+            # each iteration really consumed, i.e. the measured form of
+            # the Cost_Evals_Per_Iteration the matrix predicts.
             "cost_history": result.cost_history,
+            "iteration_history": result.iteration_history,
+            "iteration_boundaries": result.iteration_boundaries,
+            # What the matrix PREDICTED that last quantity would be, kept
+            # beside it so the two can be compared without reopening the
+            # campaign file.
+            "predicted_cost_evals_per_iteration": run.get(
+                "Cost_Evals_Per_Iteration"
+            ),
             "submitted_at": submitted_at,
             "collected_at": time.time(),
             "wall_clock_s": round(wall_s, 3),

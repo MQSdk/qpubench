@@ -4122,6 +4122,57 @@ def test_tn_qc_opt_result_tolerates_missing_metadata_in_network_mode():
     assert result.function_calls == 12
 
 
+def test_tn_qc_opt_result_carries_both_convergence_axes():
+    """cost_history is per EVALUATION; iteration_history is per ITERATION.
+
+    The two differ by a factor that is a property of the optimizer -- 1
+    for COBYLA, 2 for SPSA's two-point gradient estimate, a whole sweep
+    for ExcitationSolve -- so a result carrying only the first cannot be
+    compared against another optimizer's per step without modelling that
+    optimizer's internals.  iteration_boundaries closes it by reporting
+    what each iteration really consumed.
+    """
+    from qpubench.schemas.mirrors.mqsdk_cebule import TNQCOptResult
+
+    result = TNQCOptResult.from_task_result({
+        "VQE_energy": -1.10,
+        "phi": [0.1],
+        "theta": [[0.2]],
+        "H_TN_opt_qubit": (["Z0"], [0.5]),
+        "function_calls": 12,
+        "cost_history": [-1.0] * 12,
+        "iteration_history": [-1.0] * 4,
+        "iteration_boundaries": [3, 3, 3, 3],
+    })
+    assert result.iteration_history == [-1.0] * 4
+    assert result.iteration_boundaries == [3, 3, 3, 3]
+    # The boundaries partition the evaluations, which is the property that
+    # makes them a mapping between the two axes rather than a summary.
+    assert sum(result.iteration_boundaries) == len(result.cost_history)
+
+
+def test_tn_qc_opt_result_without_iteration_history_reads_as_unreported():
+    """A result from before the fields existed must not read as zero.
+
+    Empty is "the task did not report this", not "the optimizer ran no
+    iterations" -- a distinction that matters because a run really can
+    have one iteration, and averaging over a batch that silently counted
+    old runs as zero would be wrong rather than merely incomplete.
+    """
+    from qpubench.schemas.mirrors.mqsdk_cebule import TNQCOptResult
+
+    result = TNQCOptResult.from_task_result({
+        "VQE_energy": -1.10,
+        "phi": [0.1],
+        "theta": [[0.2]],
+        "H_TN_opt_qubit": (["Z0"], [0.5]),
+        "cost_history": [-1.0] * 12,
+    })
+    assert result.iteration_history == []
+    assert result.iteration_boundaries == []
+    assert result.cost_history == [-1.0] * 12
+
+
 def test_gnn_dataset_lifecycle_inputs():
     create = GNNDatasetCreateInput(
         dataset_name="ds1", includes_target_val=True, target_property="homo_lumo_gap",

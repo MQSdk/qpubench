@@ -791,6 +791,26 @@ class TNQCOptResult(pydantic.BaseModel):
     optimize_result all arrive merged in from the optimizer callback
     dict, and stay optional since it's unconfirmed whether older API
     versions populate them.
+
+    Added 2026-09-01: ``iteration_history`` and ``iteration_boundaries``,
+    which resolve an ambiguity ``cost_history`` alone cannot. An
+    ITERATION is not an EVALUATION, and how many of the latter one of the
+    former costs differs per optimizer — 1 for COBYLA, 2 for SPSA's
+    two-point gradient estimate, and a whole sweep for ExcitationSolve.
+    ``cost_history`` is indexed by evaluation, so comparing two
+    optimizers' progress per iteration meant reconstructing the mapping
+    from a model of each one's internals. These two carry it:
+
+      iteration_history      the cost after each ITERATION, so
+                             optimizers are directly comparable per step
+      iteration_boundaries   evaluations consumed by each iteration,
+                             which is the MEASURED form of what
+                             build_benchmark_matrix models in
+                             Cost_Evals_Per_Iteration
+
+    Both default to empty, since a run from before they existed has
+    neither, and an empty list is then honestly "not reported" rather
+    than a claim of zero iterations.
     """
     vqe_energy:      float
     phi:             list[Any]     # optimised circuit parameters U(φ)
@@ -798,6 +818,8 @@ class TNQCOptResult(pydantic.BaseModel):
     h_tn_opt_qubit:  tuple[list[str], list[float]]           # (labels, coefficients)
     function_calls:  int | None            = None   # number of cost-function evaluations
     cost_history:    list[float]           = []      # energy value per function evaluation
+    iteration_history: list[float]         = []      # energy value per optimizer ITERATION
+    iteration_boundaries: list[int]        = []      # evaluations consumed by each iteration
     param_history:   list[list[Any]]       = []      # theta+phi history per evaluation
     metadata:        dict[str, Any] | list[Any] | None = None   # backend-specific; absent in "network" mode
     optimize_result: dict[str, Any] | None = None   # full scipy.optimize.minimize OptimizeResult, as returned by the API ("OptimizeResult" in the docs)

@@ -847,6 +847,25 @@ main has since gained a `mapped_hamiltonian` module.
   (`_check_iteration_budget`, `e44d32a`). `opt_options["maxiter"]` wins
   over `n_iterations` in that check.
 
+Revised again 2026-09-01, adding two optional `TNQCOptResult` fields
+(minor bump, per the append-only rule):
+
+- **`iteration_history` added.** The cost after each optimizer
+  *iteration*, where `cost_history` is indexed by *evaluation*. The two
+  differ by a factor that is a property of the optimizer — 1 for COBYLA,
+  2 for SPSA's two-point gradient estimate, a whole sweep for
+  ExcitationSolve — so comparing two optimizers' progress per step
+  previously meant reconstructing that mapping from a model of each
+  one's internals.
+- **`iteration_boundaries` added.** Evaluations consumed by each
+  iteration. This is the *measured* form of what
+  `utils/build_benchmark_matrix.py` models as
+  `Cost_Evals_Per_Iteration`, so it turns a campaign assumption into an
+  observation — which is the kind of replacement stage 0 exists to make.
+
+Both default to `[]`, so a result from before they existed reads as "not
+reported" rather than as a claim of zero iterations.
+
 | Type | Cebule task | Description |
 |---|---|---|
 | `MolecularGeometry` | shared | Flat geometry + symbols + basis |
