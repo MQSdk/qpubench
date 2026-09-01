@@ -87,7 +87,14 @@ def _load(path: pathlib.Path) -> list[dict[str, str]]:
 def _select(
     runs: list[dict[str, str]], filters: list[str],
 ) -> list[dict[str, str]]:
-    """The runs matching every --where COLUMN=VALUE, in file order."""
+    """The runs matching every --where COLUMN=VALUE, in file order.
+
+    The separator is ONE `=`, and a second one is caught rather than
+    matched against.  `--where Ansatz==UCCSD` otherwise partitions into
+    ("Ansatz", "=UCCSD"), which matches nothing and reports "nothing
+    matches" while listing UCCSD among the values present -- the right
+    answer with no indication of why it was not found.
+    """
     selected = runs
     for pair in filters:
         column, _, value = pair.partition("=")
@@ -98,12 +105,33 @@ def _select(
                 f"--where {column}=...: no such column. Available: "
                 + ", ".join(sorted(runs[0]))
             )
-        selected = [r for r in selected if r[column] == value]
-        if not selected:
+        if value.startswith("="):
             raise SystemExit(
-                f"--where {pair}: nothing matches. Values present for "
-                f"{column}: " + ", ".join(sorted({r[column] for r in runs}))
+                f"--where {pair}: the separator is a single '='. Did you "
+                f"mean --where {column}={value.lstrip('=')}?"
             )
+        matched = [r for r in selected if r[column] == value]
+        if not matched:
+            # Which values are present is reported for the SELECTION so
+            # far, not for the whole file, because with several --where
+            # flags the useful question is what this one had left to
+            # match against.  A value that exists in the file but not in
+            # the selection means the filters conflict, which the second
+            # line says outright.
+            here = sorted({r[column] for r in selected})
+            message = [
+                f"--where {pair}: nothing matches. Values present for "
+                f"{column} in the {len(selected)} runs selected so far: "
+                + ", ".join(here)
+            ]
+            if value in {r[column] for r in runs}:
+                message.append(
+                    f"  {value!r} does exist in {len(runs)} rows of the file, "
+                    f"so it is the combination of --where flags that is empty, "
+                    f"not this one on its own."
+                )
+            raise SystemExit("\n".join(message))
+        selected = matched
     return selected
 
 
