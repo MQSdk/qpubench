@@ -56,7 +56,7 @@ _HARDWARE_PREFIX = "ibm"
 def _load(path: pathlib.Path) -> list[dict[str, str]]:
     if not path.exists():
         raise SystemExit(
-            f"{path} does not exist. Stage 0 is generated on demand:\n"
+            f"{path} does not exist. Regenerate it with:\n"
             f"    PYTHONPATH=src python utils/build_benchmark_matrix.py --stage 0"
         )
     with path.open() as f:

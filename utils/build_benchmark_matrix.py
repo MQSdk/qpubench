@@ -567,6 +567,42 @@ SIMPLEX_OVERHEAD = 2      # n+1 simplex points, +1 for the first real step;
 STAGE1_EVALS_PER_PARAM = 1.3   # ~50% of achievable descent, at every width
 STAGE2_EVALS_PER_PARAM = 4.0   # ~80%; stage 2 is where converged energies live
 
+# Stage 0 buys no QPU time, so its budget is set by what it has to MEASURE
+# rather than by what it costs.
+#
+# At 1.3n it could not do one of the four jobs it exists for.  Stage 0 is
+# meant to check the multipliers above against a real VQE surface, and the
+# fraction of ACHIEVABLE descent a budget reaches cannot be computed
+# without the achievable descent -- which needs a near-converged run.  A
+# stage 0 budgeted at 1.3n reports only that 1.3n evaluations produced
+# some energy, which is the thing already assumed.
+#
+# 12n is ~95% on the synthetic objective: flat enough that the residual is
+# a usable proxy for the true minimum, so 1.3n and 4n can be scored
+# against it.  Anything beyond that buys accuracy in the proxy rather than
+# in the answer.
+STAGE0_EVALS_PER_PARAM = 12.0
+
+# An absolute ceiling on top of the multiplier, because 12n on the widest
+# rows is not a realistic simulation: n runs to 182 here, so 12n would be
+# 2,184 evaluations for a single run and 550,656 across the matrix.
+#
+# 600 is 12n at n=50.  The median row is n=34, so the TYPICAL row is
+# uncapped and gets the full 12n; the ceiling binds on the widest 300 of
+# 1,152.  Those are not shortchanged either -- at n=182 a 600-evaluation
+# budget is still 3.3n, between stage 1's screening budget and stage 2's
+# converged one -- and truncating that quarter of the matrix takes it from
+# 550,656 evaluations to 436,032.
+#
+# Note this is a CEILING, not a cost: conv_tol (1e-6 by default) stops a
+# converged run early, so a generous budget is free on every row that
+# converges and spends only where a row genuinely needs the evaluations,
+# which is the row worth learning from.  That argument holds for COBYLA.
+# SPSA has no comparable convergence test and will likely spend the whole
+# budget, and ExcitationSolve's behaviour here is unmeasured -- which is
+# itself something stage 0 reports.
+STAGE0_MAX_ITERATIONS = 600
+
 # --- phi_init, per circuit family -----------------------------------------
 #
 # phi is the CIRCUIT's parameter vector, so every row has one: a plain
@@ -761,6 +797,7 @@ def pinned_parameter_count(path: pathlib.Path) -> int | None:
 
 def optimizer_iterations(
     num_params: int, evals_per_param: float = STAGE1_EVALS_PER_PARAM,
+    max_iterations: int | None = None,
 ) -> int:
     """Cost-function evaluations a row's optimizer will really consume.
 
@@ -768,19 +805,45 @@ def optimizer_iterations(
     reaches a comparable fraction of its own achievable descent rather
     than a fraction that shrinks with n.  The multiplier is the stage's:
     stage 1 screens at STAGE1_EVALS_PER_PARAM, stage 2 converges at
-    STAGE2_EVALS_PER_PARAM.  See MIN_ITERATIONS.
+    STAGE2_EVALS_PER_PARAM, stage 0 calibrates both at
+    STAGE0_EVALS_PER_PARAM.  See MIN_ITERATIONS.
+
+    `max_iterations` caps the result, which only stage 0 sets: it is the
+    one stage whose budget is limited by simulation wall clock rather than
+    by purchased QPU time.  See STAGE0_MAX_ITERATIONS.
     """
     budget = max(MIN_ITERATIONS, math.ceil(evals_per_param * num_params))
+    if max_iterations is not None:
+        budget = min(budget, max_iterations)
     # The proportional rule always clears COBYLA's simplex, so this can
     # never fire: for n <= 28 the floor of 30 does it, and for n >= 29 the
     # multiplier adds >= 8.7 evaluations against the 2 the simplex needs.
-    assert budget >= num_params + SIMPLEX_OVERHEAD
+    # A cap COULD breach it, which is why the assertion is kept after the
+    # cap rather than before -- upstream rejects such a budget outright
+    # (_check_iteration_budget), so it has to fail here instead.
+    assert budget >= num_params + SIMPLEX_OVERHEAD, (
+        f"{budget} evaluations for {num_params} free parameters is below "
+        f"COBYLA's simplex; raise STAGE0_MAX_ITERATIONS above "
+        f"{num_params + SIMPLEX_OVERHEAD}"
+    )
     return budget
 
 
 def stage_evals_per_param(stage: str) -> float:
     """The multiplier a stage's rows are budgeted at."""
+    if stage.startswith("0"):
+        return STAGE0_EVALS_PER_PARAM
     return STAGE2_EVALS_PER_PARAM if stage.startswith("2") else STAGE1_EVALS_PER_PARAM
+
+
+def stage_max_iterations(stage: str) -> int | None:
+    """The absolute ceiling a stage's rows are capped at, if any.
+
+    Only stage 0 has one.  The hardware stages are bounded by the 900
+    minute allocation, which is a far tighter constraint than any per-row
+    ceiling would be.
+    """
+    return STAGE0_MAX_ITERATIONS if stage.startswith("0") else None
 
 
 def circuit_parameter_count(
@@ -1077,7 +1140,10 @@ def _row(
         "Optimizer": optimizer,
         "Opt_Options": OPT_OPTIONS,
         "Iterations": str(
-            optimizer_iterations(free_params, stage_evals_per_param(stage))
+            optimizer_iterations(
+                free_params, stage_evals_per_param(stage),
+                stage_max_iterations(stage),
+            )
         ),
         # 0 was a real shot count where "shots do not apply" was meant --
         # and would be wrong the moment such a row were re-run in "both"

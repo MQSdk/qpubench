@@ -46,10 +46,10 @@ the final energies.
 
 ## Campaign structure
 
-The study is divided into three stages at the points where the
-experimental decisions fall. Only stage 1 is committed to the repository,
-since the inputs of a later stage are an output of the stage preceding
-it.
+The study is divided into four stages at the points where the
+experimental decisions fall. Stages 0 and 1 are committed to the
+repository; stages 2 and 3 are not, since the inputs of each are an
+output of the stage preceding it.
 
 Each row of a stage's CSV file defines one VQE or TN-VQE run, and that
 is how they are referred to below: a run is a single optimisation of one
@@ -58,7 +58,7 @@ method and evaluation budget.
 
 | Stage | Question | File | Runs |
 |---|---|---|---|
-| **0, simulation** | What does each combination really cost, which ansatz and which optimizer are worth hardware, and does the pipeline run? | `stage0_simulator_screen.csv` | 1152, generated on demand |
+| **0, simulation** | What does each combination really cost, which ansatz and which optimizer are worth hardware, and does the pipeline run? | `stage0_simulator_screen.csv` | 1152, committed |
 | **1, screening** | Which mapper, method and basis warrant converged runs? | `stage1_screening_matrix.csv` | 12, committed |
 | **2, deep sweep** | For the selected combinations, how do the TN-VQE sweep parameters `θ` and `φ` behave? | `stage2_deep_sweep.csv` | generated on demand |
 | **3, QESEM refinement** | Does error mitigation move the converged energy closer to the classical reference? | `stage3_qesem_refinement.csv` | generated on demand |
@@ -290,18 +290,28 @@ Four things come out of it, none of which needs purchased time:
   are greedy upper bounds and run about 2× what the runtime achieves.
 - **Evaluations really needed to converge**, against the `1.3n` and `4n`
   multipliers, which come from a synthetic objective and have never been
-  checked on a real VQE surface.
+  checked on a real VQE surface. This is why stage 0 is budgeted at `12n`
+  — see [How many evaluations each run is
+  given](#how-many-evaluations-each-run-is-given).
 - **The classical wall clock of the tensor-network contraction**, which
   is the other half of the displacement TN-VQE claims and has never been
   measured at all.
 - **That the pipeline runs end to end**, before it costs anything.
 
 A caution on its own cost: 1152 runs is free of the QPU allocation but
-not of CPU time, and the widest cells are 16 qubits with 1,177 Pauli
-terms in 538 groups. If it proves too slow to run whole, the optimizer
-axis is the one to cut back first — it is a question about the classical
-half of the loop, so it can be run on a slice of the chemistry cells
-without costing the design its other factors.
+not of CPU time. At `12n` the matrix is 436,032 cost-function
+evaluations, and the widest cells are 16 qubits with 1,177 Pauli terms in
+538 groups, while the mol_map UCCSD circuits run to thousands of gates.
+The two completed runs took 3.9 s per evaluation at 8 qubits, which is
+one configuration and not a rate — but scaled naively it puts the whole
+matrix at several hundred hours if run serially.
+
+**So run it in slices**, which is what `run_campaign.py --where` is for:
+one chemistry cell at a time, or one optimizer, resuming as it goes. If
+it still proves too slow, the optimizer axis is the one to cut back
+first — it is a question about the classical half of the loop, so it can
+be run on a subset of the chemistry cells without costing the design its
+other factors.
 
 ### The classical-only control
 
@@ -405,18 +415,49 @@ measurement is what stage 0 is for.**
 
 ### How many evaluations each run is given
 
-`Iterations` is computed per run as `max(30, ceil(1.3 x n_params))` from
-that run's own free-parameter count. The budget is proportional rather
-than additive because COBYLA needs evaluations in proportion to the
-parameter count to make a given amount of progress: reaching a fixed
-fraction of the achievable descent costs about `1.3n` evaluations for
-50%, `4n` for 80%. A rule of the form `n + constant` would reach a
-shrinking fraction as circuits widen, making the optimizer budget a
-confound correlated with qubit count.
+`Iterations` is computed per run from that run's own free-parameter
+count. The budget is proportional rather than additive because COBYLA
+needs evaluations in proportion to the parameter count to make a given
+amount of progress: reaching a fixed fraction of the achievable descent
+costs about `1.3n` evaluations for 50%, `4n` for 80% and `12n` for 95%. A
+rule of the form `n + constant` would reach a shrinking fraction as
+circuits widen, making the optimizer budget a confound correlated with
+qubit count.
+
+| Stage | Budget | Reaches | Bounded by |
+|---|---|---|---|
+| **0**, simulated | `min(600, max(30, ⌈12n⌉))` | ~95% | simulation wall clock |
+| **1**, hardware | `max(30, ⌈1.3n⌉)` | ~50% | the 900-minute allocation |
+| **2**, hardware | `max(30, ⌈4n⌉)` | ~80% | the 900-minute allocation |
 
 The multipliers come from a synthetic objective, so they are the right
-functional form rather than tuned values. Stage 0 measures them on a real
-VQE surface, which is the first time they will have been checked.
+functional form rather than tuned values, and stage 0 is where they are
+checked against a real VQE surface for the first time.
+
+**Which is why stage 0 runs at `12n` and not at `1.3n`.** The fraction of
+*achievable* descent a budget reaches cannot be computed without the
+achievable descent, and that needs a near-converged run. A stage 0
+budgeted at `1.3n` would report only that `1.3n` evaluations produced
+some energy — the thing already assumed. At `12n` the curve is flat
+enough that the residual is a usable proxy for the true minimum, so `1.3n`
+and `4n` can be scored against it.
+
+The `600` ceiling exists because `12n` on the widest rows is not a
+realistic simulation: `n` runs to 182 here, so `12n` would be 2,184
+evaluations for one run and 550,656 across the matrix. 600 is `12n` at
+`n = 50`, and the median row is `n = 34`, so the typical row is uncapped
+and gets the full `12n`; the ceiling binds on the widest 300 of 1,152 and
+takes the matrix to **436,032 evaluations**. Even a capped row is not
+shortchanged — at `n = 182`, 600 evaluations is `3.3n`, between stage 1's
+budget and stage 2's.
+
+Note that this is a **ceiling, not a cost**: `conv_tol` (`1e-6`) stops a
+converged run early, so a generous budget is free on every row that
+converges and spends only where a row genuinely needs the evaluations —
+which is the row worth learning from. That argument holds for COBYLA.
+SPSA has no comparable convergence test and will likely spend the whole
+budget, and ExcitationSolve's behaviour here is unmeasured, so plan for
+the two-thirds of rows that are not COBYLA to cost closer to the ceiling.
 
 ### What the 900 minutes buy
 
