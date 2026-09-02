@@ -493,8 +493,15 @@ def _true_row_counts() -> set[int]:
 
     # Stage 0 is generated on demand like stage 2, so its size is only ever
     # a number in prose unless it is counted here.
-    counts.add(len(module.build_stage0()))
+    stage0 = module.build_stage0()
+    counts.add(len(stage0))
     counts.add(len(module.build_stage1()))
+    # Stage 0 keeps rows it cannot execute, marked rather than deleted so
+    # no Case_ID moves, so "1152 rows" and "1008 runnable" are both true of
+    # it and prose may cite either -- as may the size of a blocked cell.
+    blocked = [r for r in stage0 if r["Infeasible_Reason"]]
+    counts.add(len(blocked))
+    counts.add(len(stage0) - len(blocked))
 
     # Stage 2 is not committed, so its size only exists as a projection in
     # prose -- which is exactly the kind of number that goes stale.

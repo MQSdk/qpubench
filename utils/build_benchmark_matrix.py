@@ -25,7 +25,7 @@ So the sweep is split at its natural decision point:
     one circuit repetition count).  12 rows: the combinations in
     STAGE1_HARDWARE crossed with plain VQE, TN-VQE and the classical-only
     control.  The axes hardware cannot afford are carried by stage 0,
-    which simulates 1152 rows for no QPU time at all.
+    which simulates 1008 rows for no QPU time at all.
 
   Stage 2 (deep sweep) -- the full 28-point TN_Layers_Network x
     Ansatz_Reps x TN_Ansatz sweep, run only on the (molecule,
@@ -230,10 +230,35 @@ SCREENED: dict[tuple[str, str, str], str] = {
 # STAGE1_HARDWARE does not name appears here with its price, so the
 # omission is a recorded number rather than a silent gap.
 SIMULATOR_ONLY: dict[tuple[str, str, str], str] = {
-    ("H2", "qvSZP", "JW"): "538 bases, ~10 min per EVALUATION -- unaffordable at any budget",
     ("H2", "qvSZP", "mol_map"): "210 min a run, 23% of the campaign for one point",
     ("H2O", "6-31g", "mol_map"): "137 min a run, 15% of the campaign for one point",
     ("H2O", "qvSZP", "mol_map"): "137 min a run; identical width and E to its 6-31g twin",
+}
+
+# Cells that cannot be SIMULATED either, with the measurement that says so.
+#
+# These rows are still generated, and that is deliberate: a Case_ID is the
+# key every collected result is stored under, so deleting a cell's rows would
+# renumber every row after them and silently re-point results already on
+# disk.  The rows stay, carrying their reason in Infeasible_Reason, and
+# utils/run_campaign.py refuses to submit one.  The campaign keeps a
+# record of what it intended to run and why it could not.
+#
+# H2/qvSZP under Jordan-Wigner is 16 qubits, and TN_QC_OPT materialises
+# the transformed Hamiltonian as a DENSE 2^n x 2^n operator: 2^16 x 2^16
+# complex128 is exactly 64 GiB, which is the allocation the runs died on.
+# The scaling is 16 x 4^n bytes, so this cell needs 4^8 = 65,536 times the
+# memory of the 8-qubit cells -- 1 MiB against 64 GiB.  Nothing about the
+# submission changes that: it failed identically under `pauli` and
+# `grouped`, and in `network` mode with no shots at all, because the
+# allocation is set by the qubit count alone.
+SIMULATION_INFEASIBLE: dict[tuple[str, str, str], str] = {
+    ("H2", "qvSZP", "JW"): (
+        "16 qubits: the dense 2^16 x 2^16 transformed Hamiltonian is 64 GiB, "
+        "65,536x the 8-qubit cells. Measured, not projected -- three runs "
+        "died on exactly that allocation, under both measurement methods "
+        "and in network mode"
+    ),
 }
 
 # STAGE 1 ON HARDWARE, and the reduction that makes it fit.
@@ -361,7 +386,7 @@ ANSATZE = [
     "RealAmplitudes", "EfficientSU2_circular", "n_local_rzryrz_sca", "UCCSD",
 ]
 
-# Both, so stage 0's crossing is complete: 1152 rows with no hole.
+# Both, so stage 0's ansatz axis is complete on either mapper.
 #
 # Neither is built here.  Both are SUPPLIED as pinned QASM, and both are a
 # RESTRICTED UCCSD rather than the generalized singles-and-doubles pool
@@ -843,7 +868,7 @@ FIELDNAMES = [
     "Num_Opt_Params_Theta", "Num_ExpVals_Per_Iter", "Num_ExpVals_Source",
     "Error_Mitigation", "Precision", "QESEM_Execution_Mode",
     "Refines_Case_ID", "Converged_Params_File", "Converged_Params_SHA256",
-    "Notes",
+    "Infeasible_Reason", "Notes",
 ]
 
 
@@ -1300,6 +1325,12 @@ def _row(
         "Refines_Case_ID": refines_case_id,
         "Converged_Params_File": converged_params[0],
         "Converged_Params_SHA256": converged_params[1],
+        # Empty on a row that can be run.  Non-empty means the row is
+        # part of the campaign's design but cannot be executed with the
+        # resources available, and run_campaign.py will not submit it.
+        "Infeasible_Reason": SIMULATION_INFEASIBLE.get(
+            (mol.name, basis, mapper), ""
+        ),
         "Notes": " ".join(notes),
     }
 
@@ -1381,7 +1412,7 @@ def build_stage0() -> list[dict[str, str]]:
 
     What it crosses
     ---------------
-    Six factors, fully crossed, with nothing missing:
+    Six factors, fully crossed:
 
       chemistry  the closed 2x2x2 in SCREENED -- {H2, H2O(4,4)} x
                  {6-31g, qvSZP} x {JW, mol_map}, 8 cells, none missing
@@ -1397,7 +1428,9 @@ def build_stage0() -> list[dict[str, str]]:
 
     A complete crossing is what lets a factor's effect be read at every
     level of the others rather than at one.  1152 rows: 8 x 4 x 3 x 3 x 2
-    x 2, with no cell absent.
+    x 2, with no cell absent -- though one cell's 144 rows carry an
+    Infeasible_Reason and are never submitted, leaving 1008 runnable.
+    See SIMULATION_INFEASIBLE.
 
     It therefore carries the axes hardware cannot afford: all four
     ansaetze against stage 1's one, all three optimizers against stage 1's
@@ -1423,6 +1456,7 @@ def build_stage0() -> list[dict[str, str]]:
                                 on_hardware=False):
                     continue
                 only = SIMULATOR_ONLY.get((mol.name, basis, mapper))
+                infeasible = SIMULATION_INFEASIBLE.get((mol.name, basis, mapper))
                 reason = SCREENED[(mol.name, basis, mapper)]
                 for backend in SIMULATOR_BACKENDS:
                     for measurement in MEASUREMENT_METHODS:
@@ -1442,6 +1476,10 @@ def build_stage0() -> list[dict[str, str]]:
                                     if only:
                                         note += (
                                             f" NEVER REACHES HARDWARE: {only}.")
+                                    if infeasible:
+                                        note += (
+                                            f" CANNOT BE SIMULATED EITHER: "
+                                            f"{infeasible}.")
                                     rows.append(_row(
                                         stage="0_simulate", mol=mol, basis=basis,
                                         active_space=space,
@@ -1832,6 +1870,13 @@ def summarize(rows: list[dict[str, str]]) -> None:
             continue
         values = sorted({r[column] for r in rows if not r[column].startswith("n/a")})
         print(f"    {len(values)} {label}: {', '.join(values)}")
+    blocked = [r for r in rows if r.get("Infeasible_Reason")]
+    if blocked:
+        cells = sorted({(r["Molecule"], r["Basis"], r["Mapper"]) for r in blocked})
+        print(f"    {len(rows) - len(blocked)} runnable; {len(blocked)} in "
+              f"{len(cells)} cell(s) cannot be run here:")
+        for cell in cells:
+            print(f"      {'/'.join(cell)}: {SIMULATION_INFEASIBLE[cell]}")
 
 
 def _read_source_matrix(path: pathlib.Path | None) -> list[dict[str, str]]:

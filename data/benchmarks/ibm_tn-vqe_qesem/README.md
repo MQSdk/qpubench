@@ -77,7 +77,8 @@ rather than from a notebook cell or a command line.
 
 [`run_campaign.py`](../../../utils/run_campaign.py) runs a stage in
 batches from the command line, selected with `--where` filters. This is
-how stage 0 is run, since 1152 runs is not something to start in one go:
+how stage 0 is run, since 1008 runnable runs is not something to start in
+one go:
 
 ```sh
 PYTHONPATH=src python utils/run_campaign.py --group-by Molecule,Basis,Mapper
@@ -143,7 +144,7 @@ on hardware.
 
 Stage 0 is where the campaign's breadth lives. It buys no QPU time, so it
 is not constrained by the 900 minutes, and it carries every axis hardware
-cannot afford. **1152 runs**, regenerated with
+cannot afford. **1152 rows, 1008 of them runnable**, regenerated with
 
 ```sh
 PYTHONPATH=src python utils/build_benchmark_matrix.py --stage 0
@@ -151,7 +152,7 @@ PYTHONPATH=src python utils/build_benchmark_matrix.py --stage 0
 
 ### What it varies
 
-Six factors, fully crossed, with nothing missing.
+Six factors, fully crossed.
 
 | Factor | Levels | |
 |---|---:|---|
@@ -162,10 +163,53 @@ Six factors, fully crossed, with nothing missing.
 | **Measurement** | 2 | `pauli`, `grouped` |
 | **Backend** | 2 | `aer_simulator`, `fake_aachen` |
 
-`8 × 4 × 3 × 3 × 2 × 2 = 1152`, complete, which is the point of a
-factorial design: an optimizer effect can be read at every ansatz, a
-mapper effect at both bases and both molecules, and an interaction
-between any two can be seen at all.
+`8 × 4 × 3 × 3 × 2 × 2 = 1152` rows, of which **1008 are runnable**: one
+chemistry cell exceeds the memory of the machine available and is marked
+rather than run. See [The cell that cannot be
+simulated](#the-cell-that-cannot-be-simulated).
+
+The crossing is otherwise complete, which is the point of a factorial
+design: an optimizer effect can be read at every ansatz, a mapper effect
+at both bases and both molecules, and an interaction between any two can
+be seen at all.
+
+### The cell that cannot be simulated
+
+**H2/qvSZP under Jordan-Wigner — 144 rows, none of them runnable here.**
+
+`TN_QC_OPT` materialises the transformed Hamiltonian as a dense
+`2ⁿ × 2ⁿ` operator, so the memory goes as `16 × 4ⁿ` bytes:
+
+| Qubits | Dense operator | Memory | Rows |
+|---:|---|---:|---:|
+| 4 | 2⁴ × 2⁴ | 4 KiB | 144 |
+| 6 | 2⁶ × 2⁶ | 64 KiB | 432 |
+| 8 | 2⁸ × 2⁸ | 1 MiB | 432 |
+| **16** | 2¹⁶ × 2¹⁶ | **64 GiB** | 144 |
+
+Three runs died on exactly that 64 GiB allocation. It is not a marginal
+case: 16 qubits needs `4⁸ = 65,536×` the memory of the 8-qubit cells, and
+the campaign has nothing in between. Nor is it a property of the
+submission — it failed identically under `pauli` and under `grouped`, and
+in `network` mode with no shots at all, because the allocation follows
+the qubit count alone. Fewer shots, another measurement method and more
+cores all leave it unchanged.
+
+**The rows are kept, not deleted.** A `Case_ID` is the key every
+collected result is stored under, so removing 144 rows would renumber
+every row after them and silently re-point results already on disk. They
+stay, carrying the reason in `Infeasible_Reason`, and the runner refuses
+to submit one — so the campaign records what it intended to run and why
+it could not.
+
+What this costs: **H2 under Jordan-Wigner exists only at 6-31G**, so the
+basis axis on H2 can be read under mol_map alone, and the mapper
+comparison at qvSZP under mol_map alone. H2O is untouched — a fixed
+CAS(4,4) holds it at 8 Jordan-Wigner qubits in either basis — so the
+controlled half of the design survives whole. It is H2's *unrestricted*
+arm that hits the wall, which is the same property that made it worth
+including: width follows the basis there, and at qvSZP the basis takes it
+past what can be simulated.
 
 ### The chemistry cells
 
@@ -357,7 +401,7 @@ Four things come out of it, none of which needs purchased time:
   measured at all.
 - **That the pipeline runs end to end**, before it costs anything.
 
-A caution on its own cost: 1152 runs is free of the QPU allocation but
+A caution on its own cost: 1008 runnable runs is free of the QPU allocation but
 not of CPU time. At `12n` the matrix is 436,032 cost-function
 evaluations, and the widest cells are 16 qubits with 1,177 Pauli terms in
 538 groups, while the mol_map UCCSD circuits run to thousands of gates.
@@ -613,7 +657,7 @@ PYTHONPATH=src python utils/split_benchmark_batches.py
 ```mermaid
 flowchart TD
     A["Chemistry cells<br/>2 molecules x 2 basis sets x 2 mappers<br/>a closed 2x2x2, none missing"]
-    A --> S["Stage 0: simulator screen<br/>1152 runs on aer_simulator and fake_aachen<br/>4 ansaetze x 3 optimizers<br/>x 3 methods x 2 measurement methods<br/>NO QPU TIME"]
+    A --> S["Stage 0: simulator screen<br/>1008 runnable runs on aer_simulator and fake_aachen<br/>4 ansaetze x 3 optimizers<br/>x 3 methods x 2 measurement methods<br/>NO QPU TIME"]
     S --> M["Measures what was assumed:<br/>E as the runtime groups it,<br/>evaluations to converge,<br/>which ansatz and optimizer win,<br/>classical wall clock"]
     M --> B["Stage 1: hardware screen<br/>12 runs, one ansatz, one optimizer,<br/>one measurement method per mapper<br/>build_benchmark_matrix.py"]
 
@@ -940,6 +984,7 @@ basis gate on any current device.
 | `Precision` | QESEM target σ in Hartree on mitigated rows; `n/a (shot-based)` elsewhere |
 | `QESEM_Execution_Mode` | `batch` or `session`; `n/a (not QESEM)` elsewhere |
 | `Refines_Case_ID`, `Converged_Params_File`, `Converged_Params_SHA256` | Stage-3 provenance |
+| `Infeasible_Reason` | Empty on a runnable row. Non-empty means the row is part of the campaign's design but cannot be executed with the resources available, and `run_campaign.py` will not submit it — see [The cell that cannot be simulated](#the-cell-that-cannot-be-simulated) |
 | `Notes` | Per-row provenance and caveats |
 
 The batch files carry three further columns, `Est_QPU_Time_Per_Iter_S`,

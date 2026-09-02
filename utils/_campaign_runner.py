@@ -479,20 +479,38 @@ TERMINAL_STATUSES = (
 )
 
 
+# The result type TN_QC_OPT uploads, and the one this campaign fetches.
+RESULT_TYPE = "result"
+
+
 def poll_task(session: Any, task_id: str) -> tuple[str, Any, str | None]:
     """(status, result or None, error message or None) for one task id.
 
     Never blocks.  A task that is neither done nor errored comes back with
     its status verbatim, so an unexpected one is reported rather than
     silently treated as still-running.
+
+    A TASK CAN BE 'done' AND HAVE NO RESULT.  `CebuleTask.results` lists
+    what was actually uploaded, and asking for a type that is not there is
+    a 404, not an empty answer -- mqsdk's own wait_for_result checks the
+    list for exactly this reason and raises rather than fetching.  So the
+    upload is checked here too, and a finished task with nothing to fetch
+    is reported as terminal-without-a-result instead of raising out of the
+    collector, which is what left the pending file stale mid-loop.
     """
     from qpubench.schemas.mirrors.mqsdk_cebule import TNQCOptResult
 
     task = session.cebule.task_status(task_id)
-    if task.status != "done":
-        return task.status, None, task.error_message
-    result = TNQCOptResult.from_task_result(session.cebule.get_result(task_id, "result"))
-    return task.status, result, None
+    uploaded = {entry.get("type") for entry in (task.results or [])}
+    if task.status == "done" and RESULT_TYPE in uploaded:
+        payload = session.cebule.get_result(task_id, RESULT_TYPE)
+        return task.status, TNQCOptResult.from_task_result(payload), None
+    if task.status in TERMINAL_STATUSES:
+        return task.status, None, task.error_message or (
+            f"finished with status {task.status!r} but uploaded no "
+            f"{RESULT_TYPE!r}; it holds {sorted(uploaded) or 'nothing'}"
+        )
+    return task.status, None, task.error_message
 
 
 def submit_run(

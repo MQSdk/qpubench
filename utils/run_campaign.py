@@ -1,6 +1,6 @@
 """Run a campaign stage in batches: submit many, collect later.
 
-Built for stage 0, which is 1152 simulated runs and therefore not
+Built for stage 0, which is 1008 runnable simulated runs and therefore not
 something to start in one go and hope: batches let a slice be run,
 inspected and resumed.  It takes any of the campaign's CSV files, so the
 stage-1 batches go through the same path.
@@ -9,7 +9,7 @@ SUBMISSION AND COLLECTION ARE SEPARATE, and that is the point.  Cebule
 dispatches to outside HPC infrastructure, so a task spends most of its
 life queued rather than running.  Submitting one and blocking until it
 returns spends that queue time doing nothing, in the one process that
-could have been submitting the rest -- 1152 runs done that way is a
+could have been submitting the rest -- 1008 runs done that way is a
 serial sum of queue times.  So `--submit` creates tasks and returns, and
 `--collect` harvests whatever has finished since.
 
@@ -303,38 +303,61 @@ def main() -> None:
     # --- Collect first, so a --collect --submit pass tops up the queue
     # against a pending count that is already current.
     if args.collect and pending:
-        still_pending, collected, errored = [], 0, 0
+        still_pending, collected, errored, stale = [], 0, 0, 0
         unfinished: collections.Counter[str] = collections.Counter()
-        for entry in pending:
-            status, result, error = runner.poll_task(session, entry["task_id"])
-            case = entry["Case_ID"]
-            if result is not None:
-                run = by_case[case]
-                elapsed = time.time() - entry["submitted_at"]
-                runner.append_record(
-                    results, run, result, entry["task_id"], elapsed, batch,
-                    args.backend, submitted_at=entry["submitted_at"],
-                )
-                done.add(case)
-                collected += 1
-                print(f"  collected {case}: E = {result.vqe_energy:.6f} Ha, "
-                      f"{elapsed / 60:.1f} min elapsed")
-            elif status in runner.TERMINAL_STATUSES or case in forget:
-                # Terminal without a result: an error, a cancellation, or a
-                # Case_ID named by --forget-pending. All three end the same
-                # way -- the task will never produce a result, so it moves
-                # out of pending rather than being polled forever.
-                runner.append_failure(results, entry, status, error)
-                failed.add(case)
-                errored += 1
-                verb = "FORGOT" if case in forget else "ENDED"
-                print(f"  {verb} {case}: status {status!r}"
-                      + (f": {error}" if error else ""))
-            else:
-                unfinished[status] += 1
-                still_pending.append(entry)
-        runner.write_pending(pending_file, still_pending)
+        # Entries consumed so far.  The pending file is rewritten in a
+        # `finally` from this index, so an exception part-way through the
+        # loop still records what was collected and keeps what was not.
+        # Without it a raising poll left every entry in the file, including
+        # ones already written to the results -- and the next pass
+        # collected those a second time, appending duplicate records.
+        consumed = 0
+        try:
+            for entry in pending:
+                case = entry["Case_ID"]
+                # Belt and braces against a stale pending file from any
+                # cause: a Case_ID already in the results is never fetched
+                # again, so a duplicate cannot be written even if the file
+                # says otherwise.
+                if case in done:
+                    stale += 1
+                    consumed += 1
+                    print(f"  already collected {case}: dropping a stale "
+                          f"pending entry")
+                    continue
+                status, result, error = runner.poll_task(session, entry["task_id"])
+                if result is not None:
+                    run = by_case[case]
+                    elapsed = time.time() - entry["submitted_at"]
+                    runner.append_record(
+                        results, run, result, entry["task_id"], elapsed, batch,
+                        args.backend, submitted_at=entry["submitted_at"],
+                    )
+                    done.add(case)
+                    collected += 1
+                    print(f"  collected {case}: E = {result.vqe_energy:.6f} Ha, "
+                          f"{elapsed / 60:.1f} min elapsed")
+                elif status in runner.TERMINAL_STATUSES or case in forget:
+                    # Terminal without a result: an error, a cancellation,
+                    # a finished task that uploaded nothing, or a Case_ID
+                    # named by --forget-pending. All end the same way --
+                    # the task will never produce a result, so it moves out
+                    # of pending rather than being polled for ever.
+                    runner.append_failure(results, entry, status, error)
+                    failed.add(case)
+                    errored += 1
+                    verb = "FORGOT" if case in forget else "ENDED"
+                    print(f"  {verb} {case}: status {status!r}"
+                          + (f": {error}" if error else ""))
+                else:
+                    unfinished[status] += 1
+                    still_pending.append(entry)
+                consumed += 1
+        finally:
+            runner.write_pending(pending_file, still_pending + pending[consumed:])
         pending = still_pending
+        if stale:
+            print(f"  ({stale} stale pending entries dropped)")
         print(f"\ncollected {collected}, {errored} ended without a result, "
               f"{len(pending)} still in flight")
         # Which statuses the still-pending tasks report, so a task stuck on
@@ -364,7 +387,7 @@ def main() -> None:
         None if args.max_in_flight is None
         else max(0, args.max_in_flight - len(pending))
     )
-    taken = skipped = unbuildable = 0
+    taken = skipped = unbuildable = infeasible = 0
     # A bare --collect means "harvest and stop": previewing what a submit
     # would send is noise on a pass that was not asked to send anything.
     # With neither flag the preview IS the point, which is the dry run.
@@ -377,6 +400,12 @@ def main() -> None:
         # recorded as failed.
         if case in done or case in in_flight or case in failed:
             skipped += 1
+            continue
+        # A row the campaign designed but cannot execute with the resources
+        # available. It stays in the matrix so the design and the reason are
+        # on record, and so no Case_ID moves; it is never submitted.
+        if run.get("Infeasible_Reason"):
+            infeasible += 1
             continue
         # Counted on a dry run too, so that `--limit 1` previews exactly the
         # run `--submit --limit 1` would send.
@@ -410,19 +439,26 @@ def main() -> None:
     if submitting:
         verb = "submitted" if args.submit else "would be submitted"
         print(f"\n{taken} {verb} this pass, {skipped} already done, in flight "
-              f"or failed, {unbuildable} unbuildable")
+              f"or failed, {unbuildable} unbuildable"
+              + (f", {infeasible} infeasible here" if infeasible else ""))
 
     # The closing tally splits what is outstanding by WHY, because the three
     # need different commands: in-flight wants --collect, failed wants
     # --retry-failed or a look at the failure, and not-started wants the
     # same command again.
+    blocked = {r["Case_ID"] for r in selected if r.get("Infeasible_Reason")}
+    reasons = sorted({r["Infeasible_Reason"] for r in selected
+                      if r.get("Infeasible_Reason")})
     waiting = len(in_flight & mine)
     broken = len(failed & mine)
-    unstarted = len(mine - done - in_flight - failed)
+    unstarted = len(mine - done - in_flight - failed - blocked)
     print(f"\n{len(done & mine)}/{len(mine)} collected"
           + (f", {waiting} in flight" if waiting else "")
           + (f", {broken} failed" if broken else "")
-          + (f", {unstarted} not started" if unstarted else ""))
+          + (f", {unstarted} not started" if unstarted else "")
+          + (f", {len(blocked)} cannot be run here" if blocked else ""))
+    for reason in reasons:
+        print(f"  not runnable: {reason}")
     if waiting:
         print("  --collect to harvest the ones in flight")
     if unstarted:
