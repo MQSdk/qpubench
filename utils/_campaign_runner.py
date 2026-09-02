@@ -394,9 +394,32 @@ def write_pending(path: pathlib.Path, records: list[dict[str, Any]]) -> None:
     temporary.replace(path)
 
 
+def _create_task_kwargs(
+    task_input: TNQCOptInput, max_processors: int | None,
+) -> dict[str, Any]:
+    """Keyword arguments for create_task, task input and envelope together.
+
+    `max_processors` is a create_task PARAMETER rather than a field of
+    TNQCOptInput -- the mirror models it on CebuleTaskEnvelope, which
+    TNQCOptInput does not inherit -- so it is merged in here rather than
+    dumped from the model.  Python binds it to the named parameter and
+    everything else falls through to **kwargs, which is what makes
+    `create_task(name, type, max_processors=N, **payload)` work.
+
+    Omitted entirely when None, so a caller that does not ask for a
+    processor count leaves upstream's own default in place instead of
+    pinning one on its behalf.
+    """
+    kwargs = task_payload(task_input)
+    if max_processors is not None:
+        kwargs["max_processors"] = max_processors
+    return kwargs
+
+
 def submit_task(
     session: Any, run: dict[str, str], task_input: TNQCOptInput, task_name: str,
     results_path: pathlib.Path, batch: str, backend_override: str | None = None,
+    max_processors: int | None = None,
 ) -> str:
     """Create one task and record it as pending; return its id.
 
@@ -407,7 +430,8 @@ def submit_task(
     from qpubench.schemas.mirrors.mqsdk_cebule import CebuleTaskType
 
     task = session.cebule.create_task(
-        task_name, CebuleTaskType.TN_QC_OPT, **task_payload(task_input),
+        task_name, CebuleTaskType.TN_QC_OPT,
+        **_create_task_kwargs(task_input, max_processors),
     )
     path = pending_path(results_path)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -421,10 +445,25 @@ def submit_task(
     return task.id
 
 
-# The two terminal statuses, matching what mqsdk's own wait_for_done polls
-# for (`status in ["done", "error"]`).  Anything else means still queued or
-# still running, and is left pending.
-TERMINAL_STATUSES = ("done", "error")
+# Statuses that mean the task is over.  "done" and "error" are what
+# mqsdk's own wait_for_done polls for (`status in ["done", "error"]`);
+# the rest are cancellation, which that helper does not consider and the
+# SDK never spells out -- the string comes from the server, so both
+# spellings and the near neighbours are listed rather than guessed at
+# once.
+#
+# The list is an ALLOW-LIST OF ENDINGS on purpose, which is the safe
+# direction to be wrong in.  Miss a terminal spelling and a dead task
+# stays pending, which is visible and fixable; treat a live one as
+# terminal and its result is lost.  `_campaign_runner` therefore never
+# infers "finished" from "not recognised" -- run_campaign reports an
+# unrecognised status instead, so it can be added here rather than
+# silently swallowed.
+TERMINAL_STATUSES = (
+    "done", "error",
+    "cancelled", "canceled", "aborted", "stopped", "killed", "failed",
+    "timeout", "timed_out", "expired",
+)
 
 
 def poll_task(session: Any, task_id: str) -> tuple[str, Any, str | None]:
@@ -445,6 +484,7 @@ def poll_task(session: Any, task_id: str) -> tuple[str, Any, str | None]:
 
 def submit_run(
     session: Any, run: dict[str, str], task_input: TNQCOptInput, task_name: str,
+    max_processors: int | None = None,
 ) -> tuple[Any, float, str]:
     """Submit one run, wait for it, return (result, wall-clock seconds, task id).
 
@@ -456,7 +496,8 @@ def submit_run(
 
     started = time.time()
     task = session.cebule.create_task(
-        task_name, CebuleTaskType.TN_QC_OPT, **task_payload(task_input),
+        task_name, CebuleTaskType.TN_QC_OPT,
+        **_create_task_kwargs(task_input, max_processors),
     )
     # create_task returns immediately with a CebuleTask; the result is
     # fetched by id, under the result type the task uploads ('result').

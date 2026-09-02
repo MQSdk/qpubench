@@ -72,6 +72,13 @@ import _campaign_runner as runner
 _DEFAULT_CSV = runner.CAMPAIGN / "stage0_simulator_screen.csv"
 # get_backend routes anything prefixed 'ibm' to real hardware.
 _HARDWARE_PREFIX = "ibm"
+# Statuses taken to mean "still going", used only to decide whether a
+# still-pending task is worth remarking on.  Nothing is ever declared
+# finished on the strength of this set -- see TERMINAL_STATUSES.
+_EXPECTED_ACTIVE_STATUSES = frozenset({
+    "queued", "running", "pending", "created", "started", "submitted",
+    "in_progress", "processing", "waiting",
+})
 
 
 def _load(path: pathlib.Path) -> list[dict[str, str]]:
@@ -191,10 +198,23 @@ def main() -> None:
              "to keep a steady queue rather than sending everything at once",
     )
     parser.add_argument(
+        "--forget-pending", action="append", default=[], metavar="CASE_ID",
+        help="treat these in-flight Case_IDs as ended whatever status they "
+             "report, moving them out of pending. For a task you cancelled "
+             "whose status this script does not recognise. Repeatable, and "
+             "takes effect on a --collect pass",
+    )
+    parser.add_argument(
         "--retry-failed", action="store_true",
         help="resubmit runs recorded in <stem>.failed.ndjson, which are "
              "otherwise skipped so a deterministic error is not retried "
              "on every pass",
+    )
+    parser.add_argument(
+        "--max-processors", type=int, default=None, metavar="N",
+        help="processors Cebule may give each task. Omitted from the "
+             "submission entirely when unset, leaving upstream's own "
+             "default rather than pinning one on its behalf",
     )
     parser.add_argument(
         "--backend", default=None, metavar="NAME",
@@ -207,6 +227,12 @@ def main() -> None:
              "reaching a real device",
     )
     args = parser.parse_args()
+
+    if args.max_processors is not None and args.max_processors < 1:
+        raise SystemExit(
+            f"--max-processors must be at least 1; got {args.max_processors}. "
+            "Omit it to leave Cebule's own default in place."
+        )
 
     runs = _load(args.csv)
     if args.group_by:
@@ -230,6 +256,15 @@ def main() -> None:
 
     done = runner.completed_case_ids(results)
     pending = runner.read_pending(pending_file)
+    forget = set(args.forget_pending)
+    unknown_forget = forget - {p["Case_ID"] for p in pending}
+    if unknown_forget:
+        raise SystemExit(
+            f"--forget-pending {', '.join(sorted(unknown_forget))}: not in "
+            f"{pending_file.name}. Nothing to forget."
+        )
+    if forget and not args.collect:
+        raise SystemExit("--forget-pending takes effect on a --collect pass")
     failed = set() if args.retry_failed else runner.failed_case_ids(results)
     mine = {r["Case_ID"] for r in selected}
 
@@ -252,6 +287,7 @@ def main() -> None:
     # against a pending count that is already current.
     if args.collect and pending:
         still_pending, collected, errored = [], 0, 0
+        unfinished: collections.Counter[str] = collections.Counter()
         for entry in pending:
             status, result, error = runner.poll_task(session, entry["task_id"])
             case = entry["Case_ID"]
@@ -266,17 +302,39 @@ def main() -> None:
                 collected += 1
                 print(f"  collected {case}: E = {result.vqe_energy:.6f} Ha, "
                       f"{elapsed / 60:.1f} min elapsed")
-            elif status in runner.TERMINAL_STATUSES:
+            elif status in runner.TERMINAL_STATUSES or case in forget:
+                # Terminal without a result: an error, a cancellation, or a
+                # Case_ID named by --forget-pending. All three end the same
+                # way -- the task will never produce a result, so it moves
+                # out of pending rather than being polled forever.
                 runner.append_failure(results, entry, status, error)
                 failed.add(case)
                 errored += 1
-                print(f"  FAILED {case}: status {status!r}: {error}")
+                verb = "FORGOT" if case in forget else "ENDED"
+                print(f"  {verb} {case}: status {status!r}"
+                      + (f": {error}" if error else ""))
             else:
+                unfinished[status] += 1
                 still_pending.append(entry)
         runner.write_pending(pending_file, still_pending)
         pending = still_pending
-        print(f"\ncollected {collected}, {errored} failed, "
-              f"{len(pending)} still in flight\n")
+        print(f"\ncollected {collected}, {errored} ended without a result, "
+              f"{len(pending)} still in flight")
+        # Which statuses the still-pending tasks report, so a task stuck on
+        # a status this script does not recognise as terminal is VISIBLE
+        # rather than silently polled forever.  A cancellation whose
+        # spelling is not in TERMINAL_STATUSES shows up here, and the fix
+        # is to add it there -- or to pass --forget-pending for a one-off.
+        if unfinished:
+            print("  still-pending statuses: "
+                  + ", ".join(f"{status!r} x{n}"
+                              for status, n in sorted(unfinished.items())))
+            unknown = set(unfinished) - _EXPECTED_ACTIVE_STATUSES
+            if unknown:
+                print(f"  {', '.join(repr(s) for s in sorted(unknown))} is not a "
+                      f"status this script knows to mean 'still running'. If the "
+                      f"task is over, --forget-pending CASE_ID clears it.")
+        print()
     elif args.collect:
         print("nothing pending to collect\n")
 
@@ -324,7 +382,7 @@ def main() -> None:
 
         task_id = runner.submit_task(
             session, run, task_input, f"{batch}-case{case}", results, batch,
-            args.backend,
+            args.backend, args.max_processors,
         )
         in_flight.add(case)
         print(f"  submitted {case}: {label}   [{task_id}]")
