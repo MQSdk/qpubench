@@ -803,10 +803,28 @@ class TNQCOptResult(pydantic.BaseModel):
 
       iteration_history      the cost after each ITERATION, so
                              optimizers are directly comparable per step
-      iteration_boundaries   evaluations consumed by each iteration,
-                             which is the MEASURED form of what
-                             build_benchmark_matrix models in
-                             Cost_Evals_Per_Iteration
+      iteration_boundaries   the CUMULATIVE evaluation count at each
+                             iteration boundary -- an index into
+                             cost_history, not a per-iteration cost
+
+    Corrected 2026-09-02 against 48 real TN_QC_OPT results: this mirror
+    first described iteration_boundaries as the evaluations each
+    iteration consumed.  It is a running total.  The per-iteration cost
+    is the DIFFERENCE between consecutive entries, which is the measured
+    form of what build_benchmark_matrix models in
+    Cost_Evals_Per_Iteration, and those differences confirm the model
+    exactly: 2 for SPSA, and 3*n_phi + 5*n_theta for ExcitationSolve at
+    every width measured.  COBYLA runs 1 to 2 rather than a flat 1.
+
+    Two invariants hold across all 48, and are pinned by
+    tests/test_schemas.py:
+
+      len(iteration_boundaries) == len(iteration_history)
+      iteration_boundaries[-1] <= len(cost_history)
+
+    The last is an inequality because a run stops mid-iteration: the
+    final boundary is one or two evaluations short of the total.  Note
+    that len(cost_history) == function_calls exactly.
 
     Both default to empty, since a run from before they existed has
     neither, and an empty list is then honestly "not reported" rather
@@ -819,7 +837,7 @@ class TNQCOptResult(pydantic.BaseModel):
     function_calls:  int | None            = None   # number of cost-function evaluations
     cost_history:    list[float]           = []      # energy value per function evaluation
     iteration_history: list[float]         = []      # energy value per optimizer ITERATION
-    iteration_boundaries: list[int]        = []      # evaluations consumed by each iteration
+    iteration_boundaries: list[int]        = []      # CUMULATIVE evaluations at each iteration boundary
     param_history:   list[list[Any]]       = []      # theta+phi history per evaluation
     metadata:        dict[str, Any] | list[Any] | None = None   # backend-specific; absent in "network" mode
     optimize_result: dict[str, Any] | None = None   # full scipy.optimize.minimize OptimizeResult, as returned by the API ("OptimizeResult" in the docs)

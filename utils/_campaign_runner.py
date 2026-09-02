@@ -488,11 +488,25 @@ def append_record(
     with results_path.open("a") as f:
         f.write(json.dumps({
             "Case_ID": run["Case_ID"], "Batch": batch, "task_id": task_id,
+            # Where the run REALLY executed, which is not always the
+            # campaign row's Backend_Platform: a network row takes no
+            # quantum measurements and so runs on aer_simulator whatever
+            # its column says, and --backend overrides it outright.  The
+            # column stays in the campaign file, where it belongs; a
+            # results file reports what happened.
             "Backend": backend_for(run, backend_override),
             "Molecule": run["Molecule"], "Basis": run["Basis"],
             "Mapper": run["Mapper"], "Method": run["Method"],
             "Ansatz": run["Ansatz"], "Optimizer": run["Optimizer"],
             "Optimization_Mode": run["Optimization_Mode"],
+            # The tensor-network side of the run: which family builds
+            # U(theta) and how many layers of it.  Both read "n/a ..." on
+            # a plain-VQE row, which is the honest value -- that row has
+            # no network -- and the reason they are recorded per result
+            # rather than looked up is that a results file should say what
+            # was run without needing the campaign file beside it.
+            "TN_Ansatz": run["TN_Ansatz"],
+            "TN_Layers_Network": run["TN_Layers_Network"],
             "Measurement_Method": run["Measurement_Method"],
             "vqe_energy": result.vqe_energy,
             "function_calls": result.function_calls,
@@ -501,9 +515,10 @@ def append_record(
             # is per EVALUATION, which is the resource axis;
             # iteration_history is per ITERATION, which is what makes two
             # optimizers comparable per step without modelling either
-            # one's internals; iteration_boundaries is the evaluations
-            # each iteration really consumed, i.e. the measured form of
-            # the Cost_Evals_Per_Iteration the matrix predicts.
+            # one's internals; iteration_boundaries is the CUMULATIVE
+            # evaluation count at each boundary, so the difference between
+            # consecutive entries is the measured form of the
+            # Cost_Evals_Per_Iteration the matrix predicts.
             "cost_history": result.cost_history,
             "iteration_history": result.iteration_history,
             "iteration_boundaries": result.iteration_boundaries,

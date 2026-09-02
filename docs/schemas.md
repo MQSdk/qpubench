@@ -857,14 +857,33 @@ Revised again 2026-09-01, adding two optional `TNQCOptResult` fields
   ExcitationSolve — so comparing two optimizers' progress per step
   previously meant reconstructing that mapping from a model of each
   one's internals.
-- **`iteration_boundaries` added.** Evaluations consumed by each
-  iteration. This is the *measured* form of what
+- **`iteration_boundaries` added.** The **cumulative** evaluation count
+  at each iteration boundary — an index into `cost_history`, not a
+  per-iteration cost. The per-iteration cost is the *difference* between
+  consecutive entries, which is the measured form of what
   `utils/build_benchmark_matrix.py` models as
   `Cost_Evals_Per_Iteration`, so it turns a campaign assumption into an
   observation — which is the kind of replacement stage 0 exists to make.
 
 Both default to `[]`, so a result from before they existed reads as "not
 reported" rather than as a claim of zero iterations.
+
+**Corrected 2026-09-02** against 48 real `TN_QC_OPT` results: the entry
+above first described `iteration_boundaries` as the evaluations each
+iteration consumed. It is a running total. No field name, type or default
+changes, so this is a description fix rather than a version bump, but a
+reader who summed the list on the old description got a number that means
+nothing. The invariants that do hold, pinned in `tests/test_schemas.py`:
+
+```
+len(iteration_boundaries) == len(iteration_history)
+iteration_boundaries[-1]  <= len(cost_history)      # a run stops mid-iteration
+len(cost_history)         == function_calls
+```
+
+The measured differences confirm the campaign's model exactly — 2 for
+SPSA, and `3·n_φ + 5·n_θ` for ExcitationSolve at every width measured.
+COBYLA runs 1 to 2 rather than a flat 1.
 
 | Type | Cebule task | Description |
 |---|---|---|

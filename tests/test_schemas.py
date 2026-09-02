@@ -4129,8 +4129,14 @@ def test_tn_qc_opt_result_carries_both_convergence_axes():
     for COBYLA, 2 for SPSA's two-point gradient estimate, a whole sweep
     for ExcitationSolve -- so a result carrying only the first cannot be
     compared against another optimizer's per step without modelling that
-    optimizer's internals.  iteration_boundaries closes it by reporting
-    what each iteration really consumed.
+    optimizer's internals.  iteration_boundaries closes it by mapping one
+    axis onto the other.
+
+    Shape taken from 48 real TN_QC_OPT results: iteration_boundaries is a
+    RUNNING TOTAL, an index into cost_history, not a per-iteration cost.
+    The per-iteration cost is the difference between consecutive entries.
+    The values below are a real ExcitationSolve run's, whose gaps of 36
+    match the 3*n_phi + 5*n_theta the campaign predicts for it.
     """
     from qpubench.schemas.mirrors.mqsdk_cebule import TNQCOptResult
 
@@ -4139,16 +4145,22 @@ def test_tn_qc_opt_result_carries_both_convergence_axes():
         "phi": [0.1],
         "theta": [[0.2]],
         "H_TN_opt_qubit": (["Z0"], [0.5]),
-        "function_calls": 12,
-        "cost_history": [-1.0] * 12,
+        "function_calls": 146,
+        "cost_history": [-1.0] * 146,
         "iteration_history": [-1.0] * 4,
-        "iteration_boundaries": [3, 3, 3, 3],
+        "iteration_boundaries": [37, 73, 109, 145],
     })
     assert result.iteration_history == [-1.0] * 4
-    assert result.iteration_boundaries == [3, 3, 3, 3]
-    # The boundaries partition the evaluations, which is the property that
-    # makes them a mapping between the two axes rather than a summary.
-    assert sum(result.iteration_boundaries) == len(result.cost_history)
+    # One boundary per iteration is what maps the two axes onto each other.
+    assert len(result.iteration_boundaries) == len(result.iteration_history)
+    boundaries = result.iteration_boundaries
+    assert boundaries == sorted(set(boundaries)), "a running total only rises"
+    # An inequality, not equality: a run stops mid-iteration, so the last
+    # boundary falls one or two evaluations short of the total.
+    assert boundaries[-1] <= len(result.cost_history)
+    # The per-iteration cost is the gap, and it is what the campaign's
+    # Cost_Evals_Per_Iteration predicts.
+    assert [b - a for a, b in zip(boundaries, boundaries[1:])] == [36, 36, 36]
 
 
 def test_tn_qc_opt_result_without_iteration_history_reads_as_unreported():
