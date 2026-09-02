@@ -75,7 +75,17 @@ _HARDWARE_PREFIX = "ibm"
 # Statuses taken to mean "still going", used only to decide whether a
 # still-pending task is worth remarking on.  Nothing is ever declared
 # finished on the strength of this set -- see TERMINAL_STATUSES.
-_EXPECTED_ACTIVE_STATUSES = frozenset({
+#
+# "new" is confirmed against Cebule and is the one that matters most: it
+# means the task is queued and has NOT yet been assigned a core.  So the
+# per-status counts printed below separate work that is waiting for
+# capacity from work that is actually running, which is the difference
+# between a queue that is merely long and one that is not moving -- and
+# the number to watch when choosing --max-processors.  The rest are
+# unconfirmed near neighbours, here so that a plausible spelling does not
+# raise a false alarm.
+_ACTIVE_STATUSES_CONFIRMED = frozenset({"new"})
+_EXPECTED_ACTIVE_STATUSES = _ACTIVE_STATUSES_CONFIRMED | frozenset({
     "queued", "running", "pending", "created", "started", "submitted",
     "in_progress", "processing", "waiting",
 })
@@ -265,7 +275,14 @@ def main() -> None:
         )
     if forget and not args.collect:
         raise SystemExit("--forget-pending takes effect on a --collect pass")
-    failed = set() if args.retry_failed else runner.failed_case_ids(results)
+    # A failure is superseded by anything that happened after it: the run
+    # was collected, or it is back in flight.  Without that subtraction a
+    # cancelled-then-retried-then-completed run is reported as failed for
+    # ever, because the log that records the cancellation is append-only.
+    superseded = done | {p["Case_ID"] for p in pending}
+    failed = runner.failed_case_ids(results, superseded)
+    if args.retry_failed:
+        failed = set()
     mine = {r["Case_ID"] for r in selected}
 
     print(f"file:     {args.csv.name}")
@@ -329,6 +346,9 @@ def main() -> None:
             print("  still-pending statuses: "
                   + ", ".join(f"{status!r} x{n}"
                               for status, n in sorted(unfinished.items())))
+            if unfinished.get("new"):
+                print(f"  {unfinished['new']} of those are 'new': queued, with "
+                      f"no core assigned yet.")
             unknown = set(unfinished) - _EXPECTED_ACTIVE_STATUSES
             if unknown:
                 print(f"  {', '.join(repr(s) for s in sorted(unknown))} is not a "

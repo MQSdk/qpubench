@@ -335,9 +335,23 @@ def completed_case_ids(results_path: pathlib.Path) -> set[str]:
     return _case_ids(results_path)
 
 
-def failed_case_ids(results_path: pathlib.Path) -> set[str]:
-    """Case_IDs whose task came back with status 'error'."""
-    return _case_ids(failed_path(results_path))
+def failed_case_ids(
+    results_path: pathlib.Path, superseded_by: set[str] | None = None,
+) -> set[str]:
+    """Case_IDs that failed and have not since been retried.
+
+    The failed file is a LOG, appended to and never rewritten, so it keeps
+    the history of every task that ended without a result -- when, and
+    with what status.  That history is worth having, but it is not the
+    same thing as the current state: a run that was cancelled, resubmitted
+    and has since completed is in the log AND in the results, and it is
+    not failed any more.
+
+    `superseded_by` is the set of Case_IDs that have moved on -- collected
+    or back in flight -- and they are subtracted here, so the log stays
+    complete while the state stays true.
+    """
+    return _case_ids(failed_path(results_path)) - (superseded_by or set())
 
 
 # --- Submitting without waiting -------------------------------------------
@@ -446,11 +460,10 @@ def submit_task(
 
 
 # Statuses that mean the task is over.  "done" and "error" are what
-# mqsdk's own wait_for_done polls for (`status in ["done", "error"]`);
-# the rest are cancellation, which that helper does not consider and the
-# SDK never spells out -- the string comes from the server, so both
-# spellings and the near neighbours are listed rather than guessed at
-# once.
+# mqsdk's own wait_for_done polls for (`status in ["done", "error"]`).
+# "cancelled" is confirmed against a real cancelled Cebule task; the rest
+# are near neighbours, listed because the SDK never spells any of them
+# out -- the string comes from the server.
 #
 # The list is an ALLOW-LIST OF ENDINGS on purpose, which is the safe
 # direction to be wrong in.  Miss a terminal spelling and a dead task
@@ -460,8 +473,8 @@ def submit_task(
 # unrecognised status instead, so it can be added here rather than
 # silently swallowed.
 TERMINAL_STATUSES = (
-    "done", "error",
-    "cancelled", "canceled", "aborted", "stopped", "killed", "failed",
+    "done", "error", "cancelled",
+    "canceled", "aborted", "stopped", "killed", "failed",
     "timeout", "timed_out", "expired",
 )
 
