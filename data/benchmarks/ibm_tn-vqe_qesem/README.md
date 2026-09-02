@@ -267,10 +267,10 @@ entangler is a one-word change to the builder.
 **All three are given the same quantum-evaluation budget, converted into
 each one's own iteration unit.** `TNQCOptInput.n_iterations` is *not*
 that budget — it is an iteration count, and an iteration means a
-different amount of work in each optimizer. Passing one number to all
-three was a real error rather than a rounding one: it would have given
-the ExcitationSolve arm 22.7 million evaluations against COBYLA's
-145,344, a factor of 156, concentrated on exactly the widest rows.
+different amount of work in each optimizer. The conversion is not a
+nicety: one number passed to all three would give the ExcitationSolve arm
+22.7 million evaluations against COBYLA's 145,344, a factor of 156,
+concentrated on exactly the widest rows.
 
 ### Why the budget is in *quantum* evaluations
 
@@ -441,34 +441,31 @@ between iterations is charged as QPU time. Measured on a 32-iteration VQE
 session, the jobs themselves billed 13 s each while the session billed
 1,284 s, so 68% of the reservation was idle.
 
-### E is what rescoped the campaign
+### What `E` is, per encoding
 
-An earlier revision carried an `assumed` measurement count of 37 wherever
-none had been counted. Every screened Hamiltonian is now committed under
-`hamiltonian_data/` and counted, and the assumption was wrong by up to a
-factor of 36:
+Every screened Hamiltonian is committed under `hamiltonian_data/`, and
+its `E` counted from that file rather than assumed.
 
-| Combination | assumed `E` | counted `E` | one screening run |
+| Cell | Qubits | `E` under JW | `E` under mol_map |
 |---|---:|---:|---:|
-| H2/6-31g mol_map | 37 | 39 | 26 min |
-| H2O mol_map, any basis | 37 | **233** | 137 min |
-| H2/qvSZP mol_map | 37 | **364** | 210 min |
-| H2/cc-pVDZ mol_map | 37 | **1322** | **749 min** |
+| H2 / 6-31G | 8 / 4 | 34 | 37 |
+| H2 / qvSZP | 16 / 6 | 538 | 364 |
+| H2O CAS(4,4) / either basis | 8 / 6 | 25 | 233 |
 
-The cause is structural. mol_map's constraint encoding trades qubits for
-density: H2/cc-pVDZ is 10,069 Pauli terms on 7 qubits, so its cost climbs
-with the **orbital** count while its width stays flat. A single
-H2/cc-pVDZ mol_map run would spend 83% of the whole campaign. H2O is the
-opposite case: a fixed CAS(4,4) holds width, `E` and cost identical
-across every basis, and only the orbitals themselves differ.
+The two encodings scale in opposite directions, which is the reason the
+mapper is a factor at all. **mol_map trades qubits for density**: its
+constraint encoding indexes determinants, so the register stays narrow
+while the Pauli-term count climbs with the *orbital* count — H2/qvSZP is
+2,064 terms on 6 qubits. Jordan-Wigner is the reverse, holding the term
+count moderate while the register grows as `2 × orbitals`.
 
-At the counted values a full crossing costs 21,643 minutes against 900
-available, which is why the scope in `SCREENED` is chosen rather than
-derived.
+H2O is the controlled case: at a fixed CAS(4,4) the width, `E` and cost
+are identical in both of its bases, so only the orbitals themselves
+differ.
 
 These counts are greedy upper bounds. Where a measurement also exists the
 two disagree by about a factor of two, the runtime's own grouping being
-better than greedy: H2/6-31g under Jordan-Wigner counts 68 and billed 34.
+better than greedy: H2/6-31G under Jordan-Wigner counts 68 and billed 34.
 The measured value is used where there is one. **Replacing the rest with
 measurement is what stage 0 is for.**
 
@@ -578,41 +575,29 @@ other diagonal of that square is stage 0's.
 Hardware buys what simulation cannot answer — device error, and the QPU
 time a method really consumes — and nothing else.
 
-### What hardware does not buy
+### The four cells stage 0 keeps
 
-Dropped from the campaign entirely, hardware and simulator alike:
+The other half of the 2×2×2 runs on the simulator only, at what a
+hardware run of each would have cost:
 
-| Dropped | Reason |
+| Simulator-only cell | Cost of one hardware run |
 |---|---|
-| sto-3g, both molecules | 2 measurement bases under mol_map and 5 under JW: too small for either comparison to show anything |
-| def2-SVP, both molecules | the same orbital count as cc-pVDZ, so the same width, the same `E` and the same budget: a second point where there is already one |
-| H2/cc-pVDZ, H2/def2-TZVP | 1,322 counted bases at 7 mol_map qubits, i.e. 749 min for one run; the Jordan-Wigner arms are 20 and 24 qubits |
-| H2O/cc-pVDZ, H2O/def2-TZVP | at a fixed CAS(4,4) they have identical width, `E` and cost to the two bases screened: interior points on an axis whose two ends are already bought |
-| H2O/cc-pVTZ | no committed Hamiltonian, and it would cost and measure exactly as the other H2O bases do |
+| H2/qvSZP JW | 538 measurement bases, ~10 min per **evaluation** |
+| H2/qvSZP mol_map | 210 min, 23% of the campaign for one point |
+| H2O/6-31g mol_map | 137 min, 15% of the campaign for one point |
+| H2O/qvSZP mol_map | 137 min; identical width and `E` to its 6-31g twin |
 
-Screened on the simulator, never bought on hardware:
-
-| Simulator-only cell | Reason |
-|---|---|
-| H2/qvSZP JW | 538 counted bases, ~10 min per **evaluation** — unaffordable at any budget, and the reason it is worth simulating |
-| H2/qvSZP mol_map | 210 min a run, 23% of the campaign for one point |
-| H2O/6-31g mol_map | 137 min a run, 15% of the campaign for one point |
-| H2O/qvSZP mol_map | 137 min a run; identical width and `E` to its 6-31g twin |
-
-The mol_map rows are the campaign's real loss: the mapper comparison
-reaches hardware for H2/6-31g alone, and water's mol_map arm exists only
-in simulation. That is a consequence of the encoding's density — it
-trades qubits for Hamiltonian terms — rather than of the budget alone,
-and it is recorded rather than hidden. Every one of these cells is run in
-full in stage 0, so what is lost is the device error on them, not the
-result.
+So the **mapper comparison reaches hardware for H2/6-31G alone**, and
+water's mol_map arm exists in simulation only. That follows from the
+encoding's density rather than from the budget: mol_map trades qubits for
+Hamiltonian terms, and at more than four orbitals the terms win. Every
+one of these cells is run in full in stage 0, so what hardware gives up
+is the device error on them, not the result.
 
 ### Batches
 
-Batches are no longer sized to a budget. The campaign used to be cut
-against IBM's access plans, because each was a separate purchase that had
-to be filled before the next. One allocation replaces them, so what the
-batches carry now is **order**: `batch1_pipeline_check.csv` holds the
+Batches carry **order**, not a budget: the campaign holds one allocation,
+so nothing here is filled to a cap. `batch1_pipeline_check.csv` holds the
 single cheapest run, which proves the submission path end to end, and
 `batch2_screen.csv` holds the rest. `batch0_classical_only.csv` takes no
 quantum measurements at all.
@@ -626,16 +611,15 @@ PYTHONPATH=src python utils/split_benchmark_batches.py
 ## Workflow
 
 ```mermaid
-%%{init: {"theme": "base", "themeVariables": {"background": "#ffffff", "primaryColor": "#ffffff", "primaryBorderColor": "#000000", "primaryTextColor": "#000000", "lineColor": "#000000", "secondaryColor": "#ffffff", "tertiaryColor": "#ffffff", "clusterBkg": "#ffffff", "clusterBorder": "#000000", "edgeLabelBackground": "#ffffff", "fontFamily": "monospace"}}}%%
 flowchart TD
-    A["SCREENED chemistry cells<br/>2 molecules x 2 basis sets x 2 mappers<br/>a closed 2x2x2, none missing"]
-    A --> S["Stage 0: simulator screen<br/>1152 runs, aer_simulator + fake_aachen<br/>4 ansaetze x 3 optimizers<br/>x 3 methods x 2 measurement methods<br/>NO QPU TIME"]
+    A["Chemistry cells<br/>2 molecules x 2 basis sets x 2 mappers<br/>a closed 2x2x2, none missing"]
+    A --> S["Stage 0: simulator screen<br/>1152 runs on aer_simulator and fake_aachen<br/>4 ansaetze x 3 optimizers<br/>x 3 methods x 2 measurement methods<br/>NO QPU TIME"]
     S --> M["Measures what was assumed:<br/>E as the runtime groups it,<br/>evaluations to converge,<br/>which ansatz and optimizer win,<br/>classical wall clock"]
-    M --> B["Stage-1 hardware screen<br/>12 runs, one ansatz, one optimizer,<br/>one measurement method per mapper<br/>build_benchmark_matrix.py"]
+    M --> B["Stage 1: hardware screen<br/>12 runs, one ansatz, one optimizer,<br/>one measurement method per mapper<br/>build_benchmark_matrix.py"]
 
     B --> Z{"Does the run take<br/>quantum measurements?"}
-    Z -->|"optimization_mode = network"| Y["batch0_classical_only.csv<br/>4 runs, no QPU time<br/>classical-only baseline"]
-    Z -->|"plain VQE, or TN-VQE in both mode"| C["Per-run cost<br/>Iterations x (11.0 s + 1.125 s x E)<br/>split_benchmark_batches.py"]
+    Z -- "network mode" --> Y["batch0_classical_only.csv<br/>4 runs, no QPU time<br/>classical-only baseline"]
+    Z -- "VQE or TN-VQE both mode" --> C["Per-run cost<br/>evaluations x 11.0 s + 1.125 s per basis<br/>split_benchmark_batches.py"]
 
     C --> H{"Order by cost.<br/>No budget caps:<br/>one 900 min allocation"}
     H --> I["batch1_pipeline_check.csv<br/>1 run, 20.87 min<br/>proves the submission path"]
@@ -646,11 +630,8 @@ flowchart TD
     R --> N["Stage-1 analysis: convergence trend per run,<br/>hardware against the noiseless and<br/>noise-model simulations, and against<br/>the classical-only baseline"]
     Y --> N
     S --> N
-    N --> O["Stage-2 deep sweep, 450 min:<br/>4n evaluations on what stage 1 selects,<br/>converged energies"]
-    O --> P["Stage-3 QESEM refinement<br/>not costed against the 900"]
-
-    classDef bw fill:#ffffff,stroke:#000000,stroke-width:1px,color:#000000
-    class A,B,C,H,I,J,M,N,O,P,R,S,Y,Z bw
+    N --> O["Stage 2: deep sweep, 450 min<br/>4n evaluations on what stage 1 selects,<br/>converged energies"]
+    O --> P["Stage 3: QESEM refinement<br/>not costed against the 900"]
 ```
 
 Two features carry experimental weight. Everything is simulated before
@@ -792,22 +773,18 @@ electrons in every orbital the basis provides, so the basis set is what
 the basis-set screen varies. The price is that H2's qubit count follows
 the basis:
 
-| Basis | Spatial orbitals | JW qubits | mol_map qubits | Run in |
+| Basis | Spatial orbitals | JW qubits | mol_map qubits | Runs in |
 |---|---|---|---|---|
-| sto-3g | 2 | 4 | 2 | nothing: dropped |
 | 6-31G | 4 | 8 | 4 | stage 0 and stage 1, both mappers |
 | qvSZP | 8 | **16** | 6 | stage 0 only, both mappers |
-| cc-pVDZ | 10 | 20 | 7 | nothing: dropped |
-| def2-TZVP | 12 | 24 | 8 | nothing: dropped |
 
 **Above 8 Jordan-Wigner qubits nothing reaches hardware.** The limit is
 `MAX_JW_QUBITS` in the generator, and it is a measurement limit rather
 than a circuit one: the number of qubit-wise-commuting measurement bases
 of a JW-mapped Hamiltonian grows as roughly N³, measured on these runs at
-5 bases for 4 qubits and 34 for 8, then 538 at 16 and, by the same
-scaling, worse above. H2/qvSZP under Jordan-Wigner is 538 bases, about 10
-minutes of billed QPU time per *evaluation*, so no evaluation budget puts
-it inside 900 minutes.
+34 bases for 8 qubits and 538 for 16. H2/qvSZP under Jordan-Wigner is
+those 538 bases, about 10 minutes of billed QPU time per *evaluation*, so
+no evaluation budget puts it inside 900 minutes.
 
 The limit therefore applies to stages 1 and 2 and **not** to stage 0: a
 simulator buys no measurement circuits, so the 16-qubit cell is run there
