@@ -783,24 +783,32 @@ families are trying to beat per unit of QPU time, and it alone starts
 from `Phi_Init = zeros`, since zero amplitudes *are* the Hartree-Fock
 reference.
 
-> **The three `UCCSD_JW_*` files are stored in MIRRORED qubit order and
-> will not read correctly in Qiskit.** Qiskit and Cebule disagree on
-> which end of a Pauli string such as `ZZII` is qubit 0, so the supplied
-> circuits placed the reference determinant on the wrong end of the
-> register — X gates on qubits 6,7 for an 8-qubit H2 where Jordan-Wigner
-> puts the occupied spin orbitals at 0,1. The files were reversed with
-> `QuantumCircuit.reverse_bits()` to compensate, so **loading one in
-> Qiskit alongside the matching `hamiltonian_data/` file gives the wrong
-> energy**; it is correct only as Cebule reads it.
+> **All six UCCSD files are stored in MIRRORED qubit order and will not
+> read correctly in Qiskit.** Qiskit and Cebule disagree on which end of
+> a Pauli string such as `ZZII` is qubit 0, so the supplied circuits
+> placed the reference determinant on the wrong end of the register — X
+> gates on qubits 6,7 for an 8-qubit H2 where Jordan-Wigner puts the
+> occupied spin orbitals at 0,1. The mismatch is in Cebule's *dense*
+> `h_operators` reader, so it applies identically under mol_map: **an
+> earlier revision of this note claimed the `mol_map` files were
+> unaffected, which was wrong.** That check validated only the reference
+> state (X-gate placement) at zero amplitudes, where two of the three
+> mol_map circuits happen to be symmetric under bit-reversal — H2/6-31G
+> has X gates on all four qubits, H2/qvSZP on none — so the check passed
+> by coincidence rather than by being correct. Water's reference,
+> `[0,1,5] → [0,4,5]`, is not symmetric, and running it exposed the same
+> bug found in the JW files. Tested away from the reference point, all
+> three mol_map circuits diverge substantially between the correct and
+> reversed reading, so their converged energies were wrong too, not only
+> their starting point.
 >
-> This compensates for the mismatch rather than fixing it. **When
-> Cebule's Pauli-string reader is corrected, these three files must be
-> reversed back**, and every UCCSD result re-run again. The `mol_map`
-> files are *not* mirrored: their qubits index determinants rather than
-> spin orbitals, and `UCCSD_molmap_4q_2r_2e_4o` is confirmed to give the
-> correct Hartree-Fock energy as stored. Note that check validates the
-> reference state only — at zero amplitudes no excitation gate is
-> active — so the mol_map excitation ordering remains unverified.
+> All six files were reversed with `QuantumCircuit.reverse_bits()` to
+> compensate, so **loading one in Qiskit alongside the matching
+> `hamiltonian_data/` file gives the wrong energy**; each is correct only
+> as Cebule currently reads it. This compensates for the mismatch rather
+> than fixing it. **When Cebule's Pauli-string reader is corrected, all
+> six files must be reversed back**, and every UCCSD result — both
+> mappers — re-run again.
 
 Its six files are **written by hand and never regenerated**. That is not
 a convenience: mol_map's qubits index determinants and have no

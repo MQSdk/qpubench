@@ -103,19 +103,30 @@ _MAPPER_INDEPENDENT = tuple(a for a in SUPPORTED_ANSATZE if a != "UCCSD")
 # circuit with this module's generalized one would change what the
 # campaign runs without changing anything that says so.
 #
-# THE JW FILES ARE STORED IN MIRRORED QUBIT ORDER, and will not read
+# ALL SIX FILES ARE STORED IN MIRRORED QUBIT ORDER, and will not read
 # correctly in Qiskit.  Qiskit and Cebule disagree about which end of a
 # Pauli string like "ZZII" is qubit 0, so the supplied circuits put the
 # reference determinant on the wrong end -- X gates on 6,7 for an 8-qubit
 # H2 where Jordan-Wigner puts the occupied spin orbitals at 0,1.  They
 # were reversed with QuantumCircuit.reverse_bits() to compensate.
 #
+# mol_map is affected identically to JW: the bug is in Cebule's DENSE
+# h_operators reader, which does not care what a qubit represents.  An
+# earlier revision of this comment claimed mol_map was unaffected,
+# citing UCCSD_molmap_4q_2r_2e_4o's correct Hartree-Fock energy as
+# confirmation -- wrong, because that check validates only the reference
+# state at zero amplitudes, and H2's reference happens to be symmetric
+# under bit-reversal (X on all 4 qubits, or none), so it could not have
+# shown the bug either way.  Water's reference, [0,1,5] -> [0,4,5], is
+# not symmetric, and running it reproduced the same failure as the
+# unmirrored JW files: a near-zero energy instead of the correct one.
+# Tested numerically away from the reference point, all three mol_map
+# circuits diverge substantially between the correct and reversed
+# reading, so the affected results were wrong throughout, not only at
+# their starting point.
+#
 # That is a compensation, not a fix.  WHEN CEBULE'S READER IS CORRECTED,
-# REVERSE THEM BACK and re-run every UCCSD row.  The mol_map files are
-# not mirrored: their qubits index determinants rather than spin
-# orbitals, and one of them is confirmed to give the right Hartree-Fock
-# energy as stored -- which validates the reference state only, since at
-# zero amplitudes no excitation gate is active.
+# REVERSE ALL SIX FILES BACK and re-run every UCCSD row, both mappers.
 UCCSD_BUILDABLE_MAPPERS: tuple[str, ...] = ()
 
 
