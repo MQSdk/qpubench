@@ -102,6 +102,20 @@ _MAPPER_INDEPENDENT = tuple(a for a in SUPPORTED_ANSATZE if a != "UCCSD")
 # present, and never writes or deletes one.  Overwriting a supplied
 # circuit with this module's generalized one would change what the
 # campaign runs without changing anything that says so.
+#
+# THE JW FILES ARE STORED IN MIRRORED QUBIT ORDER, and will not read
+# correctly in Qiskit.  Qiskit and Cebule disagree about which end of a
+# Pauli string like "ZZII" is qubit 0, so the supplied circuits put the
+# reference determinant on the wrong end -- X gates on 6,7 for an 8-qubit
+# H2 where Jordan-Wigner puts the occupied spin orbitals at 0,1.  They
+# were reversed with QuantumCircuit.reverse_bits() to compensate.
+#
+# That is a compensation, not a fix.  WHEN CEBULE'S READER IS CORRECTED,
+# REVERSE THEM BACK and re-run every UCCSD row.  The mol_map files are
+# not mirrored: their qubits index determinants rather than spin
+# orbitals, and one of them is confirmed to give the right Hartree-Fock
+# energy as stored -- which validates the reference state only, since at
+# zero amplitudes no excitation gate is active.
 UCCSD_BUILDABLE_MAPPERS: tuple[str, ...] = ()
 
 

@@ -580,6 +580,13 @@ def append_record(
             "TN_Ansatz": run["TN_Ansatz"],
             "TN_Layers_Network": run["TN_Layers_Network"],
             "Measurement_Method": run["Measurement_Method"],
+            # WHICH circuit this ran, not just which family.  A pinned file
+            # can be corrected -- the UCCSD circuits were mirrored once the
+            # Pauli-string ordering mismatch came to light -- and without
+            # the hash on the record, results from before and after such a
+            # change are indistinguishable except by timestamp, so a stale
+            # one mixes in silently.  This is what makes that detectable.
+            "Qasm_Ansatz_SHA256": run["Qasm_Ansatz_SHA256"],
             "vqe_energy": result.vqe_energy,
             "function_calls": result.function_calls,
             # All three convergence traces, because they are indexed

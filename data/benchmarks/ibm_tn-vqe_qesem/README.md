@@ -783,6 +783,25 @@ families are trying to beat per unit of QPU time, and it alone starts
 from `Phi_Init = zeros`, since zero amplitudes *are* the Hartree-Fock
 reference.
 
+> **The three `UCCSD_JW_*` files are stored in MIRRORED qubit order and
+> will not read correctly in Qiskit.** Qiskit and Cebule disagree on
+> which end of a Pauli string such as `ZZII` is qubit 0, so the supplied
+> circuits placed the reference determinant on the wrong end of the
+> register — X gates on qubits 6,7 for an 8-qubit H2 where Jordan-Wigner
+> puts the occupied spin orbitals at 0,1. The files were reversed with
+> `QuantumCircuit.reverse_bits()` to compensate, so **loading one in
+> Qiskit alongside the matching `hamiltonian_data/` file gives the wrong
+> energy**; it is correct only as Cebule reads it.
+>
+> This compensates for the mismatch rather than fixing it. **When
+> Cebule's Pauli-string reader is corrected, these three files must be
+> reversed back**, and every UCCSD result re-run again. The `mol_map`
+> files are *not* mirrored: their qubits index determinants rather than
+> spin orbitals, and `UCCSD_molmap_4q_2r_2e_4o` is confirmed to give the
+> correct Hartree-Fock energy as stored. Note that check validates the
+> reference state only — at zero amplitudes no excitation gate is
+> active — so the mol_map excitation ordering remains unverified.
+
 Its six files are **written by hand and never regenerated**. That is not
 a convenience: mol_map's qubits index determinants and have no
 occupied/virtual split for excitation operators to be built from, so no
