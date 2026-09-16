@@ -311,10 +311,10 @@ entangler is a one-word change to the builder.
 **All three are given the same quantum-evaluation budget, converted into
 each one's own iteration unit.** `TNQCOptInput.n_iterations` is *not*
 that budget — it is an iteration count, and an iteration means a
-different amount of work in each optimizer. The conversion is not a
-nicety: one number passed to all three would give the ExcitationSolve arm
-22.7 million evaluations against COBYLA's 145,344, a factor of 156,
-concentrated on exactly the widest rows.
+different amount of work in each optimizer. Passing one number to all
+three was a real error rather than a rounding one: it would have given
+the ExcitationSolve arm 22.7 million evaluations against COBYLA's
+145,344, a factor of 156, concentrated on exactly the widest rows.
 
 ### Why the budget is in *quantum* evaluations
 

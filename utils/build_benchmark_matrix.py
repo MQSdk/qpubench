@@ -66,6 +66,7 @@ import argparse
 import csv
 import hashlib
 import importlib.metadata
+import json
 import math
 import pathlib
 import sys
@@ -532,6 +533,61 @@ STAGE1_OPTIMIZER = "COBYLA"
 # convergence and the number of cost-function evaluations, i.e. the QPU
 # cost of the row.
 OPT_OPTIONS = "{}"
+
+# --- ExcitationSolve + UCCSD: a workaround for a bug in tn-vqe ------------
+#
+# tn-vqe's ExcitationSolve currently assumes every phi parameter is
+# single-frequency (G^2=I).  That is right for the three hardware-efficient
+# families and wrong for UCCSD, whose phi parameters are fermionic
+# excitation angles -- confirmed numerically to be two-frequency (G^3=G),
+# singles and doubles alike -- but tn-vqe deliberately gives phi and theta
+# different evaluation counts independent of what the phi circuit's own
+# gates are, so it applies the single-frequency assumption to UCCSD's phi
+# too.  That is what produced UCCSD/ExcitationSolve energies landing on
+# wrong, sometimes non-physical values while COBYLA and SPSA converged
+# correctly on the identical circuit.
+#
+# A real fix belongs in tn-vqe and is in progress there.  Until it lands,
+# tn-vqe accepts an explicit override through opt_options["frequencies"]:
+# one [1, 2] entry per OPTIMIZED PARAMETER, naming the two harmonics
+# G^3=G actually has, overriding tn-vqe's wrong default without changing
+# tn-vqe itself between jobs.  Confirmed directly with tn-vqe's
+# maintainer as the accepted form.
+#
+# "Per optimized parameter" is not "per phi parameter", and that
+# distinction is the reason this was wrong the first time: in
+# optimization_mode="both" the joint vector ExcitationSolve reconstructs
+# is (theta, phi) TOGETHER -- theta first -- so a frequencies list sized
+# to phi alone was too short and misaligned against the parameters it
+# was meant to label.  theta is the tensor network's Givens rotation, and
+# it is G^3=G too (two frequencies), so it takes the same [1, 2] entry as
+# phi; the list is simply theta's entries followed by phi's.
+# `optimization_mode="circuit"` has no theta (plain VQE), so nothing
+# changes there.  `network` mode is still excluded entirely: phi is
+# frozen and not part of the optimized vector at all, and theta ALONE
+# already gets correct treatment from tn-vqe with no override -- adding
+# one would relabel a vector that was never wrong.
+#
+# THIS IS A COMPENSATION, NOT A PERMANENT CAMPAIGN INPUT -- the same
+# status as the mirrored UCCSD circuits (see UCCSD_BUILDABLE_MAPPERS in
+# _ansatz_builders.py).  Once tn-vqe's real fix lands, drop this and
+# re-run the affected rows without it.
+EXCITATIONSOLVE_UCCSD_FREQUENCIES = [1, 2]
+
+
+def opt_options_for(optimizer: str, ansatz: str, num_phi: int, num_theta: int) -> str:
+    """`Opt_Options` for one row: `{}` except for the ExcitationSolve +
+    UCCSD workaround above.
+
+    num_theta is 0 on a `circuit` row (plain VQE, no tensor network) and
+    on a `network` row phi itself is already 0, so the branch below is a
+    no-op for both and only ever fires with a real theta contribution on
+    a `both` row.
+    """
+    if optimizer == "ExcitationSolve" and ansatz == "UCCSD" and num_phi:
+        entries = [EXCITATIONSOLVE_UCCSD_FREQUENCIES] * (num_theta + num_phi)
+        return json.dumps({"frequencies": entries})
+    return OPT_OPTIONS
 # n_shots is a real TNQCOptInput field, so this is a pinned input rather
 # than the illustrative assumption it used to be.
 SHOTS = 4096
@@ -655,13 +711,28 @@ STAGE0_MAX_ITERATIONS = 600
 # each optimizer's own unit -- brings the three arms within 7% of each
 # other and the matrix to 426,372 evaluations.
 #
-# ExcitationSolve's reconstruction cost is PER PARAMETER and depends on
-# the gate that parameter drives, confirmed against Cebule:
+# ExcitationSolve's reconstruction cost is PER PARAMETER, and the
+# natural guess -- that it depends only on the parameter's generator, so
+# G^2=I (one frequency) costs three points and G^3=G (two frequencies,
+# the fermionic excitation generators UCCSD is built from) costs five --
+# is WRONG for phi.  It was tried here: numerically, every UCCSD phi
+# angle sampled (three singles, three doubles) fits a 5-point model to
+# residual ~1e-15 and fails a 3-point model by up to 0.67 Ha, so the
+# LANDSCAPE really is G^3=G for UCCSD's phi. But real collected runs
+# still spent 45-46 evaluations per sweep on a 15-parameter UCCSD circuit
+# -- exactly 3n, not 5n -- whatever n_iterations asked for; theta on the
+# same runs spent ~5 per parameter as expected. Confirmed directly with
+# whoever maintains tn-vqe: **phi and theta are deliberately given
+# different evaluation counts inside tn-vqe**, independent of what the
+# phi circuit's own generators are. So the 5-point landscape result is
+# real but not the thing that sets tn-vqe's actual cost, and phi is 3
+# points per parameter uniformly, for every ansatz including UCCSD.
 #
-#   phi    single-frequency.  The energy along one circuit angle is
-#          a cos + b sin + c, so three points determine it.
-#   theta  two-frequency.  The network's gates carry two harmonics, so
-#          five points are needed.
+# This means the UCCSD/ExcitationSolve energies landing on wrong,
+# sometimes non-physical values (Case_ID 34, 70, ...) are NOT explained
+# by an evaluation-count mismatch on this side -- whatever is wrong is
+# inside tn-vqe's own handling of phi for excitation-type circuits, and
+# is being investigated there, not here.
 EXCITATIONSOLVE_EVALS_PER_PHI = 3
 EXCITATIONSOLVE_EVALS_PER_THETA = 5
 
@@ -1280,7 +1351,7 @@ def _row(
             or (BACKEND_PLATFORM_TN if is_tn else BACKEND_PLATFORM_VQE)
         ),
         "Optimizer": optimizer,
-        "Opt_Options": OPT_OPTIONS,
+        "Opt_Options": opt_options_for(optimizer, ansatz, n_phi, n_theta),
         # Three columns where there used to be one, because a caching
         # backend makes "an evaluation" two different quantities.
         #
