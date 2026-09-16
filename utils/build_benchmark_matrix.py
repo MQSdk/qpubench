@@ -582,10 +582,15 @@ EXCITATIONSOLVE_UCCSD_FREQUENCIES = [1, 2]
 # confirmed directly on H2/6-31g/JW (cases 31 and 67, both measurement
 # methods): vqe_energy sits close to the FIRST cost_history entry while the
 # run's own later evaluations collapse to roughly -0.6, well below the
-# reported value. A smaller step keeps each perturbation within the region
-# where UCCSD's cost landscape is well-approximated locally.  0.03 is a
-# starting value, not a tuned optimum.
-SPSA_UCCSD_TARGET_STEP = 0.03
+# reported value.
+#
+# target_step=0.03 alone was not enough -- still bad results, so the decay
+# schedule's gain constant `c` (which sets the size of the perturbation used
+# to *estimate* the gradient, separately from target_step's role in sizing
+# the *step* taken along it) is now pinned down too, to 0.2. Both are
+# starting values, not tuned optima.
+SPSA_UCCSD_TARGET_STEP = 0.01
+SPSA_UCCSD_C = 0.2
 
 
 def opt_options_for(optimizer: str, ansatz: str, num_phi: int, num_theta: int) -> str:
@@ -601,7 +606,10 @@ def opt_options_for(optimizer: str, ansatz: str, num_phi: int, num_theta: int) -
         entries = [EXCITATIONSOLVE_UCCSD_FREQUENCIES] * (num_theta + num_phi)
         return json.dumps({"frequencies": entries})
     if optimizer == "SPSA" and ansatz == "UCCSD" and num_phi:
-        return json.dumps({"target_step": SPSA_UCCSD_TARGET_STEP})
+        return json.dumps({
+            "target_step": SPSA_UCCSD_TARGET_STEP,
+            "c": SPSA_UCCSD_C,
+        })
     return OPT_OPTIONS
 # n_shots is a real TNQCOptInput field, so this is a pinned input rather
 # than the illustrative assumption it used to be.
