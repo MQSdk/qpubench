@@ -574,19 +574,34 @@ OPT_OPTIONS = "{}"
 # re-run the affected rows without it.
 EXCITATIONSOLVE_UCCSD_FREQUENCIES = [1, 2]
 
+# --- SPSA + UCCSD: a smaller step for a steeper landscape -----------------
+#
+# tn-vqe's SPSA defaults to target_step=0.1. On UCCSD that step overshoots:
+# the perturbed evaluations land far enough from the current point that the
+# first step is already worse than the start, and the run never recovers --
+# confirmed directly on H2/6-31g/JW (cases 31 and 67, both measurement
+# methods): vqe_energy sits close to the FIRST cost_history entry while the
+# run's own later evaluations collapse to roughly -0.6, well below the
+# reported value. A smaller step keeps each perturbation within the region
+# where UCCSD's cost landscape is well-approximated locally.  0.03 is a
+# starting value, not a tuned optimum.
+SPSA_UCCSD_TARGET_STEP = 0.03
+
 
 def opt_options_for(optimizer: str, ansatz: str, num_phi: int, num_theta: int) -> str:
-    """`Opt_Options` for one row: `{}` except for the ExcitationSolve +
-    UCCSD workaround above.
+    """`Opt_Options` for one row: `{}` except for the two UCCSD workarounds
+    above.
 
     num_theta is 0 on a `circuit` row (plain VQE, no tensor network) and
-    on a `network` row phi itself is already 0, so the branch below is a
-    no-op for both and only ever fires with a real theta contribution on
-    a `both` row.
+    on a `network` row phi itself is already 0, so the ExcitationSolve
+    branch below is a no-op for both and only ever fires with a real theta
+    contribution on a `both` row.
     """
     if optimizer == "ExcitationSolve" and ansatz == "UCCSD" and num_phi:
         entries = [EXCITATIONSOLVE_UCCSD_FREQUENCIES] * (num_theta + num_phi)
         return json.dumps({"frequencies": entries})
+    if optimizer == "SPSA" and ansatz == "UCCSD" and num_phi:
+        return json.dumps({"target_step": SPSA_UCCSD_TARGET_STEP})
     return OPT_OPTIONS
 # n_shots is a real TNQCOptInput field, so this is a pinned input rather
 # than the illustrative assumption it used to be.
