@@ -387,6 +387,21 @@ ANSATZE = [
     "RealAmplitudes", "EfficientSU2_circular", "n_local_rzryrz_sca", "UCCSD",
 ]
 
+# Dropped from stage 0 after the simulator screen: at a matched
+# evaluations-per-parameter budget, EfficientSU2_circular converged worse
+# than RealAmplitudes on every chemistry cell despite RealAmplitudes having
+# as few as half its parameters, and it produced the single worst result of
+# any hardware-efficient row in the campaign (15.8 Ha off, on H2O/6-31g).
+#
+# It stays IN ANSATZE, not removed from it, and is filtered out of the
+# stage-0 output afterwards instead (see build_stage0's caller) -- Case_ID
+# is assigned by position in the generated row list (write_csv), and results
+# already collected are keyed by that number. Taking a family out of ANSATZE
+# would shift every row generated after it, silently pointing existing
+# results at the wrong combination. Filtering post-numbering leaves gaps
+# where its rows used to be instead, and every other Case_ID stays put.
+EXCLUDED_FROM_STAGE0 = {"EfficientSU2_circular"}
+
 # Both, so stage 0's ansatz axis is complete on either mapper.
 #
 # Neither is built here.  Both are SUPPLIED as pinned QASM, and both are a
@@ -1925,9 +1940,21 @@ def build_stage3(
     return rows
 
 
-def write_csv(path: pathlib.Path, rows: list[dict[str, str]]) -> None:
+def assign_case_ids(rows: list[dict[str, str]]) -> None:
+    """Number rows 1..N by position, in place.  See EXCLUDED_FROM_STAGE0:
+    call this BEFORE dropping any row from the list that will be written,
+    or every row after the drop silently gets a different number than the
+    one already-collected results were filed under.
+    """
     for i, row in enumerate(rows, start=1):
         row["Case_ID"] = str(i)
+
+
+def write_csv(
+    path: pathlib.Path, rows: list[dict[str, str]], renumber: bool = True,
+) -> None:
+    if renumber:
+        assign_case_ids(rows)
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=FIELDNAMES, lineterminator="\n")
@@ -2090,8 +2117,12 @@ def main() -> None:
     parser.add_argument("-o", "--output", type=pathlib.Path, default=None)
     args = parser.parse_args()
 
+    renumber = True
     if args.stage == "0":
         rows = build_stage0()
+        assign_case_ids(rows)
+        rows = [r for r in rows if r["Ansatz"] not in EXCLUDED_FROM_STAGE0]
+        renumber = False
         path = args.output or _STAGE0_PATH
     elif args.stage == "1":
         rows = build_stage1()
@@ -2116,7 +2147,7 @@ def main() -> None:
         )
         path = args.output or _STAGE2_PATH
 
-    write_csv(path, rows)
+    write_csv(path, rows, renumber=renumber)
     # -o may point anywhere, so only shorten paths that are really inside
     # the repo.
     shown = path.relative_to(_REPO_ROOT) if path.is_relative_to(_REPO_ROOT) else path
