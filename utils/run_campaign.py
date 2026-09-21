@@ -228,8 +228,11 @@ def main() -> None:
     )
     parser.add_argument(
         "--backend", default=None, metavar="NAME",
-        help="override every run's own Backend_Platform. Read the note above "
-             "before using it on a stage that crosses the backend",
+        help="override every run's own Backend_Platform when SUBMITTING. "
+             "Has no effect on --collect: a pending task already ran on "
+             "whatever backend was in force when it was submitted, and "
+             "that is what gets recorded. Read the note above before using "
+             "it on a stage that crosses the backend",
     )
     parser.add_argument(
         "--allow-hardware", action="store_true",
@@ -329,9 +332,13 @@ def main() -> None:
                 if result is not None:
                     run = by_case[case]
                     elapsed = time.time() - entry["submitted_at"]
+                    # entry["Backend"], not args.backend: the task already
+                    # ran, on whatever backend was in force at SUBMISSION
+                    # time, which --collect's own --backend (if any) has no
+                    # bearing on and must not overwrite.
                     runner.append_record(
                         results, run, result, entry["task_id"], elapsed, batch,
-                        args.backend, submitted_at=entry["submitted_at"],
+                        entry["Backend"], submitted_at=entry["submitted_at"],
                     )
                     done.add(case)
                     collected += 1
