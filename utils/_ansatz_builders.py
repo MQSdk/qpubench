@@ -103,30 +103,37 @@ _MAPPER_INDEPENDENT = tuple(a for a in SUPPORTED_ANSATZE if a != "UCCSD")
 # circuit with this module's generalized one would change what the
 # campaign runs without changing anything that says so.
 #
-# ALL SIX FILES ARE STORED IN MIRRORED QUBIT ORDER, and will not read
-# correctly in Qiskit.  Qiskit and Cebule disagree about which end of a
-# Pauli string like "ZZII" is qubit 0, so the supplied circuits put the
-# reference determinant on the wrong end -- X gates on 6,7 for an 8-qubit
-# H2 where Jordan-Wigner puts the occupied spin orbitals at 0,1.  They
-# were reversed with QuantumCircuit.reverse_bits() to compensate.
+# HISTORICAL, RESOLVED 2026-09-17 -- kept because it explains why these six
+# files read the way they do, not because the mismatch is still live.
 #
-# mol_map is affected identically to JW: the bug is in Cebule's DENSE
-# h_operators reader, which does not care what a qubit represents.  An
-# earlier revision of this comment claimed mol_map was unaffected,
-# citing UCCSD_molmap_4q_2r_2e_4o's correct Hartree-Fock energy as
-# confirmation -- wrong, because that check validates only the reference
-# state at zero amplitudes, and H2's reference happens to be symmetric
-# under bit-reversal (X on all 4 qubits, or none), so it could not have
-# shown the bug either way.  Water's reference, [0,1,5] -> [0,4,5], is
-# not symmetric, and running it reproduced the same failure as the
-# unmirrored JW files: a near-zero energy instead of the correct one.
-# Tested numerically away from the reference point, all three mol_map
-# circuits diverge substantially between the correct and reversed
-# reading, so the affected results were wrong throughout, not only at
-# their starting point.
+# Through commits eb554c6/566f37c (2026-09-03), all six files carried the
+# reference determinant on the WRONG end of the register: Qiskit and old
+# Cebule disagreed about which end of a Pauli string like "ZZII" is qubit
+# 0, so a circuit whose X gates were written against Qiskit's convention
+# put the determinant where old Cebule's reversed h_operators reading
+# would see it as something else -- X gates originally sat on qubits 6,7
+# for an 8-qubit H2, where Jordan-Wigner puts the occupied spin orbitals
+# at 0,1. Those commits reversed all six circuits with
+# QuantumCircuit.reverse_bits() to compensate: cancel old Cebule's
+# Hamiltonian-reading bug from the CIRCUIT side, since the Hamiltonian
+# files themselves were Cebule's own and not this repository's to hand-edit.
+# mol_map was affected identically to JW, not exempt from it -- an earlier
+# revision of this comment claimed otherwise from a check
+# (UCCSD_molmap_4q_2r_2e_4o's Hartree-Fock energy) that could not have
+# shown the bug either way, since H2's reference is symmetric under
+# bit-reversal; water's is not, and reproduced the same failure.
 #
-# That is a compensation, not a fix.  WHEN CEBULE'S READER IS CORRECTED,
-# REVERSE ALL SIX FILES BACK and re-run every UCCSD row, both mappers.
+# On 2026-09-17 Cebule's own h_operators reader was corrected to match
+# Qiskit's convention directly (deployed and confirmed live), which
+# resolves the SAME mismatch from the other side: see
+# hamiltonian_data/*.json, whose Pauli strings were reversed that day to
+# match. Because the 2026-09-03 compensation lived entirely in these
+# circuit files and already reads correctly in Qiskit's own convention
+# (X gates at 0,1, matching uccsd()'s own reference-state convention
+# below), NO FURTHER CHANGE TO THESE SIX FILES WAS NEEDED -- verified
+# numerically against both a JW and a mol_map cell, zero-phi energy
+# against the newly-reversed Hamiltonian reproduces RHF exactly. Only the
+# Hamiltonian files moved.
 UCCSD_BUILDABLE_MAPPERS: tuple[str, ...] = ()
 
 
