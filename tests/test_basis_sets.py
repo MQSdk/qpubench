@@ -5,7 +5,7 @@ network access, unlike `hamlib.py`/`pennylane_qchem.py`). Expected function
 counts are cross-checked against real `pyscf.gto.M(...).nao` values in this
 session (see `hamiltonian_sources/basis_set_exchange.py`'s module docstring)
 for every (element, basis) pair appearing in
-`data/benchmarks/ibm_tn-vqe_qesem/stage1_screening_matrix.csv`.
+`data/benchmarks/ibm_tn-vqe_qesem/targeted_screen.csv`.
 """
 from __future__ import annotations
 
@@ -66,7 +66,7 @@ class TestListAvailableElements:
 class TestCountBasisFunctions:
     # (element, basis) -> expected spatial AO function count, matching
     # real pyscf.gto.M(...).nao exactly (verified in this session for every
-    # molecule/basis combination in data/benchmarks/ibm_tn-vqe_qesem/stage1_screening_matrix.csv).
+    # molecule/basis combination in data/benchmarks/ibm_tn-vqe_qesem/targeted_screen.csv).
     @pytest.mark.parametrize(
         "element,basis,expected",
         [

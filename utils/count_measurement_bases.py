@@ -4,12 +4,12 @@ Requires: pip install 'qpubench[qiskit]' pyscf
 
 Evaluating <H> takes one circuit per measurement BASIS, and how many
 bases that is follows from the Hamiltonian rather than from the circuit
-preparing the state.  `split_benchmark_batches.py` costs every row from
-that count, so it is what the campaign's QPU time is proportional to.  This script measures that factor for the Jordan-Wigner rows of the
-stage-1 matrix.  It is where the `qwc_grouping` values in the matrix's
-`Num_ExpVals_Per_Iter` column come from, and it re-derives them so that a
-committed value can be checked against the Hamiltonian it claims to
-describe.
+preparing the state, so it is what the campaign's QPU time is
+proportional to.  This script measures that factor for the
+Jordan-Wigner rows of targeted_screen.csv.  It is where the
+`qwc_grouping` values in the matrix's `Num_ExpVals_Per_Iter` column come
+from, and it re-derives them so that a committed value can be checked
+against the Hamiltonian it claims to describe.
 
 What is counted
 ---------------
@@ -55,7 +55,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 _REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 _CSV_PATH = (
     _REPO_ROOT / "data" / "benchmarks" / "ibm_tn-vqe_qesem"
-    / "stage1_screening_matrix.csv"
+    / "targeted_screen.csv"
 )
 
 # Experimental equilibrium geometries, in Angstrom:

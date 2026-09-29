@@ -1,6 +1,6 @@
-"""Resource + cost estimator walkthrough: what would the stage-1
-screening matrix actually cost to run on real IBM Quantum hardware,
-under each of the four access plans?
+"""Resource + cost estimator walkthrough: what would targeted_screen.csv
+actually cost to run on real IBM Quantum hardware, under each of the
+four access plans?
 
 Requires: pip install 'qpubench[qiskit]'
 
@@ -36,9 +36,8 @@ circuit per measurement basis, recorded per row in Num_ExpVals_Per_Iter,
 so the totals below are a floor. The campaign's batches are costed from a
 fit to real jobs instead; see split_benchmark_batches.py.
 
-Rows in `optimization_mode="network"` are skipped: they take no quantum
-measurements, so they have no QPU cost to estimate (see
-`split_benchmark_batches.py`, which writes them to their own file).
+Rows with `Method="TN"` are skipped: they take no quantum measurements,
+so they have no QPU cost to estimate.
 
 Run:
     PYTHONPATH=src python utils/estimate_ibm_cost.py
@@ -52,7 +51,7 @@ import sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
-from _ansatz_builders import circuit_spec
+from _ansatz_builders import SUPPLIED_ANSATZE, circuit_spec
 
 from qpubench.backends.ibm_cost_estimator import (
     estimate_circuit_resources,
@@ -64,10 +63,8 @@ from qpubench.schemas.mirrors.ibm_cost_estimator import (
     aggregate_benchmark_cost,
 )
 
-_CSV_PATH = (
-    pathlib.Path(__file__).resolve().parents[1]
-    / "data" / "benchmarks" / "ibm_tn-vqe_qesem" / "stage1_screening_matrix.csv"
-)
+_REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
+_CSV_PATH = _REPO_ROOT / "data" / "benchmarks" / "ibm_tn-vqe_qesem" / "targeted_screen.csv"
 # The device this campaign buys time on, in IBM's European data centre.
 # qiskit-ibm-runtime ships an offline calibration snapshot for it
 # (FakeAachen, from 0.47.0), so resolve_calibration_backend picks that up
@@ -117,6 +114,31 @@ def estimate_minimal_open_plan_study() -> CircuitResourceEstimate:
     )
 
 
+def _supplied_circuit_spec(qasm_path: pathlib.Path, num_qubits: int):
+    """A `CircuitSpec` for a SUPPLIED ansatz (UCCSD, tUPS), read from its
+    pinned QASM rather than built generically.
+
+    `_ansatz_builders.build_ansatz` refuses these -- they are not a
+    `(qubits, reps)`-only family, so there is nothing generic to build.
+    Bound to zeros, which is what these families' own `Phi_Init` actually
+    is (both are number-conserving and HF-initialized at zero amplitude),
+    so this is the row's real starting circuit, not a stand-in.
+    """
+    import numpy as np
+    from qiskit import qasm3
+
+    from qpubench.schemas.circuit import CircuitSpec
+    from qpubench.schemas.primitives import CircuitFormat
+
+    qc = qasm3.loads((_REPO_ROOT / qasm_path).read_text())
+    if qc.num_parameters:
+        qc = qc.assign_parameters(np.zeros(qc.num_parameters))
+    qc.measure_all()
+    return CircuitSpec(
+        num_qubits=num_qubits, format=CircuitFormat.QASM3, serialized=qasm3.dumps(qc)
+    )
+
+
 def estimate_full_csv_study() -> list[CircuitResourceEstimate]:
     """One resource estimate per CSV row, at that row's own `Iterations`,
     each iteration submitting one circuit.
@@ -139,7 +161,12 @@ def estimate_full_csv_study() -> list[CircuitResourceEstimate]:
 
         key = (ansatz, num_qubits, reps, num_electrons, shots)
         if key not in cache:
-            spec = circuit_spec(ansatz, num_qubits, reps=reps, num_electrons=num_electrons)
+            if ansatz in SUPPLIED_ANSATZE:
+                spec = _supplied_circuit_spec(
+                    pathlib.Path(row["Qasm_Ansatz_File"]), num_qubits,
+                )
+            else:
+                spec = circuit_spec(ansatz, num_qubits, reps=reps, num_electrons=num_electrons)
             label = f"{ansatz}, {num_qubits}q, {reps} reps"
             cache[key] = estimate_circuit_resources(
                 spec, backend_name=_BACKEND_NAME, backend=_calibration(),

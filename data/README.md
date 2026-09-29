@@ -10,14 +10,14 @@ folder.
 
 | Path | Holds |
 |---|---|
-| [`benchmarks/`](benchmarks/) | One folder per benchmark scenario: the matrix of cases, the tranches it is split into, and a README explaining that campaign |
+| [`benchmarks/`](benchmarks/) | One folder per benchmark scenario: the matrix of cases and a README explaining that campaign |
 | [`qasm/`](qasm/) | The exact circuits the scenarios pin, as OpenQASM 3.0, written by [`pin_qasm_ansatz.py`](../utils/pin_qasm_ansatz.py) and shared across scenarios |
 
 ### Benchmark scenarios
 
 | Scenario | What it compares |
 |---|---|
-| [`benchmarks/ibm_tn-vqe_qesem/`](benchmarks/ibm_tn-vqe_qesem/) | Tensor-network VQE (Cebule TN_QC_OPT) against plain VQE on IBM hardware, across 7 basis sets and 2 mappers, with a Qedma QESEM error-mitigation stage. Read its [README](benchmarks/ibm_tn-vqe_qesem/README.md) first; the folder name reads *vendor, method, mitigation* |
+| [`benchmarks/ibm_tn-vqe_qesem/`](benchmarks/ibm_tn-vqe_qesem/) | Tensor-network VQE (Cebule TN_QC_OPT) against plain VQE on IBM hardware, on a targeted set of axes (mapper, ansatz, optimizer, TN-layers) rather than a full factorial, with a Qedma QESEM error-mitigation stage generated on demand. Read its [README](benchmarks/ibm_tn-vqe_qesem/README.md) first; the folder name reads *vendor, method, mitigation* |
 
 ### `qasm/`
 
@@ -36,15 +36,13 @@ different thing to run.
 Everything here is generated, and the generators are the source of truth:
 
 ```sh
-PYTHONPATH=src python utils/build_benchmark_matrix.py   # the matrix
-PYTHONPATH=src python utils/pin_qasm_ansatz.py          # the circuits
-PYTHONPATH=src python utils/split_benchmark_batches.py  # the tranches
+PYTHONPATH=src python utils/build_benchmark_matrix.py --stage targeted  # the matrix
+PYTHONPATH=src python utils/pin_qasm_ansatz.py                          # the circuits
 ```
 
 Run them in that order after a change to the matrix: the circuits are
-pinned from the shapes the matrix names, the matrix then picks up their
-hashes on a second pass, and the tranches are cut from the result. None
-of the three needs credentials or a network.
+pinned from the shapes the matrix names, and the matrix then picks up
+their hashes on a second pass. Neither needs credentials or a network.
 
 `PYTHONPATH=src` (or a `pip install -e .`) is required: the scripts add
 the repo root to `sys.path`, not `src/`. `tests/test_docs_consistency.py`

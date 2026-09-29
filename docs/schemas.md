@@ -1763,7 +1763,7 @@ locations below are `.gitignore`d:
 
 Full documentation → [docs/integrations/basis_sets.md](integrations/basis_sets.md)
 
-Added 2026-07-09 to back `data/benchmarks/ibm_tn-vqe_qesem/stage1_screening_matrix.csv`'s `Basis`
+Added 2026-07-09 to back `data/benchmarks/ibm_tn-vqe_qesem/targeted_screen.csv`'s `Basis`
 column with a real catalogue instead of a free-text string. Two sources,
 **both real**, corrected 2026-07-09 after actually downloading and
 parsing q-vSZP's own data files: an earlier version of this module wrongly
@@ -1861,7 +1861,7 @@ total QPU-seconds into a `PlanCostBreakdown` per plan: Open Plan's free
 $30k-minimum lump sum, Premium's $249,600/year minimum annual
 subscription. `aggregate_benchmark_cost()` rolls up a whole study's worth
 of per-job estimates. See `utils/estimate_ibm_cost.py` for an
-end-to-end walkthrough costing `data/benchmarks/ibm_tn-vqe_qesem/stage1_screening_matrix.csv`.
+end-to-end walkthrough costing `data/benchmarks/ibm_tn-vqe_qesem/targeted_screen.csv`.
 
 | Type | Verified against real data | Purpose |
 |---|---|---|

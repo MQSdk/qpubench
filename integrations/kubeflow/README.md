@@ -15,7 +15,7 @@ body.
 
 ## Four pipelines, one per (`Mapper`, `Method`) pair
 
-[`data/benchmarks/ibm_tn-vqe_qesem/stage1_screening_matrix.csv`](../../data/benchmarks/ibm_tn-vqe_qesem/stage1_screening_matrix.csv)
+[`data/benchmarks/ibm_tn-vqe_qesem/targeted_screen.csv`](../../data/benchmarks/ibm_tn-vqe_qesem/targeted_screen.csv)
 (see [the campaign README](../../data/benchmarks/ibm_tn-vqe_qesem/README.md)) crosses two `Mapper`
 values with two `Method` values, and each of the four pairs gets its own
 `@dsl.pipeline` — that pair is the one axis that changes which components
@@ -41,7 +41,7 @@ full reasoning.
 The two `VQE` pipelines measure the fixed Hartree-Fock reference state
 rather than an optimized one; see `execute_static_hamiltonian_component`'s
 docstring. That is a limitation of these components, not of the matrix:
-`data/benchmarks/ibm_tn-vqe_qesem/stage1_screening_matrix.csv` names a real `Ansatz` and `Ansatz_Reps`
+`data/benchmarks/ibm_tn-vqe_qesem/targeted_screen.csv` names a real `Ansatz` and `Ansatz_Reps`
 on every row, including the `VQE` ones, and nothing here consumes them
 yet.
 
@@ -108,7 +108,7 @@ Or compile all four at once: `python -m integrations.kubeflow.pipelines`
 Upload the YAML through the dashboard's Pipelines UI, or submit
 programmatically — e.g. running the full `TN_Layers_Network x
 Ansatz_Reps x TN_Ansatz x Measurement_Method` sweep from
-`data/benchmarks/ibm_tn-vqe_qesem/stage1_screening_matrix.csv` as **one** pipeline run:
+`data/benchmarks/ibm_tn-vqe_qesem/targeted_screen.csv` as **one** pipeline run:
 
 ```python
 import kfp

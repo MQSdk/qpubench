@@ -1,5 +1,5 @@
 """Four kfp DAGs — one per (`Mapper`, `Method`) pair in
-data/benchmarks/ibm_tn-vqe_qesem/stage1_screening_matrix.csv (see data/benchmarks/ibm_tn-vqe_qesem/README.md's "Mapper and method
+data/benchmarks/ibm_tn-vqe_qesem/targeted_screen.csv (see data/benchmarks/ibm_tn-vqe_qesem/README.md's "Mapper and method
 are separate columns" section):
 
     cebule_molecular_vqe_pipeline  -- mol_map, TN-VQE
@@ -96,7 +96,7 @@ def _with_cebule_credentials(task: Any) -> Any:
     description=(
         "MOL_MAP -> TN_QC_OPT -> QASM_GEN -> circuit execution, following the "
         "Cebule SDK task chain documented in schemas/mirrors/mqsdk_cebule.py. "
-        "Mapper `mol_map` + Method `TN-VQE` in data/benchmarks/ibm_tn-vqe_qesem/stage1_screening_matrix.csv."
+        "Mapper `mol_map` + Method `TN-VQE` in data/benchmarks/ibm_tn-vqe_qesem/targeted_screen.csv."
     ),
 )
 def cebule_molecular_vqe_pipeline(
@@ -199,7 +199,7 @@ def cebule_molecular_vqe_pipeline(
     description=(
         "JW mapping -> TN_QC_OPT -> QASM_GEN -> circuit execution — TN-VQE "
         "applied to the plain JW-mapped Hamiltonian, no MOL_MAP. Mapper "
-        "category `tn_qc_opt` in data/benchmarks/ibm_tn-vqe_qesem/stage1_screening_matrix.csv."
+        "category `tn_qc_opt` in data/benchmarks/ibm_tn-vqe_qesem/targeted_screen.csv."
     ),
 )
 def cebule_tn_vqe_pipeline(
@@ -285,7 +285,7 @@ def cebule_tn_vqe_pipeline(
         "MOL_MAP -> measurement of the fixed Hartree-Fock reference state "
         "(no VQE ansatz — Ansatz is blank for this Mapper category in "
         "data/benchmarks/ibm_tn-vqe_qesem/README.md). Mapper category `mol_map` in "
-        "data/benchmarks/ibm_tn-vqe_qesem/stage1_screening_matrix.csv."
+        "data/benchmarks/ibm_tn-vqe_qesem/targeted_screen.csv."
     ),
 )
 def mol_map_measurement_pipeline(
@@ -327,7 +327,7 @@ def mol_map_measurement_pipeline(
         "Hartree-Fock reference state. No Cebule call at all (no VQE "
         "ansatz — Ansatz is blank for this Mapper category in "
         "data/benchmarks/ibm_tn-vqe_qesem/README.md). Mapper category `JW` in "
-        "data/benchmarks/ibm_tn-vqe_qesem/stage1_screening_matrix.csv."
+        "data/benchmarks/ibm_tn-vqe_qesem/targeted_screen.csv."
     ),
 )
 def jw_baseline_pipeline(

@@ -81,7 +81,7 @@ def test_schema_version_mentions_in_code_are_consistent():
 # ---------------------------------------------------------------------------
 
 CAMPAIGN_DIR = REPO / "data" / "benchmarks" / "ibm_tn-vqe_qesem"
-CSV_PATH = CAMPAIGN_DIR / "stage1_screening_matrix.csv"
+CSV_PATH = CAMPAIGN_DIR / "targeted_screen.csv"
 
 
 def _benchmark_matrix_module():
@@ -90,6 +90,18 @@ def _benchmark_matrix_module():
 
     path = REPO / "utils" / "build_benchmark_matrix.py"
     spec = importlib.util.spec_from_file_location("build_benchmark_matrix", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _ansatz_builders_module():
+    """Import _ansatz_builders.py the same way, rather than relying on
+    utils/ being on sys.path."""
+    import importlib.util
+
+    path = REPO / "utils" / "_ansatz_builders.py"
+    spec = importlib.util.spec_from_file_location("_ansatz_builders", path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -180,7 +192,7 @@ def test_classical_only_rows_cost_nothing_and_take_no_measurements():
     zero cost and zero measurements rather than the particular cells an
     earlier revision used to blank out.
     """
-    module = _benchmark_matrix_module()
+    builders = _ansatz_builders_module()
     controls = [r for r in _csv_rows() if r["Method"] == "TN"]
     assert controls, "the zero-QPU classical-only control rows are missing"
     for row in controls:
@@ -190,7 +202,7 @@ def test_classical_only_rows_cost_nothing_and_take_no_measurements():
         assert row["Measurement_Method"].startswith("n/a"), row["Measurement_Method"]
         # The circuit it freezes is recorded honestly, so a control on one
         # family is distinguishable from a control on another.
-        assert row["Ansatz"] in module.ANSATZE, row["Ansatz"]
+        assert row["Ansatz"] in builders.SUPPORTED_ANSATZE, row["Ansatz"]
         assert int(row["Ansatz_Reps"]) > 0
         assert int(row["Num_Opt_Params_Phi"]) > 0
 
@@ -223,63 +235,65 @@ def test_phi_init_is_fixed_by_the_circuit_family():
             f"{ansatz} rows start from {len(values)} different phi: "
             f"{sorted(values)}"
         )
-    # Zeros where zero amplitudes ARE the reference state (UCCSD), the
-    # seeded draw on the hardware-efficient families, whose identity at
-    # zero is a barren starting point rather than a reference determinant.
+    # Zeros where zero amplitudes ARE the reference state (UCCSD, tUPS);
+    # an HF-approximating phi_init on the hardware-efficient families
+    # this campaign seeds one for (RealAmplitudes, n_local_rzryrz_sca);
+    # the seeded random draw otherwise, whose identity at zero is a
+    # barren starting point rather than a reference determinant.
     module = _benchmark_matrix_module()
     for ansatz, values in by_ansatz.items():
         expected_zeros = ansatz in module.PHI_INIT_ZEROS_ANSATZE
+        expected_hf_approx = ansatz in module.HF_APPROX_ANSATZE
         value = next(iter(values))
         assert (value == "zeros") is expected_zeros, f"{ansatz}: {value}"
-        if not expected_zeros:
+        assert (value == "hf-approx") is expected_hf_approx, f"{ansatz}: {value}"
+        if not expected_zeros and not expected_hf_approx:
             assert value.startswith("random(seed="), f"{ansatz}: {value}"
 
 
-def test_every_ansatz_is_run_by_all_three_methods():
-    """The comparison is only a comparison at a fixed circuit.
+def test_method_axis_is_only_crossed_on_realamplitudes():
+    """The Method x TN-layers axis is only a comparison at a fixed circuit.
 
     An earlier revision screened plain VQE on one set of families and
     TN-VQE on another, so the two methods shared no circuit and every
     difference between them carried the circuit as well as the method.
-    Each family must therefore appear under plain `VQE`, under `TN-VQE`
-    and under the classical-only `TN` control -- on the same
-    Hamiltonian, and pinning the same QASM file.
+    Per the README's own axes table, `RealAmplitudes` is the one ansatz
+    this campaign crosses with Method (`VQE`/`TN-VQE`/`TN`) -- every
+    other ansatz runs `VQE` only, on the reps/mapper/optimizer axes that
+    are about the CIRCUIT rather than the method.
     """
-    module = _benchmark_matrix_module()
     rows = _csv_rows()
-
-    def arm(row: dict[str, str]) -> str:
-        return row["Method"]
 
     arms_by_ansatz: dict[str, set[str]] = {}
     for row in rows:
-        arms_by_ansatz.setdefault(row["Ansatz"], set()).add(arm(row))
-    # Stage 1 buys ONE ansatz on hardware: RealAmplitudes against
-    # EfficientSU2 is a question about circuits, which stage 0 answers on a
-    # simulator for nothing. What must still hold is that whatever stage 1
-    # does run, it runs under all three methods.
-    assert set(arms_by_ansatz) == {module.STAGE1_ANSATZ}, (
-        f"stage 1 runs {sorted(arms_by_ansatz)}, expected only "
-        f"{module.STAGE1_ANSATZ}"
-    )
-    stage0_ansatze = {row["Ansatz"] for row in module.build_stage0()}
-    assert stage0_ansatze == set(module.ANSATZE), (
-        f"stage 0 simulates {sorted(stage0_ansatze)}, the generator lists "
-        f"{module.ANSATZE} -- the ansatz axis has to live somewhere"
+        arms_by_ansatz.setdefault(row["Ansatz"], set()).add(row["Method"])
+
+    assert arms_by_ansatz.get("RealAmplitudes") == {"VQE", "TN-VQE", "TN"}, (
+        f"RealAmplitudes is run by {sorted(arms_by_ansatz.get('RealAmplitudes', ()))}, "
+        "expected all three methods"
     )
     for ansatz, arms in arms_by_ansatz.items():
-        assert arms == {"VQE", "TN-VQE", "TN"}, (
-            f"{ansatz} is run by {sorted(arms)} only"
+        if ansatz == "RealAmplitudes":
+            continue
+        assert arms == {"VQE"}, (
+            f"{ansatz} is run by {sorted(arms)}, expected VQE only -- the "
+            "Method axis is RealAmplitudes-only"
         )
 
-    # Same circuit, not merely the same family name: a triple that shares
-    # (molecule, basis, mapper, ansatz) must share the pinned file and the
-    # phi it starts from, or the three arms differ in more than method.
-    by_case: dict[tuple[str, ...], set[tuple[str, str, str]]] = {}
+    # Same circuit, not merely the same family name: a group that shares
+    # (molecule, basis, mapper, ansatz, reps, entanglement) -- the reps
+    # and entangler-topology axes mean two rows can share everything else
+    # and legitimately pin different files -- must share the pinned file
+    # and the phi it starts from, or the RealAmplitudes method arms at
+    # that point differ in more than method.
+    by_case: dict[tuple[str, ...], set[tuple[str, str]]] = {}
     for row in rows:
-        key = (row["Molecule"], row["Basis"], row["Mapper"], row["Ansatz"])
+        key = (
+            row["Molecule"], row["Basis"], row["Mapper"], row["Ansatz"],
+            row["Ansatz_Reps"], row["Entanglement"],
+        )
         by_case.setdefault(key, set()).add(
-            (row["Qasm_Ansatz_SHA256"], row["Phi_Init"], row["Ansatz_Reps"])
+            (row["Qasm_Ansatz_SHA256"], row["Phi_Init"])
         )
     for key, pins in by_case.items():
         assert len(pins) == 1, f"{key} runs {len(pins)} different circuits: {pins}"
@@ -309,69 +323,72 @@ def test_phi_init_seed_matches_the_generator():
     the seed rather than importing the generator, so the two must be
     checked against each other.
     """
-    import importlib.util
-
     module = _benchmark_matrix_module()
-    path = REPO / "utils" / "_ansatz_builders.py"
-    spec = importlib.util.spec_from_file_location("_ansatz_builders", path)
-    builders = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(builders)
+    builders = _ansatz_builders_module()
     assert builders.PHI_INIT_SEED == module.PHI_INIT_SEED
     assert module.PHI_INIT_RANDOM == f"random(seed={builders.PHI_INIT_SEED})"
+
+
+def _row_phi_theta(row: dict[str, str]) -> tuple[int, int]:
+    """(n_phi, n_theta) as `_row()` itself splits them: phi counts as
+    zero on a `TN` (frozen-phi) row."""
+    n_phi = int(row["Num_Opt_Params_Phi"]) if row["Method"] != "TN" else 0
+    n_theta = int(row["Num_Opt_Params_Theta"]) if row["Num_Opt_Params_Theta"].isdigit() else 0
+    return n_phi, n_theta
 
 
 def test_iterations_matches_the_generators_proportional_rule():
     """`Iterations` is the rule's output, not a number typed beside it.
 
     The floor test below is the safety net; this one pins the column to
-    `optimizer_iterations` exactly, so a change to either multiplier has
-    to be regenerated into the CSV rather than drifting away from it.
+    `optimizer_iterations` then `iteration_budget` exactly (the same two
+    steps `_row()` itself takes -- an evaluation budget, then that
+    optimizer's own evaluations-per-iteration), so a change to any of
+    the three has to be regenerated into the CSV rather than drifting
+    away from it.
     """
     module = _benchmark_matrix_module()
     checked = 0
     for row in _csv_rows():
         if row["Iterations"] == "1":        # stage-3 refinement: one job, no optimizer
             continue
-        free_params = sum(
-            int(row[column])
-            for column in ("Num_Opt_Params_Phi", "Num_Opt_Params_Theta")
-            if row[column].isdigit()
+        n_phi, n_theta = _row_phi_theta(row)
+        eval_budget = module.optimizer_iterations(
+            n_phi + n_theta, module.stage_evals_per_param(row["Stage"]),
         )
-        if row["Method"] == "TN":                       # phi is frozen
-            free_params -= int(row["Num_Opt_Params_Phi"])
-        expected = module.optimizer_iterations(
-            free_params, module.stage_evals_per_param(row["Stage"])
-        )
+        expected = module.iteration_budget(eval_budget, row["Optimizer"], n_phi, n_theta)
         assert int(row["Iterations"]) == expected, (
-            f"Case_ID {row['Case_ID']} budgets {row['Iterations']} evaluations "
-            f"for {free_params} free parameters; the {row['Stage']} rule gives "
-            f"{expected}"
+            f"Case_ID {row['Case_ID']} budgets {row['Iterations']} iterations "
+            f"for {n_phi}+{n_theta} free parameters under {row['Optimizer']}; "
+            f"the {row['Stage']} rule gives {expected}"
         )
         checked += 1
     assert checked, "no rows carry an optimizer budget"
 
 
-def test_every_row_budgets_at_least_cobylas_simplex():
+def test_every_cobyla_row_budgets_at_least_its_simplex():
     """A flat iteration count is not a conservative assumption.
 
     COBYLA cannot take a single descent step before it has built an
     initial simplex of n+1 points, and scipy raises a maxiter set below
     that rather than honouring it. So a row budgeted under n+2 does not
     run cheaply -- it runs long and optimises nothing, and the estimate
-    that billed it is wrong in both directions at once.
+    that billed it is wrong in both directions at once. SPSA and
+    ExcitationSolve carry no such floor -- neither builds a simplex --
+    so this only applies where `Optimizer == "COBYLA"`.
     """
+    checked = 0
     for row in _csv_rows():
-        params = sum(
-            int(row[column])
-            for column in ("Num_Opt_Params_Phi", "Num_Opt_Params_Theta")
-            if row[column].isdigit()
-        )
-        if row["Method"] == "TN":                       # phi is frozen
-            params -= int(row["Num_Opt_Params_Phi"])
+        if row["Optimizer"] != "COBYLA":
+            continue
+        n_phi, n_theta = _row_phi_theta(row)
+        params = n_phi + n_theta
         assert int(row["Iterations"]) >= params + 2, (
             f"Case_ID {row['Case_ID']} budgets {row['Iterations']} iterations "
             f"for {params} free parameters; COBYLA needs at least {params + 2}"
         )
+        checked += 1
+    assert checked, "no COBYLA rows to check"
 
 
 def test_error_mitigation_is_additive():
@@ -476,47 +493,17 @@ _GENERIC_COUNTS = {0, 1}
 
 
 def _true_row_counts() -> set[int]:
-    """Every row count the campaign's own files and generator produce."""
+    """Every row count the campaign's own file and generator produce."""
     module = _benchmark_matrix_module()
     rows = _csv_rows()
     counts = {
         len(rows),
         sum(1 for r in rows if r["Method"] != "TN"),
     }
-    for path in sorted(CAMPAIGN_DIR.glob("batch*.csv")):
-        import csv
 
-        with path.open(encoding="utf-8") as f:
-            counts.add(len(list(csv.DictReader(f))))
-
-    # Stage 0 is generated on demand like stage 2, so its size is only ever
-    # a number in prose unless it is counted here.
-    stage0 = module.build_stage0()
-    counts.add(len(stage0))
-    counts.add(len(module.build_stage1()))
-    # Stage 0 keeps rows it cannot execute, marked rather than deleted so
-    # no Case_ID moves, so "1152 rows" and "1008 runnable" are both true of
-    # it and prose may cite either -- as may the size of a blocked cell.
-    blocked = [
-        r for r in stage0
-        if (r["Molecule"], r["Basis"], r["Mapper"]) in module.SIMULATION_INFEASIBLE
-    ]
-    counts.add(len(blocked))
-    counts.add(len(stage0) - len(blocked))
-
-    # Stage 2 is not committed, so its size only exists as a projection in
-    # prose -- which is exactly the kind of number that goes stale.
-    # 6-31g, not sto-3g: the campaign no longer screens the minimal basis,
-    # and a selection outside SCREENED has no measurement count to cost.
-    selection = {molecule.name: "6-31g" for molecule in module.MOLECULES}
-    for sweep in (False, True):
-        counts.add(len(module.build_stage2(
-            selection, "EfficientSU2", "valence_cas", sweep,
-        )))
-
-    # The targeted screen is generated the same way stage 0 is, and
-    # main()'s own number-then-dedupe pattern is what decides its real
-    # size -- the raw (pre-dedupe) list is not the count any prose cites.
+    # main()'s own number-then-dedupe pattern is what decides the file's
+    # real size -- the raw (pre-dedupe) list is not the count any prose
+    # cites.
     targeted = module.build_targeted_screen()
     module.assign_case_ids(targeted)
     counts.add(len(module.dedupe_rows(targeted)))

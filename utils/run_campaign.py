@@ -1,9 +1,7 @@
 """Run a campaign stage in batches: submit many, collect later.
 
-Built for stage 0, which is 1008 runnable simulated runs and therefore not
-something to start in one go and hope: batches let a slice be run,
-inspected and resumed.  It takes any of the campaign's CSV files, so the
-stage-1 batches go through the same path.
+Defaults to targeted_screen.csv, this campaign's one committed file, but
+takes any CSV of the same shape via `--csv`.
 
 SUBMISSION AND COLLECTION ARE SEPARATE, and that is the point.  Cebule
 dispatches to outside HPC infrastructure, so a task spends most of its
@@ -48,13 +46,12 @@ failure stays failed until `--retry-failed` says otherwise, so a
 deterministic error is not resubmitted on every pass.
 
 WHICH BACKEND A RUN USES IS THE RUN'S OWN `Backend_Platform`, not a
-choice made here.  Stage 0 crosses the backend as a factor, half its rows
-on `aer_simulator` and half on `fake_aachen`, so overriding it would run
-one arm twice and the other never.  `--backend` exists for the one case
-the column cannot express -- executing a hardware-targeted stage-1 row on
-a simulator first -- and hardware is refused unless `--allow-hardware`
-says otherwise, because a stage-0 row costed at nothing would be billed
-like anything else.
+choice made here.  targeted_screen.csv's rows are all `aer_simulator`;
+`--backend` exists for the one case the column cannot express --
+executing a hardware-targeted row on a simulator first, for a file whose
+rows do target hardware -- and hardware is refused unless
+`--allow-hardware` says otherwise, because a row costed at nothing would
+be billed like anything else.
 """
 from __future__ import annotations
 
@@ -70,7 +67,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import _campaign_runner as runner
 from build_benchmark_matrix import SIMULATION_INFEASIBLE
 
-_DEFAULT_CSV = runner.CAMPAIGN / "stage0_simulator_screen.csv"
+_DEFAULT_CSV = runner.CAMPAIGN / "targeted_screen.csv"
 
 
 def simulation_infeasible_reason(run: dict[str, str]) -> str | None:
@@ -107,7 +104,7 @@ def _load(path: pathlib.Path) -> list[dict[str, str]]:
     if not path.exists():
         raise SystemExit(
             f"{path} does not exist. Regenerate it with:\n"
-            f"    PYTHONPATH=src python utils/build_benchmark_matrix.py --stage 0"
+            f"    PYTHONPATH=src python utils/build_benchmark_matrix.py --stage targeted"
         )
     with path.open() as f:
         return list(csv.DictReader(f))
@@ -189,7 +186,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--csv", type=pathlib.Path, default=_DEFAULT_CSV,
-        help="campaign file to run (default: the stage-0 simulator screen)",
+        help="campaign file to run (default: targeted_screen.csv)",
     )
     parser.add_argument(
         "--where", action="append", default=[], metavar="COLUMN=VALUE",

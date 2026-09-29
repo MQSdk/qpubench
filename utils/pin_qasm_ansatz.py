@@ -57,13 +57,6 @@ from _ansatz_builders import SUPPLIED_ANSATZE, build_ansatz, can_build, qasm_ste
 
 _REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 _CAMPAIGN_DIR = _REPO_ROOT / "data" / "benchmarks" / "ibm_tn-vqe_qesem"
-_CSV_PATH = _CAMPAIGN_DIR / "stage1_screening_matrix.csv"
-# Stage 0 runs on simulators, which is exactly why its circuits have to be
-# pinned too: a simulated result is only a baseline for a hardware result
-# if the two ran the SAME circuit, and stage 0 carries three ansatz
-# families and a 16-qubit width that stage 1 never reaches.  Pinned when
-# the file exists, so the generator can be re-run in either order.
-_STAGE0_PATH = _CAMPAIGN_DIR / "stage0_simulator_screen.csv"
 _TARGETED_PATH = _CAMPAIGN_DIR / "targeted_screen.csv"
 _QASM_DIR = _REPO_ROOT / "data" / "qasm"
 
@@ -161,7 +154,7 @@ def write_pinned_qasm(
 
 def main() -> None:
     _QASM_DIR.mkdir(parents=True, exist_ok=True)
-    sources = [p for p in (_CSV_PATH, _STAGE0_PATH, _TARGETED_PATH) if p.exists()]
+    sources = [p for p in (_TARGETED_PATH,) if p.exists()]
     rows: list[dict[str, str]] = []
     for path in sources:
         with path.open() as f:
@@ -169,7 +162,7 @@ def main() -> None:
 
     shapes = sorted(circuit_shapes(rows))
     if not shapes:
-        raise SystemExit(f"no rows with a circuit found in {_CSV_PATH.name}")
+        raise SystemExit(f"no rows with a circuit found in {_TARGETED_PATH.name}")
 
     names = ", ".join(p.name for p in sources)
     print(f"Pinning {len(shapes)} distinct circuits from {names}:")

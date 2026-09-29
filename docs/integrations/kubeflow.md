@@ -107,7 +107,7 @@ components each one unblocks).
 
 ## Mapper × method = new DAG; sweep point = parameter inside one DAG
 
-`data/benchmarks/ibm_tn-vqe_qesem/stage1_screening_matrix.csv` (see `data/benchmarks/ibm_tn-vqe_qesem/README.md`) is the concrete
+`data/benchmarks/ibm_tn-vqe_qesem/targeted_screen.csv` (see `data/benchmarks/ibm_tn-vqe_qesem/README.md`) is the concrete
 test of the component-boundary rule above: it has two `Mapper` values
 (`JW`, `mol_map`) crossed with two `Method` values (`VQE`, `TN-VQE`), and
 each of the four pairs requires a different set of components, so each
@@ -130,11 +130,11 @@ pipeline:
   component/job" treatment TN_QC_OPT's own `n_iterations` optimizer loop
   already gets.
 
-Running the full 12-row stage-1 matrix (or any one of its
-tranches) against real hardware means: pick the pipeline matching each
-row's (`Mapper`, `Method`) pair, then group rows by every other column
-into one `create_run_from_pipeline_package(...)` call per pair with all
-the distinct sweep values as list-valued arguments, not one run per row.
+Running the full targeted_screen.csv matrix against real hardware means:
+pick the pipeline matching each row's (`Mapper`, `Method`) pair, then
+group rows by every other column into one
+`create_run_from_pipeline_package(...)` call per pair with all the
+distinct sweep values as list-valued arguments, not one run per row.
 
 ## Why not build a custom DAG driver over `TrainerClient` instead
 

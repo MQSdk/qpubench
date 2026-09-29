@@ -9,10 +9,20 @@ hamiltonian_data/*_mapped.json already carries `mapping_matrix`, and
 reorder_mapped_hamiltonian(H, D, ...) computes the reordered (H', D',
 hf_state) from that alone.
 
-Old mol_map data is untouched; this writes NEW, distinctly-named files
-(`mapper == "mol_map_spinblock"` throughout the campaign) so
-stage0_simulator_screen.csv's ~500 already-collected mol_map results
-stay valid against the old ones.
+Wrote NEW, distinctly-named files (`mapper == "mol_map_spinblock"`
+throughout the campaign) rather than overwriting the old (plain)
+`mol_map` data, back when that data and the stage-0 results built on it
+were both still live.
+
+NOT RE-RUNNABLE AS WRITTEN: the old `hamiltonian_data/*_mapped.json`
+files this script's mol_map-reordering half reads as its SOURCE have
+since been deleted (stage 0/1 and the plain `mol_map` mapper were
+retired along with them -- see the module docstring of
+build_benchmark_matrix.py). Its outputs are already committed and need
+no regeneration; this file stays as a record of how they were produced,
+and to regenerate anything from it now you would restore those old
+Hamiltonian files from backup first. The JW tUPS-layers block below does
+not depend on them and remains re-runnable on its own.
 
 THE ROW-REVERSAL FIX: the committed `mapping_matrix`'s row index is NOT
 a Qiskit-native computational-basis integer -- it is bit-reversed

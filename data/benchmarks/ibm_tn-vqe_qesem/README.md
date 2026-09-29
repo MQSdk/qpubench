@@ -154,10 +154,8 @@ be built from, and because `_ansatz_builders.uccsd()`'s own generalized
 singles-and-doubles pool has more parameters (40 at H2/6-31g) than the
 restricted ansatz these circuits pin (15, 26). `can_build`/
 `SUPPLIED_ANSATZE` in `_ansatz_builders.py` enforce that this repository
-never overwrites them. `UCCSD_JW_8q_2r_4e.qasm` (H2O CAS(4,4)/JW) is
-among the already-supplied set, used today by stage 0's own H2O/JW
-rows — no row in `targeted_screen.csv` points at it yet (see [Known
-limitations](#known-limitations)).
+never overwrites them. No UCCSD/JW/H2O circuit is currently pinned (see
+[Known limitations](#known-limitations)).
 
 tUPS/pp-tUPS is built by
 [`regenerate_spinblock_mol_map.py`](../../../utils/regenerate_spinblock_mol_map.py)
@@ -317,11 +315,11 @@ substantially: 120 → 52 for H2/6-31g, 1304 → 392 for H2O/6-31g CAS(4,4).
   axes.** It shares the reps axis with the hardware-efficient families
   (1–4 layers, 2 default) and the mapper axis, but has no entanglement
   pattern to vary, and its own optimizer tuning is untested.
-- **UCCSD/JW is not run on H2O in this file.** A pinned circuit already
-  exists (`UCCSD_JW_8q_2r_4e.qasm`, one of the supplied set — see
-  [Ansätze](#ansätze)) and is used today by stage 0's own H2O/JW rows,
-  but an earlier UCCSD-on-H2O run took excessive wall time and this
-  cell's cost is not yet confirmed acceptable for `targeted_screen.csv`;
+- **UCCSD/JW is not run on H2O.** No `UCCSD_JW_8q_2r_4e.qasm` circuit is
+  currently pinned — `_fermionic_ansatz.uccsd()` can build and verify one
+  (see [Ansätze](#ansätze); the same generator tUPS uses, wrapped in
+  `reverse_bits()`) — but an earlier UCCSD-on-H2O run also took excessive
+  wall time, and that cell's cost is not yet confirmed acceptable either;
   H2O/JW in this file is `RealAmplitudes` only.
 - **`HF_APPROX_ANSATZE` and closed-shell orbitals are assumed together.**
   `hf_state_for`'s JW branch raises if `Active_Electrons` is odd; every

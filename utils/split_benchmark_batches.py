@@ -1,5 +1,15 @@
 """Cost the stage-1 screening matrix and cut it into batches.
 
+NOT CURRENTLY RUNNABLE: `_CSV_PATH` names `stage1_screening_matrix.csv`,
+retired along with stage 0/1 (see build_benchmark_matrix.py's module
+docstring) -- the file no longer exists. targeted_screen.csv's 38 rows
+are submitted directly through run_campaign.py's own --submit/
+--max-in-flight pacing instead, which is what makes this script's own
+job -- cutting a large screen into cost-ordered tranches -- moot for it.
+Kept as a record of how the old screen was staged, not as a live tool;
+repoint `_CSV_PATH` and rework `STAGE_ALLOCATION_MIN` if a future matrix
+needs this again.
+
 Batches are NOT sized to a budget.  The campaign used to be cut against
 IBM's access plans -- 10 free minutes, a 400-minute Flex purchase, a
 5,200-minute Premium minimum -- because each was a separate purchase that

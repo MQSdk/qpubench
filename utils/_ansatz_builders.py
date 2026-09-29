@@ -1,8 +1,8 @@
 """Build the named ansatz circuits benchmark rows ask for, as real Qiskit
 circuits, for resource estimation.
 
-Shared by `estimate_ibm_cost.py` and `split_benchmark_batches.py` so both
-cost the same circuit for the same row. Not a guide itself (hence the
+Shared by `build_benchmark_matrix.py` and `estimate_ibm_cost.py` so both
+build the same circuit for the same row. Not a guide itself (hence the
 leading underscore), and deliberately not in `src/qpubench/`: `uccsd()`
 below builds on `integrations/generic_adapt_vqe/`, which pyproject
 excludes from the installed package, so a library module importing it
