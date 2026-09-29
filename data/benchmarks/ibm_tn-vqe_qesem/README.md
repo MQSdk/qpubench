@@ -96,9 +96,8 @@ except the one deliberately crossed axis below.
 | Axis | What varies | Held at the baseline |
 |---|---|---|
 | Mapper | JW ↔ mol_map_spinblock | Every ansatz — `RealAmplitudes`, `n_local_rzryrz_sca`, `UCCSD`, tUPS/pp-tUPS — each run under both |
-| Ansatz reps | 1, 2, 3, 4 | `RealAmplitudes` and `n_local_rzryrz_sca`, JW |
+| Ansatz reps (tUPS/pp-tUPS: layers) | 1, 2, 3, 4 (2 is tUPS's default) | `RealAmplitudes`, `n_local_rzryrz_sca` and tUPS/pp-tUPS, JW |
 | Entangler topology | each family's own default ↔ `full` | `RealAmplitudes` and `n_local_rzryrz_sca`, JW, at 2 reps |
-| New ansatz family, layers | tUPS/pp-tUPS at 1, 2, 3, 4 layers (2 is the default) | JW |
 | Optimizer | `COBYLA`, `SPSA`, `ExcitationSolve` | `RealAmplitudes` (cheap) and `UCCSD` (where SPSA's `target_step`/`c` and ExcitationSolve's `frequencies` are tuned — see `opt_options_for` in `build_benchmark_matrix.py`) |
 | Method × TN-layers | `TN-VQE`/`TN` × `TN_Layers_Network` ∈ {1,2,3} (2 matters most) | `RealAmplitudes`, JW — `VQE` ignores `TN_Layers_Network` entirely, so it carries no rows in this axis |
 | Mapper × method × TN-layers | the same sweep, under mol_map_spinblock instead of JW | `RealAmplitudes` — does TN-VQE's advantage depend on Hamiltonian density? |
@@ -311,9 +310,10 @@ substantially: 120 → 52 for H2/6-31g, 1304 → 392 for H2O/6-31g CAS(4,4).
 - **The entangler-topology axis compares only one alternative, `full`,
   per family.** It answers "does topology matter at all", not "which
   topology is best".
-- **tUPS/pp-tUPS runs only under JW.** It is not yet part of the mapper
-  or optimizer axes; its own axis is layers (1–4, 2 default), not reps
-  or entanglement, which do not apply to it.
+- **tUPS/pp-tUPS is not part of the optimizer or entangler-topology
+  axes.** It shares the reps axis with the hardware-efficient families
+  (1–4 layers, 2 default) and the mapper axis, but has no entanglement
+  pattern to vary, and its own optimizer tuning is untested.
 - **UCCSD/JW is not run on H2O.** No pinned UCCSD/JW/H2O circuit exists
   (UCCSD's circuits are supplied by hand, not built — see [Ansätze](
   #ansätze)), and an earlier UCCSD-on-H2O run took excessive wall time;

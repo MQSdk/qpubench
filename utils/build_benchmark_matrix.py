@@ -2072,9 +2072,13 @@ def build_targeted_screen() -> list[dict[str, str]]:
                 extra_note=f"Mapper axis: {ansatz}, JW vs mol_map.",
             ))
 
-    # --- Ansatz reps, hardware-efficient families only (tested on the
-    # baseline cell alone) ---
-    for ansatz in ("RealAmplitudes", "n_local_rzryrz_sca"):
+    # --- Ansatz reps (tUPS/pp-tUPS: layers), tested on the baseline cell
+    # alone. tUPS is number-conserving and HF-initialized already (zero
+    # amplitudes), so it needs no entanglement axis of its own -- its
+    # "reps" is the tiling's own layer count, built by
+    # regenerate_spinblock_mol_map.py from the vendored
+    # _fermionic_ansatz.py (CompareVQEs/ansatze.py). ---
+    for ansatz in ("RealAmplitudes", "n_local_rzryrz_sca", "tUPS"):
         for r in CIRCUIT_REPS:
             rows.append(row(
                 mapper="JW", ansatz=ansatz, reps=r,
@@ -2088,20 +2092,6 @@ def build_targeted_screen() -> list[dict[str, str]]:
             mapper="JW", ansatz=ansatz, entanglement="full",
             extra_note=f"Entangler-topology axis: {ansatz} with 'full' "
                        "entanglement instead of its own default.",
-        ))
-
-    # --- New ansatz family: tUPS/pp-tUPS, built by
-    # regenerate_spinblock_mol_map.py from the vendored
-    # _fermionic_ansatz.py (CompareVQEs/ansatze.py) -- number-conserving
-    # and HF-initialized already, so it needs no entanglement or phi_init
-    # axis of its own. Its own axis is layers, tested on the baseline
-    # cell alone like the reps axis above; 2 layers is the default. ---
-    for layers in CIRCUIT_REPS:
-        rows.append(row(
-            mapper="JW", ansatz="tUPS", reps=layers,
-            extra_note=f"New ansatz family, layers axis: tUPS/pp-tUPS at "
-                       f"layers={layers}. Number-conserving and "
-                       "HF-initialized like UCCSD.",
         ))
 
     # --- Optimizer: COBYLA/SPSA/ExcitationSolve, on the baseline ansatz

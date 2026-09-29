@@ -44,6 +44,7 @@ import numpy as np
 import scipy.sparse as sparse
 from _ansatz_builders import qasm_stem
 from _fermionic_ansatz import pp_tups, reorder_mapped_hamiltonian, uccsd
+from build_benchmark_matrix import CIRCUIT_REPS
 from qiskit import qasm3
 from qiskit.quantum_info import SparsePauliOp, Statevector
 
@@ -53,10 +54,10 @@ _QASM_DIR = _REPO_ROOT / "data" / "qasm"
 
 NEW_MAPPER = "mol_map_spinblock"
 N_LAYERS = 2  # tUPS/pp-tUPS default, per instruction
-# The JW layers axis (build_targeted_screen's "New ansatz family" sweep)
-# mirrors CIRCUIT_REPS in build_benchmark_matrix.py -- kept as a literal
-# here rather than imported, since this stays a one-off local script.
-TUPS_LAYERS_SWEEP = [1, 2, 3, 4]
+# The JW layers axis is part of build_targeted_screen's own Ansatz-reps
+# axis now, so it sweeps the campaign's own CIRCUIT_REPS rather than a
+# second, driftable copy of the same list.
+TUPS_LAYERS_SWEEP = CIRCUIT_REPS
 
 # (molecule, basis, n_spatial, n_alpha, n_beta, known Hartree-Fock energy).
 # The HF energies are cross-checks against numbers already established
