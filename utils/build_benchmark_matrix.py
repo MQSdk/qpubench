@@ -339,7 +339,7 @@ OPT_OPTIONS = "{}"
 # re-run the affected rows without it.
 EXCITATIONSOLVE_UCCSD_FREQUENCIES = [1, 2]
 
-# --- SPSA + UCCSD: a smaller step for a steeper landscape -----------------
+# --- SPSA: a smaller step for a steep landscape at a sharp start ---------
 #
 # tn-vqe's SPSA defaults to target_step=0.1. On UCCSD that step overshoots:
 # the perturbed evaluations land far enough from the current point that the
@@ -354,13 +354,31 @@ EXCITATIONSOLVE_UCCSD_FREQUENCIES = [1, 2]
 # to *estimate* the gradient, separately from target_step's role in sizing
 # the *step* taken along it) is now pinned down too, to 0.2. Both are
 # starting values, not tuned optima.
-SPSA_UCCSD_TARGET_STEP = 0.01
-SPSA_UCCSD_C = 0.2
+#
+# Extended to RealAmplitudes and n_local_rzryrz_sca (SPSA_TUNED_ANSATZE)
+# once the same failure mode showed up on RealAmplitudes/SPSA real results
+# (case 25: first cost_history entry already 0.25 Ha above HF, diverges
+# from there, never recovers -- unlike UCCSD/SPSA at the same cell, which
+# also starts rough but does recover once tuned). The mechanism generalises:
+# COBYLA's own early per-parameter simplex probes on these same cells jump
+# 0.1-1.4 Ha within 1-2 evaluations regardless of ansatz, so the landscape
+# near a SHARP starting configuration -- hf-approx's exact 0/pi rotations
+# for the hardware-efficient families, UCCSD's and tUPS's exact reference
+# determinant (zero amplitudes) -- is steep rather than flat. tUPS is
+# included on that same reasoning, ahead of a real tUPS/SPSA result to
+# check it against: PHI_INIT_ZEROS_ANSATZE names UCCSD and tUPS as sharing
+# exactly this starting-point shape. Reusing UCCSD's own found values is
+# the same starting hypothesis for a mechanistically similar family, not
+# an independently tuned one. Re-run the affected rows and re-tune per
+# family if they still misbehave.
+SPSA_TARGET_STEP = 0.01
+SPSA_C = 0.2
+SPSA_TUNED_ANSATZE = {"UCCSD", "RealAmplitudes", "n_local_rzryrz_sca", "tUPS"}
 
 
 def opt_options_for(optimizer: str, ansatz: str, num_phi: int, num_theta: int) -> str:
-    """`Opt_Options` for one row: `{}` except for the two UCCSD workarounds
-    above.
+    """`Opt_Options` for one row: `{}` except for the SPSA/ExcitationSolve
+    workarounds above.
 
     num_theta is 0 on a `circuit` row (plain VQE, no tensor network) and
     on a `network` row phi itself is already 0, so the ExcitationSolve
@@ -370,10 +388,10 @@ def opt_options_for(optimizer: str, ansatz: str, num_phi: int, num_theta: int) -
     if optimizer == "ExcitationSolve" and ansatz == "UCCSD" and num_phi:
         entries = [EXCITATIONSOLVE_UCCSD_FREQUENCIES] * (num_theta + num_phi)
         return json.dumps({"frequencies": entries})
-    if optimizer == "SPSA" and ansatz == "UCCSD" and num_phi:
+    if optimizer == "SPSA" and ansatz in SPSA_TUNED_ANSATZE and num_phi:
         return json.dumps({
-            "target_step": SPSA_UCCSD_TARGET_STEP,
-            "c": SPSA_UCCSD_C,
+            "target_step": SPSA_TARGET_STEP,
+            "c": SPSA_C,
         })
     return OPT_OPTIONS
 # n_shots is a real TNQCOptInput field, so this is a pinned input rather
@@ -436,6 +454,14 @@ SIMPLEX_OVERHEAD = 2      # n+1 simplex points, +1 for the first real step;
                           # retained as the invariant the rule must never breach
 STAGE1_EVALS_PER_PARAM = 1.3   # ~50% of achievable descent, at every width
 STAGE2_EVALS_PER_PARAM = 4.0   # ~80%; stage 2 is where converged energies live
+
+# targeted_screen.csv's own budget: 38 rows, not the old factorial's
+# thousands, so it is affordable to run each one close to convergence
+# rather than screen it. ~95% on the synthetic objective -- the same
+# number STAGE0_EVALS_PER_PARAM uses for a different reason (a proxy for
+# the true minimum to score other multipliers against); here it is the
+# multiplier a real row is actually budgeted at.
+TARGETED_EVALS_PER_PARAM = 12.0
 
 # Stage 0 buys no QPU time, so its budget is set by what it has to MEASURE
 # rather than by what it costs.
@@ -828,9 +854,8 @@ def optimizer_iterations(
     `max(MIN_ITERATIONS, ceil(evals_per_param * n))`, so that every row
     reaches a comparable fraction of its own achievable descent rather
     than a fraction that shrinks with n.  The multiplier is the stage's:
-    stage 1 screens at STAGE1_EVALS_PER_PARAM, stage 2 converges at
-    STAGE2_EVALS_PER_PARAM, stage 0 calibrates both at
-    STAGE0_EVALS_PER_PARAM.  See MIN_ITERATIONS.
+    targeted_screen.csv runs each row close to convergence at
+    TARGETED_EVALS_PER_PARAM.  See MIN_ITERATIONS.
 
     `max_iterations` caps the result, which only stage 0 sets: it is the
     one stage whose budget is limited by simulation wall clock rather than
@@ -857,7 +882,11 @@ def stage_evals_per_param(stage: str) -> float:
     """The multiplier a stage's rows are budgeted at."""
     if stage.startswith("0"):
         return STAGE0_EVALS_PER_PARAM
-    return STAGE2_EVALS_PER_PARAM if stage.startswith("2") else STAGE1_EVALS_PER_PARAM
+    if stage.startswith("2"):
+        return STAGE2_EVALS_PER_PARAM
+    if stage == "targeted":
+        return TARGETED_EVALS_PER_PARAM
+    return STAGE1_EVALS_PER_PARAM
 
 
 def stage_max_iterations(stage: str) -> int | None:

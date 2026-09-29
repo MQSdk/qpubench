@@ -98,7 +98,7 @@ except the one deliberately crossed axis below.
 | Mapper | JW ↔ mol_map_spinblock | Every ansatz — `RealAmplitudes`, `n_local_rzryrz_sca`, `UCCSD`, tUPS/pp-tUPS — each run under both |
 | Ansatz reps (tUPS/pp-tUPS: layers) | 1, 2, 3, 4 | `RealAmplitudes`, `n_local_rzryrz_sca` and tUPS/pp-tUPS, JW |
 | Entangler topology | each family's own default ↔ `full` | `RealAmplitudes` and `n_local_rzryrz_sca`, JW, at 2 reps |
-| Optimizer | `COBYLA`, `SPSA`, `ExcitationSolve` | `RealAmplitudes` (cheap) and `UCCSD` (where SPSA's `target_step`/`c` and ExcitationSolve's `frequencies` are tuned — see `opt_options_for` in `build_benchmark_matrix.py`) |
+| Optimizer | `COBYLA`, `SPSA`, `ExcitationSolve` | `RealAmplitudes` (cheap; also where SPSA's `target_step`/`c` are tuned) and `UCCSD` (where SPSA is tuned too, and ExcitationSolve's `frequencies` — see `opt_options_for` in `build_benchmark_matrix.py`) |
 | Method × TN-layers | `TN-VQE`/`TN` × `TN_Layers_Network` ∈ {1,2,3} (2 matters most) | `RealAmplitudes`, JW — `VQE` ignores `TN_Layers_Network` entirely, so it carries no rows in this axis |
 | Mapper × method × TN-layers | the same sweep, under mol_map_spinblock instead of JW | `RealAmplitudes` — does TN-VQE's advantage depend on Hamiltonian density? |
 | Richer system | H2O/6-31g, under mol_map_spinblock and, on `RealAmplitudes` alone, under JW too (see [Known limitations](#known-limitations)) | `RealAmplitudes` and `UCCSD` |
@@ -282,8 +282,8 @@ substantially: 120 → 52 for H2/6-31g, 1304 → 392 for H2O/6-31g CAS(4,4).
 | `Ansatz_Reps` | Repetitions (or, for tUPS, layers) of the ansatz circuit |
 | `Entanglement` | Blank except on the entangler-topology axis's rows (`RealAmplitudes`/`n_local_rzryrz_sca` only), where it names the non-default entanglement |
 | `Backend_Platform` | `aer_simulator`, on every row |
-| `Optimizer`, `Opt_Options` | `COBYLA`, `SPSA` or `ExcitationSolve`. `Opt_Options` is the dictionary passed to `scipy.optimize.minimize` (or Cebule's own optimizer): `{}` except for SPSA/ExcitationSolve on `UCCSD`, tuned in `opt_options_for` (`build_benchmark_matrix.py`) |
-| `Quantum_Eval_Budget` | Quantum evaluations the row is allowed, held equal across optimizers: `max(30, ceil(1.3 × n_params))`, reaching roughly half of each row's achievable descent |
+| `Optimizer`, `Opt_Options` | `COBYLA`, `SPSA` or `ExcitationSolve`. `Opt_Options` is the dictionary passed to `scipy.optimize.minimize` (or Cebule's own optimizer): `{}` except for SPSA on `RealAmplitudes`/`n_local_rzryrz_sca`/`UCCSD`/`tUPS` and ExcitationSolve on `UCCSD`, tuned in `opt_options_for` (`build_benchmark_matrix.py`) |
+| `Quantum_Eval_Budget` | Quantum evaluations the row is allowed, held equal across optimizers: `max(30, ceil(12 × n_params))`, close to each row's own achievable descent — affordable because this file is 38 rows, not a full factorial |
 | `Quantum_Evals_Per_Iteration` | What one iteration of this row's optimizer spends of the budget: 1 for COBYLA, 2 for SPSA, `3 × n_phi` for ExcitationSolve — 0 wherever φ is frozen, since a θ-only change is served from cache |
 | `Cost_Evals_Per_Iteration` | Entries one iteration adds to `cost_history`, the axis convergence curves are aligned on |
 | `Iterations` | What `TNQCOptInput.n_iterations` receives |
@@ -325,10 +325,18 @@ substantially: 120 → 52 for H2/6-31g, 1304 → 392 for H2O/6-31g CAS(4,4).
   `hf_state_for`'s JW branch raises if `Active_Electrons` is odd; every
   cell this campaign runs is closed-shell, so this has not been
   exercised for an open-shell system.
-- **`ExcitationSolve`'s SPSA/frequency tuning is UCCSD-specific.**
-  `opt_options_for` special-cases `UCCSD` alone; `RealAmplitudes` under
-  `SPSA`/`ExcitationSolve` runs with `Opt_Options = "{}"`, unverified to
-  need no similar treatment.
+- **`ExcitationSolve`'s frequency tuning is UCCSD-specific.**
+  `opt_options_for` special-cases `UCCSD` alone, because the workaround is
+  for UCCSD's own two-frequency excitation angles; `RealAmplitudes` under
+  `ExcitationSolve` runs with `Opt_Options = "{}"`, unverified to need no
+  similar treatment. `SPSA`'s `target_step`/`c` tuning, by contrast, is
+  no longer UCCSD-only — `SPSA_TUNED_ANSATZE` covers `RealAmplitudes`,
+  `n_local_rzryrz_sca` and `tUPS` too, reusing UCCSD's own found values as
+  a starting hypothesis (real case 25 showed the untuned default diverging
+  on RealAmplitudes the same way it once did on UCCSD) rather than an
+  independently tuned one — tUPS shares no real SPSA result yet to check
+  it against, since this campaign has never generated a tUPS/SPSA row.
+  Re-check each family once its affected rows are (re-)run.
 
 ## Open decisions
 
