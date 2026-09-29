@@ -2133,9 +2133,11 @@ def build_targeted_screen() -> list[dict[str, str]]:
     # --- Richer system: H2O/6-31g. mol_map_spinblock at CAS(4,4) is 6
     # qubits; JW at the same active space is 8 -- feasible in width, so
     # it is included too, but only on RealAmplitudes (cheap). UCCSD/JW
-    # is not added here: no pinned UCCSD/JW/H2O circuit exists (UCCSD is
-    # supplied, not built -- see Ansatze), and an earlier UCCSD-on-H2O
-    # run took excessive wall time. ---
+    # is deliberately still not added here: a pinned circuit already
+    # exists (UCCSD_JW_8q_2r_4e.qasm, already used by stage 0's own
+    # H2O/CAS(4,4)/JW rows), but an earlier UCCSD-on-H2O run was slow
+    # enough that it is being held back pending confirmation the cost on
+    # this cell is acceptable. ---
     for ansatz in ("RealAmplitudes", "UCCSD"):
         rows.append(row(
             mapper="mol_map_spinblock", ansatz=ansatz, cell=h2o_6_31g,
@@ -2144,9 +2146,10 @@ def build_targeted_screen() -> list[dict[str, str]]:
     rows.append(row(
         mapper="JW", ansatz="RealAmplitudes", cell=h2o_6_31g,
         extra_note="Richer system: H2O/6-31g under JW too (CAS(4,4), 8 "
-                   "qubits). UCCSD/JW is deliberately not added -- no "
-                   "pinned circuit exists, and UCCSD on H2O has been "
-                   "slow to run before.",
+                   "qubits). UCCSD/JW is deliberately not added -- a "
+                   "pinned circuit exists, but UCCSD on H2O has been "
+                   "slow to run before and this cell's cost is not yet "
+                   "confirmed acceptable.",
     ))
 
     return rows

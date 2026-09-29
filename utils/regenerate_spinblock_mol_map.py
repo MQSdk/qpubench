@@ -1,6 +1,8 @@
 """Regenerate mol_map Hamiltonians and UCCSD/tUPS circuits under the
 spin-block ordering tUPS's efficiency depends on (spin_product_mapping in
-_fermionic_ansatz.py, vendored from CompareVQEs/ansatze.py).
+_fermionic_ansatz.py, vendored from CompareVQEs/ansatze.py). Also builds
+tUPS's own JW layers sweep, which needs no reordering but is not
+supplied by hand the way UCCSD's JW circuits are.
 
 Purely local: no new Cebule MOL_MAP submission. The existing committed
 hamiltonian_data/*_mapped.json already carries `mapping_matrix`, and
@@ -153,8 +155,9 @@ def main() -> None:
     # tUPS/JW: needs no reordering, but ansatze.py's own JW convention
     # (mode m -> qubit n_qubits-1-m) is the MIRROR of what this repo's
     # committed JW Hamiltonian files use (fixed back in September) --
-    # reverse_bits() compensates, exactly as the original UCCSD/JW
-    # circuits were compensated. Verified below, not assumed.
+    # reverse_bits() compensates, exactly as the already-pinned UCCSD/JW
+    # circuits were compensated when they were originally supplied.
+    # Verified below, not assumed.
     print("H2/6-31g JW tUPS layers sweep (UCCSD/JW is untouched):")
     jw_payload = json.loads((_HAMILTONIAN_DIR / "h2_6-31G_JW.json").read_text())
     H_jw = SparsePauliOp(jw_payload["h_operators"], jw_payload["h_coeff_values"])
