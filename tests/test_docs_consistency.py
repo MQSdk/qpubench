@@ -512,6 +512,13 @@ def _true_row_counts() -> set[int]:
         counts.add(len(module.build_stage2(
             selection, "EfficientSU2", "valence_cas", sweep,
         )))
+
+    # The targeted screen is generated the same way stage 0 is, and
+    # main()'s own number-then-dedupe pattern is what decides its real
+    # size -- the raw (pre-dedupe) list is not the count any prose cites.
+    targeted = module.build_targeted_screen()
+    module.assign_case_ids(targeted)
+    counts.add(len(module.dedupe_rows(targeted)))
     return counts
 
 

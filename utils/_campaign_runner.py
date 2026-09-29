@@ -30,7 +30,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "src"))
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
 import numpy as np
-from _ansatz_builders import PHI_INIT_SEED
+from _ansatz_builders import PHI_INIT_SEED, hf_approx_phi_init, hf_state_for
 
 from qpubench.schemas.mirrors.mqsdk_cebule import TNAnsatz, TNQCOptInput
 from qpubench.schemas.observable import SparsePauliObservable
@@ -79,6 +79,19 @@ def phi_init(run: dict[str, str]) -> list[float]:
     n = int(run["Num_Opt_Params_Phi"])
     if run["Phi_Init"] == "zeros":
         return [0.0] * n
+    # Mirrored, not imported -- see PHI_INIT_SEED's own comment. Kept as
+    # the literal build_benchmark_matrix.PHI_INIT_HF_APPROX defines.
+    if run["Phi_Init"] == "hf-approx":
+        num_qubits = int(run["N_Qubit"])
+        hf_state = hf_state_for(
+            run["Mapper"], run["Molecule"], run["Basis"],
+            int(run["Active_Electrons"]), num_qubits,
+        )
+        return hf_approx_phi_init(
+            run["Ansatz"], num_qubits, int(run["Ansatz_Reps"]),
+            hf_state, verified_qasm(run),
+            entanglement=run["Entanglement"] or None,
+        )
     return (2 * np.pi * np.random.default_rng(PHI_INIT_SEED).random(n)).tolist()
 
 
@@ -121,7 +134,7 @@ def to_cebule_operators(observable: Any) -> tuple[list[float], list[str]]:
 _FILE_MOLECULE = {"H2": "h2", "H2O": "water"}
 _FILE_BASIS = {"sto-3g": "sto3g", "6-31g": "6-31G", "cc-pvdz": "cc-pvdz",
                "cc-pvtz": "cc-pvtz", "def2-tzvp": "def2-tzvp", "qvSZP": "qvSZP"}
-_FILE_MAPPER = {"JW": "JW", "mol_map": "mapped"}
+_FILE_MAPPER = {"JW": "JW", "mol_map": "mapped", "mol_map_spinblock": "mapped_spinblock"}
 
 
 def hamiltonian_file(run: dict[str, str]) -> pathlib.Path | None:

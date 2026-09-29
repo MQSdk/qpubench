@@ -439,6 +439,101 @@ result: the classical-only value, the noiseless simulated value and the
 noise-model value, which is what allows an observed hardware error to be
 attributed between algorithmic limitation and device error.
 
+## The targeted screen
+
+`targeted_screen.csv` is a second, separate simulator-only file --
+`stage0_simulator_screen.csv` and its collected results are untouched --
+built after stage 0's full factorial made every fix this campaign needed
+(an optimizer's `opt_options`, a dropped ansatz, a Hamiltonian-convention
+change) apply to all 1152 rows at once rather than in a controlled,
+traceable way. Regenerated with
+
+```sh
+PYTHONPATH=src python utils/build_benchmark_matrix.py --stage targeted
+```
+
+**One baseline row** -- H2/6-31g, JW, `RealAmplitudes`, COBYLA, `circuit`
+mode, 2 repetitions -- and a set of named axes that each vary exactly one
+thing off it. Two axes are deliberately crossed rather than varied alone,
+because a specific question motivates it (mol_map's denser Hamiltonian
+against the mode/TN-layers axis, below); every other axis stands on its
+own. `build_targeted_screen()` in `utils/build_benchmark_matrix.py` is
+the source of truth for what each axis actually varies; this is a summary:
+
+| Axis | What varies | Held at the baseline |
+|---|---|---|
+| Mapper | JW ↔ mol_map_spinblock | RealAmplitudes, and separately UCCSD (the chemistry anchor) |
+| Ansatz reps | 1, 2, 3, 4 | RealAmplitudes and n_local_rzryrz_sca, JW |
+| Entangler topology | each family's own default ↔ `full` | RealAmplitudes and n_local_rzryrz_sca, JW, at 2 reps |
+| New ansatz family | tUPS/pp-tUPS, 2 layers | JW |
+| Optimizer | COBYLA, SPSA, ExcitationSolve | RealAmplitudes (cheap) and UCCSD (where SPSA's `target_step`/`c` and ExcitationSolve's `frequencies` were actually tuned) |
+| Mode × TN-layers | `both`/`network` × `TN_Layers_Network` ∈ {1,2,3} | RealAmplitudes, JW -- `circuit` mode ignores `TN_Layers_Network` entirely, so it carries no rows in this axis |
+| Mapper × mode × TN-layers | the same sweep, under mol_map_spinblock instead of JW | RealAmplitudes -- motivated: does TN-VQE's advantage over plain VQE depend on Hamiltonian density, which mol_map increases? |
+| Richer system | H2O/6-31g, mol_map_spinblock only (H2O/JW is the already-infeasible 16-qubit cell) | RealAmplitudes and UCCSD |
+
+`mol_map_spinblock` is a mapper value local to this file (never added to
+the global `MAPPERS` stage 0/1/2/3 read) -- see below.
+
+A row that coincides with an earlier one on every field but `Case_ID` and
+`Notes` (the reps=2 point of the reps axis IS the baseline, for instance)
+is numbered and then dropped, the same way `EXCLUDED_FROM_STAGE0` handles
+stage 0: every row gets a `Case_ID` first, so a collapsed duplicate
+leaves a gap rather than reshuffling anything after it. 32 rows,
+Case_IDs 1-35 with three gaps.
+
+**`RealAmplitudes` and `n_local_rzryrz_sca` start from an
+HF-approximating `phi_init`** (`Phi_Init="hf-approx"`) instead of a
+random draw, so a VQE/TN-VQE/network comparison is not confounded by an
+arbitrary starting point the way stage 0's was. Only the last rotation
+layer is set (π on each occupied qubit, 0 elsewhere) -- every earlier CX
+gate is controlled by a qubit still in `|0⟩`, hence the identity, so the
+state stays `|0...0⟩` untouched until that final layer, exact regardless
+of entanglement topology. Verified against RHF, both mappers, both
+families (`_ansatz_builders.hf_approx_phi_init`, backed by
+`_fermionic_ansatz.hf_parameters`). The reference state itself
+(`_ansatz_builders.hf_state_for`) is a formula for JW and data for
+mol_map_spinblock, from `regenerate_spinblock_mol_map.py`'s own printed
+`hf_state` -- not derivable by formula, since the reordering is data.
+UCCSD and tUPS need no such treatment: both are number-conserving and
+already HF-initialized at zero amplitudes.
+
+**tUPS/pp-tUPS** (Tiled Unitary Product State [7]) is a new ansatz
+family, built by `utils/regenerate_spinblock_mol_map.py` from
+`utils/_fermionic_ansatz.py` -- vendored (2026-09-29) from
+`CompareVQEs/ansatze.py`, which also supplies `spin_product_mapping`
+(below). It stays in `SUPPLIED_ANSATZE` for stem-naming purposes (a
+chemistry-dependent circuit, like UCCSD, not a `(qubits, reps)`-only
+one) even though it is now genuinely built, just by that dedicated
+script rather than `pin_qasm_ansatz.py`'s generic loop -- see
+`can_build`/`SUPPLIED_ANSATZE` in `_ansatz_builders.py`.
+
+**`mol_map_spinblock`: tUPS's efficiency (and UCCSD's, and the
+Hamiltonian's own Pauli-term count) depends on a specific spin
+ordering** the original MOL_MAP-derived encoding doesn't follow.
+`spin_product_mapping` reindexes an existing mapping matrix so alpha and
+beta spin-orbitals fall in contiguous blocks; `reorder_mapped_hamiltonian`
+applies the same change of basis to the Hamiltonian. Both are purely
+local recomputations from what `hamiltonian_data/*_mapped.json` already
+carries (`mapping_matrix`) -- no new Cebule MOL_MAP submission. Old
+mol_map data (`mapper == "mol_map"`, stage 0/1/2/3) is untouched;
+`targeted_screen.csv` alone uses the reordered
+`hamiltonian_data/*_mapped_spinblock.json` and `data/qasm/
+*_molmapspinblock_*.qasm`, under the distinct mapper value
+`mol_map_spinblock`, for the 2 chemistry cells it needs (H2/6-31g,
+H2O/6-31g's CAS(4,4)). Reordering dropped the Pauli-term count from 120
+to 52 (H2/6-31g) and 1304 to 392 (H2O/6-31g CAS(4,4)).
+
+One thing worth knowing if this is extended: the committed
+`mapping_matrix`'s row index is bit-reversed relative to a Qiskit-native
+computational-basis integer -- discovered, not assumed, when the
+naive reading gave a Hartree-Fock energy of 0 for H2O (RHF should be
+nowhere near that) while H2's case happened to pass regardless, because
+H2's HF row is a bit-palindrome. `regenerate_spinblock_mol_map.py`
+corrects this before using the matrix; nothing upstream of it (Cebule,
+`_campaign_runner.py`'s existing pass-through of `mapping_matrix`) ever
+treated the row index as a plain integer before, which is why this was
+never caught until now.
+
 ## QPU time: what a run costs, and what the 900 minutes buy
 
 The QPU time a run consumes is the product of two quantities measured
@@ -989,6 +1084,7 @@ basis gate on any current device.
 | `Active_Electrons`, `Active_Orbitals` | The space the Hamiltonian is built in |
 | `Mapper`, `Method`, `Ansatz` | See the table above |
 | `Ansatz_Reps` | Repetitions of the ansatz type, 2 on every stage-1 row and identical across the three methods, since the pinned QASM file fixes it |
+| `Entanglement` | Blank except on `targeted_screen.csv`'s entangler-topology rows, where it names the non-default entanglement (`RealAmplitudes`/`n_local_rzryrz_sca` only — see [The targeted screen](#the-targeted-screen)) |
 | `N_Qubit`, `N_Qubit_Source` | Qubit count and its provenance: `jw_exact`, `mol_map_run` or `mol_map_inferred` |
 | `Backend_Platform` | The device the row runs on, `ibm_aachen` throughout |
 | `Optimizer`, `Opt_Options` | `COBYLA` on every stage-1 row, matching the default of `TNQCOptInput.opt_method`; stage 0 also runs `SPSA` and `ExcitationSolve`, at the same evaluation budget. `Opt_Options` is the dictionary passed to `scipy.optimize.minimize`, and `{}` is a recorded choice, since `rhobeg` affects the evaluation count and therefore the row's cost |
@@ -1160,3 +1256,7 @@ documentation covers the submission path this campaign would use.
 6. Basis Set Exchange:
    [basissetexchange.org](https://www.basissetexchange.org/). The source
    of five of the six basis sets; the sixth, `qvSZP`, is Grimme's.
+7. H. G. A. Burton, "Accurate and gate-efficient quantum ansätze for
+   electronic states without adaptive optimization",
+   [Phys. Rev. Research 6, 023300](https://doi.org/10.1103/PhysRevResearch.6.023300).
+   The Tiled Unitary Product State (tUPS/pp-tUPS) ansatz.

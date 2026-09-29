@@ -53,7 +53,7 @@ import sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "src"))
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
-from _ansatz_builders import build_ansatz, can_build, qasm_stem
+from _ansatz_builders import SUPPLIED_ANSATZE, build_ansatz, can_build, qasm_stem
 
 _REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 _CAMPAIGN_DIR = _REPO_ROOT / "data" / "benchmarks" / "ibm_tn-vqe_qesem"
@@ -64,13 +64,15 @@ _CSV_PATH = _CAMPAIGN_DIR / "stage1_screening_matrix.csv"
 # families and a 16-qubit width that stage 1 never reaches.  Pinned when
 # the file exists, so the generator can be re-run in either order.
 _STAGE0_PATH = _CAMPAIGN_DIR / "stage0_simulator_screen.csv"
+_TARGETED_PATH = _CAMPAIGN_DIR / "targeted_screen.csv"
 _QASM_DIR = _REPO_ROOT / "data" / "qasm"
 
 
 def circuit_shapes(
     rows: list[dict[str, str]],
-) -> set[tuple[str, int, int, str, int, int]]:
-    """The distinct (ansatz, qubits, reps, mapper, electrons, orbitals) run.
+) -> set[tuple[str, int, int, str, int, int, str]]:
+    """The distinct (ansatz, qubits, reps, mapper, electrons, orbitals,
+    entanglement) run.
 
     Every row, not only the TN-VQE ones. A comparison between VQE and
     TN-VQE is only a comparison if both sides' circuits are fixed, and a
@@ -84,39 +86,46 @@ def circuit_shapes(
     phi)` -- so the circuit they freeze is part of what defines them.
 
     Mapper, electrons and orbitals are zeroed off the mapper-independent
-    families, matching `qasm_stem`: they are fixed by (qubits, reps)
-    alone, so carrying the rest would make one circuit look like several
-    and write the same file once per molecule that reaches that width.
+    families, matching `qasm_stem`: they are fixed by (qubits, reps,
+    entanglement) alone, so carrying the rest would make one circuit look
+    like several and write the same file once per molecule that reaches
+    that width. `Entanglement` stays "" (never None) where the column is
+    blank, so shapes differing only there stay comparable for `sorted()`
+    below; qasm_path/write_pinned_qasm treat "" as "each family's own
+    default" the same way None does in qasm_stem/build_ansatz.
     """
     shapes = set()
     for row in rows:
         if not (row["Ansatz"] and row["N_Qubit"]):
             continue
-        chemistry = row["Ansatz"] == "UCCSD"
+        supplied = row["Ansatz"] in SUPPLIED_ANSATZE
+        entanglement = row.get("Entanglement") or ""
         shapes.add((
             row["Ansatz"], int(row["N_Qubit"]), int(row["Ansatz_Reps"]),
-            row["Mapper"] if chemistry else "JW",
-            int(row["Active_Electrons"]) if chemistry else 0,
-            int(row["Active_Orbitals"]) if chemistry else 0,
+            row["Mapper"] if supplied else "JW",
+            int(row["Active_Electrons"]) if supplied else 0,
+            int(row["Active_Orbitals"]) if supplied else 0,
+            entanglement,
         ))
     return shapes
 
 
 def qasm_path(
     ansatz: str, num_qubits: int, reps: int, mapper: str = "JW",
-    num_electrons: int = 0, num_orbitals: int = 0,
+    num_electrons: int = 0, num_orbitals: int = 0, entanglement: str = "",
 ) -> pathlib.Path:
     """Where one circuit's pinned QASM lives.  See `qasm_stem`."""
     stem = qasm_stem(
         ansatz, num_qubits, reps, mapper=mapper,
         num_electrons=num_electrons, num_orbitals=num_orbitals,
+        entanglement=entanglement or None,
     )
     return _QASM_DIR / f"{stem}.qasm"
 
 
 def write_pinned_qasm(
     ansatz: str, num_qubits: int, reps: int, mapper: str = "JW",
-    num_electrons: int = 0, num_orbitals: int = 0,
+    num_electrons: int = 0, num_orbitals: int = 0, entanglement: str = "",
 ) -> tuple[pathlib.Path, str]:
     """Write one circuit as OpenQASM 3.0, parameters left free; return
     (path, sha256 prefix).
@@ -137,10 +146,12 @@ def write_pinned_qasm(
 
     circuit = build_ansatz(
         ansatz, num_qubits, reps=reps, num_electrons=num_electrons,
-        parameterize=True,
+        parameterize=True, entanglement=entanglement or None,
     )
 
-    path = qasm_path(ansatz, num_qubits, reps, mapper, num_electrons, num_orbitals)
+    path = qasm_path(
+        ansatz, num_qubits, reps, mapper, num_electrons, num_orbitals, entanglement,
+    )
     # UTF-8 explicitly, not the locale default: an unbound dump names its
     # parameters `input float[64] _{θ}_0_;`, so these files are not pure
     # ASCII and must not depend on the writer's locale.
@@ -150,7 +161,7 @@ def write_pinned_qasm(
 
 def main() -> None:
     _QASM_DIR.mkdir(parents=True, exist_ok=True)
-    sources = [p for p in (_CSV_PATH, _STAGE0_PATH) if p.exists()]
+    sources = [p for p in (_CSV_PATH, _STAGE0_PATH, _TARGETED_PATH) if p.exists()]
     rows: list[dict[str, str]] = []
     for path in sources:
         with path.open() as f:
@@ -169,14 +180,16 @@ def main() -> None:
     # campaign runs, and deleting it would be the worst kind of tidying.
     expected: set[pathlib.Path] = set()
     supplied: list[pathlib.Path] = []
-    for ansatz, num_qubits, reps, mapper, num_electrons, num_orbitals in shapes:
-        path = qasm_path(ansatz, num_qubits, reps, mapper, num_electrons, num_orbitals)
+    for ansatz, num_qubits, reps, mapper, num_electrons, num_orbitals, entanglement in shapes:
+        path = qasm_path(
+            ansatz, num_qubits, reps, mapper, num_electrons, num_orbitals, entanglement,
+        )
         expected.add(path)
         if not can_build(ansatz, mapper):
             supplied.append(path)
             continue
         _, digest = write_pinned_qasm(
-            ansatz, num_qubits, reps, mapper, num_electrons, num_orbitals,
+            ansatz, num_qubits, reps, mapper, num_electrons, num_orbitals, entanglement,
         )
         print(f"  {path.relative_to(_REPO_ROOT)}  sha256:{digest}")
 

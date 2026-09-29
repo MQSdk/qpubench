@@ -87,6 +87,9 @@ _REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 _CAMPAIGN_DIR = _REPO_ROOT / "data" / "benchmarks" / "ibm_tn-vqe_qesem"
 _STAGE0_PATH = _CAMPAIGN_DIR / "stage0_simulator_screen.csv"
 _STAGE1_PATH = _CAMPAIGN_DIR / "stage1_screening_matrix.csv"
+# A new, separate file, not a replacement for stage0_simulator_screen.csv
+# -- see build_targeted_screen().
+_TARGETED_PATH = _CAMPAIGN_DIR / "targeted_screen.csv"
 _STAGE2_PATH = _CAMPAIGN_DIR / "stage2_deep_sweep.csv"
 _STAGE3_PATH = _CAMPAIGN_DIR / "stage3_qesem_refinement.csv"
 _QASM_DIR = _REPO_ROOT / "data" / "qasm"
@@ -873,7 +876,18 @@ PHI_INIT_SEED = 20260811
 PHI_INIT_ZEROS = "zeros"
 PHI_INIT_RANDOM = f"random(seed={PHI_INIT_SEED})"
 # Families for which zero is the reference state rather than a barren one.
-PHI_INIT_ZEROS_ANSATZE = {"UCCSD"}
+# tUPS is number-conserving and HF-initialized the same way UCCSD is
+# (supplied pinned, zero amplitudes = HF exactly), so it takes this branch
+# too.
+PHI_INIT_ZEROS_ANSATZE = {"UCCSD", "tUPS"}
+# The hardware-efficient families' own reference state approximates HF
+# instead of starting from an arbitrary random point -- see
+# _ansatz_builders.hf_approx_phi_init. `_row()`'s `phi_init_tag` argument
+# names this explicitly per call rather than keying it off `ansatz` the
+# way PHI_INIT_ZEROS_ANSATZE does, because unlike UCCSD's zero-init this
+# needs occupied-qubit information (mapper, molecule, basis, electrons)
+# that only the caller building a specific row has to hand.
+PHI_INIT_HF_APPROX = "hf-approx"
 
 # --- Measurement circuits per cost-function evaluation -------------------
 #
@@ -925,6 +939,11 @@ EXPVALS_PER_ITER = {
     ("mol_map", "H2", 6): (364, "hamiltonian_file"),
     ("mol_map", "H2", 7): (1322, "hamiltonian_file"),
     ("mol_map", "H2O", 6): (233, "hamiltonian_file"),
+    # targeted_screen.csv only: the spin-block reordering's own Pauli-term
+    # count, from regenerate_spinblock_mol_map.py -- down from 120 and
+    # 1304 respectively under the old mol_map ordering.
+    ("mol_map_spinblock", "H2", 4): (52, "hamiltonian_file"),
+    ("mol_map_spinblock", "H2O", 6): (392, "hamiltonian_file"),
 }
 
 NETWORK_NO_MEASUREMENT = "n/a (network mode)"
@@ -968,6 +987,7 @@ FIELDNAMES = [
     "Num_Electrons",
     "Basis", "Basis_Source", "Active_Space", "Active_Electrons", "Active_Orbitals",
     "Mapper", "N_Qubit", "N_Qubit_Source", "Method", "Ansatz", "Ansatz_Reps",
+    "Entanglement",
     "Backend_Platform", "Optimizer", "Opt_Options",
     "Quantum_Eval_Budget", "Quantum_Evals_Per_Iteration",
     "Cost_Evals_Per_Iteration", "Iterations", "Shots",
@@ -997,10 +1017,33 @@ def qiskit_version() -> str:
         return ""
 
 
+# mol_map_spinblock's qubit count is data (regenerate_spinblock_mol_map.py's
+# own printed D'.shape), not a formula -- count_qubits/is_confirmed know
+# only the OLD mol_map ordering. Keyed on (electrons, orbitals) rather than
+# (molecule, basis) to match qubit_count's own signature; the 2 cells this
+# campaign uses don't collide.
+MOL_MAP_SPINBLOCK_QUBITS: dict[tuple[int, int], int] = {
+    (2, 4): 4,   # H2/6-31g
+    (4, 4): 6,   # H2O/6-31g CAS(4,4)
+}
+
+
 def qubit_count(mapper: str, active_electrons: int, active_orbitals: int) -> tuple[int, str]:
     """(qubits, provenance) for one active space under one mapper."""
     if mapper == "JW":
         return 2 * active_orbitals, "jw_exact"
+    if mapper == "mol_map_spinblock":
+        try:
+            return (
+                MOL_MAP_SPINBLOCK_QUBITS[(active_electrons, active_orbitals)],
+                "mol_map_spinblock_computed",
+            )
+        except KeyError:
+            raise KeyError(
+                f"no mol_map_spinblock qubit count for {active_electrons}e/"
+                f"{active_orbitals}o; add it to MOL_MAP_SPINBLOCK_QUBITS "
+                f"(see regenerate_spinblock_mol_map.py)"
+            ) from None
     n_alpha = n_beta = active_electrons // 2
     n = count_qubits(active_orbitals, n_alpha, n_beta)
     assert n is not None
@@ -1089,7 +1132,7 @@ def stage_max_iterations(stage: str) -> int | None:
 
 def circuit_parameter_count(
     ansatz: str, num_qubits: int, reps: int, num_electrons: int | None = None,
-    mapper: str = "JW", num_orbitals: int = 0,
+    mapper: str = "JW", num_orbitals: int = 0, entanglement: str | None = None,
 ) -> str:
     """Circuit-side (phi) parameter count, where the ansatz fixes it.
 
@@ -1098,12 +1141,15 @@ def circuit_parameter_count(
     recording one number for both is how this column came to understate
     every TN row by 50%.
 
-    UCCSD is read off its pinned file rather than derived, because its
-    circuit is supplied rather than built -- see `pinned_parameter_count`.
-    The hardware-efficient families are derived, and every formula below
-    was verified against the built circuit's own `num_parameters`.
+    UCCSD and tUPS (SUPPLIED_ANSATZE) are read off their pinned file
+    rather than derived, because their circuits are supplied rather than
+    built -- see `pinned_parameter_count`. The hardware-efficient families
+    are derived, and every formula below was verified against the built
+    circuit's own `num_parameters`; `entanglement` never changes the count
+    for them, only the CX pattern, so it plays no part in these formulas
+    -- it only affects which pinned file `qasm_stem` names.
     """
-    if ansatz == "UCCSD":
+    if ansatz in ("UCCSD", "tUPS"):
         stem = qasm_stem(
             ansatz, num_qubits, reps, mapper=mapper,
             num_electrons=num_electrons or 0, num_orbitals=num_orbitals,
@@ -1131,7 +1177,7 @@ def circuit_parameter_count(
 
 def qasm_ansatz_pin(
     ansatz: str, num_qubits: int, reps: int, num_electrons: int,
-    mapper: str = "JW", num_orbitals: int = 0,
+    mapper: str = "JW", num_orbitals: int = 0, entanglement: str | None = None,
 ) -> tuple[str, str]:
     """(path, sha256 prefix) of the pinned QASM circuit, if one exists.
 
@@ -1163,6 +1209,7 @@ def qasm_ansatz_pin(
     stem = qasm_stem(
         ansatz, num_qubits, reps, mapper=mapper,
         num_electrons=num_electrons, num_orbitals=num_orbitals,
+        entanglement=entanglement,
     )
     path = _QASM_DIR / f"{stem}.qasm"
     if not path.exists():
@@ -1279,6 +1326,8 @@ def _row(
     qesem_execution_mode: str = NOT_QESEM,
     refines_case_id: str = "",
     converged_params: tuple[str, str] = ("", ""),
+    entanglement: str | None = None,
+    phi_init_tag: str | None = None,
 ) -> dict[str, str]:
     num_qubits, source = qubit_count(mapper, active_electrons, active_orbitals)
     notes = [_qubit_note(mapper, source, mol.name, basis)]
@@ -1303,9 +1352,11 @@ def _row(
     takes_measurements = optimization_mode != "network"
     qasm_file, qasm_hash = qasm_ansatz_pin(
         ansatz, num_qubits, reps, active_electrons, mapper, active_orbitals,
+        entanglement,
     )
     phi_params = circuit_parameter_count(
         ansatz, num_qubits, reps, active_electrons, mapper, active_orbitals,
+        entanglement,
     )
     # Theta is fixed by the inputs, unlike Num_ExpVals_Per_Iter: the
     # network is E (O E)^n_layers, so the node count is
@@ -1362,7 +1413,7 @@ def _row(
     # share an ansatz start from the same phi, and so does the `network`
     # control that freezes it.  Nothing here reads `method` or
     # `optimization_mode`, which is the point.
-    phi_init = (
+    phi_init = phi_init_tag if phi_init_tag is not None else (
         PHI_INIT_ZEROS if ansatz in PHI_INIT_ZEROS_ANSATZE else PHI_INIT_RANDOM
     )
     return {
@@ -1384,6 +1435,7 @@ def _row(
         "Method": method,
         "Ansatz": ansatz,
         "Ansatz_Reps": str(reps),
+        "Entanglement": entanglement or "",
         "Backend_Platform": (
             backend_platform
             or (BACKEND_PLATFORM_TN if is_tn else BACKEND_PLATFORM_VQE)
@@ -1940,6 +1992,193 @@ def build_stage3(
     return rows
 
 
+# Ansatze whose reference state approximates HF instead of starting random
+# -- see _ansatz_builders.hf_approx_phi_init and PHI_INIT_HF_APPROX.
+HF_APPROX_ANSATZE = {"RealAmplitudes", "n_local_rzryrz_sca"}
+
+
+def build_targeted_screen() -> list[dict[str, str]]:
+    """One baseline row, and a set of named axes that each vary exactly
+    one thing off it (occasionally two, only where a specific question
+    motivates the crossing).
+
+    Replaces stage 0's full factorial for the questions this campaign is
+    actually for: JW vs mol_map, ansatz variety (including tUPS), VQE vs
+    TN-VQE vs the classical-only network control with a TN-layers sweep,
+    and optimizer comparison -- without the factorial's combinatorial
+    blowup, and without touching stage0_simulator_screen.csv or its
+    results, which stay as historical record.
+
+    Rows that coincide with an earlier one on every field but Case_ID and
+    Notes (e.g. the reps=2 point of the reps sweep IS the baseline) are
+    left for `main()` to number and then collapse, the same
+    number-then-filter pattern EXCLUDED_FROM_STAGE0 established: every
+    row gets a Case_ID first, and only entries after the first occurrence
+    of a shape are dropped, leaving gaps rather than reshuffling anything.
+    """
+    h2 = next(m for m in MOLECULES if m.name == "H2")
+    h2o = next(m for m in MOLECULES if m.name == "H2O")
+    reps = STAGE1_TN_REFERENCE["ansatz_reps"]         # 2, the baseline's own reps
+    tn_ansatz = STAGE1_TN_REFERENCE["tn_ansatz"].value
+    backend = "aer_simulator"
+    # [1, 2, 3]: TN_LAYERS_NETWORK's own sweep, minus the 0-layer edge case.
+    tn_layers_sweep = TN_LAYERS_NETWORK[1:]
+
+    def cell(mol: Molecule, basis: str) -> dict:
+        space, electrons, orbitals, _ = stage1_active_space(mol, basis)
+        return dict(
+            mol=mol, basis=basis, active_space=space,
+            active_electrons=electrons, active_orbitals=orbitals,
+        )
+
+    h2_6_31g = cell(h2, "6-31g")
+    h2o_6_31g = cell(h2o, "6-31g")
+    # mol_map_spinblock is local to this campaign (see
+    # regenerate_spinblock_mol_map.py) and isn't in the global
+    # STAGE1_MEASUREMENT, which stage 1 also reads -- extended here rather
+    # than there so stage 1 stays untouched.
+    measurement_for = {**STAGE1_MEASUREMENT, "mol_map_spinblock": "grouped"}
+
+    def row(
+        *, mapper: str, ansatz: str, cell: dict = h2_6_31g, reps: int = reps,
+        optimizer: str = OPTIMIZER, mode: str = "circuit",
+        layers_network: int | None = None, entanglement: str | None = None,
+        extra_note: str = "",
+    ) -> dict[str, str]:
+        return _row(
+            stage="targeted", **cell, mapper=mapper,
+            method="VQE" if mode == "circuit" else "TN-VQE",
+            ansatz=ansatz, reps=reps, measurement=measurement_for[mapper],
+            layers_network=layers_network,
+            tn_ansatz=NOT_TN if mode == "circuit" else tn_ansatz,
+            optimization_mode=mode, optimizer=optimizer,
+            backend_platform=backend, entanglement=entanglement,
+            phi_init_tag=PHI_INIT_HF_APPROX if ansatz in HF_APPROX_ANSATZE else None,
+            extra_note=extra_note,
+        )
+
+    rows: list[dict[str, str]] = []
+
+    # --- Baseline ---
+    rows.append(row(
+        mapper="JW", ansatz="RealAmplitudes",
+        extra_note="Baseline row: every other row in this campaign is one "
+                    "deliberate step away from this.",
+    ))
+
+    # --- Mapper: JW <-> mol_map, on the baseline ansatz and on the
+    # chemistry anchor (UCCSD's own mapper comparison is the one that
+    # matters chemically; RealAmplitudes' is the cheap sanity check).
+    # mol_map here means mol_map_spinblock throughout this file -- see
+    # regenerate_spinblock_mol_map.py -- not stage 0/1/2/3's plain
+    # mol_map, which this campaign never touches. ---
+    rows.append(row(
+        mapper="mol_map_spinblock", ansatz="RealAmplitudes",
+        extra_note="Mapper axis, off the baseline: JW vs mol_map.",
+    ))
+    for mapper in ("JW", "mol_map_spinblock"):
+        rows.append(row(
+            mapper=mapper, ansatz="UCCSD",
+            extra_note="Mapper axis on the chemistry anchor: JW vs mol_map.",
+        ))
+
+    # --- Ansatz reps, hardware-efficient families only (tested on the
+    # baseline cell alone) ---
+    for ansatz in ("RealAmplitudes", "n_local_rzryrz_sca"):
+        for r in CIRCUIT_REPS:
+            rows.append(row(
+                mapper="JW", ansatz=ansatz, reps=r,
+                extra_note=f"Ansatz-reps axis: {ansatz} at reps={r}.",
+            ))
+
+    # --- Entangler topology: each family's own default vs "full", at the
+    # baseline's own reps ---
+    for ansatz in ("RealAmplitudes", "n_local_rzryrz_sca"):
+        rows.append(row(
+            mapper="JW", ansatz=ansatz, entanglement="full",
+            extra_note=f"Entangler-topology axis: {ansatz} with 'full' "
+                       "entanglement instead of its own default.",
+        ))
+
+    # --- New ansatz family: tUPS/pp-tUPS, built by
+    # regenerate_spinblock_mol_map.py from the vendored
+    # _fermionic_ansatz.py (CompareVQEs/ansatze.py) -- number-conserving
+    # and HF-initialized already, so it needs no entanglement or phi_init
+    # axis of its own. 2 layers is the instructed default. ---
+    rows.append(row(
+        mapper="JW", ansatz="tUPS", reps=2,
+        extra_note="New ansatz family: tUPS/pp-tUPS, number-conserving "
+                   "and HF-initialized like UCCSD.",
+    ))
+
+    # --- Optimizer: COBYLA/SPSA/ExcitationSolve, on the baseline ansatz
+    # (cheap, no known workaround needed) and on UCCSD (where SPSA's
+    # target_step/c and ExcitationSolve's frequencies were actually
+    # tuned -- see opt_options_for) ---
+    for ansatz in ("RealAmplitudes", "UCCSD"):
+        for optimizer in OPTIMIZERS:
+            rows.append(row(
+                mapper="JW", ansatz=ansatz, optimizer=optimizer,
+                extra_note=f"Optimizer axis: {optimizer} on {ansatz}.",
+            ))
+
+    # --- Mode x TN-layers: circuit mode ignores TN_Layers_Network
+    # entirely, so only both/network vary it, on the baseline ---
+    for mode in ("both", "network"):
+        for layers in tn_layers_sweep:
+            rows.append(row(
+                mapper="JW", ansatz="RealAmplitudes", mode=mode,
+                layers_network=layers,
+                extra_note=f"Mode x TN-layers axis: {mode} mode at "
+                           f"TN_Layers_Network={layers}.",
+            ))
+
+    # --- Motivated crossing: does TN-VQE's advantage over plain VQE
+    # depend on Hamiltonian density, which mol_map increases? Repeats the
+    # mode x TN-layers sweep under mol_map rather than JW. ---
+    for mode in ("both", "network"):
+        for layers in tn_layers_sweep:
+            rows.append(row(
+                mapper="mol_map_spinblock", ansatz="RealAmplitudes", mode=mode,
+                layers_network=layers,
+                extra_note="Motivated crossing (mapper x mode x TN-layers): "
+                           "does TN-VQE's advantage depend on Hamiltonian "
+                           f"density? {mode} mode at TN_Layers_Network={layers}, "
+                           "mol_map.",
+            ))
+
+    # --- Richer system: H2O/6-31g, mol_map only -- H2O/JW is the
+    # already-known-infeasible 16-qubit/64 GiB cell ---
+    for ansatz in ("RealAmplitudes", "UCCSD"):
+        rows.append(row(
+            mapper="mol_map_spinblock", ansatz=ansatz, cell=h2o_6_31g,
+            extra_note="Richer system: H2O/6-31g, mol_map only (H2O/JW is "
+                       "the known-infeasible 16-qubit cell).",
+        ))
+
+    return rows
+
+
+def dedupe_rows(rows: list[dict[str, str]]) -> list[dict[str, str]]:
+    """Keep the first occurrence of each distinct row, by every field but
+    Case_ID and Notes (whose `extra_note` differs per axis even when the
+    row it produces is identical to one from another axis).
+
+    Call AFTER `assign_case_ids`, matching the EXCLUDED_FROM_STAGE0
+    pattern: number everything first, so a dropped duplicate leaves a gap
+    rather than shifting any other row's Case_ID.
+    """
+    seen: set[tuple[str, ...]] = set()
+    kept = []
+    for row in rows:
+        key = tuple(v for k, v in row.items() if k not in ("Case_ID", "Notes"))
+        if key in seen:
+            continue
+        seen.add(key)
+        kept.append(row)
+    return kept
+
+
 def assign_case_ids(rows: list[dict[str, str]]) -> None:
     """Number rows 1..N by position, in place.  See EXCLUDED_FROM_STAGE0:
     call this BEFORE dropping any row from the list that will be written,
@@ -1965,7 +2204,9 @@ def write_csv(
 def summarize(rows: list[dict[str, str]]) -> None:
     qubits = sorted({int(r["N_Qubit"]) for r in rows})
     print(f"  {len(rows)} rows, qubit counts {qubits[0]}-{qubits[-1]}")
-    for mapper in MAPPERS:
+    # Every mapper actually present, not just MAPPERS -- targeted_screen.csv
+    # also carries mol_map_spinblock, which isn't in the global list.
+    for mapper in sorted({r["Mapper"] for r in rows}):
         subset = [r for r in rows if r["Mapper"] == mapper]
         inferred = sum(1 for r in subset if r["N_Qubit_Source"] == "mol_map_inferred")
         suffix = f" ({inferred} qubit counts inferred, not from a real MOL_MAP run)" if inferred else ""
@@ -2065,7 +2306,9 @@ def _parse_selection(pairs: list[str]) -> dict[str, str]:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--stage", choices=["0", "1", "2", "3"], default="1")
+    parser.add_argument(
+        "--stage", choices=["0", "1", "2", "3", "targeted"], default="1",
+    )
     parser.add_argument(
         "--select", action="append", default=[], metavar="MOLECULE=BASIS",
         help="stage 2 only: basis set carried forward from stage-1 results",
@@ -2127,6 +2370,12 @@ def main() -> None:
     elif args.stage == "1":
         rows = build_stage1()
         path = args.output or _STAGE1_PATH
+    elif args.stage == "targeted":
+        rows = build_targeted_screen()
+        assign_case_ids(rows)
+        rows = dedupe_rows(rows)
+        renumber = False
+        path = args.output or _TARGETED_PATH
     elif args.stage == "3":
         rows = build_stage3(
             _read_source_matrix(args.source),

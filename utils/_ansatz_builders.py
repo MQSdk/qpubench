@@ -79,11 +79,18 @@ SUPPORTED_ANSATZE = (
     "n_local_rzryrz_sca",
     "excitation_preserving_linear",
     "UCCSD",
+    "tUPS",
 )
+
+# Ansatze whose circuit is supplied as pinned QASM rather than built here --
+# both need a reference determinant and an occupied/virtual split the way
+# UCCSD does (tUPS is number-conserving and HF-initialized the same way),
+# so both depend on mapper and electron count, not just (qubits, reps).
+SUPPLIED_ANSATZE = {"UCCSD", "tUPS"}
 
 # Families whose circuit is fixed by (qubits, reps) alone, so that two rows
 # reaching the same width share one pinned file however they got there.
-_MAPPER_INDEPENDENT = tuple(a for a in SUPPORTED_ANSATZE if a != "UCCSD")
+_MAPPER_INDEPENDENT = tuple(a for a in SUPPORTED_ANSATZE if a not in SUPPLIED_ANSATZE)
 
 # THE CAMPAIGN'S UCCSD CIRCUITS ARE SUPPLIED, NOT BUILT HERE -- under
 # either mapper.  `uccsd()` below builds the GENERALIZED ansatz, one
@@ -140,31 +147,39 @@ UCCSD_BUILDABLE_MAPPERS: tuple[str, ...] = ()
 def can_build(ansatz: str, mapper: str = "JW") -> bool:
     """Whether `build_ansatz` may construct this circuit for the campaign.
 
-    False for UCCSD under every mapper -- see UCCSD_BUILDABLE_MAPPERS.
-    `uccsd()` itself still works, and `estimate_ibm_cost.py` still uses
-    it; what this governs is whether a pinned campaign file may be
-    generated from it.
+    False for UCCSD under every mapper -- see UCCSD_BUILDABLE_MAPPERS --
+    and False for every SUPPLIED_ANSATZE for the same reason: `uccsd()`
+    itself still works and `estimate_ibm_cost.py` still uses it, but what
+    this governs is whether a pinned campaign file may be generated here;
+    tUPS has no local builder at all, supplied or not.
     """
     if ansatz == "UCCSD":
         return mapper in UCCSD_BUILDABLE_MAPPERS
+    if ansatz in SUPPLIED_ANSATZE:
+        return False
     return ansatz in SUPPORTED_ANSATZE
 
 
 def qasm_stem(
     ansatz: str, num_qubits: int, reps: int, *, mapper: str = "JW",
-    num_electrons: int = 0, num_orbitals: int = 0,
+    num_electrons: int = 0, num_orbitals: int = 0, entanglement: str | None = None,
 ) -> str:
     """The filename stem identifying one pinned circuit.
 
     The stem lists exactly what the circuit depends on, and nothing else,
     so that two rows share a file when and only when they share a circuit.
 
-    The hardware-efficient families depend on (qubits, reps): a ring of CX
-    and a stack of rotation layers is the same object whichever mapper
-    produced the register, so their stem carries neither the mapper nor the
-    electron count.
+    The hardware-efficient families depend on (qubits, reps, entanglement):
+    a ring of CX and a stack of rotation layers is the same object
+    whichever mapper produced the register, so their stem carries neither
+    the mapper nor the electron count. `entanglement=None` (each family's
+    own DEFAULT_ENTANGLEMENT) is left OUT of the stem -- that is the common
+    case, and every file pinned before this parameter existed already
+    matches it -- an alternate topology is spelled out so it pins to its
+    own file instead of colliding with the default one.
 
-    UCCSD depends on more, and on different things per mapper:
+    UCCSD and tUPS (SUPPLIED_ANSATZE) depend on more, and on different
+    things per mapper:
 
       JW       qubits are spin orbitals, so (qubits, electrons) fixes the
                occupied/virtual split and therefore the excitation pool.
@@ -175,7 +190,7 @@ def qasm_stem(
                H2O.  So the orbital count is load-bearing here and is in
                the stem.
 
-    The mapper is named on every UCCSD file even where the orbital count
+    The mapper is named on every such file even where the orbital count
     would already separate them.  A JW UCCSD and a mol_map UCCSD are not
     the same kind of object -- one acts on spin orbitals, the other on a
     determinant index -- and a stem that let them collide would surface as
@@ -183,11 +198,27 @@ def qasm_stem(
     than as the name clash it is.
     """
     if ansatz in _MAPPER_INDEPENDENT:
-        return f"{ansatz}_{num_qubits}q_{reps}r"
+        stem = f"{ansatz}_{num_qubits}q_{reps}r"
+        default = DEFAULT_ENTANGLEMENT.get(ansatz)
+        if entanglement is not None and entanglement != default:
+            stem += f"_{entanglement}"
+        return stem
     stem = f"{ansatz}_{mapper.replace('_', '')}_{num_qubits}q_{reps}r_{num_electrons}e"
     if mapper != "JW":
         stem += f"_{num_orbitals}o"
     return stem
+
+
+# Each hardware-efficient family's own default topology -- what it builds
+# when `build_ansatz` is asked for entanglement=None, and what `qasm_stem`
+# leaves OUT of the filename since it is the common case. An alternate
+# topology (e.g. "full") is spelled out in the stem so it pins to its own
+# file rather than colliding with the default one at the same (qubits, reps).
+DEFAULT_ENTANGLEMENT = {
+    "RealAmplitudes": "reverse_linear",
+    "EfficientSU2_circular": "circular",
+    "n_local_rzryrz_sca": "sca",
+}
 
 
 def build_ansatz(
@@ -197,6 +228,7 @@ def build_ansatz(
     reps: int = 1,
     num_electrons: int | None = None,
     parameterize: bool = False,
+    entanglement: str | None = None,
 ) -> "QuantumCircuit":
     """Build `ansatz` on `num_qubits` qubits at `reps` repetitions.
 
@@ -210,6 +242,11 @@ def build_ansatz(
     estimate wants, and are left free when the circuit is being pinned as
     QASM (`pin_qasm_ansatz.py`), because that is what a pinned circuit
     has to carry.
+
+    `entanglement` only affects RealAmplitudes and n_local_rzryrz_sca
+    (None means each family's own DEFAULT_ENTANGLEMENT). EfficientSU2_circular
+    already names its one non-default topology outright; the rest have no
+    entanglement pattern to vary.
     """
     if ansatz == "EfficientSU2":
         from qiskit.circuit.library import efficient_su2
@@ -223,17 +260,25 @@ def build_ansatz(
         return efficient_su2(num_qubits, reps=reps, entanglement="circular")
     if ansatz == "RealAmplitudes":
         from qiskit.circuit.library import real_amplitudes
-        return real_amplitudes(num_qubits, reps=reps)
+        return real_amplitudes(
+            num_qubits, reps=reps,
+            entanglement=entanglement or DEFAULT_ENTANGLEMENT["RealAmplitudes"],
+        )
     if ansatz == "StronglyEntanglingLayers":
         return strongly_entangling_layers(num_qubits, reps=reps)
     if ansatz == "n_local_rzryrz_sca":
-        return n_local_rzryrz_sca(num_qubits, reps=reps)
+        return n_local_rzryrz_sca(
+            num_qubits, reps=reps,
+            entanglement=entanglement or DEFAULT_ENTANGLEMENT["n_local_rzryrz_sca"],
+        )
     if ansatz == "excitation_preserving_linear":
         return excitation_preserving_linear(num_qubits, reps=reps)
     if ansatz == "UCCSD":
         if num_electrons is None:
             raise ValueError("UCCSD needs num_electrons to place the reference determinant")
         return uccsd(num_qubits, num_electrons, reps=reps, parameterize=parameterize)
+    if ansatz == "tUPS":
+        raise ValueError("tUPS is supplied as pinned QASM, not built here -- see can_build")
     raise ValueError(
         f"no builder for ansatz {ansatz!r}; supported: {', '.join(SUPPORTED_ANSATZE)}"
     )
@@ -262,13 +307,17 @@ def strongly_entangling_layers(num_qubits: int, *, reps: int = 1) -> "QuantumCir
     return qc
 
 
-def n_local_rzryrz_sca(num_qubits: int, *, reps: int = 1) -> "QuantumCircuit":
+def n_local_rzryrz_sca(
+    num_qubits: int, *, reps: int = 1, entanglement: str = "sca",
+) -> "QuantumCircuit":
     """TN_QC_OPT's Qiskit circuit side, exactly as `functions_qiskit.py:36`
     builds it: `n_local(n, ["rz","ry","rz"], "cx", entanglement="sca")`.
 
     'sca' is Qiskit's shifted-circular-alternating entanglement: a
     circular CX chain whose starting qubit shifts each rep and whose
-    control/target orientation alternates.
+    control/target orientation alternates. `entanglement` is exposed for
+    the campaign's own topology comparison (see qasm_stem) -- the task
+    itself always builds 'sca' when it builds this circuit for itself.
 
     Note that the leading Rz layer acts on |0...0>, where Rz is a global
     phase, so `n` of the `3n(R+1)` parameters cannot affect the state.
@@ -276,7 +325,7 @@ def n_local_rzryrz_sca(num_qubits: int, *, reps: int = 1) -> "QuantumCircuit":
     from qiskit.circuit.library import n_local
 
     return n_local(
-        num_qubits, ["rz", "ry", "rz"], "cx", reps=reps, entanglement="sca",
+        num_qubits, ["rz", "ry", "rz"], "cx", reps=reps, entanglement=entanglement,
     )
 
 
@@ -337,6 +386,104 @@ def uccsd(
         time = amplitudes[index] if amplitudes is not None else 0.1
         qc.append(PauliEvolutionGate(generator, time=time), range(num_qubits))
     return qc
+
+
+# Hartree-Fock reference state per mapper, as a bit list in Pauli-label
+# order (leftmost = highest qubit) -- the form _fermionic_ansatz.
+# hf_parameters expects. JW is a formula (the first `active_electrons`
+# qubits, same convention uccsd() above uses); mol_map_spinblock's is data
+# this campaign's own regenerate_spinblock_mol_map.py prints when it
+# builds the reordered Hamiltonian (reorder_mapped_hamiltonian's own
+# returned hf_state), since the reordering is data, not a formula.
+MOL_MAP_SPINBLOCK_HF_STATE: dict[tuple[str, str], list[int]] = {
+    ("H2", "6-31g"): [0, 0, 0, 0],
+    ("H2O", "6-31g"): [0, 0, 0, 0, 0, 0],
+}
+
+
+def hf_state_for(
+    mapper: str, molecule: str, basis: str, active_electrons: int, num_qubits: int,
+) -> list[int]:
+    """The Hartree-Fock reference, as a bit list in Pauli-label order --
+    for a hardware-efficient ansatz's HF-approximating phi_init, or for
+    verifying a fermionic ansatz's own zero-amplitude reference.
+    """
+    if mapper == "JW":
+        from _fermionic_ansatz import hf_state_jw
+        # Every cell this campaign runs is closed-shell (n_alpha == n_beta),
+        # so the occupied MODE SET is {0, ..., active_electrons-1} regardless
+        # of how the split is spelled here -- but the split still has to be
+        # a real closed-shell split, not electrons-into-alpha-only.
+        if active_electrons % 2:
+            raise ValueError(
+                f"{active_electrons} active electrons is not closed-shell; "
+                f"hf_state_for assumes n_alpha == n_beta"
+            )
+        n_alpha = n_beta = active_electrons // 2
+        # hf_state_jw follows _fermionic_ansatz's own JW convention (mode m
+        # -> qubit n_qubits-1-m), the MIRROR of this repo's (occupied = the
+        # FIRST active_electrons qubits -- uccsd()'s own X-gate placement,
+        # and what every already-pinned JW circuit in this campaign uses).
+        # Reversed to match; verified against RHF for RealAmplitudes.
+        return list(reversed(hf_state_jw(num_qubits // 2, n_alpha, n_beta)))
+    try:
+        return MOL_MAP_SPINBLOCK_HF_STATE[(molecule, basis)]
+    except KeyError:
+        raise KeyError(
+            f"no {mapper} Hartree-Fock state for {molecule}/{basis}; add it to "
+            f"MOL_MAP_SPINBLOCK_HF_STATE"
+        ) from None
+
+
+def hf_approx_phi_init(
+    ansatz: str, num_qubits: int, reps: int, hf_state: list[int],
+    qasm_text: str, *, entanglement: str | None = None,
+) -> list[float]:
+    """phi_init approximating Hartree-Fock for a hardware-efficient ansatz,
+    in the parameter order the pinned QASM text actually binds against.
+
+    The actual per-qubit value comes from _fermionic_ansatz.hf_parameters
+    (verified against RHF for RealAmplitudes and n_local_rzryrz_sca, both
+    mappers, robust to entanglement topology -- it sets only the LAST
+    rotation layer, and a CX gate controlled by a qubit still in |0> is
+    the identity, so every earlier entangler leaves |0...0> untouched).
+
+    What this wraps around it is the parameter-ORDER translation, which
+    hf_parameters alone does not solve: hf_parameters returns values in
+    the FRESHLY-BUILT circuit's own `.parameters` order, but once Cebule
+    loads a circuit from QASM text (`qiskit.qasm3.loads`), it binds phi
+    positionally against THAT circuit's `.parameters`, which sorts
+    alphabetically over the raw identifier string ("_θ_0_", "_θ_10_",
+    "_θ_11_", ..., "_θ_1_", ...) -- not numerically. `qasm3.dumps` names
+    the i-th authoring parameter "_θ_{i}_", so translation is by that
+    name, never by position.
+    """
+    import re
+
+    from _fermionic_ansatz import hf_parameters
+    from qiskit import qasm3
+
+    fresh = build_ansatz(ansatz, num_qubits, reps=reps, entanglement=entanglement)
+    authoring_params = list(fresh.parameters)
+    fresh_values = hf_parameters(fresh, hf_state)
+    desired_by_authoring_name = {
+        str(p): v for p, v in zip(authoring_params, fresh_values)
+    }
+
+    loaded = qasm3.loads(qasm_text)
+    if loaded.num_parameters != len(authoring_params):
+        raise ValueError(
+            f"{ansatz}: pinned QASM has {loaded.num_parameters} parameters, "
+            f"a freshly-built (qubits={num_qubits}, reps={reps}) circuit has "
+            f"{len(authoring_params)} -- out of sync"
+        )
+    vec = []
+    for loaded_param in loaded.parameters:
+        match = re.fullmatch(r"_θ_(\d+)_", str(loaded_param))
+        if match is None:
+            raise ValueError(f"unexpected parameter name {str(loaded_param)!r}")
+        vec.append(desired_by_authoring_name[str(authoring_params[int(match.group(1))])])
+    return vec
 
 
 # The seed the benchmark campaign initialises phi from
