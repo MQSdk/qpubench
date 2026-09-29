@@ -68,7 +68,6 @@ _BACKEND_NAME = "ibm_aachen"
 # What TN-VQE's own transpile(circuit, backend) call resolves to under
 # Qiskit 2.x -- not the estimator's signature default of 1.
 _OPTIMIZATION_LEVEL = 2
-_CLASSICAL_ONLY_MODE = "network"
 
 # The campaign's whole allocation, and what each phase is meant to take.
 # Reported against, never filled to: nothing here caps a batch.
@@ -125,11 +124,11 @@ def _row_active_electrons(row: dict[str, str]) -> int:
 def is_classical_only(row: dict[str, str]) -> bool:
     """True for rows that take no quantum measurements at all.
 
-    optimization_mode="network" freezes phi and optimises theta by
-    classical tensor-network contraction, so the row has no QPU cost --
-    distinct from a row whose cost merely could not be worked out.
+    Method="TN" freezes phi and optimises theta by classical
+    tensor-network contraction, so the row has no QPU cost -- distinct
+    from a row whose cost merely could not be worked out.
     """
-    return row.get("Optimization_Mode") == _CLASSICAL_ONLY_MODE
+    return row.get("Method") == "TN"
 
 
 def _eval_budget(row: dict[str, str]) -> int:

@@ -68,8 +68,20 @@ import time
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
 import _campaign_runner as runner
+from build_benchmark_matrix import SIMULATION_INFEASIBLE
 
 _DEFAULT_CSV = runner.CAMPAIGN / "stage0_simulator_screen.csv"
+
+
+def simulation_infeasible_reason(run: dict[str, str]) -> str | None:
+    """Why this run cannot be simulated at all, or None if it can.
+
+    SIMULATION_INFEASIBLE is keyed by cell rather than derivable from any
+    formula -- these are memory deaths measured on real submissions, not
+    projected -- so this reads the same table `build_targeted_screen`'s
+    siblings wrote their rows' Notes from, rather than a column.
+    """
+    return SIMULATION_INFEASIBLE.get((run["Molecule"], run["Basis"], run["Mapper"]))
 # get_backend routes anything prefixed 'ibm' to real hardware.
 _HARDWARE_PREFIX = "ibm"
 # Statuses taken to mean "still going", used only to decide whether a
@@ -411,7 +423,7 @@ def main() -> None:
         # A row the campaign designed but cannot execute with the resources
         # available. It stays in the matrix so the design and the reason are
         # on record, and so no Case_ID moves; it is never submitted.
-        if run.get("Infeasible_Reason"):
+        if simulation_infeasible_reason(run):
             infeasible += 1
             continue
         # Counted on a dry run too, so that `--limit 1` previews exactly the
@@ -453,9 +465,9 @@ def main() -> None:
     # need different commands: in-flight wants --collect, failed wants
     # --retry-failed or a look at the failure, and not-started wants the
     # same command again.
-    blocked = {r["Case_ID"] for r in selected if r.get("Infeasible_Reason")}
-    reasons = sorted({r["Infeasible_Reason"] for r in selected
-                      if r.get("Infeasible_Reason")})
+    blocked = {r["Case_ID"] for r in selected if simulation_infeasible_reason(r)}
+    reasons = sorted({simulation_infeasible_reason(r) for r in selected
+                      if simulation_infeasible_reason(r)})
     waiting = len(in_flight & mine)
     broken = len(failed & mine)
     unstarted = len(mine - done - in_flight - failed - blocked)

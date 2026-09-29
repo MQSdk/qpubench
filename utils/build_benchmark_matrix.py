@@ -244,9 +244,10 @@ SIMULATOR_ONLY: dict[tuple[str, str, str], str] = {
 # These rows are still generated, and that is deliberate: a Case_ID is the
 # key every collected result is stored under, so deleting a cell's rows would
 # renumber every row after them and silently re-point results already on
-# disk.  The rows stay, carrying their reason in Infeasible_Reason, and
-# utils/run_campaign.py refuses to submit one.  The campaign keeps a
-# record of what it intended to run and why it could not.
+# disk.  The rows stay, carrying their reason in Notes, and
+# utils/run_campaign.py checks this table itself and refuses to submit
+# one.  The campaign keeps a record of what it intended to run and why it
+# could not.
 #
 # H2/qvSZP under Jordan-Wigner is 16 qubits, and TN_QC_OPT materialises
 # the transformed Hamiltonian as a DENSE 2^n x 2^n operator: 2^16 x 2^16
@@ -950,14 +951,12 @@ NETWORK_NO_MEASUREMENT = "n/a (network mode)"
 
 NOT_TN = "n/a (not TN-VQE)"
 
-# What a plain-VQE row's Optimization_Mode says.  "circuit" rather than
-# "n/a": TNQCOptInput.optimization_mode="circuit" is exactly what such a
-# row is SUBMITTED with -- it freezes theta and varies phi, which is what
-# plain VQE is -- so the column now records what is sent instead of
-# declaring the field inapplicable to a row that does in fact set it.
-# TN_Ansatz keeps NOT_TN, because there a VQE row really does name no
-# family.
-VQE_MODE = "circuit"
+# Method used to share the row with a separate Optimization_Mode column;
+# now Method alone names what TNQCOptInput.optimization_mode is actually
+# submitted as, so it says what runs rather than requiring the two to be
+# read together. TN_Ansatz still keeps NOT_TN on a "VQE" row, because
+# there a row really does name no tensor-network family.
+COMBINED_METHOD = {"circuit": "VQE", "both": "TN-VQE", "network": "TN"}
 NO_TN_LAYERS = "n/a (no TN layers)"
 NETWORK_MODE = "n/a (network mode)"
 
@@ -992,12 +991,11 @@ FIELDNAMES = [
     "Quantum_Eval_Budget", "Quantum_Evals_Per_Iteration",
     "Cost_Evals_Per_Iteration", "Iterations", "Shots",
     "Qiskit_Version", "TN_Layers_Network", "TN_Ansatz",
-    "Optimization_Mode", "Measurement_Method", "Qasm_Ansatz_File",
+    "Measurement_Method", "Qasm_Ansatz_File",
     "Qasm_Ansatz_SHA256", "Num_Opt_Params_Phi", "Phi_Init",
     "Num_Opt_Params_Theta", "Num_ExpVals_Per_Iter", "Num_ExpVals_Source",
     "Error_Mitigation", "Precision", "QESEM_Execution_Mode",
-    "Refines_Case_ID", "Converged_Params_File", "Converged_Params_SHA256",
-    "Infeasible_Reason", "Notes",
+    "Converged_Params_File", "Converged_Params_SHA256", "Notes",
 ]
 
 
@@ -1314,7 +1312,7 @@ def _tn_ansatz_note(tn_ansatz: str) -> str:
 
 def _row(
     *, stage: str, mol: Molecule, basis: str, active_space: str,
-    active_electrons: int, active_orbitals: int, mapper: str, method: str,
+    active_electrons: int, active_orbitals: int, mapper: str,
     ansatz: str, reps: int, measurement: str,
     layers_network: int | None, tn_ansatz: str,
     optimization_mode: str = "both", extra_note: str = "",
@@ -1324,7 +1322,6 @@ def _row(
     error_mitigation: str = MITIGATION_NONE,
     precision: str = SHOT_BASED,
     qesem_execution_mode: str = NOT_QESEM,
-    refines_case_id: str = "",
     converged_params: tuple[str, str] = ("", ""),
     entanglement: str | None = None,
     phi_init_tag: str | None = None,
@@ -1339,7 +1336,13 @@ def _row(
     notes.append(_optimizer_note(optimizer))
     notes.append(_measurement_note(measurement))
 
-    is_tn = method == "TN-VQE"
+    # Method and Optimization_Mode used to be two columns naming the same
+    # thing from two angles -- every call site already set them in lockstep
+    # (method="VQE" iff optimization_mode="circuit", "TN-VQE" otherwise) --
+    # so this is the one column now, and optimization_mode is what a caller
+    # actually varies.
+    combined_method = COMBINED_METHOD[optimization_mode]
+    is_tn = optimization_mode != "circuit"
     # "network" freezes phi and contracts the circuit classically; it does
     # not mean there is no circuit.  The control runs the same circuit as
     # the row it controls, at the same phi_init, and that frozen state IS
@@ -1347,8 +1350,7 @@ def _row(
     # rows differing only in their circuit give different floors.  So the
     # circuit, its reps, its pinned QASM and its phi count are all
     # recorded honestly here; what distinguishes the control is that it
-    # takes no QUANTUM MEASUREMENTS, and Optimization_Mode already carries
-    # that.
+    # takes no QUANTUM MEASUREMENTS, and Method="TN" already carries that.
     takes_measurements = optimization_mode != "network"
     qasm_file, qasm_hash = qasm_ansatz_pin(
         ansatz, num_qubits, reps, active_electrons, mapper, active_orbitals,
@@ -1432,7 +1434,7 @@ def _row(
         "Mapper": mapper,
         "N_Qubit": str(num_qubits),
         "N_Qubit_Source": source,
-        "Method": method,
+        "Method": combined_method,
         "Ansatz": ansatz,
         "Ansatz_Reps": str(reps),
         "Entanglement": entanglement or "",
@@ -1471,7 +1473,6 @@ def _row(
         "Qiskit_Version": qiskit_version(),
         "TN_Layers_Network": "" if layers_network is None else str(layers_network),
         "TN_Ansatz": tn_ansatz,
-        "Optimization_Mode": optimization_mode if is_tn else VQE_MODE,
         "Measurement_Method": measurement,
         "Qasm_Ansatz_File": qasm_file,
         "Qasm_Ansatz_SHA256": qasm_hash,
@@ -1483,15 +1484,8 @@ def _row(
         "Error_Mitigation": error_mitigation,
         "Precision": precision,
         "QESEM_Execution_Mode": qesem_execution_mode,
-        "Refines_Case_ID": refines_case_id,
         "Converged_Params_File": converged_params[0],
         "Converged_Params_SHA256": converged_params[1],
-        # Empty on a row that can be run.  Non-empty means the row is
-        # part of the campaign's design but cannot be executed with the
-        # resources available, and run_campaign.py will not submit it.
-        "Infeasible_Reason": SIMULATION_INFEASIBLE.get(
-            (mol.name, basis, mapper), ""
-        ),
         "Notes": " ".join(notes),
     }
 
@@ -1589,9 +1583,9 @@ def build_stage0() -> list[dict[str, str]]:
 
     A complete crossing is what lets a factor's effect be read at every
     level of the others rather than at one.  1152 rows: 8 x 4 x 3 x 3 x 2
-    x 2, with no cell absent -- though one cell's 144 rows carry an
-    Infeasible_Reason and are never submitted, leaving 1008 runnable.
-    See SIMULATION_INFEASIBLE.
+    x 2, with no cell absent -- though one cell's 144 rows are never
+    submitted (run_campaign.py checks SIMULATION_INFEASIBLE at submission
+    time), leaving 1008 runnable.
 
     It therefore carries the axes hardware cannot afford: all four
     ansaetze against stage 1's one, all three optimizers against stage 1's
@@ -1646,7 +1640,7 @@ def build_stage0() -> list[dict[str, str]]:
                                         active_space=space,
                                         active_electrons=active_electrons,
                                         active_orbitals=active_orbitals,
-                                        mapper=mapper, method=method,
+                                        mapper=mapper,
                                         ansatz=ansatz,
                                         reps=reps, measurement=measurement,
                                         optimizer=optimizer,
@@ -1702,9 +1696,10 @@ def build_stage1() -> list[dict[str, str]]:
                         if ansatz != STAGE1_ANSATZ:
                             continue
                         rows.append(_row(
-                            **common, mapper=mapper, method="VQE",
+                            **common, mapper=mapper,
                             ansatz=ansatz, reps=reps, measurement=measurement,
                             layers_network=None, tn_ansatz=NOT_TN,
+                            optimization_mode="circuit",
                             extra_note=(
                                 f"{space_note} Plain-VQE arm of the "
                                 f"{ansatz} triple; the TN-VQE and classical-only "
@@ -1713,7 +1708,7 @@ def build_stage1() -> list[dict[str, str]]:
                             ),
                         ))
                         rows.append(_row(
-                            **common, mapper=mapper, method="TN-VQE",
+                            **common, mapper=mapper,
                             ansatz=ansatz, reps=reps, measurement=measurement,
                             layers_network=tn["layers_network"],
                             tn_ansatz=tn["tn_ansatz"].value,
@@ -1737,7 +1732,7 @@ def build_stage1() -> list[dict[str, str]]:
                     if ansatz != STAGE1_ANSATZ:
                         continue
                     rows.append(_row(
-                        **common, mapper=mapper, method="TN-VQE",
+                        **common, mapper=mapper,
                         ansatz=ansatz, reps=reps, measurement=NETWORK_MODE,
                         layers_network=tn["layers_network"],
                         tn_ansatz=tn["tn_ansatz"].value, optimization_mode="network",
@@ -1862,10 +1857,10 @@ def build_stage2(
                     {(circuit, n_circuit) for _, n_circuit, _, circuit in points}
                 ):
                     rows.append(_row(
-                        **common, mapper=mapper, method="VQE",
+                        **common, mapper=mapper,
                         ansatz=baseline_ansatz, reps=baseline_reps,
                         measurement=measurement, layers_network=None,
-                        tn_ansatz=NOT_TN,
+                        tn_ansatz=NOT_TN, optimization_mode="circuit",
                         extra_note=(
                             f"{selection_note} Plain-VQE baseline for the TN-VQE "
                             f"rows on {baseline_ansatz} at {baseline_reps} "
@@ -1874,7 +1869,7 @@ def build_stage2(
                     ))
                 for n_network, n_circuit, tn_ansatz, circuit_ansatz in points:
                     rows.append(_row(
-                        **common, mapper=mapper, method="TN-VQE",
+                        **common, mapper=mapper,
                         ansatz=circuit_ansatz, reps=n_circuit,
                         measurement=measurement, layers_network=n_network,
                         tn_ansatz=tn_ansatz,
@@ -1959,7 +1954,6 @@ def build_stage3(
                 "Error_Mitigation": mitigation,
                 "Precision": f"{precision:g}" if mitigated else SHOT_BASED,
                 "QESEM_Execution_Mode": execution_mode if mitigated else NOT_QESEM,
-                "Refines_Case_ID": case_id,
                 "Converged_Params_File": params_ref[0],
                 "Converged_Params_SHA256": params_ref[1],
                 "Notes": (
@@ -2047,7 +2041,6 @@ def build_targeted_screen() -> list[dict[str, str]]:
     ) -> dict[str, str]:
         return _row(
             stage="targeted", **cell, mapper=mapper,
-            method="VQE" if mode == "circuit" else "TN-VQE",
             ansatz=ansatz, reps=reps, measurement=measurement_for[mapper],
             layers_network=layers_network,
             tn_ansatz=NOT_TN if mode == "circuit" else tn_ansatz,
@@ -2066,21 +2059,18 @@ def build_targeted_screen() -> list[dict[str, str]]:
                     "deliberate step away from this.",
     ))
 
-    # --- Mapper: JW <-> mol_map, on the baseline ansatz and on the
-    # chemistry anchor (UCCSD's own mapper comparison is the one that
-    # matters chemically; RealAmplitudes' is the cheap sanity check).
-    # mol_map here means mol_map_spinblock throughout this file -- see
-    # regenerate_spinblock_mol_map.py -- not stage 0/1/2/3's plain
-    # mol_map, which this campaign never touches. ---
-    rows.append(row(
-        mapper="mol_map_spinblock", ansatz="RealAmplitudes",
-        extra_note="Mapper axis, off the baseline: JW vs mol_map.",
-    ))
-    for mapper in ("JW", "mol_map_spinblock"):
-        rows.append(row(
-            mapper=mapper, ansatz="UCCSD",
-            extra_note="Mapper axis on the chemistry anchor: JW vs mol_map.",
-        ))
+    # --- Mapper: JW <-> mol_map, on every ansatz -- tUPS/pp-tUPS
+    # included, since a family HF-initialized and number-conserving under
+    # JW is that under mol_map too, and the comparison is exactly the
+    # question this axis asks. mol_map here means mol_map_spinblock
+    # throughout this file -- see regenerate_spinblock_mol_map.py -- not
+    # stage 0/1/2/3's plain mol_map, which this campaign never touches. ---
+    for ansatz in ("RealAmplitudes", "n_local_rzryrz_sca", "UCCSD", "tUPS"):
+        for mapper in ("JW", "mol_map_spinblock"):
+            rows.append(row(
+                mapper=mapper, ansatz=ansatz,
+                extra_note=f"Mapper axis: {ansatz}, JW vs mol_map.",
+            ))
 
     # --- Ansatz reps, hardware-efficient families only (tested on the
     # baseline cell alone) ---
@@ -2104,12 +2094,15 @@ def build_targeted_screen() -> list[dict[str, str]]:
     # regenerate_spinblock_mol_map.py from the vendored
     # _fermionic_ansatz.py (CompareVQEs/ansatze.py) -- number-conserving
     # and HF-initialized already, so it needs no entanglement or phi_init
-    # axis of its own. 2 layers is the instructed default. ---
-    rows.append(row(
-        mapper="JW", ansatz="tUPS", reps=2,
-        extra_note="New ansatz family: tUPS/pp-tUPS, number-conserving "
-                   "and HF-initialized like UCCSD.",
-    ))
+    # axis of its own. Its own axis is layers, tested on the baseline
+    # cell alone like the reps axis above; 2 layers is the default. ---
+    for layers in CIRCUIT_REPS:
+        rows.append(row(
+            mapper="JW", ansatz="tUPS", reps=layers,
+            extra_note=f"New ansatz family, layers axis: tUPS/pp-tUPS at "
+                       f"layers={layers}. Number-conserving and "
+                       "HF-initialized like UCCSD.",
+        ))
 
     # --- Optimizer: COBYLA/SPSA/ExcitationSolve, on the baseline ansatz
     # (cheap, no known workaround needed) and on UCCSD (where SPSA's
@@ -2147,14 +2140,24 @@ def build_targeted_screen() -> list[dict[str, str]]:
                            "mol_map.",
             ))
 
-    # --- Richer system: H2O/6-31g, mol_map only -- H2O/JW is the
-    # already-known-infeasible 16-qubit/64 GiB cell ---
+    # --- Richer system: H2O/6-31g. mol_map_spinblock at CAS(4,4) is 6
+    # qubits; JW at the same active space is 8 -- feasible in width, so
+    # it is included too, but only on RealAmplitudes (cheap). UCCSD/JW
+    # is not added here: no pinned UCCSD/JW/H2O circuit exists (UCCSD is
+    # supplied, not built -- see Ansatze), and an earlier UCCSD-on-H2O
+    # run took excessive wall time. ---
     for ansatz in ("RealAmplitudes", "UCCSD"):
         rows.append(row(
             mapper="mol_map_spinblock", ansatz=ansatz, cell=h2o_6_31g,
-            extra_note="Richer system: H2O/6-31g, mol_map only (H2O/JW is "
-                       "the known-infeasible 16-qubit cell).",
+            extra_note="Richer system: H2O/6-31g, mol_map.",
         ))
+    rows.append(row(
+        mapper="JW", ansatz="RealAmplitudes", cell=h2o_6_31g,
+        extra_note="Richer system: H2O/6-31g under JW too (CAS(4,4), 8 "
+                   "qubits). UCCSD/JW is deliberately not added -- no "
+                   "pinned circuit exists, and UCCSD on H2O has been "
+                   "slow to run before.",
+    ))
 
     return rows
 
@@ -2211,10 +2214,10 @@ def summarize(rows: list[dict[str, str]]) -> None:
         inferred = sum(1 for r in subset if r["N_Qubit_Source"] == "mol_map_inferred")
         suffix = f" ({inferred} qubit counts inferred, not from a real MOL_MAP run)" if inferred else ""
         print(f"    {mapper}: {len(subset)} rows{suffix}")
-    controls = [r for r in rows if r["Optimization_Mode"] == "network"]
+    controls = [r for r in rows if r["Method"] == "TN"]
     if controls:
         print(f"    {len(controls)} zero-QPU classical-only controls "
-              f"(optimization_mode='network')")
+              f"(Method='TN')")
     families = sorted({r["TN_Ansatz"] for r in rows if not r["TN_Ansatz"].startswith("n/a")})
     if families:
         print(f"    TN families: {', '.join(families)}")
@@ -2232,7 +2235,10 @@ def summarize(rows: list[dict[str, str]]) -> None:
             continue
         values = sorted({r[column] for r in rows if not r[column].startswith("n/a")})
         print(f"    {len(values)} {label}: {', '.join(values)}")
-    blocked = [r for r in rows if r.get("Infeasible_Reason")]
+    blocked = [
+        r for r in rows
+        if (r["Molecule"], r["Basis"], r["Mapper"]) in SIMULATION_INFEASIBLE
+    ]
     if blocked:
         cells = sorted({(r["Molecule"], r["Basis"], r["Mapper"]) for r in blocked})
         print(f"    {len(rows) - len(blocked)} runnable; {len(blocked)} in "

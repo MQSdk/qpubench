@@ -225,6 +225,18 @@ def hamiltonian(run: dict[str, str]) -> tuple[list[float], list[str], Any] | Non
 
 # --- The task input -------------------------------------------------------
 
+# Method names what TNQCOptInput.optimization_mode this row is submitted
+# with, in campaign-facing terms rather than the API's own strings --
+# "VQE"/"TN-VQE"/"TN" instead of "circuit"/"both"/"network". This is the
+# one place that translates back.
+OPTIMIZATION_MODE_FOR_METHOD = {"VQE": "circuit", "TN-VQE": "both", "TN": "network"}
+
+
+def optimization_mode_for(run: dict[str, str]) -> str:
+    """The literal TNQCOptInput.optimization_mode this run's Method means."""
+    return OPTIMIZATION_MODE_FOR_METHOD[run["Method"]]
+
+
 def backend_for(run: dict[str, str], override: str | None = None) -> str:
     """Which backend string this run is submitted against.
 
@@ -240,7 +252,7 @@ def backend_for(run: dict[str, str], override: str | None = None) -> str:
     it never goes to hardware: naming a device there only makes Cebule
     authenticate against one the run does not use.
     """
-    if run["Optimization_Mode"] == "network":
+    if run["Method"] == "TN":
         return NETWORK_ONLY_BACKEND
     return override or run["Backend_Platform"]
 
@@ -277,7 +289,7 @@ def build_input(
     # >= 0 explicitly and returns 0 parameters at 0, which is why the
     # campaign leaves TN_Layers_Network and TN_Ansatz empty on these runs.
     plain_vqe = run["Method"] == "VQE"
-    network_only = run["Optimization_Mode"] == "network"
+    network_only = run["Method"] == "TN"
 
     return TNQCOptInput(
         h_coeff_values=coefficients,
@@ -300,14 +312,14 @@ def build_input(
         n_shots=None if network_only else int(run["Shots"]),
         backend=backend_for(run, backend_override),
         measurement_method="pauli" if network_only else run["Measurement_Method"],
-        optimization_mode="circuit" if plain_vqe else run["Optimization_Mode"],
+        optimization_mode=optimization_mode_for(run),
     )
 
 
 def run_label(run: dict[str, str], backend_override: str | None = None) -> str:
     """One line describing what a run is, for a log or a dry run."""
     return (f"{run['Molecule']}/{run['Basis']} {run['Mapper']} {run['Method']} "
-            f"{run['Ansatz']} {run['Optimizer']} {run['Optimization_Mode']} "
+            f"{run['Ansatz']} {run['Optimizer']} "
             f"on {backend_for(run, backend_override)}")
 
 
@@ -583,7 +595,6 @@ def append_record(
             "Molecule": run["Molecule"], "Basis": run["Basis"],
             "Mapper": run["Mapper"], "Method": run["Method"],
             "Ansatz": run["Ansatz"], "Optimizer": run["Optimizer"],
-            "Optimization_Mode": run["Optimization_Mode"],
             # The tensor-network side of the run: which family builds
             # U(theta) and how many layers of it.  Both read "n/a ..." on
             # a plain-VQE row, which is the honest value -- that row has

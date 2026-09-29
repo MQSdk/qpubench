@@ -172,7 +172,7 @@ def test_measurement_method_column_uses_cebules_vocabulary():
 
 
 def test_classical_only_rows_cost_nothing_and_take_no_measurements():
-    """optimization_mode="network" takes no quantum measurements at all.
+    """Method="TN" takes no quantum measurements at all.
 
     That -- not "runs no circuit" -- is what defines the control. The
     circuit exists at the frozen phi_init the other arms start from and
@@ -181,7 +181,7 @@ def test_classical_only_rows_cost_nothing_and_take_no_measurements():
     earlier revision used to blank out.
     """
     module = _benchmark_matrix_module()
-    controls = [r for r in _csv_rows() if r["Optimization_Mode"] == "network"]
+    controls = [r for r in _csv_rows() if r["Method"] == "TN"]
     assert controls, "the zero-QPU classical-only control rows are missing"
     for row in controls:
         # Shots do not APPLY here; 0 was a real shot count, and would be
@@ -205,9 +205,9 @@ def test_phi_init_is_fixed_by_the_circuit_family():
     results would be attributable to the starting point rather than to
     the method, which is the comparison this campaign exists to make.
 
-    So the column is keyed on `Ansatz` alone: neither `Method` nor
-    `Optimization_Mode` may move it, and no row may leave it unpinned --
-    an unseeded upstream default is the defect being fixed.
+    So the column is keyed on `Ansatz` alone: `Method` may not move it,
+    and no row may leave it unpinned -- an unseeded upstream default is
+    the defect being fixed.
     """
     by_ansatz: dict[str, set[str]] = {}
     for row in _csv_rows():
@@ -241,17 +241,15 @@ def test_every_ansatz_is_run_by_all_three_methods():
     An earlier revision screened plain VQE on one set of families and
     TN-VQE on another, so the two methods shared no circuit and every
     difference between them carried the circuit as well as the method.
-    Each family must therefore appear under plain VQE, under TN-VQE's
-    `both` mode and under the classical-only `network` control -- on the
-    same Hamiltonian, and pinning the same QASM file.
+    Each family must therefore appear under plain `VQE`, under `TN-VQE`
+    and under the classical-only `TN` control -- on the same
+    Hamiltonian, and pinning the same QASM file.
     """
     module = _benchmark_matrix_module()
     rows = _csv_rows()
 
     def arm(row: dict[str, str]) -> str:
-        if row["Method"] == "VQE":
-            return "VQE"
-        return f"TN-VQE/{row['Optimization_Mode']}"
+        return row["Method"]
 
     arms_by_ansatz: dict[str, set[str]] = {}
     for row in rows:
@@ -270,7 +268,7 @@ def test_every_ansatz_is_run_by_all_three_methods():
         f"{module.ANSATZE} -- the ansatz axis has to live somewhere"
     )
     for ansatz, arms in arms_by_ansatz.items():
-        assert arms == {"VQE", "TN-VQE/both", "TN-VQE/network"}, (
+        assert arms == {"VQE", "TN-VQE", "TN"}, (
             f"{ansatz} is run by {sorted(arms)} only"
         )
 
@@ -339,7 +337,7 @@ def test_iterations_matches_the_generators_proportional_rule():
             for column in ("Num_Opt_Params_Phi", "Num_Opt_Params_Theta")
             if row[column].isdigit()
         )
-        if row["Optimization_Mode"] == "network":       # phi is frozen
+        if row["Method"] == "TN":                       # phi is frozen
             free_params -= int(row["Num_Opt_Params_Phi"])
         expected = module.optimizer_iterations(
             free_params, module.stage_evals_per_param(row["Stage"])
@@ -368,7 +366,7 @@ def test_every_row_budgets_at_least_cobylas_simplex():
             for column in ("Num_Opt_Params_Phi", "Num_Opt_Params_Theta")
             if row[column].isdigit()
         )
-        if row["Optimization_Mode"] == "network":       # phi is frozen
+        if row["Method"] == "TN":                       # phi is frozen
             params -= int(row["Num_Opt_Params_Phi"])
         assert int(row["Iterations"]) >= params + 2, (
             f"Case_ID {row['Case_ID']} budgets {row['Iterations']} iterations "
@@ -483,7 +481,7 @@ def _true_row_counts() -> set[int]:
     rows = _csv_rows()
     counts = {
         len(rows),
-        sum(1 for r in rows if r["Optimization_Mode"] != "network"),
+        sum(1 for r in rows if r["Method"] != "TN"),
     }
     for path in sorted(CAMPAIGN_DIR.glob("batch*.csv")):
         import csv
@@ -499,7 +497,10 @@ def _true_row_counts() -> set[int]:
     # Stage 0 keeps rows it cannot execute, marked rather than deleted so
     # no Case_ID moves, so "1152 rows" and "1008 runnable" are both true of
     # it and prose may cite either -- as may the size of a blocked cell.
-    blocked = [r for r in stage0 if r["Infeasible_Reason"]]
+    blocked = [
+        r for r in stage0
+        if (r["Molecule"], r["Basis"], r["Mapper"]) in module.SIMULATION_INFEASIBLE
+    ]
     counts.add(len(blocked))
     counts.add(len(stage0) - len(blocked))
 

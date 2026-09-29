@@ -100,7 +100,7 @@ def _load_csv_cases() -> list[dict[str, str]]:
     with _CSV_PATH.open() as f:
         return [
             row for row in csv.DictReader(f)
-            if row["N_Qubit"] and row["Optimization_Mode"] != "network"
+            if row["N_Qubit"] and row["Method"] != "TN"
         ]
 
 

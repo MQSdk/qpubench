@@ -53,6 +53,10 @@ _QASM_DIR = _REPO_ROOT / "data" / "qasm"
 
 NEW_MAPPER = "mol_map_spinblock"
 N_LAYERS = 2  # tUPS/pp-tUPS default, per instruction
+# The JW layers axis (build_targeted_screen's "New ansatz family" sweep)
+# mirrors CIRCUIT_REPS in build_benchmark_matrix.py -- kept as a literal
+# here rather than imported, since this stays a one-off local script.
+TUPS_LAYERS_SWEEP = [1, 2, 3, 4]
 
 # (molecule, basis, n_spatial, n_alpha, n_beta, known Hartree-Fock energy).
 # The HF energies are cross-checks against numbers already established
@@ -150,15 +154,16 @@ def main() -> None:
     # committed JW Hamiltonian files use (fixed back in September) --
     # reverse_bits() compensates, exactly as the original UCCSD/JW
     # circuits were compensated. Verified below, not assumed.
-    print("H2/6-31g JW (tUPS only -- UCCSD/JW is untouched):")
+    print("H2/6-31g JW tUPS layers sweep (UCCSD/JW is untouched):")
     jw_payload = json.loads((_HAMILTONIAN_DIR / "h2_6-31G_JW.json").read_text())
     H_jw = SparsePauliOp(jw_payload["h_operators"], jw_payload["h_coeff_values"])
-    tups_jw = pp_tups(4, 1, 1, N_LAYERS, mapping_matrix=None).reverse_bits()
-    _verify("tUPS (JW)", tups_jw, H_jw, -1.1267333176928163)
-    stem = qasm_stem("tUPS", 8, N_LAYERS, mapper="JW", num_electrons=2, num_orbitals=0)
-    path = _QASM_DIR / f"{stem}.qasm"
-    path.write_text(qasm3.dumps(tups_jw) + "\n", encoding="utf-8")
-    print(f"  wrote {path.relative_to(_REPO_ROOT)}  ({tups_jw.num_parameters} params)")
+    for layers in TUPS_LAYERS_SWEEP:
+        tups_jw = pp_tups(4, 1, 1, layers, mapping_matrix=None).reverse_bits()
+        _verify(f"tUPS (JW, {layers}L)", tups_jw, H_jw, -1.1267333176928163)
+        stem = qasm_stem("tUPS", 8, layers, mapper="JW", num_electrons=2, num_orbitals=0)
+        path = _QASM_DIR / f"{stem}.qasm"
+        path.write_text(qasm3.dumps(tups_jw) + "\n", encoding="utf-8")
+        print(f"  wrote {path.relative_to(_REPO_ROOT)}  ({tups_jw.num_parameters} params)")
 
     print("\nLookup tables for build_benchmark_matrix.py:")
     print("  qubit counts:", qubit_counts)

@@ -24,10 +24,11 @@ crossing:
    pp-tUPS) that reach the reference determinant exactly.
 3. **Optimizer**: `COBYLA`, `SPSA` and `ExcitationSolve`, each given the
    same quantum-evaluation budget converted into its own iteration unit.
-4. **Method and TN-layers**: plain VQE against TN-VQE in `both` mode
-   (jointly optimising `θ` and `φ`) against the classical-only `network`
-   control (θ alone, no quantum measurements at all), with
-   `TN_Layers_Network` swept where it applies.
+4. **Method and TN-layers**: plain `VQE` against `TN-VQE` (jointly
+   optimising `θ` and `φ`) against the classical-only `TN` control (θ
+   alone, no quantum measurements at all), with `TN_Layers_Network`
+   swept over `{1, 2, 3}` where it applies — 2 is the value that
+   matters most for the comparison against plain VQE.
 5. **Mapper × method × TN-layers, deliberately crossed**: does TN-VQE's
    advantage over plain VQE depend on Hamiltonian density, which
    `mol_map_spinblock` increases relative to JW?
@@ -88,27 +89,27 @@ overrides it.
 
 ## The baseline row and axes
 
-**One baseline row**: H2/6-31g, JW, `RealAmplitudes`, `COBYLA`, `circuit`
-mode, 2 repetitions. Every other row varies exactly one thing off it,
+**One baseline row**: H2/6-31g, JW, `RealAmplitudes`, `COBYLA`, `VQE`,
+2 repetitions. Every other row varies exactly one thing off it,
 except the one deliberately crossed axis below.
 
 | Axis | What varies | Held at the baseline |
 |---|---|---|
-| Mapper | JW ↔ mol_map_spinblock | `RealAmplitudes`, and separately `UCCSD` (the chemistry anchor) |
+| Mapper | JW ↔ mol_map_spinblock | Every ansatz — `RealAmplitudes`, `n_local_rzryrz_sca`, `UCCSD`, tUPS/pp-tUPS — each run under both |
 | Ansatz reps | 1, 2, 3, 4 | `RealAmplitudes` and `n_local_rzryrz_sca`, JW |
 | Entangler topology | each family's own default ↔ `full` | `RealAmplitudes` and `n_local_rzryrz_sca`, JW, at 2 reps |
-| New ansatz family | tUPS/pp-tUPS, 2 layers | JW |
+| New ansatz family, layers | tUPS/pp-tUPS at 1, 2, 3, 4 layers (2 is the default) | JW |
 | Optimizer | `COBYLA`, `SPSA`, `ExcitationSolve` | `RealAmplitudes` (cheap) and `UCCSD` (where SPSA's `target_step`/`c` and ExcitationSolve's `frequencies` are tuned — see `opt_options_for` in `build_benchmark_matrix.py`) |
-| Mode × TN-layers | `both`/`network` × `TN_Layers_Network` ∈ {1,2,3} | `RealAmplitudes`, JW — `circuit` mode ignores `TN_Layers_Network` entirely, so it carries no rows in this axis |
-| Mapper × mode × TN-layers | the same sweep, under mol_map_spinblock instead of JW | `RealAmplitudes` — does TN-VQE's advantage depend on Hamiltonian density? |
-| Richer system | H2O/6-31g, mol_map_spinblock only (H2O/JW is 16 qubits — see [Known limitations](#known-limitations)) | `RealAmplitudes` and `UCCSD` |
+| Method × TN-layers | `TN-VQE`/`TN` × `TN_Layers_Network` ∈ {1,2,3} (2 matters most) | `RealAmplitudes`, JW — `VQE` ignores `TN_Layers_Network` entirely, so it carries no rows in this axis |
+| Mapper × method × TN-layers | the same sweep, under mol_map_spinblock instead of JW | `RealAmplitudes` — does TN-VQE's advantage depend on Hamiltonian density? |
+| Richer system | H2O/6-31g, under mol_map_spinblock and, on `RealAmplitudes` alone, under JW too (see [Known limitations](#known-limitations)) | `RealAmplitudes` and `UCCSD` |
 
 A row that coincides with an earlier one on every field but `Case_ID` and
 `Notes` (the reps=2 point of the reps axis *is* the baseline, for
 instance) is numbered and then dropped: every row gets a `Case_ID` first,
 so a collapsed duplicate leaves a gap rather than reshuffling anything
 after it (`assign_case_ids` then `dedupe_rows` in `build_benchmark_
-matrix.py`). 32 rows, `Case_ID`s 1–35 with three gaps.
+matrix.py`). 38 rows, `Case_ID`s 1–44 with six gaps.
 
 **Every ansatz-optimizer-mode combination reuses the same Hamiltonian,
 pinned circuit and `Phi_Init`** for a given (molecule, basis, mapper)
@@ -121,6 +122,7 @@ their axis actually varies.
 |---|---|---|---|---:|
 | H2 | unrestricted (2e in 4 orbitals) | 6-31g | JW | 8 |
 | H2 | unrestricted (2e in 4 orbitals) | 6-31g | mol_map_spinblock | 4 |
+| H2O | CAS(4,4) | 6-31g | JW | 8 |
 | H2O | CAS(4,4) | 6-31g | mol_map_spinblock | 6 |
 
 Every run is at the experimental equilibrium geometry, given in Angstrom
@@ -136,7 +138,7 @@ committed under `hamiltonian_data/`.
 | `RealAmplitudes` | `n(R+1)` | Ry only, reverse-linear entangler by default. Real amplitudes only; the baseline ansatz |
 | `n_local_rzryrz_sca` | `3n(R+1)` | Rz+Ry+Rz, shifted-circular-alternating entangler by default. The circuit `TN_QC_OPT` builds for itself when no `qasm_ansatz` is supplied — in the comparison so the vendor's own default is measured rather than assumed |
 | `UCCSD` | 15, 26 | A restricted singles-and-doubles ansatz out of the reference determinant. The chemistry anchor the hardware-efficient families are compared against |
-| tUPS / pp-tUPS | 18 | Tiled Unitary Product State [7], 2 layers. Number-conserving and HF-initialized like UCCSD; `perfect_pairing_order` when occupied and virtual orbitals are equal in number (pp-tUPS), `occupied_middle_order` otherwise (plain tUPS) |
+| tUPS / pp-tUPS | 9 per layer | Tiled Unitary Product State [7], swept at 1–4 layers (2 is the default). Number-conserving and HF-initialized like UCCSD; `perfect_pairing_order` when occupied and virtual orbitals are equal in number (pp-tUPS), `occupied_middle_order` otherwise (plain tUPS) |
 
 `RealAmplitudes` and `n_local_rzryrz_sca` are built by
 [`_ansatz_builders.py`](../../../utils/_ansatz_builders.py) and pinned as
@@ -275,7 +277,7 @@ substantially: 120 → 52 for H2/6-31g, 1304 → 392 for H2O/6-31g CAS(4,4).
 | `Active_Electrons`, `Active_Orbitals` | The space the Hamiltonian is built in |
 | `Mapper` | `JW` or `mol_map_spinblock` — see [Mappers](#mappers) |
 | `N_Qubit`, `N_Qubit_Source` | Qubit count and its provenance: `jw_exact` or `mol_map_spinblock_computed` |
-| `Method` | `VQE` (plain, `circuit` mode) or `TN-VQE` (`both` or `network` mode) |
+| `Method` | `VQE` (plain), `TN-VQE` (θ and φ jointly optimised) or `TN` (classical-only control: θ alone, no quantum measurements) |
 | `Ansatz` | `RealAmplitudes`, `n_local_rzryrz_sca`, `UCCSD` or `tUPS` |
 | `Ansatz_Reps` | Repetitions (or, for tUPS, layers) of the ansatz circuit |
 | `Entanglement` | Blank except on the entangler-topology axis's rows (`RealAmplitudes`/`n_local_rzryrz_sca` only), where it names the non-default entanglement |
@@ -285,20 +287,18 @@ substantially: 120 → 52 for H2/6-31g, 1304 → 392 for H2O/6-31g CAS(4,4).
 | `Quantum_Evals_Per_Iteration` | What one iteration of this row's optimizer spends of the budget: 1 for COBYLA, 2 for SPSA, `3 × n_phi` for ExcitationSolve — 0 wherever φ is frozen, since a θ-only change is served from cache |
 | `Cost_Evals_Per_Iteration` | Entries one iteration adds to `cost_history`, the axis convergence curves are aligned on |
 | `Iterations` | What `TNQCOptInput.n_iterations` receives |
-| `Shots` | 4,096, pinned via `TNQCOptInput.n_shots`; `n/a (network mode)` where no quantum measurement is taken |
+| `Shots` | 4,096, pinned via `TNQCOptInput.n_shots`; `n/a (network mode)` on `TN` rows, which take no quantum measurement |
 | `Qiskit_Version` | The installed Qiskit, which fixes the transpiler optimisation level the run receives |
-| `TN_Layers_Network` | Layers of θ on the classical tensor-network side; blank on `circuit`-mode rows, which ignore it entirely; 1, 2 or 3 on `both`/`network` rows |
+| `TN_Layers_Network` | Layers of θ on the classical tensor-network side; blank on `VQE` rows, which ignore it entirely; 1, 2 or 3 on `TN-VQE`/`TN` rows |
 | `TN_Ansatz` | `givens` on every TN-VQE row, or `n/a (not TN-VQE)` |
-| `Optimization_Mode` | `circuit` (φ only), `both` (θ and φ jointly) or `network` (θ only, no quantum measurements) |
 | `Measurement_Method` | `pauli` (JW rows) or `grouped` (mol_map_spinblock rows) |
 | `Qasm_Ansatz_File`, `Qasm_Ansatz_SHA256` | The pinned circuit and a hash prefix of it |
-| `Num_Opt_Params_Phi` | Circuit-side parameter count, the `num_parameters` the pinned QASM loads with. On a `network` row it is the count held fixed |
+| `Num_Opt_Params_Phi` | Circuit-side parameter count, the `num_parameters` the pinned QASM loads with. On a `TN` row it is the count held fixed |
 | `Phi_Init` | `"zeros"` (`UCCSD`, tUPS), `"hf-approx"` (`RealAmplitudes`, `n_local_rzryrz_sca`) — see [HF-approximating initial parameters](#hf-approximating-initial-parameters) |
 | `Num_Opt_Params_Theta` | Network-side parameter count on a TN-VQE row |
 | `Num_ExpVals_Per_Iter`, `Num_ExpVals_Source` | Measurement circuits one evaluation submits, and where that count came from |
 | `Error_Mitigation`, `Precision`, `QESEM_Execution_Mode` | `none`, `n/a (shot-based)`, `n/a (not QESEM)` on every row — no mitigation is applied in this file |
-| `Refines_Case_ID`, `Converged_Params_File`, `Converged_Params_SHA256` | Blank on every row |
-| `Infeasible_Reason` | Blank on every row in this file — every row here is runnable |
+| `Converged_Params_File`, `Converged_Params_SHA256` | Blank on every row in this file — no row here is a stage-3 refinement |
 | `Notes` | Per-row provenance and caveats |
 
 ## Known limitations
@@ -308,15 +308,16 @@ substantially: 120 → 52 for H2/6-31g, 1304 → 392 for H2O/6-31g CAS(4,4).
   another cell means running `regenerate_spinblock_mol_map.py` against
   that cell's own committed `mapping_matrix`, correcting for the
   row-bit-reversal noted under [Mappers](#mappers).
-- **H2/qvSZP and H2O/qvSZP are not in this file at all.** The earlier
-  simulator screen found H2/qvSZP under JW too wide to be interesting
-  here (16 qubits), and this campaign's basis-set question is answered
-  by 6-31g alone; qvSZP can be added as its own axis if that changes.
 - **The entangler-topology axis compares only one alternative, `full`,
   per family.** It answers "does topology matter at all", not "which
   topology is best".
-- **tUPS/pp-tUPS runs only under JW, at one layer count.** It is not yet
-  part of the mapper, reps or optimizer axes.
+- **tUPS/pp-tUPS runs only under JW.** It is not yet part of the mapper
+  or optimizer axes; its own axis is layers (1–4, 2 default), not reps
+  or entanglement, which do not apply to it.
+- **UCCSD/JW is not run on H2O.** No pinned UCCSD/JW/H2O circuit exists
+  (UCCSD's circuits are supplied by hand, not built — see [Ansätze](
+  #ansätze)), and an earlier UCCSD-on-H2O run took excessive wall time;
+  H2O/JW in this file is `RealAmplitudes` only.
 - **`HF_APPROX_ANSATZE` and closed-shell orbitals are assumed together.**
   `hf_state_for`'s JW branch raises if `Active_Electrons` is odd; every
   cell this campaign runs is closed-shell, so this has not been
@@ -328,12 +329,7 @@ substantially: 120 → 52 for H2/6-31g, 1304 → 392 for H2O/6-31g CAS(4,4).
 
 ## Open decisions
 
-1. **Which TN_Layers_Network values matter most.** The sweep is
-   `{1, 2, 3}`; whether a wider or narrower sweep would say more is open.
-2. **Whether the mol_map_spinblock reordering should extend to qvSZP**,
-   and whether the richer-system row (H2O) is worth repeating under JW
-   despite its 8-qubit width.
-3. **Whether `RealAmplitudes`/`ExcitationSolve` needs its own
+1. **Whether `RealAmplitudes`/`ExcitationSolve` needs its own
    `opt_options` tuning**, the way `UCCSD` did.
 
 ## References
