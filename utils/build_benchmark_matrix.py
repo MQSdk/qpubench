@@ -454,13 +454,12 @@ SIMPLEX_OVERHEAD = 2      # n+1 simplex points, +1 for the first real step;
 STAGE1_EVALS_PER_PARAM = 1.3   # ~50% of achievable descent, at every width
 STAGE2_EVALS_PER_PARAM = 4.0   # ~80%; stage 2 is where converged energies live
 
-# targeted_screen.csv's own budget: 38 rows, not the old factorial's
-# thousands, so it is affordable to run each one close to convergence
-# rather than screen it. ~95% on the synthetic objective -- the same
-# number STAGE0_EVALS_PER_PARAM uses for a different reason (a proxy for
-# the true minimum to score other multipliers against); here it is the
-# multiplier a real row is actually budgeted at.
-TARGETED_EVALS_PER_PARAM = 12.0
+# targeted_screen.csv's own budget: 40 rows, not the old factorial's
+# thousands, so each run can be given enough to reach its optimum rather
+# than be cut off. Sized so ExcitationSolve, the costliest per iteration,
+# gets 6 sweeps after its fixed evaluations (fixed_evals); COBYLA stops on
+# its own tolerance well inside it.
+TARGETED_EVALS_PER_PARAM = 30.0
 
 # Stage 0 buys no QPU time, so its budget is set by what it has to MEASURE
 # rather than by what it costs.
@@ -513,41 +512,31 @@ STAGE0_MAX_ITERATIONS = 600
 #   SPSA             2, a plus- and a minus-perturbation per step.  Flat
 #                    in n, which is the property that makes SPSA
 #                    interesting on the wide rows.
-#   ExcitationSolve  3n.  It reconstructs the energy's exact dependence on
+#   ExcitationSolve  4n.  It reconstructs the energy's exact dependence on
 #                    ONE parameter and jumps to that parameter's minimum,
 #                    so an iteration is a sweep over all n of them.
 #
 # Passing one number to all three was a real error, not a rounding one:
-# the same n_iterations gave the ExcitationSolve arm 22.7 MILLION
-# evaluations against COBYLA's 145,344, a factor of 156, concentrated on
-# exactly the widest rows.  Converting instead -- same evaluation budget,
-# each optimizer's own unit -- brings the three arms within 7% of each
-# other and the matrix to 426,372 evaluations.
+# ExcitationSolve's arm got two orders of magnitude more evaluations than
+# COBYLA's.  Converting instead -- same evaluation budget, each
+# optimizer's own unit -- keeps the arms comparable.
 #
-# ExcitationSolve's reconstruction cost is PER PARAMETER, and the
-# natural guess -- that it depends only on the parameter's generator, so
-# G^2=I (one frequency) costs three points and G^3=G (two frequencies,
-# the fermionic excitation generators UCCSD is built from) costs five --
-# is WRONG for phi.  It was tried here: numerically, every UCCSD phi
-# angle sampled (three singles, three doubles) fits a 5-point model to
-# residual ~1e-15 and fails a 3-point model by up to 0.67 Ha, so the
-# LANDSCAPE really is G^3=G for UCCSD's phi. But real collected runs
-# still spent 45-46 evaluations per sweep on a 15-parameter UCCSD circuit
-# -- exactly 3n, not 5n -- whatever n_iterations asked for; theta on the
-# same runs spent ~5 per parameter as expected. Confirmed directly with
-# whoever maintains tn-vqe: **phi and theta are deliberately given
-# different evaluation counts inside tn-vqe**, independent of what the
-# phi circuit's own generators are. So the 5-point landscape result is
-# real but not the thing that sets tn-vqe's actual cost, and phi is 3
-# points per parameter uniformly, for every ansatz including UCCSD.
-#
-# This means the UCCSD/ExcitationSolve energies landing on wrong,
-# sometimes non-physical values (Case_ID 34, 70, ...) are NOT explained
-# by an evaluation-count mismatch on this side -- whatever is wrong is
-# inside tn-vqe's own handling of phi for excitation-type circuits, and
-# is being investigated there, not here.
-EXCITATIONSOLVE_EVALS_PER_PHI = 3
+# ExcitationSolve fits each parameter to its frequency set {1, 2} (tn-vqe's
+# default, and UCCSD's workaround): five samples, one reused from the
+# previous parameter's fit.  Theta is taken at five, unverified.
+EXCITATIONSOLVE_EVALS_PER_PHI = 4
 EXCITATIONSOLVE_EVALS_PER_THETA = 5
+
+# Evaluations an optimizer spends outside its iterations, taken off the
+# budget before it is converted to iterations -- otherwise the same budget
+# buys each optimizer a different total.  Read off tn-vqe's spsa.py and
+# excitation_solve.py, and matched against collected cost_history lengths.
+#   SPSA             12 gain calibration + 1 start + 2 x 3 closing repeats
+#   ExcitationSolve  4n flatness check + n first-sweep validation
+#                    + 1 start + 1 closing evaluation
+SPSA_FIXED_EVALS = 19
+EXCITATIONSOLVE_FIXED_EVALS_PER_PHI = 5
+EXCITATIONSOLVE_FIXED_EVALS = 2
 
 # What COBYLA and SPSA cost per iteration.  Both move EVERY parameter at
 # once -- COBYLA steps the whole vector, SPSA perturbs all coordinates
@@ -597,16 +586,25 @@ def iteration_budget(
     its cost-function evaluations instead, since otherwise nothing would
     bound it.
 
-    Floored at 1: ExcitationSolve's sweep costs 3 x n_phi, so at the
-    widest rows the budget buys barely one, and a single sweep -- a full
-    coordinate descent with an exact minimisation per coordinate -- is
-    still a run worth having.  That it gets several sweeps on a narrow row
-    and one on a wide one is not a defect in the budget; it is the
-    measured answer to whether the method is affordable at a screening
-    budget, which is what stage 0 is for.
+    The optimizer's fixed evaluations (`fixed_evals`) come off the budget
+    first, so every optimizer's whole run fits the same budget.
+
+    Floored at 1: a single ExcitationSolve sweep -- a full coordinate
+    descent with an exact minimisation per coordinate -- is still a run
+    worth having even where the budget doesn't quite cover it.
     """
     quantum, cost = evals_per_iteration(optimizer, num_phi, num_theta)
-    return max(1, budget // (quantum or cost))
+    remaining = budget - fixed_evals(optimizer, num_phi)
+    return max(1, remaining // (quantum or cost))
+
+
+def fixed_evals(optimizer: str, num_phi: int) -> int:
+    """Evaluations `optimizer` spends outside its iterations."""
+    if optimizer == "SPSA":
+        return SPSA_FIXED_EVALS
+    if optimizer == "ExcitationSolve":
+        return EXCITATIONSOLVE_FIXED_EVALS_PER_PHI * num_phi + EXCITATIONSOLVE_FIXED_EVALS
+    return 0
 
 # --- phi_init, per circuit family -----------------------------------------
 #
@@ -1505,7 +1503,8 @@ def build_targeted_screen() -> list[dict[str, str]]:
     # --- Optimizer: COBYLA/SPSA/ExcitationSolve, on the baseline ansatz
     # (cheap, no known workaround needed) and on UCCSD (where SPSA's
     # target_step/c and ExcitationSolve's frequencies were actually
-    # tuned -- see opt_options_for) ---
+    # tuned -- see opt_options_for). tUPS is added at the end of this
+    # function. ---
     for ansatz in ("RealAmplitudes", "UCCSD"):
         for optimizer in OPTIMIZERS:
             rows.append(row(
@@ -1559,6 +1558,16 @@ def build_targeted_screen() -> list[dict[str, str]]:
                    "slow to run before and this cell's cost is not yet "
                    "confirmed acceptable.",
     ))
+
+    # --- Optimizer axis, continued: tUPS at its default 2 layers. Kept
+    # apart from the block above so appending it doesn't renumber the
+    # rows in between; its COBYLA row is the mapper axis's JW tUPS row
+    # and dedupes away. ---
+    for optimizer in OPTIMIZERS:
+        rows.append(row(
+            mapper="JW", ansatz="tUPS", optimizer=optimizer,
+            extra_note=f"Optimizer axis: {optimizer} on tUPS.",
+        ))
 
     return rows
 

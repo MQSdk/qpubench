@@ -2,7 +2,7 @@
 
 NOT CURRENTLY RUNNABLE: `_CSV_PATH` names `stage1_screening_matrix.csv`,
 retired along with stage 0/1 (see build_benchmark_matrix.py's module
-docstring) -- the file no longer exists. targeted_screen.csv's 38 rows
+docstring) -- the file no longer exists. targeted_screen.csv's 40 rows
 are submitted directly through run_campaign.py's own --submit/
 --max-in-flight pacing instead, which is what makes this script's own
 job -- cutting a large screen into cost-ordered tranches -- moot for it.
