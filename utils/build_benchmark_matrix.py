@@ -176,7 +176,7 @@ SIMULATION_INFEASIBLE: dict[tuple[str, str, str], str] = {
     ),
 }
 
-# `mol_map_spinblock`'s own measurement method is extended onto this at
+# `MolMap_sb`'s own measurement method is extended onto this at
 # the one remaining call site (`build_targeted_screen`, local to that
 # file) rather than here, so this dict stays exactly what it always
 # named: which measurement method each of Cebule's two real mappers
@@ -354,7 +354,7 @@ EXCITATIONSOLVE_UCCSD_FREQUENCIES = [1, 2]
 # straddle enough curvature to bias the step. 0.1 still sits well above
 # the shot noise.
 #
-# Extended to RealAmplitudes and n_local_rzryrz_sca (SPSA_TUNED_ANSATZE)
+# Extended to RealAmplitudes and rzryrz (SPSA_TUNED_ANSATZE)
 # once the same failure mode showed up on RealAmplitudes/SPSA real results
 # (case 25: first cost_history entry already 0.25 Ha above HF, diverges
 # from there, never recovers -- unlike UCCSD/SPSA at the same cell, which
@@ -372,7 +372,7 @@ EXCITATIONSOLVE_UCCSD_FREQUENCIES = [1, 2]
 # family if they still misbehave.
 SPSA_TARGET_STEP = 0.01
 SPSA_C = 0.1
-SPSA_TUNED_ANSATZE = {"UCCSD", "RealAmplitudes", "n_local_rzryrz_sca", "tUPS"}
+SPSA_TUNED_ANSATZE = {"UCCSD", "RealAmplitudes", "rzryrz", "tUPS"}
 
 
 def opt_options_for(optimizer: str, ansatz: str, num_phi: int, num_theta: int) -> str:
@@ -709,8 +709,8 @@ EXPVALS_PER_ITER = {
     # targeted_screen.csv only: the spin-block reordering's own Pauli-term
     # count, from regenerate_spinblock_mol_map.py -- down from 120 and
     # 1304 respectively under the old mol_map ordering.
-    ("mol_map_spinblock", "H2", 4): (52, "hamiltonian_file"),
-    ("mol_map_spinblock", "H2O", 6): (392, "hamiltonian_file"),
+    ("MolMap_sb", "H2", 4): (52, "hamiltonian_file"),
+    ("MolMap_sb", "H2O", 6): (392, "hamiltonian_file"),
 }
 
 NETWORK_NO_MEASUREMENT = "n/a (network mode)"
@@ -780,7 +780,7 @@ def qiskit_version() -> str:
         return ""
 
 
-# mol_map_spinblock's qubit count is data (regenerate_spinblock_mol_map.py's
+# MolMap_sb's qubit count is data (regenerate_spinblock_mol_map.py's
 # own printed D'.shape), not a formula -- count_qubits/is_confirmed know
 # only the OLD mol_map ordering. Keyed on (electrons, orbitals) rather than
 # (molecule, basis) to match qubit_count's own signature; the 2 cells this
@@ -795,15 +795,15 @@ def qubit_count(mapper: str, active_electrons: int, active_orbitals: int) -> tup
     """(qubits, provenance) for one active space under one mapper."""
     if mapper == "JW":
         return 2 * active_orbitals, "jw_exact"
-    if mapper == "mol_map_spinblock":
+    if mapper == "MolMap_sb":
         try:
             return (
                 MOL_MAP_SPINBLOCK_QUBITS[(active_electrons, active_orbitals)],
-                "mol_map_spinblock_computed",
+                "MolMap_sb_computed",
             )
         except KeyError:
             raise KeyError(
-                f"no mol_map_spinblock qubit count for {active_electrons}e/"
+                f"no MolMap_sb qubit count for {active_electrons}e/"
                 f"{active_orbitals}o; add it to MOL_MAP_SPINBLOCK_QUBITS "
                 f"(see regenerate_spinblock_mol_map.py)"
             ) from None
@@ -927,7 +927,7 @@ def circuit_parameter_count(
         # pair per rep (Qiskit's default mode="iswap"). Verified against
         # the built circuit's num_parameters, not derived on paper.
         return str(num_qubits * (reps + 1) + (num_qubits - 1) * reps)
-    if ansatz == "n_local_rzryrz_sca":
+    if ansatz == "rzryrz":
         # Three rotation layers per block, R+1 blocks -- TN_QC_OPT's own
         # n_local(n, ["rz","ry","rz"], "cx", "sca"). Verified against the
         # built circuit's num_parameters, not derived on paper.
@@ -1397,7 +1397,7 @@ def build_stage3(
 
 # Ansatze whose reference state approximates HF instead of starting random
 # -- see _ansatz_builders.hf_approx_phi_init and PHI_INIT_HF_APPROX.
-HF_APPROX_ANSATZE = {"RealAmplitudes", "n_local_rzryrz_sca"}
+HF_APPROX_ANSATZE = {"RealAmplitudes", "rzryrz"}
 
 
 def build_targeted_screen() -> list[dict[str, str]]:
@@ -1433,11 +1433,11 @@ def build_targeted_screen() -> list[dict[str, str]]:
 
     h2_6_31g = cell(h2, "6-31g")
     h2o_6_31g = cell(h2o, "6-31g")
-    # mol_map_spinblock is local to this campaign (see
+    # MolMap_sb is local to this campaign (see
     # regenerate_spinblock_mol_map.py) and isn't in STAGE1_MEASUREMENT
     # itself, which only names Cebule's two real mappers -- extended
     # here rather than there.
-    measurement_for = {**STAGE1_MEASUREMENT, "mol_map_spinblock": "grouped"}
+    measurement_for = {**STAGE1_MEASUREMENT, "MolMap_sb": "grouped"}
 
     def row(
         *, mapper: str, ansatz: str, cell: dict = h2_6_31g, reps: int = reps,
@@ -1468,11 +1468,11 @@ def build_targeted_screen() -> list[dict[str, str]]:
     # --- Mapper: JW <-> mol_map, on every ansatz -- tUPS/pp-tUPS
     # included, since a family HF-initialized and number-conserving under
     # JW is that under mol_map too, and the comparison is exactly the
-    # question this axis asks. mol_map here means mol_map_spinblock
+    # question this axis asks. mol_map here means MolMap_sb
     # throughout this file -- see regenerate_spinblock_mol_map.py -- not
     # stage 0/1/2/3's plain mol_map, which this campaign never touches. ---
-    for ansatz in ("RealAmplitudes", "n_local_rzryrz_sca", "UCCSD", "tUPS"):
-        for mapper in ("JW", "mol_map_spinblock"):
+    for ansatz in ("RealAmplitudes", "rzryrz", "UCCSD", "tUPS"):
+        for mapper in ("JW", "MolMap_sb"):
             rows.append(row(
                 mapper=mapper, ansatz=ansatz,
                 extra_note=f"Mapper axis: {ansatz}, JW vs mol_map.",
@@ -1484,7 +1484,7 @@ def build_targeted_screen() -> list[dict[str, str]]:
     # "reps" is the tiling's own layer count, built by
     # regenerate_spinblock_mol_map.py from the vendored
     # _fermionic_ansatz.py (CompareVQEs/ansatze.py). ---
-    for ansatz in ("RealAmplitudes", "n_local_rzryrz_sca", "tUPS"):
+    for ansatz in ("RealAmplitudes", "rzryrz", "tUPS"):
         for r in CIRCUIT_REPS:
             rows.append(row(
                 mapper="JW", ansatz=ansatz, reps=r,
@@ -1493,7 +1493,7 @@ def build_targeted_screen() -> list[dict[str, str]]:
 
     # --- Entangler topology: each family's own default vs "full", at the
     # baseline's own reps ---
-    for ansatz in ("RealAmplitudes", "n_local_rzryrz_sca"):
+    for ansatz in ("RealAmplitudes", "rzryrz"):
         rows.append(row(
             mapper="JW", ansatz=ansatz, entanglement="full",
             extra_note=f"Entangler-topology axis: {ansatz} with 'full' "
@@ -1529,7 +1529,7 @@ def build_targeted_screen() -> list[dict[str, str]]:
     for mode in ("both", "network"):
         for layers in tn_layers_sweep:
             rows.append(row(
-                mapper="mol_map_spinblock", ansatz="RealAmplitudes", mode=mode,
+                mapper="MolMap_sb", ansatz="RealAmplitudes", mode=mode,
                 layers_network=layers,
                 extra_note="Motivated crossing (mapper x mode x TN-layers): "
                            "does TN-VQE's advantage depend on Hamiltonian "
@@ -1537,7 +1537,7 @@ def build_targeted_screen() -> list[dict[str, str]]:
                            "mol_map.",
             ))
 
-    # --- Richer system: H2O/6-31g. mol_map_spinblock at CAS(4,4) is 6
+    # --- Richer system: H2O/6-31g. MolMap_sb at CAS(4,4) is 6
     # qubits; JW at the same active space is 8 -- feasible in width, so
     # it is included too, but only on RealAmplitudes (cheap). UCCSD/JW
     # is deliberately still not added here: a pinned circuit already
@@ -1547,7 +1547,7 @@ def build_targeted_screen() -> list[dict[str, str]]:
     # this cell is acceptable. ---
     for ansatz in ("RealAmplitudes", "UCCSD"):
         rows.append(row(
-            mapper="mol_map_spinblock", ansatz=ansatz, cell=h2o_6_31g,
+            mapper="MolMap_sb", ansatz=ansatz, cell=h2o_6_31g,
             extra_note="Richer system: H2O/6-31g, mol_map.",
         ))
     rows.append(row(

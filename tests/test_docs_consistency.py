@@ -237,7 +237,7 @@ def test_phi_init_is_fixed_by_the_circuit_family():
         )
     # Zeros where zero amplitudes ARE the reference state (UCCSD, tUPS);
     # an HF-approximating phi_init on the hardware-efficient families
-    # this campaign seeds one for (RealAmplitudes, n_local_rzryrz_sca);
+    # this campaign seeds one for (RealAmplitudes, rzryrz);
     # the seeded random draw otherwise, whose identity at zero is a
     # barren starting point rather than a reference determinant.
     module = _benchmark_matrix_module()

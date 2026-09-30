@@ -654,7 +654,7 @@ def hf_parameters(circuit, hf_state):
     is 1 in the state.
 
     Relies on the circuit leaving |0...0> alone at zero angles, as
-    RealAmplitudes, EfficientSU2 and n_local_rzryrz_sca do. Only
+    RealAmplitudes, EfficientSU2 and rzryrz do. Only
     parameterised RZs (identities at zero) may follow that last rotation
     on its qubit.
 

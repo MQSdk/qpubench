@@ -16,10 +16,10 @@ it, so a question has one row to point to rather than a slice of a large
 crossing:
 
 1. **Mapper**: Jordan-Wigner (JW) against Cebule's `mol_map` constraint
-   encoding, reindexed for circuit efficiency (`mol_map_spinblock` —
+   encoding, reindexed for circuit efficiency (`MolMap_sb` —
    see [Mappers](#mappers)).
 2. **Ansatz**: two hardware-efficient families (`RealAmplitudes`,
-   `n_local_rzryrz_sca`) at several repetition counts and entangler
+   `rzryrz`) at several repetition counts and entangler
    topologies, against two chemistry-motivated ones (`UCCSD`, tUPS/
    pp-tUPS) that reach the reference determinant exactly.
 3. **Optimizer**: `COBYLA`, `SPSA` and `ExcitationSolve`, each given the
@@ -31,7 +31,7 @@ crossing:
    matters most for the comparison against plain VQE.
 5. **Mapper × method × TN-layers, deliberately crossed**: does TN-VQE's
    advantage over plain VQE depend on Hamiltonian density, which
-   `mol_map_spinblock` increases relative to JW?
+   `MolMap_sb` increases relative to JW?
 
 Everything here runs on `aer_simulator`; no run in this file consumes
 purchased hardware time or applies error mitigation.
@@ -95,13 +95,13 @@ except the one deliberately crossed axis below.
 
 | Axis | What varies | Held at the baseline |
 |---|---|---|
-| Mapper | JW ↔ mol_map_spinblock | Every ansatz — `RealAmplitudes`, `n_local_rzryrz_sca`, `UCCSD`, tUPS/pp-tUPS — each run under both |
-| Ansatz reps (tUPS/pp-tUPS: layers) | 1, 2, 3, 4 | `RealAmplitudes`, `n_local_rzryrz_sca` and tUPS/pp-tUPS, JW |
-| Entangler topology | each family's own default ↔ `full` | `RealAmplitudes` and `n_local_rzryrz_sca`, JW, at 2 reps |
+| Mapper | JW ↔ MolMap_sb | Every ansatz — `RealAmplitudes`, `rzryrz`, `UCCSD`, tUPS/pp-tUPS — each run under both |
+| Ansatz reps (tUPS/pp-tUPS: layers) | 1, 2, 3, 4 | `RealAmplitudes`, `rzryrz` and tUPS/pp-tUPS, JW |
+| Entangler topology | each family's own default ↔ `full` | `RealAmplitudes` and `rzryrz`, JW, at 2 reps |
 | Optimizer | `COBYLA`, `SPSA`, `ExcitationSolve` | `RealAmplitudes` (cheap; also where SPSA's `target_step`/`c` are tuned), `UCCSD` (where SPSA is tuned too, and ExcitationSolve's `frequencies` — see `opt_options_for` in `build_benchmark_matrix.py`) and `tUPS` at its default 2 layers |
 | Method × TN-layers | `TN-VQE`/`TN` × `TN_Layers_Network` ∈ {1,2,3} (2 matters most) | `RealAmplitudes`, JW — `VQE` ignores `TN_Layers_Network` entirely, so it carries no rows in this axis |
-| Mapper × method × TN-layers | the same sweep, under mol_map_spinblock instead of JW | `RealAmplitudes` — does TN-VQE's advantage depend on Hamiltonian density? |
-| Richer system | H2O/6-31g, under mol_map_spinblock and, on `RealAmplitudes` alone, under JW too (see [Known limitations](#known-limitations)) | `RealAmplitudes` and `UCCSD` |
+| Mapper × method × TN-layers | the same sweep, under MolMap_sb instead of JW | `RealAmplitudes` — does TN-VQE's advantage depend on Hamiltonian density? |
+| Richer system | H2O/6-31g, under MolMap_sb and, on `RealAmplitudes` alone, under JW too (see [Known limitations](#known-limitations)) | `RealAmplitudes` and `UCCSD` |
 
 A row that coincides with an earlier one on every field but `Case_ID` and
 `Notes` (the reps=2 point of the reps axis *is* the baseline, for
@@ -120,9 +120,9 @@ their axis actually varies.
 | Molecule | Active space | Basis | Mapper | Qubits |
 |---|---|---|---|---:|
 | H2 | unrestricted (2e in 4 orbitals) | 6-31g | JW | 8 |
-| H2 | unrestricted (2e in 4 orbitals) | 6-31g | mol_map_spinblock | 4 |
+| H2 | unrestricted (2e in 4 orbitals) | 6-31g | MolMap_sb | 4 |
 | H2O | CAS(4,4) | 6-31g | JW | 8 |
-| H2O | CAS(4,4) | 6-31g | mol_map_spinblock | 6 |
+| H2O | CAS(4,4) | 6-31g | MolMap_sb | 6 |
 
 Every run is at the experimental equilibrium geometry, given in Angstrom
 in the `Geometry` column: H2 at `r = 0.74144`, H2O at `r = 0.9572` and
@@ -135,11 +135,11 @@ committed under `hamiltonian_data/`.
 | Ansatz | Parameters | Structure |
 |---|---|---|
 | `RealAmplitudes` | `n(R+1)` | Ry only, reverse-linear entangler by default. Real amplitudes only; the baseline ansatz |
-| `n_local_rzryrz_sca` | `3n(R+1)` | Rz+Ry+Rz, shifted-circular-alternating entangler by default. The circuit `TN_QC_OPT` builds for itself when no `qasm_ansatz` is supplied — in the comparison so the vendor's own default is measured rather than assumed |
+| `rzryrz` | `3n(R+1)` | Rz+Ry+Rz, shifted-circular-alternating entangler by default (Qiskit `n_local` with `sca` entanglement). The circuit `TN_QC_OPT` builds for itself when no `qasm_ansatz` is supplied — in the comparison so the vendor's own default is measured rather than assumed |
 | `UCCSD` | 15, 26 | A restricted singles-and-doubles ansatz out of the reference determinant. The chemistry anchor the hardware-efficient families are compared against |
 | tUPS / pp-tUPS | 9 per layer | Tiled Unitary Product State [7], swept at 1–4 layers (2 is the default). Number-conserving and HF-initialized like UCCSD; `perfect_pairing_order` when occupied and virtual orbitals are equal in number (pp-tUPS), `occupied_middle_order` otherwise (plain tUPS) |
 
-`RealAmplitudes` and `n_local_rzryrz_sca` are built by
+`RealAmplitudes` and `rzryrz` are built by
 [`_ansatz_builders.py`](../../../utils/_ansatz_builders.py) and pinned as
 OpenQASM 3.0 under `data/qasm/`, one file per distinct (ansatz, qubits,
 repetitions, entanglement), named in `Qasm_Ansatz_File` and hashed in
@@ -161,7 +161,7 @@ tUPS/pp-tUPS is built by
 [`regenerate_spinblock_mol_map.py`](../../../utils/regenerate_spinblock_mol_map.py)
 from [`_fermionic_ansatz.py`](../../../utils/_fermionic_ansatz.py) —
 vendored from `CompareVQEs/ansatze.py`, which also supplies the
-`mol_map_spinblock` reordering below. It stays in `SUPPLIED_ANSATZE` for
+`MolMap_sb` reordering below. It stays in `SUPPLIED_ANSATZE` for
 stem-naming purposes (a chemistry-dependent circuit, like UCCSD, not a
 `(qubits, reps)`-only one) even though it is genuinely built, just by
 this dedicated script rather than `pin_qasm_ansatz.py`'s generic loop.
@@ -181,8 +181,8 @@ q_3: ┤ Ry(θ[3]) ├┤ X ├┤ Ry(θ[7]) ├──────────�
      └──────────┘└───┘└──────────┘               └───┘    └───────────┘
 ```
 
-`n_local_rzryrz_sca`, `UCCSD` and tUPS are not drawn here — at 4 qubits
-`n_local_rzryrz_sca` is three times the width of the diagram above, and
+`rzryrz`, `UCCSD` and tUPS are not drawn here — at 4 qubits
+`rzryrz` is three times the width of the diagram above, and
 the mol_map circuits for the other two run to thousands of gates. All
 are in `data/qasm/`, where the pinned file is the authority anyway.
 
@@ -194,7 +194,7 @@ own file, distinguished in the stem by `qasm_stem`
 
 ## HF-approximating initial parameters
 
-`RealAmplitudes` and `n_local_rzryrz_sca` start from an
+`RealAmplitudes` and `rzryrz` start from an
 HF-approximating `phi_init` (`Phi_Init = "hf-approx"`) rather than a
 random draw, so a VQE/TN-VQE/network comparison is not confounded by an
 arbitrary starting point. Only the *last* rotation layer is set (π on
@@ -209,7 +209,7 @@ both families (`_ansatz_builders.hf_approx_phi_init`, backed by
 The occupied-qubit pattern itself (`_ansatz_builders.hf_state_for`) is a
 formula under JW — the first `Active_Electrons` qubits, the same
 convention `UCCSD`'s own reference-state preparation uses — and data
-under mol_map_spinblock, from `regenerate_spinblock_mol_map.py`'s own
+under MolMap_sb, from `regenerate_spinblock_mol_map.py`'s own
 computed `hf_state` (`_ansatz_builders.MOL_MAP_SPINBLOCK_HF_STATE`),
 since the reordering that produces it is not a formula. `UCCSD` and
 tUPS need no such treatment: both are number-conserving and already
@@ -230,7 +230,7 @@ translates by parameter name, never by position.
 | Value | Meaning |
 |---|---|
 | `JW` | Jordan-Wigner, `2 × Active_Orbitals` qubits, spin-orbitals interleaved |
-| `mol_map_spinblock` | Cebule's constraint-based MOL_MAP encoding, reindexed so alpha and beta spin-orbitals fall in contiguous blocks |
+| `MolMap_sb` | Cebule's constraint-based MOL_MAP encoding, reindexed so alpha and beta spin-orbitals fall in contiguous blocks |
 
 Cebule's MOL_MAP output indexes only the determinants satisfying the
 active space's particle-number and spin constraints, so its qubit count
@@ -243,11 +243,11 @@ mapping matrix into that form; `reorder_mapped_hamiltonian` applies the
 same change of basis to the Hamiltonian. Both are purely local
 recomputations, from `mapping_matrix` already committed in
 `hamiltonian_data/*_mapped.json` — no MOL_MAP submission is made to
-produce `mol_map_spinblock`.
+produce `MolMap_sb`.
 
 `regenerate_spinblock_mol_map.py` runs this for the campaign's two
 mol_map cells and writes `hamiltonian_data/{h2_6-31G,water_6-31G}_
-mapped_spinblock.json` and the matching `data/qasm/*_molmapspinblock_
+MolMap_sb.json` and the matching `data/qasm/*_MolMap_sb_
 *.qasm` circuits, verifying each against the cell's known Hartree-Fock
 energy before writing anything. One thing worth knowing if this is
 extended to another cell: a MOL_MAP mapping matrix's row index, as
@@ -275,14 +275,14 @@ substantially: 120 → 52 for H2/6-31g, 1304 → 392 for H2O/6-31g CAS(4,4).
 | `Basis`, `Basis_Source` | `6-31g` throughout, from Basis Set Exchange [6] |
 | `Active_Space` | `full` (H2) or `valence_cas` (H2O) |
 | `Active_Electrons`, `Active_Orbitals` | The space the Hamiltonian is built in |
-| `Mapper` | `JW` or `mol_map_spinblock` — see [Mappers](#mappers) |
-| `N_Qubit`, `N_Qubit_Source` | Qubit count and its provenance: `jw_exact` or `mol_map_spinblock_computed` |
+| `Mapper` | `JW` or `MolMap_sb` — see [Mappers](#mappers) |
+| `N_Qubit`, `N_Qubit_Source` | Qubit count and its provenance: `jw_exact` or `MolMap_sb_computed` |
 | `Method` | `VQE` (plain), `TN-VQE` (θ and φ jointly optimised) or `TN` (classical-only control: θ alone, no quantum measurements) |
-| `Ansatz` | `RealAmplitudes`, `n_local_rzryrz_sca`, `UCCSD` or `tUPS` |
+| `Ansatz` | `RealAmplitudes`, `rzryrz`, `UCCSD` or `tUPS` |
 | `Ansatz_Reps` | Repetitions (or, for tUPS, layers) of the ansatz circuit |
-| `Entanglement` | Blank except on the entangler-topology axis's rows (`RealAmplitudes`/`n_local_rzryrz_sca` only), where it names the non-default entanglement |
+| `Entanglement` | Blank except on the entangler-topology axis's rows (`RealAmplitudes`/`rzryrz` only), where it names the non-default entanglement |
 | `Backend_Platform` | `aer_simulator`, on every row |
-| `Optimizer`, `Opt_Options` | `COBYLA`, `SPSA` or `ExcitationSolve`. `Opt_Options` is the dictionary passed to `scipy.optimize.minimize` (or Cebule's own optimizer): `{}` except for SPSA on `RealAmplitudes`/`n_local_rzryrz_sca`/`UCCSD`/`tUPS` and ExcitationSolve on `UCCSD`, tuned in `opt_options_for` (`build_benchmark_matrix.py`) |
+| `Optimizer`, `Opt_Options` | `COBYLA`, `SPSA` or `ExcitationSolve`. `Opt_Options` is the dictionary passed to `scipy.optimize.minimize` (or Cebule's own optimizer): `{}` except for SPSA on `RealAmplitudes`/`rzryrz`/`UCCSD`/`tUPS` and ExcitationSolve on `UCCSD`, tuned in `opt_options_for` (`build_benchmark_matrix.py`) |
 | `Quantum_Eval_Budget` | Quantum evaluations the row is allowed, held equal across optimizers and covering the whole run, including SPSA's calibration and closing repeats and ExcitationSolve's flatness check and validation: `max(30, ceil(30 × n_params))`, enough for each run to reach its optimum rather than be cut off (ExcitationSolve gets 6 sweeps) — affordable because this file is 40 rows, not a full factorial |
 | `Quantum_Evals_Per_Iteration` | What one iteration of this row's optimizer spends of the budget: 1 for COBYLA, 2 for SPSA, `4 × n_phi` for ExcitationSolve — 0 wherever φ is frozen, since a θ-only change is served from cache |
 | `Cost_Evals_Per_Iteration` | Entries one iteration adds to `cost_history`, the axis convergence curves are aligned on |
@@ -291,10 +291,10 @@ substantially: 120 → 52 for H2/6-31g, 1304 → 392 for H2O/6-31g CAS(4,4).
 | `Qiskit_Version` | The installed Qiskit, which fixes the transpiler optimisation level the run receives |
 | `TN_Layers_Network` | Layers of θ on the classical tensor-network side; blank on `VQE` rows, which ignore it entirely; 1, 2 or 3 on `TN-VQE`/`TN` rows |
 | `TN_Ansatz` | `givens` on every TN-VQE row, or `n/a (not TN-VQE)` |
-| `Measurement_Method` | `pauli` (JW rows) or `grouped` (mol_map_spinblock rows) |
+| `Measurement_Method` | `pauli` (JW rows) or `grouped` (MolMap_sb rows) |
 | `Qasm_Ansatz_File`, `Qasm_Ansatz_SHA256` | The pinned circuit and a hash prefix of it |
 | `Num_Opt_Params_Phi` | Circuit-side parameter count, the `num_parameters` the pinned QASM loads with. On a `TN` row it is the count held fixed |
-| `Phi_Init` | `"zeros"` (`UCCSD`, tUPS), `"hf-approx"` (`RealAmplitudes`, `n_local_rzryrz_sca`) — see [HF-approximating initial parameters](#hf-approximating-initial-parameters) |
+| `Phi_Init` | `"zeros"` (`UCCSD`, tUPS), `"hf-approx"` (`RealAmplitudes`, `rzryrz`) — see [HF-approximating initial parameters](#hf-approximating-initial-parameters) |
 | `Num_Opt_Params_Theta` | Network-side parameter count on a TN-VQE row |
 | `Num_ExpVals_Per_Iter`, `Num_ExpVals_Source` | Measurement circuits one evaluation submits, and where that count came from |
 | `Error_Mitigation`, `Precision`, `QESEM_Execution_Mode` | `none`, `n/a (shot-based)`, `n/a (not QESEM)` on every row — no mitigation is applied in this file |
@@ -303,7 +303,7 @@ substantially: 120 → 52 for H2/6-31g, 1304 → 392 for H2O/6-31g CAS(4,4).
 
 ## Known limitations
 
-- **`mol_map_spinblock` covers two chemistry cells.** H2/6-31g and
+- **`MolMap_sb` covers two chemistry cells.** H2/6-31g and
   H2O/6-31g's CAS(4,4) are what this campaign needs; extending it to
   another cell means running `regenerate_spinblock_mol_map.py` against
   that cell's own committed `mapping_matrix`, correcting for the
@@ -332,7 +332,7 @@ substantially: 120 → 52 for H2/6-31g, 1304 → 392 for H2O/6-31g CAS(4,4).
   `Opt_Options = "{}"`, unverified to need no similar treatment.
   `SPSA`'s `target_step`/`c` tuning, by contrast, is no longer
   UCCSD-only — `SPSA_TUNED_ANSATZE` covers `RealAmplitudes`,
-  `n_local_rzryrz_sca` and `tUPS` too. The values were tuned on UCCSD;
+  `rzryrz` and `tUPS` too. The values were tuned on UCCSD;
   the other families reuse them as a starting hypothesis, and tUPS has no
   SPSA result yet to check it against. Re-check each family once its
   affected rows are (re-)run.

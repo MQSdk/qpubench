@@ -23,7 +23,7 @@ estimates.
 TN_QC_OPT has *two* circuit sides, one per platform, and they are
 different circuits — which is why both are here:
 
-`n_local_rzryrz_sca` is TN_QC_OPT's Qiskit path (`functions_qiskit.py:36`):
+`rzryrz` is TN_QC_OPT's Qiskit path (`functions_qiskit.py:36`):
 `n_local(n, ["rz","ry","rz"], "cx", entanglement="sca")` — the circuit the
 task builds for itself when no QASM is supplied. Parameter count
 `3n(R+1)`, the trailing rotation layer being the difference from
@@ -76,7 +76,7 @@ SUPPORTED_ANSATZE = (
     "EfficientSU2_circular",
     "RealAmplitudes",
     "StronglyEntanglingLayers",
-    "n_local_rzryrz_sca",
+    "rzryrz",
     "excitation_preserving_linear",
     "UCCSD",
     "tUPS",
@@ -203,7 +203,7 @@ def qasm_stem(
         if entanglement is not None and entanglement != default:
             stem += f"_{entanglement}"
         return stem
-    stem = f"{ansatz}_{mapper.replace('_', '')}_{num_qubits}q_{reps}r_{num_electrons}e"
+    stem = f"{ansatz}_{mapper}_{num_qubits}q_{reps}r_{num_electrons}e"
     if mapper != "JW":
         stem += f"_{num_orbitals}o"
     return stem
@@ -217,7 +217,7 @@ def qasm_stem(
 DEFAULT_ENTANGLEMENT = {
     "RealAmplitudes": "reverse_linear",
     "EfficientSU2_circular": "circular",
-    "n_local_rzryrz_sca": "sca",
+    "rzryrz": "sca",
 }
 
 
@@ -243,7 +243,7 @@ def build_ansatz(
     QASM (`pin_qasm_ansatz.py`), because that is what a pinned circuit
     has to carry.
 
-    `entanglement` only affects RealAmplitudes and n_local_rzryrz_sca
+    `entanglement` only affects RealAmplitudes and rzryrz
     (None means each family's own DEFAULT_ENTANGLEMENT). EfficientSU2_circular
     already names its one non-default topology outright; the rest have no
     entanglement pattern to vary.
@@ -266,10 +266,10 @@ def build_ansatz(
         )
     if ansatz == "StronglyEntanglingLayers":
         return strongly_entangling_layers(num_qubits, reps=reps)
-    if ansatz == "n_local_rzryrz_sca":
-        return n_local_rzryrz_sca(
+    if ansatz == "rzryrz":
+        return rzryrz(
             num_qubits, reps=reps,
-            entanglement=entanglement or DEFAULT_ENTANGLEMENT["n_local_rzryrz_sca"],
+            entanglement=entanglement or DEFAULT_ENTANGLEMENT["rzryrz"],
         )
     if ansatz == "excitation_preserving_linear":
         return excitation_preserving_linear(num_qubits, reps=reps)
@@ -307,7 +307,7 @@ def strongly_entangling_layers(num_qubits: int, *, reps: int = 1) -> "QuantumCir
     return qc
 
 
-def n_local_rzryrz_sca(
+def rzryrz(
     num_qubits: int, *, reps: int = 1, entanglement: str = "sca",
 ) -> "QuantumCircuit":
     """TN_QC_OPT's Qiskit circuit side, exactly as `functions_qiskit.py:36`
@@ -391,7 +391,7 @@ def uccsd(
 # Hartree-Fock reference state per mapper, as a bit list in Pauli-label
 # order (leftmost = highest qubit) -- the form _fermionic_ansatz.
 # hf_parameters expects. JW is a formula (the first `active_electrons`
-# qubits, same convention uccsd() above uses); mol_map_spinblock's is data
+# qubits, same convention uccsd() above uses); MolMap_sb's is data
 # this campaign's own regenerate_spinblock_mol_map.py prints when it
 # builds the reordered Hamiltonian (reorder_mapped_hamiltonian's own
 # returned hf_state), since the reordering is data, not a formula.
@@ -443,7 +443,7 @@ def hf_approx_phi_init(
     in the parameter order the pinned QASM text actually binds against.
 
     The actual per-qubit value comes from _fermionic_ansatz.hf_parameters
-    (verified against RHF for RealAmplitudes and n_local_rzryrz_sca, both
+    (verified against RHF for RealAmplitudes and rzryrz, both
     mappers, robust to entanglement topology -- it sets only the LAST
     rotation layer, and a CX gate controlled by a qubit still in |0> is
     the identity, so every earlier entangler leaves |0...0> untouched).
@@ -538,7 +538,7 @@ def circuit_parameter_count(ansatz: str, num_qubits: int, reps: int) -> int | No
     """
     if ansatz == "StronglyEntanglingLayers":
         return 3 * reps * num_qubits            # PennyLane's (L, N, 3) shape
-    if ansatz == "n_local_rzryrz_sca":
+    if ansatz == "rzryrz":
         return 3 * num_qubits * (reps + 1)      # Qiskit's trailing rotation layer
     if ansatz == "excitation_preserving_linear":
         # One RZ per qubit per rotation layer, plus one theta per linear

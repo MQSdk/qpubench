@@ -9,7 +9,7 @@ hamiltonian_data/*_mapped.json already carries `mapping_matrix`, and
 reorder_mapped_hamiltonian(H, D, ...) computes the reordered (H', D',
 hf_state) from that alone.
 
-Wrote NEW, distinctly-named files (`mapper == "mol_map_spinblock"`
+Wrote NEW, distinctly-named files (`mapper == "MolMap_sb"`
 throughout the campaign) rather than overwriting the old (plain)
 `mol_map` data, back when that data and the stage-0 results built on it
 were both still live.
@@ -64,7 +64,7 @@ _REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 _HAMILTONIAN_DIR = _REPO_ROOT / "data" / "benchmarks" / "ibm_tn-vqe_qesem" / "hamiltonian_data"
 _QASM_DIR = _REPO_ROOT / "data" / "qasm"
 
-NEW_MAPPER = "mol_map_spinblock"
+NEW_MAPPER = "MolMap_sb"
 N_LAYERS = 2  # tUPS/pp-tUPS default, per instruction
 # The JW layers axis is part of build_targeted_screen's own Ansatz-reps
 # axis now, so it sweeps the campaign's own CIRCUIT_REPS rather than a
@@ -134,7 +134,7 @@ def main() -> None:
 
         new_path = (
             _HAMILTONIAN_DIR
-            / f"{_FILE_MOLECULE[molecule]}_{_FILE_BASIS[basis]}_mapped_spinblock.json"
+            / f"{_FILE_MOLECULE[molecule]}_{_FILE_BASIS[basis]}_MolMap_sb.json"
         )
         new_mapping_matrix = [
             [int(r), int(c), float(v.real)]

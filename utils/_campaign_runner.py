@@ -134,7 +134,7 @@ def to_cebule_operators(observable: Any) -> tuple[list[float], list[str]]:
 _FILE_MOLECULE = {"H2": "h2", "H2O": "water"}
 _FILE_BASIS = {"sto-3g": "sto3g", "6-31g": "6-31G", "cc-pvdz": "cc-pvdz",
                "cc-pvtz": "cc-pvtz", "def2-tzvp": "def2-tzvp", "qvSZP": "qvSZP"}
-_FILE_MAPPER = {"JW": "JW", "mol_map": "mapped", "mol_map_spinblock": "mapped_spinblock"}
+_FILE_MAPPER = {"JW": "JW", "mol_map": "mapped", "MolMap_sb": "MolMap_sb"}
 
 
 def hamiltonian_file(run: dict[str, str]) -> pathlib.Path | None:
