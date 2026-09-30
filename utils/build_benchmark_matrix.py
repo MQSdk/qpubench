@@ -349,11 +349,10 @@ EXCITATIONSOLVE_UCCSD_FREQUENCIES = [1, 2]
 # run's own later evaluations collapse to roughly -0.6, well below the
 # reported value.
 #
-# target_step=0.03 alone was not enough -- still bad results, so the decay
-# schedule's gain constant `c` (which sets the size of the perturbation used
-# to *estimate* the gradient, separately from target_step's role in sizing
-# the *step* taken along it) is now pinned down too, to 0.2. Both are
-# starting values, not tuned optima.
+# `c` sets the perturbation used to estimate the gradient. tn-vqe's
+# shot-based default of 0.2 is too wide for these landscapes: the probes
+# straddle enough curvature to bias the step. 0.1 still sits well above
+# the shot noise.
 #
 # Extended to RealAmplitudes and n_local_rzryrz_sca (SPSA_TUNED_ANSATZE)
 # once the same failure mode showed up on RealAmplitudes/SPSA real results
@@ -372,7 +371,7 @@ EXCITATIONSOLVE_UCCSD_FREQUENCIES = [1, 2]
 # an independently tuned one. Re-run the affected rows and re-tune per
 # family if they still misbehave.
 SPSA_TARGET_STEP = 0.01
-SPSA_C = 0.2
+SPSA_C = 0.1
 SPSA_TUNED_ANSATZE = {"UCCSD", "RealAmplitudes", "n_local_rzryrz_sca", "tUPS"}
 
 
