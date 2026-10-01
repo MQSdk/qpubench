@@ -622,6 +622,15 @@ def append_record(
             "predicted_cost_evals_per_iteration": run.get(
                 "Cost_Evals_Per_Iteration"
             ),
+            # The final parameters and the Hamiltonian they were optimised
+            # against (U(theta)^dag H U(theta), which is H itself on a plain
+            # VQE run). vqe_energy is the lowest NOISY evaluation seen, which
+            # sits below the true energy by a few shot-noise widths; these
+            # let the final state be re-evaluated exactly instead -- see
+            # _exact_energy.py.
+            "phi": result.phi,
+            "theta": result.theta,
+            "h_tn_opt_qubit": list(result.h_tn_opt_qubit),
             "submitted_at": submitted_at,
             "collected_at": time.time(),
             "wall_clock_s": round(wall_s, 3),

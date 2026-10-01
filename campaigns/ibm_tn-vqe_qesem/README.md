@@ -297,11 +297,11 @@ substantially: 120 → 52 for H2/6-31g, 1304 → 392 for H2O/6-31g CAS(4,4).
 | `Entanglement` | Blank except on the entangler-topology axis's rows (`RealAmplitudes`/`rzryrz` only), where it names the non-default entanglement |
 | `Backend_Platform` | `aer_simulator`, on every row |
 | `Optimizer`, `Opt_Options` | `COBYLA`, `SPSA` or `ExcitationSolve`. `Opt_Options` is the dictionary passed to `scipy.optimize.minimize` (or Cebule's own optimizer): `{}` except for SPSA on `RealAmplitudes`/`rzryrz`/`UCCSD`/`tUPS` and ExcitationSolve on `UCCSD`, tuned in `opt_options_for` (`build_matrix.py`) |
-| `Quantum_Eval_Budget` | Quantum evaluations the row is allowed, held equal across optimizers and covering the whole run, including SPSA's calibration and closing repeats and ExcitationSolve's flatness check and validation: `max(30, ceil(30 × n_params))`, enough for each run to reach its optimum rather than be cut off (ExcitationSolve gets 6 sweeps) |
+| `Quantum_Eval_Budget` | Quantum evaluations the row is allowed, held equal across optimizers and covering the whole run, including SPSA's calibration and closing repeats and ExcitationSolve's flatness check and validation: `max(30, ceil(120 × n_params))`, enough for each run to reach its optimum rather than be cut off -- sized for SPSA on tUPS, the slowest case seen |
 | `Quantum_Evals_Per_Iteration` | What one iteration of this row's optimizer spends of the budget: 1 for COBYLA, 2 for SPSA, `4 × n_phi` for ExcitationSolve — 0 wherever φ is frozen, since a θ-only change is served from cache |
 | `Cost_Evals_Per_Iteration` | Entries one iteration adds to `cost_history`, the axis convergence curves are aligned on |
 | `Iterations` | What `TNQCOptInput.n_iterations` receives |
-| `Shots` | 4,096, pinned via `TNQCOptInput.n_shots`; `n/a (network mode)` on `TN` rows, which take no quantum measurement |
+| `Shots` | 50,000, pinned via `TNQCOptInput.n_shots`, so one evaluation's shot noise is about 1 mHa on H2; `n/a (network mode)` on `TN` rows, which take no quantum measurement |
 | `Qiskit_Version` | The installed Qiskit, which fixes the transpiler optimisation level the run receives |
 | `TN_Layers_Network` | Layers of θ on the classical tensor-network side; blank on `VQE` rows, which ignore it entirely; 1, 2 or 3 on `TN-VQE`/`TN` rows |
 | `TN_Ansatz` | `givens` on every TN-VQE row, or `n/a (not TN-VQE)` |
@@ -355,6 +355,13 @@ substantially: 120 → 52 for H2/6-31g, 1304 → 392 for H2O/6-31g CAS(4,4).
   roughly the HF energy there, whatever its settings; a `vqe_energy`
   below HF on these rows is the lowest of many noisy evaluations, not
   real progress.
+- **`vqe_energy` is biased low; compare exact energies instead.** It is
+  the lowest noisy evaluation a run saw, so it sits a few shot-noise
+  widths below the energy of any state the run reached. Result records
+  therefore also carry the final `phi`, `theta` and transformed
+  Hamiltonian (`h_tn_opt_qubit`), and `plot_results.ipynb` re-evaluates
+  the final state exactly from them (`utils/_exact_energy.py`). Records
+  collected before this was stored fall back to `vqe_energy`.
 
 ## Open decisions
 

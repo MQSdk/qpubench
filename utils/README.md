@@ -40,6 +40,7 @@ PYTHONPATH=src python utils/pin_qasm_ansatz.py --campaign ibm_tn-vqe_qesem
 | [`_ansatz_builders.py`](_ansatz_builders.py) | Builds named ansatz circuits as real Qiskit circuits, names their pinned files, and starts hardware-efficient circuits at Hartree-Fock |
 | [`_fermionic_ansatz.py`](_fermionic_ansatz.py) | UCCSD and tUPS/pp-tUPS built from exact Givens rotations, under Jordan-Wigner or a reduced (mapping-matrix) encoding, and the spin-block reordering of such an encoding |
 | [`_optimizer_budget.py`](_optimizer_budget.py) | tn-vqe's optimizer cost model: turns an evaluation budget into each optimizer's iterations, so COBYLA, SPSA and ExcitationSolve spend the same budget |
+| [`_exact_energy.py`](_exact_energy.py) | Re-evaluates a TN_QC_OPT run's final state exactly by statevector, from the final parameters and transformed Hamiltonian its result record carries, instead of trusting the noisy `vqe_energy` |
 | [`_matrix_io.py`](_matrix_io.py) | Case_ID numbering, de-duplication, CSV output and pinned-circuit lookup for a campaign's matrix builder |
 
 Dependencies vary by module. `_matrix_io.py` and `_optimizer_budget.py`

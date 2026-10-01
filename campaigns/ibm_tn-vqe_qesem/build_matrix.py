@@ -339,10 +339,10 @@ EXCITATIONSOLVE_UCCSD_FREQUENCIES = [1, 2]
 # run's own later evaluations collapse to roughly -0.6, well below the
 # reported value.
 #
-# `c` sets the perturbation used to estimate the gradient. tn-vqe's
-# shot-based default of 0.2 is too wide for these landscapes: the probes
-# straddle enough curvature to bias the step. 0.1 still sits well above
-# the shot noise.
+# `c` sets the perturbation used to estimate the gradient. Wide probes
+# straddle enough curvature to bias the step; narrow ones let shot noise
+# swamp the difference they measure. It is sized for the noise at SHOTS,
+# so retune it if SHOTS changes.
 #
 # Extended to RealAmplitudes and rzryrz (SPSA_TUNED_ANSATZE)
 # once the same failure mode showed up on RealAmplitudes/SPSA real results
@@ -361,7 +361,7 @@ EXCITATIONSOLVE_UCCSD_FREQUENCIES = [1, 2]
 # an independently tuned one. Re-run the affected rows and re-tune per
 # family if they still misbehave.
 SPSA_TARGET_STEP = 0.01
-SPSA_C = 0.1
+SPSA_C = 0.05
 SPSA_TUNED_ANSATZE = {"UCCSD", "RealAmplitudes", "rzryrz", "tUPS"}
 
 
@@ -383,9 +383,12 @@ def opt_options_for(optimizer: str, ansatz: str, num_phi: int, num_theta: int) -
             "c": SPSA_C,
         })
     return OPT_OPTIONS
-# n_shots is a real TNQCOptInput field, so this is a pinned input rather
-# than the illustrative assumption it used to be.
-SHOTS = 4096
+
+
+# Passed as TNQCOptInput.n_shots. Sized so one evaluation's shot noise is
+# about 1 mHa on H2 -- below chemical accuracy and the differences between
+# methods this campaign compares; it falls as 1/sqrt(shots).
+SHOTS = 50_000
 
 # --- The optimizer budget, per row ----------------------------------------
 #
@@ -395,10 +398,11 @@ SHOTS = 4096
 # the same budget.
 #
 # 46 rows rather than a factorial's thousands, so each run can be given
-# enough to reach its optimum rather than be cut off. Sized so
-# ExcitationSolve, the costliest per iteration, gets 6 sweeps after its
-# fixed evaluations; COBYLA stops on its own tolerance well inside it.
-TARGETED_EVALS_PER_PARAM = 30.0
+# enough to reach its optimum rather than be cut off. Sized for the
+# slowest case seen, SPSA on tUPS from its HF start, which needs about
+# four times what UCCSD does; COBYLA stops on its own tolerance well
+# inside it.
+TARGETED_EVALS_PER_PARAM = 120.0
 
 # --- phi_init, per circuit family -----------------------------------------
 #
