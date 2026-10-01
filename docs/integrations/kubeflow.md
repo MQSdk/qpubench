@@ -107,7 +107,7 @@ components each one unblocks).
 
 ## Mapper × method = new DAG; sweep point = parameter inside one DAG
 
-`data/benchmarks/ibm_tn-vqe_qesem/targeted_screen.csv` (see `data/benchmarks/ibm_tn-vqe_qesem/README.md`) is the concrete
+`campaigns/ibm_tn-vqe_qesem/targeted_screen.csv` (see `campaigns/ibm_tn-vqe_qesem/README.md`) is the concrete
 test of the component-boundary rule above: it has two `Mapper` values
 (`JW`, `mol_map`) crossed with two `Method` values (`VQE`, `TN-VQE`), and
 each of the four pairs requires a different set of components, so each

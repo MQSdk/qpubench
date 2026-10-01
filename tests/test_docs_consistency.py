@@ -80,16 +80,17 @@ def test_schema_version_mentions_in_code_are_consistent():
 # `full`/`phase` rotation names would both have failed here.
 # ---------------------------------------------------------------------------
 
-CAMPAIGN_DIR = REPO / "data" / "benchmarks" / "ibm_tn-vqe_qesem"
+CAMPAIGN_DIR = REPO / "campaigns" / "ibm_tn-vqe_qesem"
 CSV_PATH = CAMPAIGN_DIR / "targeted_screen.csv"
 
 
 def _benchmark_matrix_module():
-    """Import the generator, which lives in utils/ rather than the package."""
+    """Import the campaign's matrix builder, which lives with the campaign
+    rather than in the package."""
     import importlib.util
 
-    path = REPO / "utils" / "build_benchmark_matrix.py"
-    spec = importlib.util.spec_from_file_location("build_benchmark_matrix", path)
+    path = CAMPAIGN_DIR / "build_matrix.py"
+    spec = importlib.util.spec_from_file_location("build_matrix", path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
@@ -118,7 +119,7 @@ def _documented_columns() -> set[str]:
     """Every backticked token in the first cell of the campaign README's
     column table.
 
-    The table lives with the campaign rather than in `data/README.md`,
+    The table lives with the campaign rather than in `campaigns/README.md`,
     which is only an index across scenarios: a column list belongs to the
     scenario that has those columns.
 
@@ -142,7 +143,7 @@ def test_csv_header_matches_generator_fieldnames():
         header = f.readline().strip().split(",")
     assert header == module.FIELDNAMES, (
         f"{CSV_PATH.relative_to(REPO)} is stale — regenerate it with "
-        "`PYTHONPATH=src python utils/build_benchmark_matrix.py`"
+        "`PYTHONPATH=src python campaigns/ibm_tn-vqe_qesem/build_matrix.py`"
     )
 
 
@@ -346,7 +347,7 @@ def test_iterations_matches_the_generators_proportional_rule():
     """`Iterations` is the rule's output, not a number typed beside it.
 
     The floor test below is the safety net; this one pins the column to
-    `optimizer_iterations` then `iteration_budget` exactly (the same two
+    `evaluation_budget` then `iteration_budget` exactly (the same two
     steps `_row()` itself takes -- an evaluation budget, then that
     optimizer's own evaluations-per-iteration), so a change to any of
     the three has to be regenerated into the CSV rather than drifting
@@ -358,8 +359,8 @@ def test_iterations_matches_the_generators_proportional_rule():
         if row["Iterations"] == "1":        # stage-3 refinement: one job, no optimizer
             continue
         n_phi, n_theta = _row_phi_theta(row)
-        eval_budget = module.optimizer_iterations(
-            n_phi + n_theta, module.stage_evals_per_param(row["Stage"]),
+        eval_budget = module.evaluation_budget(
+            n_phi + n_theta, module.TARGETED_EVALS_PER_PARAM,
         )
         expected = module.iteration_budget(eval_budget, row["Optimizer"], n_phi, n_theta)
         assert int(row["Iterations"]) == expected, (
@@ -521,7 +522,8 @@ def test_row_counts_stated_in_prose_are_counts_that_really_exist():
         *(REPO / "examples").rglob("*.py"),
         *(REPO / "utils").rglob("*.py"),
         *(REPO / "utils").rglob("*.md"),
-        *(REPO / "data").rglob("*.md"),
+        *(REPO / "campaigns").rglob("*.md"),
+        *(REPO / "campaigns").rglob("*.py"),
         *(REPO / "integrations").rglob("*.md"),
         *(REPO / "integrations").rglob("*.py"),
     ]

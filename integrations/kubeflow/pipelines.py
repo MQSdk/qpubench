@@ -1,5 +1,5 @@
 """Four kfp DAGs — one per (`Mapper`, `Method`) pair in
-data/benchmarks/ibm_tn-vqe_qesem/targeted_screen.csv (see data/benchmarks/ibm_tn-vqe_qesem/README.md's "Mapper and method
+campaigns/ibm_tn-vqe_qesem/targeted_screen.csv (see campaigns/ibm_tn-vqe_qesem/README.md's "Mapper and method
 are separate columns" section):
 
     cebule_molecular_vqe_pipeline  -- mol_map, TN-VQE
@@ -96,7 +96,7 @@ def _with_cebule_credentials(task: Any) -> Any:
     description=(
         "MOL_MAP -> TN_QC_OPT -> QASM_GEN -> circuit execution, following the "
         "Cebule SDK task chain documented in schemas/mirrors/mqsdk_cebule.py. "
-        "Mapper `mol_map` + Method `TN-VQE` in data/benchmarks/ibm_tn-vqe_qesem/targeted_screen.csv."
+        "Mapper `mol_map` + Method `TN-VQE` in campaigns/ibm_tn-vqe_qesem/targeted_screen.csv."
     ),
 )
 def cebule_molecular_vqe_pipeline(
@@ -107,7 +107,7 @@ def cebule_molecular_vqe_pipeline(
     h_operators: list[str] = [],  # noqa: B006
     n_iterations: int = 100,
     # TN_Layers_Network / Ansatz_Reps / TN_Ansatz / Measurement_Method
-    # sweep points (data/benchmarks/ibm_tn-vqe_qesem/README.md) — resolved by dsl.ParallelFor below, all
+    # sweep points (campaigns/ibm_tn-vqe_qesem/README.md) — resolved by dsl.ParallelFor below, all
     # inside this one pipeline/DAG, not one pipeline per combination.
     tn_layers_network_values: list[int] = [3],
     tn_layers_circuit_values: list[int] = [3],
@@ -199,7 +199,7 @@ def cebule_molecular_vqe_pipeline(
     description=(
         "JW mapping -> TN_QC_OPT -> QASM_GEN -> circuit execution — TN-VQE "
         "applied to the plain JW-mapped Hamiltonian, no MOL_MAP. Mapper "
-        "category `tn_qc_opt` in data/benchmarks/ibm_tn-vqe_qesem/targeted_screen.csv."
+        "category `tn_qc_opt` in campaigns/ibm_tn-vqe_qesem/targeted_screen.csv."
     ),
 )
 def cebule_tn_vqe_pipeline(
@@ -284,8 +284,8 @@ def cebule_tn_vqe_pipeline(
     description=(
         "MOL_MAP -> measurement of the fixed Hartree-Fock reference state "
         "(no VQE ansatz — Ansatz is blank for this Mapper category in "
-        "data/benchmarks/ibm_tn-vqe_qesem/README.md). Mapper category `mol_map` in "
-        "data/benchmarks/ibm_tn-vqe_qesem/targeted_screen.csv."
+        "campaigns/ibm_tn-vqe_qesem/README.md). Mapper category `mol_map` in "
+        "campaigns/ibm_tn-vqe_qesem/targeted_screen.csv."
     ),
 )
 def mol_map_measurement_pipeline(
@@ -326,8 +326,8 @@ def mol_map_measurement_pipeline(
         "Plain Jordan-Wigner mapping -> measurement of the fixed "
         "Hartree-Fock reference state. No Cebule call at all (no VQE "
         "ansatz — Ansatz is blank for this Mapper category in "
-        "data/benchmarks/ibm_tn-vqe_qesem/README.md). Mapper category `JW` in "
-        "data/benchmarks/ibm_tn-vqe_qesem/targeted_screen.csv."
+        "campaigns/ibm_tn-vqe_qesem/README.md). Mapper category `JW` in "
+        "campaigns/ibm_tn-vqe_qesem/targeted_screen.csv."
     ),
 )
 def jw_baseline_pipeline(

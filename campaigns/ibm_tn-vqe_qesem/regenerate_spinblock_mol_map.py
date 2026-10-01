@@ -17,8 +17,7 @@ were both still live.
 NOT RE-RUNNABLE AS WRITTEN: the old `hamiltonian_data/*_mapped.json`
 files this script's mol_map-reordering half reads as its SOURCE have
 since been deleted (stage 0/1 and the plain `mol_map` mapper were
-retired along with them -- see the module docstring of
-build_benchmark_matrix.py). Its outputs are already committed and need
+retired along with them -- see the module docstring of build_matrix.py). Its outputs are already committed and need
 no regeneration; this file stays as a record of how they were produced,
 and to regenerate anything from it now you would restore those old
 Hamiltonian files from backup first. The JW tUPS-layers block below does
@@ -41,7 +40,8 @@ exactly that reason). No prior code in this repo treated
 caught before.
 
 Run:
-    PYTHONPATH=src python utils/regenerate_spinblock_mol_map.py
+    PYTHONPATH=src python campaigns/ibm_tn-vqe_qesem/regenerate_spinblock_mol_map.py
+    PYTHONPATH=src python campaigns/ibm_tn-vqe_qesem/regenerate_spinblock_mol_map.py --h2o-tups
 """
 from __future__ import annotations
 
@@ -49,20 +49,22 @@ import json
 import pathlib
 import sys
 
-sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "src"))
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2] / "src"))
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2] / "utils"))
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
+import campaign
 import numpy as np
 import scipy.sparse as sparse
 from _ansatz_builders import qasm_stem
 from _fermionic_ansatz import pp_tups, reorder_mapped_hamiltonian, uccsd
-from build_benchmark_matrix import CIRCUIT_REPS
+from build_matrix import CIRCUIT_REPS
 from qiskit import qasm3
 from qiskit.quantum_info import SparsePauliOp, Statevector
 
-_REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
-_HAMILTONIAN_DIR = _REPO_ROOT / "data" / "benchmarks" / "ibm_tn-vqe_qesem" / "hamiltonian_data"
-_QASM_DIR = _REPO_ROOT / "data" / "qasm"
+_REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
+_HAMILTONIAN_DIR = campaign.HAMILTONIAN_DIR
+_QASM_DIR = campaign.QASM_DIR
 
 NEW_MAPPER = "MolMap_sb"
 N_LAYERS = 2  # tUPS/pp-tUPS default, per instruction
@@ -179,7 +181,7 @@ def main() -> None:
         path.write_text(qasm3.dumps(tups_jw) + "\n", encoding="utf-8")
         print(f"  wrote {path.relative_to(_REPO_ROOT)}  ({tups_jw.num_parameters} params)")
 
-    print("\nLookup tables for build_benchmark_matrix.py:")
+    print("\nLookup tables for build_matrix.py:")
     print("  qubit counts:", qubit_counts)
     print("  Pauli term counts:", term_counts)
 

@@ -38,32 +38,45 @@ purchased hardware time or applies error mitigation.
 
 ## Campaign structure
 
-One file, `targeted_screen.csv`, generated with
+Everything this campaign decides lives in this folder; the reusable
+machinery it runs on is the shared toolkit in [`utils/`](../../utils/).
+
+| File | What it is |
+|---|---|
+| [`build_matrix.py`](build_matrix.py) | Generates `targeted_screen.csv`: the molecules, axes, shots, optimizer settings and budget multiplier are all set here |
+| [`campaign.py`](campaign.py) | What the shared tools need to know: file locations, Hamiltonian file names, Hartree-Fock states under MolMap_sb, the device to price against |
+| [`regenerate_spinblock_mol_map.py`](regenerate_spinblock_mol_map.py) | Builds the MolMap_sb Hamiltonians and the UCCSD/tUPS circuits from them |
+| `targeted_screen.csv` | The matrix |
+| `hamiltonian_data/`, `qasm/` | The Hamiltonians the runs optimise, and the circuits they run |
+| `results/` | Collected runs (gitignored) |
+| `run_campaign_batch.ipynb`, `plot_results.ipynb` | Running the campaign interactively, and plotting its results |
+
+The matrix is generated with
 
 ```sh
-PYTHONPATH=src python utils/build_benchmark_matrix.py --stage targeted
+PYTHONPATH=src python campaigns/ibm_tn-vqe_qesem/build_matrix.py --stage targeted
 ```
 
 Each row defines one VQE or TN-VQE run: a single optimisation of one
 Hamiltonian by one method, with its own ansatz, mapper, measurement
 method and evaluation budget. `build_targeted_screen()` in
-[`build_benchmark_matrix.py`](../../../utils/build_benchmark_matrix.py)
+[`build_matrix.py`](build_matrix.py)
 is the source of truth for what each row actually is; the axes table
 below is a summary of it.
 
 Two things execute the campaign, and they build their runs through the
-same module ([`_campaign_runner.py`](../../../utils/_campaign_runner.py)),
+same module ([`_campaign_runner.py`](../../utils/_campaign_runner.py)),
 so neither can drift from the other. Both submit nothing until told to,
 both checkpoint per run so an interrupted pass resumes rather than
 re-spending time, and both read credentials from the environment rather
 than from a notebook cell or a command line.
 
-[`run_campaign.py`](../../../utils/run_campaign.py) runs the file from
+[`run_campaign.py`](../../utils/run_campaign.py) runs the file from
 the command line, selected with `--where` filters:
 
 ```sh
-PYTHONPATH=src python utils/run_campaign.py --submit --where Stage=targeted
-PYTHONPATH=src python utils/run_campaign.py --collect
+PYTHONPATH=src python utils/run_campaign.py --campaign ibm_tn-vqe_qesem --submit
+PYTHONPATH=src python utils/run_campaign.py --campaign ibm_tn-vqe_qesem --collect
 ```
 
 **Submission and collection are separate.** Cebule dispatches to outside
@@ -98,7 +111,7 @@ except the one deliberately crossed axis below.
 | Mapper | JW ↔ MolMap_sb | Every ansatz — `RealAmplitudes`, `rzryrz`, `UCCSD`, tUPS/pp-tUPS — each run under both |
 | Ansatz reps (tUPS/pp-tUPS: layers) | 1, 2, 3, 4 | `RealAmplitudes`, `rzryrz` and tUPS/pp-tUPS, JW |
 | Entangler topology | `reverse_linear`, `sca` and `full` on both families (defaults: `reverse_linear` for `RealAmplitudes`, `sca` for `rzryrz`) | `RealAmplitudes` and `rzryrz`, JW, at 2 reps |
-| Optimizer | `COBYLA`, `SPSA`, `ExcitationSolve` | `RealAmplitudes` (cheap; also where SPSA's `target_step`/`c` are tuned), `UCCSD` (where SPSA is tuned too, and ExcitationSolve's `frequencies` — see `opt_options_for` in `build_benchmark_matrix.py`) and `tUPS` at its default 2 layers |
+| Optimizer | `COBYLA`, `SPSA`, `ExcitationSolve` | `RealAmplitudes` (cheap; also where SPSA's `target_step`/`c` are tuned), `UCCSD` (where SPSA is tuned too, and ExcitationSolve's `frequencies` — see `opt_options_for` in `build_matrix.py`) and `tUPS` at its default 2 layers |
 | Method × TN-layers | `TN-VQE`/`TN` × `TN_Layers_Network` ∈ {1,2,3} (2 matters most) | `RealAmplitudes`, JW — `VQE` ignores `TN_Layers_Network` entirely, so it carries no rows in this axis |
 | Mapper × method × TN-layers | the same sweep, under MolMap_sb instead of JW | `RealAmplitudes` — does TN-VQE's advantage depend on Hamiltonian density? |
 | TN-VQE on tUPS | `TN-VQE` at `TN_Layers_Network` = 2, under JW and MolMap_sb | tUPS/pp-tUPS at 2 layers, `COBYLA` — does TN-VQE's advantage carry over to a chemistry ansatz? Compared against the mapper axis's VQE tUPS rows |
@@ -108,8 +121,8 @@ A row that coincides with an earlier one on every field but `Case_ID` and
 `Notes` (the reps=2 point of the reps axis *is* the baseline, for
 instance) is numbered and then dropped: every row gets a `Case_ID` first,
 so a collapsed duplicate leaves a gap rather than reshuffling anything
-after it (`assign_case_ids` then `dedupe_rows` in `build_benchmark_
-matrix.py`). 46 rows, `Case_ID`s 1–53 with seven gaps.
+after it (`assign_case_ids` then `dedupe_rows`, from
+`utils/_matrix_io.py`). 46 rows, `Case_ID`s 1–53 with seven gaps.
 
 **Every ansatz-optimizer-mode combination reuses the same Hamiltonian,
 pinned circuit and `Phi_Init`** for a given (molecule, basis, mapper)
@@ -141,8 +154,8 @@ committed under `hamiltonian_data/`.
 | tUPS / pp-tUPS | 9 per layer | Tiled Unitary Product State [7], swept at 1–4 layers (2 is the default). Number-conserving and HF-initialized like UCCSD; `perfect_pairing_order` when occupied and virtual orbitals are equal in number (pp-tUPS), `occupied_middle_order` otherwise (plain tUPS) |
 
 `RealAmplitudes` and `rzryrz` are built by
-[`_ansatz_builders.py`](../../../utils/_ansatz_builders.py) and pinned as
-OpenQASM 3.0 under `data/qasm/`, one file per distinct (ansatz, qubits,
+[`_ansatz_builders.py`](../../utils/_ansatz_builders.py) and pinned as
+OpenQASM 3.0 under `qasm/`, one file per distinct (ansatz, qubits,
 repetitions, entanglement), named in `Qasm_Ansatz_File` and hashed in
 `Qasm_Ansatz_SHA256` so a silently edited circuit is detectable. A named
 ansatz is not a circuit — it is a name a library version resolves — so
@@ -159,8 +172,8 @@ never overwrites them. No UCCSD/JW/H2O circuit is currently pinned (see
 [Known limitations](#known-limitations)).
 
 tUPS/pp-tUPS is built by
-[`regenerate_spinblock_mol_map.py`](../../../utils/regenerate_spinblock_mol_map.py)
-from [`_fermionic_ansatz.py`](../../../utils/_fermionic_ansatz.py) —
+[`regenerate_spinblock_mol_map.py`](regenerate_spinblock_mol_map.py)
+from [`_fermionic_ansatz.py`](../../utils/_fermionic_ansatz.py) —
 vendored from `CompareVQEs/ansatze.py`, which also supplies the
 `MolMap_sb` reordering below. It stays in `SUPPLIED_ANSATZE` for
 stem-naming purposes (a chemistry-dependent circuit, like UCCSD, not a
@@ -185,7 +198,7 @@ q_3: ┤ Ry(θ[3]) ├┤ X ├┤ Ry(θ[7]) ├──────────�
 `rzryrz`, `UCCSD` and tUPS are not drawn here — at 4 qubits
 `rzryrz` is three times the width of the diagram above, and
 the mol_map circuits for the other two run to thousands of gates. All
-are in `data/qasm/`, where the pinned file is the authority anyway.
+are in `qasm/`, where the pinned file is the authority anyway.
 
 The `full` entangler variant (the entangler-topology axis) pins to its
 own file, distinguished in the stem by `qasm_stem`
@@ -248,7 +261,7 @@ produce `MolMap_sb`.
 
 `regenerate_spinblock_mol_map.py` runs this for the campaign's two
 mol_map cells and writes `hamiltonian_data/{h2_6-31G,water_6-31G}_
-MolMap_sb.json` and the matching `data/qasm/*_MolMap_sb_
+MolMap_sb.json` and the matching `qasm/*_MolMap_sb_
 *.qasm` circuits, verifying each against the cell's known Hartree-Fock
 energy before writing anything. One thing worth knowing if this is
 extended to another cell: a MOL_MAP mapping matrix's row index, as
@@ -283,7 +296,7 @@ substantially: 120 → 52 for H2/6-31g, 1304 → 392 for H2O/6-31g CAS(4,4).
 | `Ansatz_Reps` | Repetitions (or, for tUPS, layers) of the ansatz circuit |
 | `Entanglement` | Blank except on the entangler-topology axis's rows (`RealAmplitudes`/`rzryrz` only), where it names the non-default entanglement |
 | `Backend_Platform` | `aer_simulator`, on every row |
-| `Optimizer`, `Opt_Options` | `COBYLA`, `SPSA` or `ExcitationSolve`. `Opt_Options` is the dictionary passed to `scipy.optimize.minimize` (or Cebule's own optimizer): `{}` except for SPSA on `RealAmplitudes`/`rzryrz`/`UCCSD`/`tUPS` and ExcitationSolve on `UCCSD`, tuned in `opt_options_for` (`build_benchmark_matrix.py`) |
+| `Optimizer`, `Opt_Options` | `COBYLA`, `SPSA` or `ExcitationSolve`. `Opt_Options` is the dictionary passed to `scipy.optimize.minimize` (or Cebule's own optimizer): `{}` except for SPSA on `RealAmplitudes`/`rzryrz`/`UCCSD`/`tUPS` and ExcitationSolve on `UCCSD`, tuned in `opt_options_for` (`build_matrix.py`) |
 | `Quantum_Eval_Budget` | Quantum evaluations the row is allowed, held equal across optimizers and covering the whole run, including SPSA's calibration and closing repeats and ExcitationSolve's flatness check and validation: `max(30, ceil(30 × n_params))`, enough for each run to reach its optimum rather than be cut off (ExcitationSolve gets 6 sweeps) |
 | `Quantum_Evals_Per_Iteration` | What one iteration of this row's optimizer spends of the budget: 1 for COBYLA, 2 for SPSA, `4 × n_phi` for ExcitationSolve — 0 wherever φ is frozen, since a θ-only change is served from cache |
 | `Cost_Evals_Per_Iteration` | Entries one iteration adds to `cost_history`, the axis convergence curves are aligned on |

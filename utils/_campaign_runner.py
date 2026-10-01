@@ -1,13 +1,15 @@
 """Build and submit one campaign run as a Cebule `TN_QC_OPT` task.
 
-Imported, not run.  Two things execute a campaign -- `run_campaign.py` on
-the command line and
-`data/benchmarks/ibm_tn-vqe_qesem/run_campaign_batch.ipynb` in Jupyter --
-and both go through here, so a correction to how a run is built reaches
-both rather than one of them.  That matters more than usual for this
-campaign: a run's identity is its Hamiltonian, its pinned circuit and its
-initial parameters together, and two implementations of "build the input"
-would eventually disagree about one of them without anything failing.
+Imported, not run.  Everything that executes a campaign -- `run_campaign.py`
+on the command line, or a campaign's own notebook -- goes through here, so
+a correction to how a run is built reaches all of them.  A run's identity
+is its Hamiltonian, its pinned circuit and its initial parameters together,
+and two implementations of "build the input" would eventually disagree
+about one of them without anything failing.
+
+Campaign-specific knowledge -- where its Hamiltonians live, Hartree-Fock
+states under non-JW mappers -- comes from the campaign's own `campaign.py`
+(see `_campaign.py`), passed in as `campaign`.
 
 Requires: `pip install 'qpubench[cebule]'` to submit; building and
 validating inputs needs only numpy and this repository.
@@ -29,16 +31,16 @@ from typing import Any
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "src"))
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
+import re
+from types import ModuleType
+
 import numpy as np
-from _ansatz_builders import PHI_INIT_SEED, hf_approx_phi_init, hf_state_for
+from _ansatz_builders import PHI_INIT_SEED, hf_approx_phi_init, jw_hf_state
 
 from qpubench.schemas.mirrors.mqsdk_cebule import TNAnsatz, TNQCOptInput
 from qpubench.schemas.observable import SparsePauliObservable
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
-CAMPAIGN = REPO / "data" / "benchmarks" / "ibm_tn-vqe_qesem"
-HAMILTONIAN_DATA = CAMPAIGN / "hamiltonian_data"
-RESULTS_DIR = CAMPAIGN / "results"
 
 # get_backend dispatches on this string: 'ibm*' routes to hardware, the
 # four named simulators and anything prefixed 'fake' to Qiskit, anything
@@ -67,32 +69,41 @@ def verified_qasm(run: dict[str, str]) -> str:
     return text
 
 
-def phi_init(run: dict[str, str]) -> list[float]:
-    """The run's circuit-parameter initialisation, from its own column.
+def hf_state(run: dict[str, str], campaign: ModuleType) -> list[int]:
+    """The run's Hartree-Fock bits: a formula under JW, the campaign's own
+    data under any other mapper."""
+    if run["Mapper"] == "JW":
+        return jw_hf_state(int(run["Active_Electrons"]), int(run["N_Qubit"]))
+    if not hasattr(campaign, "hf_state"):
+        raise ValueError(
+            f"run {run['Case_ID']} starts at Hartree-Fock under {run['Mapper']}, "
+            "but the campaign defines no hf_state(run)"
+        )
+    return campaign.hf_state(run)
 
-    Keyed on the ansatz family alone, so two runs sharing a circuit start
-    from the same phi whatever else differs between them -- which is what
-    makes a difference between them attributable to the method.  Upstream
-    randomises phi unseeded when it is None, which is the defect this
-    pins.
+
+def phi_init(run: dict[str, str], campaign: ModuleType) -> list[float]:
+    """The run's circuit-parameter initialisation, from its `Phi_Init` column.
+
+    `zeros`, `hf-approx`, or `random(seed=N)` (a bare `random` uses
+    PHI_INIT_SEED). Upstream randomises phi unseeded when none is given,
+    so a run that leaves it unset cannot be reproduced.
     """
     n = int(run["Num_Opt_Params_Phi"])
-    if run["Phi_Init"] == "zeros":
+    spec = run["Phi_Init"]
+    if spec == "zeros":
         return [0.0] * n
-    # Mirrored, not imported -- see PHI_INIT_SEED's own comment. Kept as
-    # the literal build_benchmark_matrix.PHI_INIT_HF_APPROX defines.
-    if run["Phi_Init"] == "hf-approx":
-        num_qubits = int(run["N_Qubit"])
-        hf_state = hf_state_for(
-            run["Mapper"], run["Molecule"], run["Basis"],
-            int(run["Active_Electrons"]), num_qubits,
-        )
+    if spec == "hf-approx":
         return hf_approx_phi_init(
-            run["Ansatz"], num_qubits, int(run["Ansatz_Reps"]),
-            hf_state, verified_qasm(run),
+            run["Ansatz"], int(run["N_Qubit"]), int(run["Ansatz_Reps"]),
+            hf_state(run, campaign), verified_qasm(run),
             entanglement=run["Entanglement"] or None,
         )
-    return (2 * np.pi * np.random.default_rng(PHI_INIT_SEED).random(n)).tolist()
+    match = re.fullmatch(r"random(?:\(seed=(\d+)\))?", spec)
+    if match is None:
+        raise ValueError(f"run {run['Case_ID']}: unknown Phi_Init {spec!r}")
+    seed = int(match.group(1)) if match.group(1) else PHI_INIT_SEED
+    return (2 * np.pi * np.random.default_rng(seed).random(n)).tolist()
 
 
 # --- The Hamiltonian ------------------------------------------------------
@@ -127,27 +138,6 @@ def to_cebule_operators(observable: Any) -> tuple[list[float], list[str]]:
     return coefficients, operators
 
 
-# Committed Hamiltonians, keyed (molecule, basis, mapper). These are the
-# operator the run actually optimises, and for mol_map they are the only
-# source: that encoding is Cebule's, so this repository cannot derive it.
-# File basis spellings differ from the campaign's, hence the table.
-_FILE_MOLECULE = {"H2": "h2", "H2O": "water"}
-_FILE_BASIS = {"sto-3g": "sto3g", "6-31g": "6-31G", "cc-pvdz": "cc-pvdz",
-               "cc-pvtz": "cc-pvtz", "def2-tzvp": "def2-tzvp", "qvSZP": "qvSZP"}
-_FILE_MAPPER = {"JW": "JW", "mol_map": "mapped", "MolMap_sb": "MolMap_sb"}
-
-
-def hamiltonian_file(run: dict[str, str]) -> pathlib.Path | None:
-    """The committed Hamiltonian for this run, or None if there is not one."""
-    molecule = _FILE_MOLECULE.get(run["Molecule"])
-    basis = _FILE_BASIS.get(run["Basis"])
-    mapper = _FILE_MAPPER.get(run["Mapper"])
-    if molecule is None or basis is None or mapper is None:
-        return None
-    path = HAMILTONIAN_DATA / f"{molecule}_{basis}_{mapper}.json"
-    return path if path.exists() else None
-
-
 def load_hamiltonian(
     path: pathlib.Path, run: dict[str, str],
 ) -> tuple[list[float], list[str], Any]:
@@ -162,8 +152,8 @@ def load_hamiltonian(
     """
     payload = json.loads(path.read_text())
     coefficients, operators = payload["h_coeff_values"], payload["h_operators"]
-    # The mol_map files carry the mapping operator D, and it is not
-    # cosmetic: with a mapping_matrix AND tn_ansatz="givens" the run becomes
+    # A reduced encoding's file carries the mapping operator D, and it is
+    # not cosmetic: with a mapping_matrix AND tn_ansatz="givens" the run becomes
     # an orbital rotation on the reduced register, which is what sizes theta
     # by the SPATIAL ORBITALS rather than by the register. That is how the
     # campaign counts Num_Opt_Params_Theta, so omitting it here would submit
@@ -183,29 +173,31 @@ def load_hamiltonian(
     return coefficients, operators, mapping_matrix
 
 
-def unbuildable_reason(run: dict[str, str]) -> str | None:
+def unbuildable_reason(run: dict[str, str], campaign: ModuleType) -> str | None:
     """Why this run's Hamiltonian cannot be obtained, or None if it can."""
-    if hamiltonian_file(run) is not None:
+    if campaign.hamiltonian_file(run) is not None:
         return None
     if run["Mapper"] != "JW":
         return (f"no committed Hamiltonian for {run['Molecule']}/{run['Basis']} "
-                f"mol_map, and the encoding is Cebule's, so it needs a MOL_MAP task")
+                f"under {run['Mapper']}, and only Jordan-Wigner is built here")
     if run["Basis"] == "qvSZP":
         return ("q-vSZP is not a PySCF basis, and hamiltonian_sources/qvszp.py "
                 "parses shell letters and function counts only, not exponents")
     return None
 
 
-def hamiltonian(run: dict[str, str]) -> tuple[list[float], list[str], Any] | None:
+def hamiltonian(
+    run: dict[str, str], campaign: ModuleType,
+) -> tuple[list[float], list[str], Any] | None:
     """(coefficients, operators, mapping_matrix), or None if no source has it.
 
     A committed file wins over building one here: it is what the campaign
-    recorded, and for mol_map it is the only thing that exists.
+    recorded, and for a reduced encoding it is the only thing that exists.
     """
-    path = hamiltonian_file(run)
+    path = campaign.hamiltonian_file(run)
     if path is not None:
         return load_hamiltonian(path, run)
-    if unbuildable_reason(run) is not None:
+    if unbuildable_reason(run, campaign) is not None:
         return None
     from qpubench.hamiltonian_sources.ab_initio import build_qubit_hamiltonian
     restricted = run["Active_Space"] != "full"
@@ -240,13 +232,12 @@ def optimization_mode_for(run: dict[str, str]) -> str:
 def backend_for(run: dict[str, str], override: str | None = None) -> str:
     """Which backend string this run is submitted against.
 
-    THE RUN'S OWN `Backend_Platform` WINS by default, and that is not a
-    detail: stage 0's backend is a factor it crosses, half its rows naming
-    `aer_simulator` and half `fake_aachen`, so a single backend chosen at
-    submission time would run one arm of that factor twice and the other
-    never.  An override exists for the case the column cannot express --
-    executing a hardware-targeted stage-1 row on a simulator first -- and
-    it is a deliberate act rather than the default.
+    THE RUN'S OWN `Backend_Platform` WINS by default: a matrix may cross
+    the backend as a factor, and a single backend chosen at submission time
+    would run one arm of it twice and the other never.  An override exists
+    for the case the column cannot express -- executing a hardware-targeted
+    row on a simulator first -- and it is a deliberate act rather than the
+    default.
 
     A network run takes no quantum measurements whatever either says, so
     it never goes to hardware: naming a device there only makes Cebule
@@ -275,10 +266,10 @@ def task_payload(task_input: TNQCOptInput) -> dict[str, Any]:
 
 
 def build_input(
-    run: dict[str, str], backend_override: str | None = None,
+    run: dict[str, str], campaign: ModuleType, backend_override: str | None = None,
 ) -> TNQCOptInput | None:
     """The task input for one run, or None if its Hamiltonian is unavailable."""
-    h = hamiltonian(run)
+    h = hamiltonian(run, campaign)
     if h is None:
         return None
     coefficients, operators, mapping_matrix = h
@@ -306,7 +297,7 @@ def build_input(
         # all-zero theta, and an empty list is not that -- it reaches the
         # shape check as a length-0 array against the (n_layers, n_nodes)
         # theta_shape and fails. task_payload drops it.
-        phi_init=phi_init(run),
+        phi_init=phi_init(run, campaign),
         opt_method=run["Optimizer"],
         opt_options=json.loads(run["Opt_Options"]),
         n_shots=None if network_only else int(run["Shots"]),
@@ -545,7 +536,7 @@ def submit_run(
     """Submit one run, wait for it, return (result, wall-clock seconds, task id).
 
     The blocking form, for a caller that runs a small batch and watches it
-    -- the stage-1 notebook.  `submit_task` plus `poll_task` is the form
+    -- a campaign notebook.  `submit_task` plus `poll_task` is the form
     that scales, and is what utils/run_campaign.py uses.
     """
     from qpubench.schemas.mirrors.mqsdk_cebule import CebuleTaskType

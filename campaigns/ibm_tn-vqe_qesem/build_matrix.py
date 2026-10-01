@@ -1,8 +1,14 @@
-"""Build the VQE benchmark scenario matrix.
+"""Build this campaign's matrix.
 
 Writes `targeted_screen.csv`, the campaign's one committed file (see
 `build_targeted_screen`), and can generate a stage-3 QESEM refinement
 arm on demand for any converged run from it.
+
+Everything in this file is a choice this campaign made -- its molecules,
+axes, shots, optimizer settings and budget multiplier. The reusable
+machinery it builds on lives in utils/: circuit naming and building
+(_ansatz_builders), tn-vqe's optimizer cost model (_optimizer_budget) and
+CSV helpers (_matrix_io).
 
 Requires: nothing beyond the standard library.  (`importlib.metadata`
 reads the installed Qiskit *distribution metadata* for the
@@ -17,42 +23,50 @@ refinement) survives because it refines whatever converged run it is
 pointed at, not specifically a stage-2 one.
 
 Run:
-    PYTHONPATH=src python utils/build_benchmark_matrix.py --stage targeted
-    PYTHONPATH=src python utils/build_benchmark_matrix.py --stage 3 \\
-        --from data/benchmarks/ibm_tn-vqe_qesem/targeted_screen.csv \\
+    PYTHONPATH=src python campaigns/ibm_tn-vqe_qesem/build_matrix.py --stage targeted
+    PYTHONPATH=src python campaigns/ibm_tn-vqe_qesem/build_matrix.py --stage 3 \\
+        --from campaigns/ibm_tn-vqe_qesem/targeted_screen.csv \\
         --refine 17=results/converged/case_17.json --precision 0.0016
-
-`PYTHONPATH=src` (or `pip install -e .`) is required: this script imports
-`qpubench`, and the `sys.path` line below adds the repo root, not `src/`.
 """
 from __future__ import annotations
 
 import argparse
 import csv
 import hashlib
-import importlib.metadata
 import json
-import math
 import pathlib
 import sys
 
-sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "src"))
-sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2] / "src"))
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2] / "utils"))
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
 # _ansatz_builders defers every quantum-SDK import into the function that
 # needs one, so naming a circuit costs this module no dependency it did
 # not already have.
-from _ansatz_builders import qasm_stem
+import campaign
+from _ansatz_builders import SUPPLIED_ANSATZE, qasm_stem
+from _ansatz_builders import circuit_parameter_count as built_parameter_count
+from _matrix_io import (
+    assign_case_ids,
+    dedupe_rows,
+    pinned_circuit,
+    pinned_parameter_count,
+    qiskit_version,
+)
+from _matrix_io import write_csv as _write_csv
+from _optimizer_budget import evals_per_iteration, evaluation_budget, iteration_budget
 
 from qpubench.hamiltonian_sources.mol_map import count_qubits, is_confirmed
 from qpubench.schemas.mirrors.mqsdk_cebule import TNAnsatz, tn_theta_parameter_count
 
-_REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
-_CAMPAIGN_DIR = _REPO_ROOT / "data" / "benchmarks" / "ibm_tn-vqe_qesem"
-_TARGETED_PATH = _CAMPAIGN_DIR / "targeted_screen.csv"
+_CAMPAIGN_DIR = campaign.DIR
+_REPO_ROOT = _CAMPAIGN_DIR.parents[1]
+_TARGETED_PATH = campaign.CSV
 _STAGE3_PATH = _CAMPAIGN_DIR / "stage3_qesem_refinement.csv"
-_QASM_DIR = _REPO_ROOT / "data" / "qasm"
+_QASM_DIR = campaign.QASM_DIR
+SIMULATION_INFEASIBLE = campaign.SIMULATION_INFEASIBLE
 
 
 # --- Molecules ------------------------------------------------------------
@@ -84,8 +98,7 @@ class Molecule:
 #
 # H2O's hydrogens sit in the yz-plane with the oxygen at the origin, so
 # y = r sin(theta/2) and z = r cos(theta/2) reproduce that bond length
-# and angle exactly.  utils/count_measurement_bases.py pins the
-# same values.
+# and angle exactly.
 GEOMETRIES = {
     "H2":  "H 0 0 0; H 0 0 0.74144",
     "H2O": "O 0 0 0; H 0 0.75695 0.58588; H 0 -0.75695 0.58588",
@@ -152,29 +165,6 @@ N_SPATIAL_ORBITALS = {
 # difference.
 BASES = ["6-31g", "cc-pvdz", "def2-tzvp", "qvSZP"]
 BASIS_SOURCE = {b: "basis_set_exchange" for b in BASES} | {"qvSZP": "grimme_qvszp"}
-
-# Cells that cannot be SIMULATED at all, with the measurement that says
-# so. utils/run_campaign.py checks this table itself and refuses to
-# submit one.
-#
-# H2/qvSZP under Jordan-Wigner is 16 qubits, and TN_QC_OPT materialises
-# the transformed Hamiltonian as a DENSE 2^n x 2^n operator: 2^16 x 2^16
-# complex128 is exactly 64 GiB, which is the allocation the runs died on.
-# The scaling is 16 x 4^n bytes, so this cell needs 4^8 = 65,536 times the
-# memory of the 8-qubit cells -- 1 MiB against 64 GiB.  Nothing about the
-# submission changes that: it failed identically under `pauli` and
-# `grouped`, and in `network` mode with no shots at all, because the
-# allocation is set by the qubit count alone.  Kept here as a record of a
-# real failure even though this campaign's own file never generates
-# H2/qvSZP rows.
-SIMULATION_INFEASIBLE: dict[tuple[str, str, str], str] = {
-    ("H2", "qvSZP", "JW"): (
-        "16 qubits: the dense 2^16 x 2^16 transformed Hamiltonian is 64 GiB, "
-        "65,536x the 8-qubit cells. Measured, not projected -- three runs "
-        "died on exactly that allocation, under both measurement methods "
-        "and in network mode"
-    ),
-}
 
 # `MolMap_sb`'s own measurement method is extended onto this at
 # the one remaining call site (`build_targeted_screen`, local to that
@@ -289,7 +279,7 @@ OPTIMIZERS = ["COBYLA", "SPSA", "ExcitationSolve"]
 # Only COBYLA has an upstream budget check (_check_iteration_budget
 # rejects n_iterations < varied + 2 for opt_method="COBYLA"), so only
 # COBYLA rows are constrained by it; the proportional rule clears it
-# everywhere anyway.  See optimizer_iterations.
+# everywhere anyway.  See _optimizer_budget.evaluation_budget.
 STAGE1_OPTIMIZER = "COBYLA"
 
 # Recorded, not assumed: opt_options goes straight to
@@ -399,212 +389,16 @@ SHOTS = 4096
 
 # --- The optimizer budget, per row ----------------------------------------
 #
-# The budget is PROPORTIONAL to the row's own free-parameter count, not
-# that count plus a constant.
+# Proportional to the row's own free-parameter count (see
+# _optimizer_budget.evaluation_budget for why proportional), then converted
+# into each optimizer's own iterations so every optimizer on a row spends
+# the same budget.
 #
-# What is true of a flat budget stays true: COBYLA builds an initial
-# simplex of n+1 points before it can take a single descent step, and
-# scipy.optimize.minimize does NOT honour a maxiter below that -- it
-# raises maxfun, warns "COBYLA: Invalid MAXFUN; it should be at least
-# ...", and runs n+2 evaluations anyway.  A budget set under n+2
-# therefore does not make a row cheaper, it only misstates what the row
-# costs, which is how a flat 30 came to under-bill the widest rows by
-# ~4.8x.
-#
-# The reason for proportional rather than n + constant is a different
-# one, and it is about what stage 1 can conclude.  COBYLA needs
-# evaluations in proportion to n to make a given amount of progress:
-# measured on a trigonometric-polynomial objective (the functional form a
-# VQE energy takes), reaching a fixed fraction of the achievable descent
-# costs about 1.3n evaluations for 50%, 4n for 80% and 12n for 95%.  So a
-# rule of the form `n + constant` delivers a SHRINKING fraction as n
-# grows -- fraction of achievable descent, median over seeds:
-#
-#      n     max(30,n+2)     n+30     n+100     1.3n      2n      4n
-#     22          53%         65%       85%      53%     61%     79%
-#     46          41%         54%       75%      47%     64%     81%
-#     94          38%         51%       65%      50%     63%     81%
-#    142          38%         49%       60%      51%     65%     85%
-#    200          38%         47%       54%      51%     62%     80%
-#
-# The additive columns fall, the proportional ones are flat.  Under
-# `n + 2` a row reached 53% of its own achievable descent at n=22 and 38%
-# at n=200, which made the optimizer budget a confound correlated with
-# the qubit count -- and the qubit count is one of the factors the screen
-# exists to compare.  Under the proportional rule every row reaches ~50%,
-# so "convergence behaviour", stage 1's stated observable, is comparable
-# across rows.  It also equalises a control against the row it controls:
-# a `network` row varies theta only and its `both` counterpart varies phi
-# and theta, so under an additive rule the control was run much further
-# along its own convergence curve than the row it is the baseline for.
-#
-# Stage 1 remains a SCREEN: ~50% of achievable descent ranks rows and
-# exposes the initial descent, and it is not a converged energy.  Stage 2
-# carries the converged runs at the same functional form and a larger
-# multiplier.
-#
-# The multipliers come from a synthetic objective, so they are the right
-# functional form and the right order of magnitude rather than tuned
-# values.  `TN_QC_OPT` already returns `cost_history`, one entry per
-# cost-function evaluation, so real runs refine them with no new
-# instrumentation and no schema change.
-MIN_ITERATIONS = 30       # smoke-test floor, so the small rows stay comparable
-SIMPLEX_OVERHEAD = 2      # n+1 simplex points, +1 for the first real step;
-                          # retained as the invariant the rule must never breach
-STAGE1_EVALS_PER_PARAM = 1.3   # ~50% of achievable descent, at every width
-STAGE2_EVALS_PER_PARAM = 4.0   # ~80%; stage 2 is where converged energies live
-
-# targeted_screen.csv's own budget: 46 rows, not the old factorial's
-# thousands, so each run can be given enough to reach its optimum rather
-# than be cut off. Sized so ExcitationSolve, the costliest per iteration,
-# gets 6 sweeps after its fixed evaluations (fixed_evals); COBYLA stops on
-# its own tolerance well inside it.
+# 46 rows rather than a factorial's thousands, so each run can be given
+# enough to reach its optimum rather than be cut off. Sized so
+# ExcitationSolve, the costliest per iteration, gets 6 sweeps after its
+# fixed evaluations; COBYLA stops on its own tolerance well inside it.
 TARGETED_EVALS_PER_PARAM = 30.0
-
-# Stage 0 buys no QPU time, so its budget is set by what it has to MEASURE
-# rather than by what it costs.
-#
-# At 1.3n it could not do one of the four jobs it exists for.  Stage 0 is
-# meant to check the multipliers above against a real VQE surface, and the
-# fraction of ACHIEVABLE descent a budget reaches cannot be computed
-# without the achievable descent -- which needs a near-converged run.  A
-# stage 0 budgeted at 1.3n reports only that 1.3n evaluations produced
-# some energy, which is the thing already assumed.
-#
-# 12n is ~95% on the synthetic objective: flat enough that the residual is
-# a usable proxy for the true minimum, so 1.3n and 4n can be scored
-# against it.  Anything beyond that buys accuracy in the proxy rather than
-# in the answer.
-STAGE0_EVALS_PER_PARAM = 12.0
-
-# An absolute ceiling on top of the multiplier, because 12n on the widest
-# rows is not a realistic simulation: n runs to 182 here, so 12n would be
-# 2,184 evaluations for a single run and 550,656 across the matrix.
-#
-# 600 is 12n at n=50.  The median row is n=34, so the TYPICAL row is
-# uncapped and gets the full 12n; the ceiling binds on the widest 300 of
-# 1,152.  Those are not shortchanged either -- at n=182 a 600-evaluation
-# budget is still 3.3n, between stage 1's screening budget and stage 2's
-# converged one -- and truncating that quarter of the matrix takes it from
-# 550,656 evaluations to 436,032.
-#
-# Note this is a CEILING, not a cost: conv_tol (1e-6 by default) stops a
-# converged run early, so a generous budget is free on every row that
-# converges and spends only where a row genuinely needs the evaluations,
-# which is the row worth learning from.  That argument holds for COBYLA.
-# SPSA has no comparable convergence test and will likely spend the whole
-# budget, and ExcitationSolve's behaviour here is unmeasured -- which is
-# itself something stage 0 reports.
-STAGE0_MAX_ITERATIONS = 600
-
-# --- Evaluations against iterations ---------------------------------------
-#
-# The budgets above are in COST-FUNCTION EVALUATIONS, which is the common
-# currency: an evaluation is what the QPU is billed for and what
-# cost_history records one entry of.  `TNQCOptInput.n_iterations` is not
-# that.  It is an ITERATION count, and an iteration means a different
-# amount of work in each optimizer:
-#
-#   COBYLA           1 evaluation per iteration.  scipy's COBYLA takes
-#                    maxiter as a cap on function evaluations, so the two
-#                    coincide and this is the case the budgets were
-#                    written for.
-#   SPSA             2, a plus- and a minus-perturbation per step.  Flat
-#                    in n, which is the property that makes SPSA
-#                    interesting on the wide rows.
-#   ExcitationSolve  4n.  It reconstructs the energy's exact dependence on
-#                    ONE parameter and jumps to that parameter's minimum,
-#                    so an iteration is a sweep over all n of them.
-#
-# Passing one number to all three was a real error, not a rounding one:
-# ExcitationSolve's arm got two orders of magnitude more evaluations than
-# COBYLA's.  Converting instead -- same evaluation budget, each
-# optimizer's own unit -- keeps the arms comparable.
-#
-# ExcitationSolve fits each parameter to its frequency set {1, 2} (tn-vqe's
-# default, and UCCSD's workaround): five samples, one reused from the
-# previous parameter's fit.  Theta is taken at five, unverified.
-EXCITATIONSOLVE_EVALS_PER_PHI = 4
-EXCITATIONSOLVE_EVALS_PER_THETA = 5
-
-# Evaluations an optimizer spends outside its iterations, taken off the
-# budget before it is converted to iterations -- otherwise the same budget
-# buys each optimizer a different total.  Read off tn-vqe's spsa.py and
-# excitation_solve.py, and matched against collected cost_history lengths.
-#   SPSA             12 gain calibration + 1 start + 2 x 3 closing repeats
-#   ExcitationSolve  4n flatness check + n first-sweep validation
-#                    + 1 start + 1 closing evaluation
-SPSA_FIXED_EVALS = 19
-EXCITATIONSOLVE_FIXED_EVALS_PER_PHI = 5
-EXCITATIONSOLVE_FIXED_EVALS = 2
-
-# What COBYLA and SPSA cost per iteration.  Both move EVERY parameter at
-# once -- COBYLA steps the whole vector, SPSA perturbs all coordinates
-# simultaneously -- which is what makes the caching below useless to them.
-EVALS_PER_ITERATION_FIXED = {"COBYLA": 1, "SPSA": 2}
-
-
-def evals_per_iteration(
-    optimizer: str, num_phi: int, num_theta: int,
-) -> tuple[int, int]:
-    """(quantum evaluations, cost-function evaluations) per iteration.
-
-    THE TWO DIFFER BECAUSE CEBULE CACHES.  The quantum measurement depends
-    on the circuit state U(phi)|0>, so an evaluation that changes only
-    theta is served from the cached phi results and recombined
-    classically, costing nothing on the QPU or in simulation.  A
-    coordinate-wise optimizer therefore gets its whole theta sweep free
-    on the quantum side; COBYLA and SPSA move phi on every iteration and
-    never hit the cache.
-
-    That asymmetry is not a confound to be corrected away.  It is a real
-    property of the method, and budgeting in QUANTUM evaluations is what
-    lets it show up as what it is: more descent per unit of the resource
-    actually being spent.
-
-    num_phi is passed as 0 for a `network` row, where phi is frozen by
-    construction, so such a row reports no quantum cost at all -- which is
-    the same statement the campaign already makes about it elsewhere.
-    """
-    if optimizer == "ExcitationSolve":
-        quantum = EXCITATIONSOLVE_EVALS_PER_PHI * num_phi
-        cost = quantum + EXCITATIONSOLVE_EVALS_PER_THETA * num_theta
-        return quantum, max(1, cost)
-    per = EVALS_PER_ITERATION_FIXED[optimizer]
-    return (per if num_phi else 0), per
-
-
-def iteration_budget(
-    budget: int, optimizer: str, num_phi: int, num_theta: int,
-) -> int:
-    """`n_iterations` for an optimizer, given a QUANTUM evaluation budget.
-
-    Spent in the currency that binds: billed seconds on hardware, and
-    simulation wall clock in stage 0, both of which track quantum
-    evaluations rather than cost-function calls.  A row with no quantum
-    cost at all -- `network` mode, where phi is frozen -- is budgeted on
-    its cost-function evaluations instead, since otherwise nothing would
-    bound it.
-
-    The optimizer's fixed evaluations (`fixed_evals`) come off the budget
-    first, so every optimizer's whole run fits the same budget.
-
-    Floored at 1: a single ExcitationSolve sweep -- a full coordinate
-    descent with an exact minimisation per coordinate -- is still a run
-    worth having even where the budget doesn't quite cover it.
-    """
-    quantum, cost = evals_per_iteration(optimizer, num_phi, num_theta)
-    remaining = budget - fixed_evals(optimizer, num_phi)
-    return max(1, remaining // (quantum or cost))
-
-
-def fixed_evals(optimizer: str, num_phi: int) -> int:
-    """Evaluations `optimizer` spends outside its iterations."""
-    if optimizer == "SPSA":
-        return SPSA_FIXED_EVALS
-    if optimizer == "ExcitationSolve":
-        return EXCITATIONSOLVE_FIXED_EVALS_PER_PHI * num_phi + EXCITATIONSOLVE_FIXED_EVALS
-    return 0
 
 # --- phi_init, per circuit family -----------------------------------------
 #
@@ -672,7 +466,7 @@ PHI_INIT_HF_APPROX = "hf-approx"
 #                   class where both numbers exist reads 34 measured against
 #                   46 computed
 #   hamiltonian_file  counted on the committed operator the run actually
-#                   optimises (data/benchmarks/.../hamiltonian_data), by
+#                   optimises (hamiltonian_data/), by
 #                   qubit-wise-commuting grouping.  Greedy, so an upper
 #                   bound on what the runtime's own grouping achieves.
 #
@@ -764,22 +558,6 @@ FIELDNAMES = [
 ]
 
 
-def qiskit_version() -> str:
-    """Installed Qiskit version, or "" if it isn't installed.
-
-    Recorded per row because TN-VQE calls `transpile(circuit, backend)`
-    with no optimization_level (functions_qiskit.py:47,205), and
-    transpile's own default resolves to 2 in Qiskit 2.x but 1 in Qiskit
-    1.x.  "Qiskit's default" is therefore a version-dependent value, so
-    the version is the thing worth recording -- a Qiskit_Opt_Level column
-    would be recording a number nothing can set.
-    """
-    try:
-        return importlib.metadata.version("qiskit")
-    except importlib.metadata.PackageNotFoundError:
-        return ""
-
-
 # MolMap_sb's qubit count is data (regenerate_spinblock_mol_map.py's
 # own printed D'.shape), not a formula -- count_qubits/is_confirmed know
 # only the OLD mol_map ordering. Keyed on (electrons, orbitals) rather than
@@ -814,88 +592,6 @@ def qubit_count(mapper: str, active_electrons: int, active_orbitals: int) -> tup
     return n, source
 
 
-def pinned_parameter_count(path: pathlib.Path) -> int | None:
-    """Free parameters a pinned OpenQASM 3 circuit declares, or None.
-
-    THE FILE IS THE AUTHORITY, and for UCCSD it is the only one.  The
-    campaign's UCCSD circuits are supplied rather than built here (see
-    `_ansatz_builders.UCCSD_BUILDABLE_MAPPERS`): they are a restricted
-    ansatz, not the generalized singles-and-doubles pool this repository
-    can generate, and matched between the two encodings so that a JW row
-    and a mol_map row differ in the encoding rather than in the ansatz.
-    Deriving the count from (qubits, electrons) would therefore describe
-    a circuit the campaign does not run -- it reads 40 where the pinned
-    file declares 15.
-
-    Counted off the `input` declarations rather than by loading the
-    circuit, so this module keeps its standard-library-only requirement.
-    An unbound OpenQASM 3 dump declares exactly one `input` per free
-    parameter, which is the property `pin_qasm_ansatz` exists to
-    preserve and `test_pinned_qasm_carries_the_parameters_the_matrix_claims`
-    checks against a real Qiskit load.
-    """
-    if not path.exists():
-        return None
-    return sum(
-        1 for line in path.read_text(encoding="utf-8").splitlines()
-        if line.startswith("input ")
-    )
-
-
-def optimizer_iterations(
-    num_params: int, evals_per_param: float = STAGE1_EVALS_PER_PARAM,
-    max_iterations: int | None = None,
-) -> int:
-    """Cost-function evaluations a row's optimizer will really consume.
-
-    `max(MIN_ITERATIONS, ceil(evals_per_param * n))`, so that every row
-    reaches a comparable fraction of its own achievable descent rather
-    than a fraction that shrinks with n.  The multiplier is the stage's:
-    targeted_screen.csv runs each row close to convergence at
-    TARGETED_EVALS_PER_PARAM.  See MIN_ITERATIONS.
-
-    `max_iterations` caps the result, which only stage 0 sets: it is the
-    one stage whose budget is limited by simulation wall clock rather than
-    by purchased QPU time.  See STAGE0_MAX_ITERATIONS.
-    """
-    budget = max(MIN_ITERATIONS, math.ceil(evals_per_param * num_params))
-    if max_iterations is not None:
-        budget = min(budget, max_iterations)
-    # The proportional rule always clears COBYLA's simplex, so this can
-    # never fire: for n <= 28 the floor of 30 does it, and for n >= 29 the
-    # multiplier adds >= 8.7 evaluations against the 2 the simplex needs.
-    # A cap COULD breach it, which is why the assertion is kept after the
-    # cap rather than before -- upstream rejects such a budget outright
-    # (_check_iteration_budget), so it has to fail here instead.
-    assert budget >= num_params + SIMPLEX_OVERHEAD, (
-        f"{budget} evaluations for {num_params} free parameters is below "
-        f"COBYLA's simplex; raise STAGE0_MAX_ITERATIONS above "
-        f"{num_params + SIMPLEX_OVERHEAD}"
-    )
-    return budget
-
-
-def stage_evals_per_param(stage: str) -> float:
-    """The multiplier a stage's rows are budgeted at."""
-    if stage.startswith("0"):
-        return STAGE0_EVALS_PER_PARAM
-    if stage.startswith("2"):
-        return STAGE2_EVALS_PER_PARAM
-    if stage == "targeted":
-        return TARGETED_EVALS_PER_PARAM
-    return STAGE1_EVALS_PER_PARAM
-
-
-def stage_max_iterations(stage: str) -> int | None:
-    """The absolute ceiling a stage's rows are capped at, if any.
-
-    Only stage 0 has one.  The hardware stages are bounded by the 900
-    minute allocation, which is a far tighter constraint than any per-row
-    ceiling would be.
-    """
-    return STAGE0_MAX_ITERATIONS if stage.startswith("0") else None
-
-
 def circuit_parameter_count(
     ansatz: str, num_qubits: int, reps: int, num_electrons: int | None = None,
     mapper: str = "JW", num_orbitals: int = 0, entanglement: str | None = None,
@@ -915,30 +611,15 @@ def circuit_parameter_count(
     for them, only the CX pattern, so it plays no part in these formulas
     -- it only affects which pinned file `qasm_stem` names.
     """
-    if ansatz in ("UCCSD", "tUPS"):
+    if ansatz in SUPPLIED_ANSATZE:
         stem = qasm_stem(
             ansatz, num_qubits, reps, mapper=mapper,
             num_electrons=num_electrons or 0, num_orbitals=num_orbitals,
         )
         count = pinned_parameter_count(_QASM_DIR / f"{stem}.qasm")
         return "" if count is None else str(count)
-    if ansatz == "excitation_preserving_linear":
-        # One RZ per qubit per rotation layer, plus one theta per linear
-        # pair per rep (Qiskit's default mode="iswap"). Verified against
-        # the built circuit's num_parameters, not derived on paper.
-        return str(num_qubits * (reps + 1) + (num_qubits - 1) * reps)
-    if ansatz == "rzryrz":
-        # Three rotation layers per block, R+1 blocks -- TN_QC_OPT's own
-        # n_local(n, ["rz","ry","rz"], "cx", "sca"). Verified against the
-        # built circuit's num_parameters, not derived on paper.
-        return str(3 * num_qubits * (reps + 1))
-    if ansatz == "StronglyEntanglingLayers":
-        return str(3 * reps * num_qubits)          # PennyLane's (L, N, 3) shape
-    if ansatz in ("EfficientSU2", "EfficientSU2_circular"):
-        return str(2 * num_qubits * (reps + 1))    # 2 rotation layers per block
-    if ansatz == "RealAmplitudes":
-        return str(num_qubits * (reps + 1))        # 1 rotation layer per block
-    return ""
+    count = built_parameter_count(ansatz, num_qubits, reps)
+    return "" if count is None else str(count)
 
 
 def qasm_ansatz_pin(
@@ -977,11 +658,7 @@ def qasm_ansatz_pin(
         num_electrons=num_electrons, num_orbitals=num_orbitals,
         entanglement=entanglement,
     )
-    path = _QASM_DIR / f"{stem}.qasm"
-    if not path.exists():
-        return "", ""
-    digest = hashlib.sha256(path.read_bytes()).hexdigest()[:12]
-    return str(path.relative_to(_REPO_ROOT)), digest
+    return pinned_circuit(_QASM_DIR, stem)
 
 
 def _qubit_note(mapper: str, source: str, molecule: str, basis: str) -> str:
@@ -1133,11 +810,12 @@ def _row(
     # even + n_layers * (odd + even) over the width U is built on.
     #
     # That width is the register's qubit count everywhere EXCEPT givens on a
-    # mol_map row, where the transformation is an orbital rotation over the
-    # spatial orbitals instead (functions_main._theta_shape).  Passing the
-    # active orbital count there is what makes a mol_map row's theta match
-    # the rotation it actually performs rather than its configuration index.
-    rotates_orbitals = mapper == "mol_map"
+    # reduced-encoding row (anything submitted with a mapping matrix), where
+    # the transformation is an orbital rotation over the spatial orbitals
+    # instead (functions_main._theta_shape).  Passing the active orbital
+    # count there is what makes such a row's theta match the rotation it
+    # actually performs rather than its configuration index.
+    rotates_orbitals = mapper != "JW"
     theta_params = (
         str(tn_theta_parameter_count(
             num_qubits, layers_network, tn_ansatz,
@@ -1153,9 +831,7 @@ def _row(
     n_phi = int(phi_params) if phi_params and takes_measurements else 0
     n_theta = int(theta_params) if theta_params else 0
     free_params = n_phi + n_theta
-    eval_budget = optimizer_iterations(
-        free_params, stage_evals_per_param(stage), stage_max_iterations(stage),
-    )
+    eval_budget = evaluation_budget(free_params, TARGETED_EVALS_PER_PARAM)
     quantum_per_iter, cost_per_iter = evals_per_iteration(
         optimizer, n_phi, n_theta,
     )
@@ -1598,45 +1274,10 @@ def build_targeted_screen() -> list[dict[str, str]]:
     return rows
 
 
-def dedupe_rows(rows: list[dict[str, str]]) -> list[dict[str, str]]:
-    """Keep the first occurrence of each distinct row, by every field but
-    Case_ID and Notes (whose `extra_note` differs per axis even when the
-    row it produces is identical to one from another axis).
-
-    Call AFTER `assign_case_ids`: number everything first, so a dropped
-    duplicate leaves a gap rather than shifting any other row's Case_ID.
-    """
-    seen: set[tuple[str, ...]] = set()
-    kept = []
-    for row in rows:
-        key = tuple(v for k, v in row.items() if k not in ("Case_ID", "Notes"))
-        if key in seen:
-            continue
-        seen.add(key)
-        kept.append(row)
-    return kept
-
-
-def assign_case_ids(rows: list[dict[str, str]]) -> None:
-    """Number rows 1..N by position, in place.  Call this BEFORE dropping
-    any row from the list that will be written, or every row after the
-    drop silently gets a different number than the one already-collected
-    results were filed under.
-    """
-    for i, row in enumerate(rows, start=1):
-        row["Case_ID"] = str(i)
-
-
 def write_csv(
     path: pathlib.Path, rows: list[dict[str, str]], renumber: bool = True,
 ) -> None:
-    if renumber:
-        assign_case_ids(rows)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=FIELDNAMES, lineterminator="\n")
-        writer.writeheader()
-        writer.writerows(rows)
+    _write_csv(path, rows, FIELDNAMES, renumber=renumber)
 
 
 def summarize(rows: list[dict[str, str]]) -> None:

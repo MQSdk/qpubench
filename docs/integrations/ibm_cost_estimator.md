@@ -140,7 +140,7 @@ estimate_all_plans(total_qpu_seconds=180.0, rates=my_rates)
 ## End-to-end example: costing the VQE benchmark CSV
 
 `utils/estimate_ibm_cost.py` runs this against
-`data/benchmarks/ibm_tn-vqe_qesem/targeted_screen.csv` end to end: the minimal case (H2/sto-3g,
+`campaigns/ibm_tn-vqe_qesem/targeted_screen.csv` end to end: the minimal case (H2/sto-3g,
 4 qubits, 1 circuit) fits comfortably in the Open Plan's free quota
 (~3s of an estimated 3.04s QPU-time budget vs. 600s free).
 
@@ -157,7 +157,7 @@ quantum_seconds are known,
 which holds to within 4% from 2 measurement bases to 81, and puts a
 4-qubit evaluation at 13 to 20 s against the 3.04 s a single transpiled
 submission suggests. See
-[the campaign README](../../data/benchmarks/ibm_tn-vqe_qesem/README.md#what-one-cost-function-evaluation-costs).
+[the campaign README](../../campaigns/ibm_tn-vqe_qesem/README.md#what-one-cost-function-evaluation-costs).
 Two facts from those jobs are worth carrying into any use of this module:
 the fixed 11 s is readout-error calibration requested once per job by the
 default Estimator options, and across the depths measured the circuit
@@ -177,8 +177,7 @@ rule reaches a shrinking fraction as circuits widen.
 
 ### Turning this into a real campaign plan
 
-`utils/split_benchmark_batches.py` uses the same kind of per-row
-estimates to cut a screening matrix into cost-ordered batches; see its
-own docstring for its current status and
-[`data/benchmarks/ibm_tn-vqe_qesem/README.md`](../../data/benchmarks/ibm_tn-vqe_qesem/README.md)
-for how this campaign submits and collects `targeted_screen.csv` today.
+`utils/estimate_ibm_cost.py --campaign NAME` prices any campaign's matrix
+this way; see
+[`campaigns/ibm_tn-vqe_qesem/README.md`](../../campaigns/ibm_tn-vqe_qesem/README.md)
+for how that campaign submits and collects `targeted_screen.csv`.

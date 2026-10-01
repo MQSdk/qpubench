@@ -40,8 +40,12 @@ src/qpubench/
 
 integrations/      ← NOT installed; copy into your project
 examples/          ← Runnable demos
-utils/             ← Campaign machinery: builds, pins and costs a benchmark
-                     campaign's runs. NOT installed, run directly.
+utils/             ← Shared campaign toolkit: ansatz builders, optimizer budget,
+                     Cebule runner, pinning and costing. Takes --campaign;
+                     NOT installed, run directly.
+campaigns/<name>/  ← One self-contained benchmark campaign: its matrix builder,
+                     campaign.py config, CSV, Hamiltonians, pinned circuits,
+                     results (gitignored) and notebooks.
 tests/             ← Schema-only unit tests
 ```
 

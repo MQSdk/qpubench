@@ -811,7 +811,7 @@ class TNQCOptResult(pydantic.BaseModel):
     first described iteration_boundaries as the evaluations each
     iteration consumed.  It is a running total.  The per-iteration cost
     is the DIFFERENCE between consecutive entries, which is the measured
-    form of what build_benchmark_matrix models in
+    form of what utils/_optimizer_budget.py models in
     Cost_Evals_Per_Iteration, and those differences confirm the model
     exactly: 2 for SPSA, and 3*n_phi + 5*n_theta for ExcitationSolve at
     every width measured.  COBYLA runs 1 to 2 rather than a flat 1.

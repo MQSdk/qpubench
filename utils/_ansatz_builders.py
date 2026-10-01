@@ -1,9 +1,9 @@
 """Build the named ansatz circuits benchmark rows ask for, as real Qiskit
 circuits, for resource estimation.
 
-Shared by `build_benchmark_matrix.py` and `estimate_ibm_cost.py` so both
-build the same circuit for the same row. Not a guide itself (hence the
-leading underscore), and deliberately not in `src/qpubench/`: `uccsd()`
+Shared by every campaign's matrix builder and by the tools in utils/, so
+all of them build the same circuit for the same row. Not a guide itself
+(hence the leading underscore), and deliberately not in `src/qpubench/`: `uccsd()`
 below builds on `integrations/generic_adapt_vqe/`, which pyproject
 excludes from the installed package, so a library module importing it
 would break for pip-installed users.
@@ -388,51 +388,26 @@ def uccsd(
     return qc
 
 
-# Hartree-Fock reference state per mapper, as a bit list in Pauli-label
-# order (leftmost = highest qubit) -- the form _fermionic_ansatz.
-# hf_parameters expects. JW is a formula (the first `active_electrons`
-# qubits, same convention uccsd() above uses); MolMap_sb's is data
-# this campaign's own regenerate_spinblock_mol_map.py prints when it
-# builds the reordered Hamiltonian (reorder_mapped_hamiltonian's own
-# returned hf_state), since the reordering is data, not a formula.
-MOL_MAP_SPINBLOCK_HF_STATE: dict[tuple[str, str], list[int]] = {
-    ("H2", "6-31g"): [0, 0, 0, 0],
-    ("H2O", "6-31g"): [0, 0, 0, 0, 0, 0],
-}
+def jw_hf_state(active_electrons: int, num_qubits: int) -> list[int]:
+    """The closed-shell Hartree-Fock reference under Jordan-Wigner, as a bit
+    list in Pauli-label order (leftmost = highest qubit) -- the form
+    _fermionic_ansatz.hf_parameters expects.
 
-
-def hf_state_for(
-    mapper: str, molecule: str, basis: str, active_electrons: int, num_qubits: int,
-) -> list[int]:
-    """The Hartree-Fock reference, as a bit list in Pauli-label order --
-    for a hardware-efficient ansatz's HF-approximating phi_init, or for
-    verifying a fermionic ansatz's own zero-amplitude reference.
+    Other mappers have no formula for it; a campaign that uses one supplies
+    its own (see utils/_campaign.py, `hf_state`).
     """
-    if mapper == "JW":
-        from _fermionic_ansatz import hf_state_jw
-        # Every cell this campaign runs is closed-shell (n_alpha == n_beta),
-        # so the occupied MODE SET is {0, ..., active_electrons-1} regardless
-        # of how the split is spelled here -- but the split still has to be
-        # a real closed-shell split, not electrons-into-alpha-only.
-        if active_electrons % 2:
-            raise ValueError(
-                f"{active_electrons} active electrons is not closed-shell; "
-                f"hf_state_for assumes n_alpha == n_beta"
-            )
-        n_alpha = n_beta = active_electrons // 2
-        # hf_state_jw follows _fermionic_ansatz's own JW convention (mode m
-        # -> qubit n_qubits-1-m), the MIRROR of this repo's (occupied = the
-        # FIRST active_electrons qubits -- uccsd()'s own X-gate placement,
-        # and what every already-pinned JW circuit in this campaign uses).
-        # Reversed to match; verified against RHF for RealAmplitudes.
-        return list(reversed(hf_state_jw(num_qubits // 2, n_alpha, n_beta)))
-    try:
-        return MOL_MAP_SPINBLOCK_HF_STATE[(molecule, basis)]
-    except KeyError:
-        raise KeyError(
-            f"no {mapper} Hartree-Fock state for {molecule}/{basis}; add it to "
-            f"MOL_MAP_SPINBLOCK_HF_STATE"
-        ) from None
+    from _fermionic_ansatz import hf_state_jw
+
+    if active_electrons % 2:
+        raise ValueError(
+            f"{active_electrons} active electrons is not closed-shell; "
+            f"jw_hf_state assumes n_alpha == n_beta"
+        )
+    n_alpha = n_beta = active_electrons // 2
+    # hf_state_jw maps mode m to qubit n_qubits-1-m, the mirror of this
+    # repository's convention (occupied = the first qubits, as uccsd()
+    # places its X gates).
+    return list(reversed(hf_state_jw(num_qubits // 2, n_alpha, n_beta)))
 
 
 def hf_approx_phi_init(
@@ -486,11 +461,9 @@ def hf_approx_phi_init(
     return vec
 
 
-# The seed the benchmark campaign initialises phi from
-# (`build_benchmark_matrix.PHI_INIT_SEED`, and the `Phi_Init` column).
-# Mirrored rather than imported, because the generator is a sibling guide
-# rather than a library; `test_phi_init_seed_matches_the_generator` fails
-# the build if the two drift apart.
+# Default seed for a random phi draw (2*pi*U(0,1) from numpy's
+# default_rng), the distribution tn-vqe itself uses unseeded. A campaign
+# records the seed it actually used in its `Phi_Init` column.
 PHI_INIT_SEED = 20260811
 
 

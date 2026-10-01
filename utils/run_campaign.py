@@ -1,13 +1,14 @@
-"""Run a campaign stage in batches: submit many, collect later.
+"""Run a campaign's matrix in batches: submit many, collect later.
 
-Defaults to targeted_screen.csv, this campaign's one committed file, but
-takes any CSV of the same shape via `--csv`.
+Runs the matrix named by the campaign's `campaign.py` (see `_campaign.py`),
+or any CSV of the same shape via `--csv`. `--campaign` may be left out
+while the repository has only one campaign.
 
 SUBMISSION AND COLLECTION ARE SEPARATE, and that is the point.  Cebule
 dispatches to outside HPC infrastructure, so a task spends most of its
 life queued rather than running.  Submitting one and blocking until it
 returns spends that queue time doing nothing, in the one process that
-could have been submitting the rest -- 1008 runs done that way is a
+could have been submitting the rest -- a large matrix done that way is a
 serial sum of queue times.  So `--submit` creates tasks and returns, and
 `--collect` harvests whatever has finished since.
 
@@ -15,8 +16,10 @@ Requires: `pip install 'qpubench[cebule]'` to submit.  A dry run needs
 only numpy and this repository, and is the default -- nothing is sent
 without `--submit`.
 
-    # what batches are there, and how big
-    PYTHONPATH=src python utils/run_campaign.py --group-by Molecule,Basis,Mapper
+    # what batches are there, and how big (--campaign names which campaign;
+    # optional while there is only one)
+    PYTHONPATH=src python utils/run_campaign.py --campaign ibm_tn-vqe_qesem \
+        --group-by Molecule,Basis,Mapper
 
     # build and validate every input, sending nothing
     PYTHONPATH=src python utils/run_campaign.py
@@ -34,7 +37,8 @@ without `--submit`.
     # prove the path first: one run, then stop
     PYTHONPATH=src python utils/run_campaign.py --submit --limit 1
 
-Three files carry the state, all beside each other under `results/`:
+Three files carry the state, all beside each other in the campaign's
+results folder:
 
     <stem>.ndjson           finished runs, one JSON line each
     <stem>.pending.ndjson   task ids submitted and not yet collected
@@ -46,8 +50,8 @@ failure stays failed until `--retry-failed` says otherwise, so a
 deterministic error is not resubmitted on every pass.
 
 WHICH BACKEND A RUN USES IS THE RUN'S OWN `Backend_Platform`, not a
-choice made here.  targeted_screen.csv's rows are all `aer_simulator`;
-`--backend` exists for the one case the column cannot express --
+choice made here.  `--backend` exists for the one case the column cannot
+express --
 executing a hardware-targeted row on a simulator first, for a file whose
 rows do target hardware -- and hardware is refused unless
 `--allow-hardware` says otherwise, because a row costed at nothing would
@@ -64,21 +68,9 @@ import time
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
+import _campaign
 import _campaign_runner as runner
-from build_benchmark_matrix import SIMULATION_INFEASIBLE
 
-_DEFAULT_CSV = runner.CAMPAIGN / "targeted_screen.csv"
-
-
-def simulation_infeasible_reason(run: dict[str, str]) -> str | None:
-    """Why this run cannot be simulated at all, or None if it can.
-
-    SIMULATION_INFEASIBLE is keyed by cell rather than derivable from any
-    formula -- these are memory deaths measured on real submissions, not
-    projected -- so this reads the same table `build_targeted_screen`'s
-    siblings wrote their rows' Notes from, rather than a column.
-    """
-    return SIMULATION_INFEASIBLE.get((run["Molecule"], run["Basis"], run["Mapper"]))
 # get_backend routes anything prefixed 'ibm' to real hardware.
 _HARDWARE_PREFIX = "ibm"
 # Statuses taken to mean "still going", used only to decide whether a
@@ -103,8 +95,8 @@ _EXPECTED_ACTIVE_STATUSES = _ACTIVE_STATUSES_CONFIRMED | frozenset({
 def _load(path: pathlib.Path) -> list[dict[str, str]]:
     if not path.exists():
         raise SystemExit(
-            f"{path} does not exist. Regenerate it with:\n"
-            f"    PYTHONPATH=src python utils/build_benchmark_matrix.py --stage targeted"
+            f"{path} does not exist. Regenerate it with the campaign's own "
+            "matrix builder."
         )
     with path.open() as f:
         return list(csv.DictReader(f))
@@ -184,9 +176,10 @@ def main() -> None:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="\n".join(__doc__.splitlines()[2:]),
     )
+    _campaign.add_argument(parser)
     parser.add_argument(
-        "--csv", type=pathlib.Path, default=_DEFAULT_CSV,
-        help="campaign file to run (default: targeted_screen.csv)",
+        "--csv", type=pathlib.Path, default=None,
+        help="matrix to run (default: the one the campaign's campaign.py names)",
     )
     parser.add_argument(
         "--where", action="append", default=[], metavar="COLUMN=VALUE",
@@ -241,7 +234,7 @@ def main() -> None:
              "Has no effect on --collect: a pending task already ran on "
              "whatever backend was in force when it was submitted, and "
              "that is what gets recorded. Read the note above before using "
-             "it on a stage that crosses the backend",
+             "it on a matrix that crosses the backend",
     )
     parser.add_argument(
         "--allow-hardware", action="store_true",
@@ -256,7 +249,14 @@ def main() -> None:
             "Omit it to leave Cebule's own default in place."
         )
 
-    runs = _load(args.csv)
+    campaign = _campaign.load(args.campaign)
+    csv_path = args.csv or campaign.CSV
+    infeasible_rule = getattr(campaign, "simulation_infeasible_reason", None)
+
+    def simulation_infeasible_reason(run: dict[str, str]) -> str | None:
+        return infeasible_rule(run) if infeasible_rule else None
+
+    runs = _load(csv_path)
     if args.group_by:
         _group(runs, args.group_by)
         return
@@ -271,9 +271,9 @@ def main() -> None:
             "--backend aer_simulator to simulate them first."
         )
 
-    results = runner.RESULTS_DIR / f"{args.csv.stem}.ndjson"
+    results = campaign.RESULTS_DIR / f"{csv_path.stem}.ndjson"
     pending_file = runner.pending_path(results)
-    batch = args.csv.stem
+    batch = csv_path.stem
     by_case = {r["Case_ID"]: r for r in runs}
 
     done = runner.completed_case_ids(results)
@@ -297,7 +297,7 @@ def main() -> None:
         failed = set()
     mine = {r["Case_ID"] for r in selected}
 
-    print(f"file:     {args.csv.name}")
+    print(f"file:     {csv_path.relative_to(runner.REPO) if csv_path.is_relative_to(runner.REPO) else csv_path}")
     print(f"selected: {len(selected)} of {len(runs)} runs"
           + (f"   ({', '.join(args.where)})" if args.where else ""))
     print(f"backends: {', '.join(sorted(backends))}"
@@ -433,9 +433,9 @@ def main() -> None:
                   f"--max-in-flight asked")
             break
 
-        task_input = runner.build_input(run, args.backend)
+        task_input = runner.build_input(run, campaign, args.backend)
         if task_input is None:
-            print(f"  skip {case}: {runner.unbuildable_reason(run)}")
+            print(f"  skip {case}: {runner.unbuildable_reason(run, campaign)}")
             unbuildable += 1
             continue
 

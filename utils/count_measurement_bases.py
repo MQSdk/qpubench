@@ -6,7 +6,7 @@ Evaluating <H> takes one circuit per measurement BASIS, and how many
 bases that is follows from the Hamiltonian rather than from the circuit
 preparing the state, so it is what the campaign's QPU time is
 proportional to.  This script measures that factor for the
-Jordan-Wigner rows of targeted_screen.csv.  It is where the
+Jordan-Wigner rows of a campaign's matrix.  It is where the
 `qwc_grouping` values in the matrix's `Num_ExpVals_Per_Iter` column come
 from, and it re-derives them so that a committed value can be checked
 against the Hamiltonian it claims to describe.
@@ -24,9 +24,8 @@ circuit, hence one submission at the row's full shot count.
               or "-" where the term count exceeds MAX_GROUPING_TERMS
 
 Both are structural: they follow from which integrals are non-zero, so
-they barely move with bond length.  The equilibrium geometries below are
-therefore adequate even though the campaign has not settled its
-geometries, which is a separate open decision.
+they barely move with bond length.  Each row's own `Geometry` column is
+used, so the count describes the molecule the row actually runs.
 
 What is NOT counted
 -------------------
@@ -41,41 +40,20 @@ What is NOT counted
     but need entangling basis-change circuits.
 
 Run:
-    PYTHONPATH=src python utils/count_measurement_bases.py
+    PYTHONPATH=src python utils/count_measurement_bases.py [--campaign NAME]
 """
 from __future__ import annotations
 
+import argparse
 import csv
 import pathlib
 import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "src"))
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
-_REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
-_CSV_PATH = (
-    _REPO_ROOT / "data" / "benchmarks" / "ibm_tn-vqe_qesem"
-    / "targeted_screen.csv"
-)
-
-# Experimental equilibrium geometries, in Angstrom:
-#
-#   H2   r_e = 0.74144            Huber & Herzberg, via NIST CCCBDB
-#   H2O  r_e = 0.9572, 104.52 deg Benedict, Gailar & Plyler (1956)
-#
-# H2O's hydrogens are placed in the yz-plane with the oxygen at the
-# origin, so y = r sin(theta/2) and z = r cos(theta/2) reproduce that
-# bond length and angle exactly.
-#
-# The counts this module produces do not actually depend on these values,
-# since a term count is a property of which integrals are non-zero rather
-# than of their magnitudes.  They are pinned at equilibrium so that the
-# campaign names one geometry everywhere it names a molecule.
-GEOMETRIES = {
-    "H2": "H 0 0 0; H 0 0 0.74144",
-    "Li2": "Li 0 0 0; Li 0 0 2.6729",
-    "H2O": "O 0 0 0; H 0 0.75695 0.58588; H 0 -0.75695 0.58588",
-}
+import _campaign
 
 # Campaign basis name -> PySCF's spelling.
 PYSCF_BASIS = {
@@ -98,14 +76,13 @@ QVSZP_PROXY = ("ccpvdz", "shape proxy: same orbital count, different basis")
 # a 16 GB machine that does not fail cleanly: it invokes the OOM killer,
 # which takes the whole parent process group with it.
 #
-# The campaign's own rows top out at 2,064 terms (qvSZP), so this ceiling
-# never binds on a real row.  It exists so that pointing this script at a
-# larger basis reports the term count and declines, rather than dying.
+# The ceiling exists so that pointing this script at a large basis reports
+# the term count and declines, rather than dying.
 MAX_GROUPING_TERMS = 4_000
 
 
 def measurement_bases(
-    molecule: str, basis: str, active_electrons: int, active_orbitals: int,
+    geometry: str, basis: str, active_electrons: int, active_orbitals: int,
     full_space: bool,
 ) -> tuple[int, int, int | None, str]:
     """(qubits, Pauli terms, qubit-wise-commuting groups, proxy note).
@@ -124,7 +101,7 @@ def measurement_bases(
         pyscf_basis = PYSCF_BASIS[basis]
         restrict = not full_space
 
-    problem = PySCFDriver(atom=GEOMETRIES[molecule], basis=pyscf_basis).run()
+    problem = PySCFDriver(atom=geometry, basis=pyscf_basis).run()
     if restrict:
         problem = ActiveSpaceTransformer(
             active_electrons, active_orbitals
@@ -143,7 +120,10 @@ def measurement_bases(
 
 
 def main() -> None:
-    with _CSV_PATH.open(encoding="utf-8") as f:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    _campaign.add_argument(parser)
+    csv_path = _campaign.load(parser.parse_args().campaign).CSV
+    with csv_path.open(encoding="utf-8") as f:
         matrix = list(csv.DictReader(f))
 
     # One measurement per distinct (molecule, basis) among the JW rows:
@@ -154,7 +134,7 @@ def main() -> None:
             continue
         classes.setdefault((row["Molecule"], row["Basis"]), row)
 
-    print(f"Measurement bases per evaluation, JW rows of {_CSV_PATH.name}")
+    print(f"Measurement bases per evaluation, JW rows of {csv_path.name}")
     print(f"{'molecule/basis':22} {'space':12} {'qubits':>6} {'terms':>7} {'E':>6}")
     # Keyed by (molecule, qubits), not by qubits: two different active
     # spaces reach 8 qubits here with different term counts, and keying on
@@ -164,7 +144,7 @@ def main() -> None:
         classes.items(), key=lambda kv: int(kv[1]["N_Qubit"])
     ):
         qubits, terms, groups, proxy = measurement_bases(
-            molecule, basis,
+            row["Geometry"], basis,
             int(row["Active_Electrons"]), int(row["Active_Orbitals"]),
             row["Active_Space"] == "full",
         )

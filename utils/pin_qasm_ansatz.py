@@ -31,7 +31,7 @@ Why files rather than a CSV column
 A multi-line QASM program does not belong in a CSV cell. The matrix
 records the path and a SHA-256 prefix instead, so a silently edited
 circuit is detectable — the hash in the CSV stops matching the file.
-`build_benchmark_matrix.py` fills both cells for any row whose circuit
+A campaign's matrix builder fills both cells for any row whose circuit
 file exists here, and leaves them blank otherwise, so running this script
 is optional and the matrix is generatable without Qiskit.
 
@@ -40,11 +40,16 @@ changes `n_layers_circuit`'s effective default from 3 to 1 (the circuit
 is fully specified by the QASM, so the task stops building reps of its
 own). Pass it explicitly whenever you pin a circuit.
 
+Each campaign pins into its own `qasm/` folder (its campaign.py's
+QASM_DIR), and the stale-file sweep below stays inside that folder, so
+one campaign's pinning never deletes another's circuits.
+
 Run:
-    PYTHONPATH=src python utils/pin_qasm_ansatz.py
+    PYTHONPATH=src python utils/pin_qasm_ansatz.py [--campaign NAME]
 """
 from __future__ import annotations
 
+import argparse
 import csv
 import hashlib
 import pathlib
@@ -53,12 +58,10 @@ import sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "src"))
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
+import _campaign
 from _ansatz_builders import SUPPLIED_ANSATZE, build_ansatz, can_build, qasm_stem
 
 _REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
-_CAMPAIGN_DIR = _REPO_ROOT / "data" / "benchmarks" / "ibm_tn-vqe_qesem"
-_TARGETED_PATH = _CAMPAIGN_DIR / "targeted_screen.csv"
-_QASM_DIR = _REPO_ROOT / "data" / "qasm"
 
 
 def circuit_shapes(
@@ -104,8 +107,9 @@ def circuit_shapes(
 
 
 def qasm_path(
-    ansatz: str, num_qubits: int, reps: int, mapper: str = "JW",
-    num_electrons: int = 0, num_orbitals: int = 0, entanglement: str = "",
+    qasm_dir: pathlib.Path, ansatz: str, num_qubits: int, reps: int,
+    mapper: str = "JW", num_electrons: int = 0, num_orbitals: int = 0,
+    entanglement: str = "",
 ) -> pathlib.Path:
     """Where one circuit's pinned QASM lives.  See `qasm_stem`."""
     stem = qasm_stem(
@@ -113,12 +117,13 @@ def qasm_path(
         num_electrons=num_electrons, num_orbitals=num_orbitals,
         entanglement=entanglement or None,
     )
-    return _QASM_DIR / f"{stem}.qasm"
+    return qasm_dir / f"{stem}.qasm"
 
 
 def write_pinned_qasm(
-    ansatz: str, num_qubits: int, reps: int, mapper: str = "JW",
-    num_electrons: int = 0, num_orbitals: int = 0, entanglement: str = "",
+    qasm_dir: pathlib.Path, ansatz: str, num_qubits: int, reps: int,
+    mapper: str = "JW", num_electrons: int = 0, num_orbitals: int = 0,
+    entanglement: str = "",
 ) -> tuple[pathlib.Path, str]:
     """Write one circuit as OpenQASM 3.0, parameters left free; return
     (path, sha256 prefix).
@@ -143,7 +148,8 @@ def write_pinned_qasm(
     )
 
     path = qasm_path(
-        ansatz, num_qubits, reps, mapper, num_electrons, num_orbitals, entanglement,
+        qasm_dir, ansatz, num_qubits, reps, mapper, num_electrons, num_orbitals,
+        entanglement,
     )
     # UTF-8 explicitly, not the locale default: an unbound dump names its
     # parameters `input float[64] _{θ}_0_;`, so these files are not pure
@@ -153,8 +159,13 @@ def write_pinned_qasm(
 
 
 def main() -> None:
-    _QASM_DIR.mkdir(parents=True, exist_ok=True)
-    sources = [p for p in (_TARGETED_PATH,) if p.exists()]
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    _campaign.add_argument(parser)
+    campaign = _campaign.load(parser.parse_args().campaign)
+    qasm_dir = campaign.QASM_DIR
+
+    qasm_dir.mkdir(parents=True, exist_ok=True)
+    sources = [p for p in (campaign.CSV,) if p.exists()]
     rows: list[dict[str, str]] = []
     for path in sources:
         with path.open() as f:
@@ -162,7 +173,7 @@ def main() -> None:
 
     shapes = sorted(circuit_shapes(rows))
     if not shapes:
-        raise SystemExit(f"no rows with a circuit found in {_TARGETED_PATH.name}")
+        raise SystemExit(f"no rows with a circuit found in {campaign.CSV.name}")
 
     names = ", ".join(p.name for p in sources)
     print(f"Pinning {len(shapes)} distinct circuits from {names}:")
@@ -175,14 +186,16 @@ def main() -> None:
     supplied: list[pathlib.Path] = []
     for ansatz, num_qubits, reps, mapper, num_electrons, num_orbitals, entanglement in shapes:
         path = qasm_path(
-            ansatz, num_qubits, reps, mapper, num_electrons, num_orbitals, entanglement,
+            qasm_dir, ansatz, num_qubits, reps, mapper, num_electrons, num_orbitals,
+            entanglement,
         )
         expected.add(path)
         if not can_build(ansatz, mapper):
             supplied.append(path)
             continue
         _, digest = write_pinned_qasm(
-            ansatz, num_qubits, reps, mapper, num_electrons, num_orbitals, entanglement,
+            qasm_dir, ansatz, num_qubits, reps, mapper, num_electrons, num_orbitals,
+            entanglement,
         )
         print(f"  {path.relative_to(_REPO_ROOT)}  sha256:{digest}")
 
@@ -193,12 +206,12 @@ def main() -> None:
     # The pinned set is exactly what the matrix runs. A circuit left
     # behind by an earlier matrix is not a spare -- it is a file no row
     # points at, which invites being read as one the campaign runs.
-    for stale in sorted(set(_QASM_DIR.glob("*.qasm")) - expected):
+    for stale in sorted(set(qasm_dir.glob("*.qasm")) - expected):
         stale.unlink()
         print(f"  removed {stale.relative_to(_REPO_ROOT)} (no row runs it)")
 
     print(
-        "\nRe-run build_benchmark_matrix.py to fill Qasm_Ansatz_File / "
+        "\nRe-run the campaign's matrix builder to fill Qasm_Ansatz_File / "
         "Qasm_Ansatz_SHA256 from these."
     )
 
