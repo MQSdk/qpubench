@@ -150,7 +150,7 @@ committed under `hamiltonian_data/`.
 |---|---|---|
 | `RealAmplitudes` | `n(R+1)` | Ry only, reverse-linear entangler by default. Real amplitudes only; the baseline ansatz |
 | `rzryrz` | `3n(R+1)` | Rz+Ry+Rz, shifted-circular-alternating entangler by default (Qiskit `n_local` with `sca` entanglement). The circuit `TN_QC_OPT` builds for itself when no `qasm_ansatz` is supplied — in the comparison so the vendor's own default is measured rather than assumed |
-| `UCCSD` | 15, 26 | A restricted singles-and-doubles ansatz out of the reference determinant. The chemistry anchor the hardware-efficient families are compared against |
+| `UCCSD` | 15, 26 | A restricted singles-and-doubles ansatz out of the reference determinant, as a single layer (`Ansatz_Reps` = 1 on every UCCSD row, whatever the axis around it uses). The chemistry anchor the hardware-efficient families are compared against |
 | tUPS / pp-tUPS | 9 per layer | Tiled Unitary Product State [7], swept at 1–4 layers (2 is the default). Number-conserving and HF-initialized like UCCSD; `perfect_pairing_order` when occupied and virtual orbitals are equal in number (pp-tUPS), `occupied_middle_order` otherwise (plain tUPS) |
 
 `RealAmplitudes` and `rzryrz` are built by
@@ -329,7 +329,7 @@ substantially: 120 → 52 for H2/6-31g, 1304 → 392 for H2O/6-31g CAS(4,4).
   axes.** It shares the reps axis with the hardware-efficient families
   (1–4 layers, 2 default) and the mapper axis, but has no entanglement
   pattern to vary, and its own optimizer tuning is untested.
-- **UCCSD/JW is not run on H2O.** No `UCCSD_JW_8q_2r_4e.qasm` circuit is
+- **UCCSD/JW is not run on H2O.** No `UCCSD_JW_8q_1r_4e.qasm` circuit is
   currently pinned — `_fermionic_ansatz.uccsd()` can build and verify one
   (see [Ansätze](#ansätze); the same generator tUPS uses, wrapped in
   `reverse_bits()`) — but an earlier UCCSD-on-H2O run also took excessive

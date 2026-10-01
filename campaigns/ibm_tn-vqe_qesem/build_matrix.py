@@ -1071,6 +1071,10 @@ def build_stage3(
     return rows
 
 
+# Ansatze whose pinned circuits are a single layer, so their rows say 1
+# whatever reps the axis around them uses.
+SINGLE_LAYER_ANSATZE = {"UCCSD"}
+
 # Ansatze whose reference state approximates HF instead of starting random
 # -- see _ansatz_builders.hf_approx_phi_init and PHI_INIT_HF_APPROX.
 HF_APPROX_ANSATZE = {"RealAmplitudes", "rzryrz"}
@@ -1121,6 +1125,8 @@ def build_targeted_screen() -> list[dict[str, str]]:
         layers_network: int | None = None, entanglement: str | None = None,
         extra_note: str = "",
     ) -> dict[str, str]:
+        if ansatz in SINGLE_LAYER_ANSATZE:
+            reps = 1
         return _row(
             stage="targeted", **cell, mapper=mapper,
             ansatz=ansatz, reps=reps, measurement=measurement_for[mapper],
@@ -1216,11 +1222,9 @@ def build_targeted_screen() -> list[dict[str, str]]:
     # --- Richer system: H2O/6-31g. MolMap_sb at CAS(4,4) is 6
     # qubits; JW at the same active space is 8 -- feasible in width, so
     # it is included too, but only on RealAmplitudes (cheap). UCCSD/JW
-    # is deliberately still not added here: a pinned circuit already
-    # exists (UCCSD_JW_8q_2r_4e.qasm, already used by stage 0's own
-    # H2O/CAS(4,4)/JW rows), but an earlier UCCSD-on-H2O run was slow
-    # enough that it is being held back pending confirmation the cost on
-    # this cell is acceptable. ---
+    # is deliberately not added: an earlier UCCSD-on-H2O run was slow
+    # enough that it is held back pending confirmation the cost on this
+    # cell is acceptable, and no circuit for it is pinned. ---
     for ansatz in ("RealAmplitudes", "UCCSD"):
         rows.append(row(
             mapper="MolMap_sb", ansatz=ansatz, cell=h2o_6_31g,

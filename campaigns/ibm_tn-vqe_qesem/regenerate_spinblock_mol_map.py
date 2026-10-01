@@ -156,8 +156,10 @@ def main() -> None:
         _verify(f"{tups_circuit.name} ({NEW_MAPPER})", tups_circuit, H_new, expected_hf)
 
         for ansatz, circuit in (("UCCSD", uccsd_circuit), ("tUPS", tups_circuit)):
+            # uccsd() builds a single layer; tUPS takes N_LAYERS.
+            reps = 1 if ansatz == "UCCSD" else N_LAYERS
             stem = qasm_stem(
-                ansatz, n_qubits, N_LAYERS, mapper=NEW_MAPPER,
+                ansatz, n_qubits, reps, mapper=NEW_MAPPER,
                 num_electrons=n_alpha + n_beta, num_orbitals=n_spatial,
             )
             path = _QASM_DIR / f"{stem}.qasm"
