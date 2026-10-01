@@ -97,18 +97,19 @@ except the one deliberately crossed axis below.
 |---|---|---|
 | Mapper | JW ↔ MolMap_sb | Every ansatz — `RealAmplitudes`, `rzryrz`, `UCCSD`, tUPS/pp-tUPS — each run under both |
 | Ansatz reps (tUPS/pp-tUPS: layers) | 1, 2, 3, 4 | `RealAmplitudes`, `rzryrz` and tUPS/pp-tUPS, JW |
-| Entangler topology | each family's own default ↔ `full` | `RealAmplitudes` and `rzryrz`, JW, at 2 reps |
+| Entangler topology | `reverse_linear`, `sca` and `full` on both families (defaults: `reverse_linear` for `RealAmplitudes`, `sca` for `rzryrz`) | `RealAmplitudes` and `rzryrz`, JW, at 2 reps |
 | Optimizer | `COBYLA`, `SPSA`, `ExcitationSolve` | `RealAmplitudes` (cheap; also where SPSA's `target_step`/`c` are tuned), `UCCSD` (where SPSA is tuned too, and ExcitationSolve's `frequencies` — see `opt_options_for` in `build_benchmark_matrix.py`) and `tUPS` at its default 2 layers |
 | Method × TN-layers | `TN-VQE`/`TN` × `TN_Layers_Network` ∈ {1,2,3} (2 matters most) | `RealAmplitudes`, JW — `VQE` ignores `TN_Layers_Network` entirely, so it carries no rows in this axis |
 | Mapper × method × TN-layers | the same sweep, under MolMap_sb instead of JW | `RealAmplitudes` — does TN-VQE's advantage depend on Hamiltonian density? |
-| Richer system | H2O/6-31g, under MolMap_sb and, on `RealAmplitudes` alone, under JW too (see [Known limitations](#known-limitations)) | `RealAmplitudes` and `UCCSD` |
+| TN-VQE on tUPS | `TN-VQE` at `TN_Layers_Network` = 2, under JW and MolMap_sb | tUPS/pp-tUPS at 2 layers, `COBYLA` — does TN-VQE's advantage carry over to a chemistry ansatz? Compared against the mapper axis's VQE tUPS rows |
+| Richer system | H2O/6-31g, under MolMap_sb and JW (UCCSD under MolMap_sb only — see [Known limitations](#known-limitations)) | `RealAmplitudes` and tUPS/pp-tUPS under both mappers, `UCCSD` under MolMap_sb |
 
 A row that coincides with an earlier one on every field but `Case_ID` and
 `Notes` (the reps=2 point of the reps axis *is* the baseline, for
 instance) is numbered and then dropped: every row gets a `Case_ID` first,
 so a collapsed duplicate leaves a gap rather than reshuffling anything
 after it (`assign_case_ids` then `dedupe_rows` in `build_benchmark_
-matrix.py`). 40 rows, `Case_ID`s 1–47 with seven gaps.
+matrix.py`). 46 rows, `Case_ID`s 1–53 with seven gaps.
 
 **Every ansatz-optimizer-mode combination reuses the same Hamiltonian,
 pinned circuit and `Phi_Init`** for a given (molecule, basis, mapper)
@@ -283,7 +284,7 @@ substantially: 120 → 52 for H2/6-31g, 1304 → 392 for H2O/6-31g CAS(4,4).
 | `Entanglement` | Blank except on the entangler-topology axis's rows (`RealAmplitudes`/`rzryrz` only), where it names the non-default entanglement |
 | `Backend_Platform` | `aer_simulator`, on every row |
 | `Optimizer`, `Opt_Options` | `COBYLA`, `SPSA` or `ExcitationSolve`. `Opt_Options` is the dictionary passed to `scipy.optimize.minimize` (or Cebule's own optimizer): `{}` except for SPSA on `RealAmplitudes`/`rzryrz`/`UCCSD`/`tUPS` and ExcitationSolve on `UCCSD`, tuned in `opt_options_for` (`build_benchmark_matrix.py`) |
-| `Quantum_Eval_Budget` | Quantum evaluations the row is allowed, held equal across optimizers and covering the whole run, including SPSA's calibration and closing repeats and ExcitationSolve's flatness check and validation: `max(30, ceil(30 × n_params))`, enough for each run to reach its optimum rather than be cut off (ExcitationSolve gets 6 sweeps) — affordable because this file is 40 rows, not a full factorial |
+| `Quantum_Eval_Budget` | Quantum evaluations the row is allowed, held equal across optimizers and covering the whole run, including SPSA's calibration and closing repeats and ExcitationSolve's flatness check and validation: `max(30, ceil(30 × n_params))`, enough for each run to reach its optimum rather than be cut off (ExcitationSolve gets 6 sweeps) |
 | `Quantum_Evals_Per_Iteration` | What one iteration of this row's optimizer spends of the budget: 1 for COBYLA, 2 for SPSA, `4 × n_phi` for ExcitationSolve — 0 wherever φ is frozen, since a θ-only change is served from cache |
 | `Cost_Evals_Per_Iteration` | Entries one iteration adds to `cost_history`, the axis convergence curves are aligned on |
 | `Iterations` | What `TNQCOptInput.n_iterations` receives |
@@ -320,7 +321,7 @@ substantially: 120 → 52 for H2/6-31g, 1304 → 392 for H2O/6-31g CAS(4,4).
   (see [Ansätze](#ansätze); the same generator tUPS uses, wrapped in
   `reverse_bits()`) — but an earlier UCCSD-on-H2O run also took excessive
   wall time, and that cell's cost is not yet confirmed acceptable either;
-  H2O/JW in this file is `RealAmplitudes` only.
+  H2O/JW in this file is `RealAmplitudes` and tUPS only.
 - **`HF_APPROX_ANSATZE` and closed-shell orbitals are assumed together.**
   `hf_state_for`'s JW branch raises if `Active_Electrons` is odd; every
   cell this campaign runs is closed-shell, so this has not been

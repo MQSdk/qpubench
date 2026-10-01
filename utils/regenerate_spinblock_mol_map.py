@@ -184,5 +184,44 @@ def main() -> None:
     print("  Pauli term counts:", term_counts)
 
 
+def pin_h2o_tups() -> None:
+    """tUPS for H2O/6-31g CAS(4,4) under both mappers.
+
+    Re-runnable, unlike main()'s reordering half: it reads the committed
+    MolMap_sb Hamiltonian, whose mapping_matrix is already the reordered D'
+    in Qiskit's row convention, so no source file from before the
+    reordering is needed.
+    """
+    n_spatial, n_alpha, n_beta, expected_hf = 4, 2, 2, -75.98399756962218
+    print(f"H2O/6-31g CAS(4,4) tUPS, {N_LAYERS} layers:")
+
+    payload = json.loads((_HAMILTONIAN_DIR / "water_6-31G_MolMap_sb.json").read_text())
+    H_sb = SparsePauliOp(payload["h_operators"], payload["h_coeff_values"])
+    triples = np.array(payload["mapping_matrix"])
+    D = sparse.csr_matrix(
+        (triples[:, 2].astype(complex), (triples[:, 0].astype(int), triples[:, 1].astype(int))),
+        shape=(2**H_sb.num_qubits, 2 ** (2 * n_spatial)),
+    )
+    tups_sb = pp_tups(n_spatial, n_alpha, n_beta, N_LAYERS, mapping_matrix=D)
+
+    jw_payload = json.loads((_HAMILTONIAN_DIR / "water_6-31G_JW.json").read_text())
+    H_jw = SparsePauliOp(jw_payload["h_operators"], jw_payload["h_coeff_values"])
+    # Same JW mirror compensation as the H2 tUPS layers sweep in main().
+    tups_jw = pp_tups(n_spatial, n_alpha, n_beta, N_LAYERS, mapping_matrix=None).reverse_bits()
+
+    for mapper, circuit, H in ((NEW_MAPPER, tups_sb, H_sb), ("JW", tups_jw, H_jw)):
+        _verify(f"tUPS ({mapper})", circuit, H, expected_hf)
+        stem = qasm_stem(
+            "tUPS", circuit.num_qubits, N_LAYERS, mapper=mapper,
+            num_electrons=n_alpha + n_beta, num_orbitals=n_spatial,
+        )
+        path = _QASM_DIR / f"{stem}.qasm"
+        path.write_text(qasm3.dumps(circuit) + "\n", encoding="utf-8")
+        print(f"  wrote {path.relative_to(_REPO_ROOT)}  ({circuit.num_parameters} params)")
+
+
 if __name__ == "__main__":
-    main()
+    if "--h2o-tups" in sys.argv:
+        pin_h2o_tups()
+    else:
+        main()

@@ -454,7 +454,7 @@ SIMPLEX_OVERHEAD = 2      # n+1 simplex points, +1 for the first real step;
 STAGE1_EVALS_PER_PARAM = 1.3   # ~50% of achievable descent, at every width
 STAGE2_EVALS_PER_PARAM = 4.0   # ~80%; stage 2 is where converged energies live
 
-# targeted_screen.csv's own budget: 40 rows, not the old factorial's
+# targeted_screen.csv's own budget: 46 rows, not the old factorial's
 # thousands, so each run can be given enough to reach its optimum rather
 # than be cut off. Sized so ExcitationSolve, the costliest per iteration,
 # gets 6 sweeps after its fixed evaluations (fixed_evals); COBYLA stops on
@@ -1567,6 +1567,32 @@ def build_targeted_screen() -> list[dict[str, str]]:
         rows.append(row(
             mapper="JW", ansatz="tUPS", optimizer=optimizer,
             extra_note=f"Optimizer axis: {optimizer} on tUPS.",
+        ))
+
+    # --- TN-VQE on tUPS, at the TN-layers value that matters most, under
+    # both mappers: does the TN-VQE advantage carry over to a chemistry
+    # ansatz? Compared against the mapper axis's VQE tUPS rows. ---
+    for mapper in ("JW", "MolMap_sb"):
+        rows.append(row(
+            mapper=mapper, ansatz="tUPS", mode="both", layers_network=2,
+            extra_note=f"TN-VQE on tUPS: TN_Layers_Network=2, {mapper}.",
+        ))
+
+    # --- Richer system, continued: tUPS on H2O under both mappers. Its
+    # circuits come from regenerate_spinblock_mol_map.py --h2o-tups. ---
+    for mapper in ("JW", "MolMap_sb"):
+        rows.append(row(
+            mapper=mapper, ansatz="tUPS", cell=h2o_6_31g,
+            extra_note=f"Richer system: H2O/6-31g tUPS, {mapper}.",
+        ))
+
+    # --- Entangler topology, continued: each family under the other's
+    # default, so both sca and reverse_linear are seen on both. ---
+    for ansatz, entanglement in (("RealAmplitudes", "sca"), ("rzryrz", "reverse_linear")):
+        rows.append(row(
+            mapper="JW", ansatz=ansatz, entanglement=entanglement,
+            extra_note=f"Entangler-topology axis: {ansatz} with "
+                       f"'{entanglement}' entanglement instead of its own default.",
         ))
 
     return rows

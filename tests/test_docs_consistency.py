@@ -251,7 +251,7 @@ def test_phi_init_is_fixed_by_the_circuit_family():
             assert value.startswith("random(seed="), f"{ansatz}: {value}"
 
 
-def test_method_axis_is_only_crossed_on_realamplitudes():
+def test_method_axis_is_only_crossed_on_realamplitudes_and_tups():
     """The Method x TN-layers axis is only a comparison at a fixed circuit.
 
     An earlier revision screened plain VQE on one set of families and
@@ -272,12 +272,17 @@ def test_method_axis_is_only_crossed_on_realamplitudes():
         f"RealAmplitudes is run by {sorted(arms_by_ansatz.get('RealAmplitudes', ()))}, "
         "expected all three methods"
     )
+    # tUPS gets TN-VQE at 2 layers only, against its own VQE rows.
+    assert arms_by_ansatz.get("tUPS") == {"VQE", "TN-VQE"}, (
+        f"tUPS is run by {sorted(arms_by_ansatz.get('tUPS', ()))}, "
+        "expected VQE and TN-VQE"
+    )
     for ansatz, arms in arms_by_ansatz.items():
-        if ansatz == "RealAmplitudes":
+        if ansatz in ("RealAmplitudes", "tUPS"):
             continue
         assert arms == {"VQE"}, (
             f"{ansatz} is run by {sorted(arms)}, expected VQE only -- the "
-            "Method axis is RealAmplitudes-only"
+            "Method axis is RealAmplitudes- and tUPS-only"
         )
 
     # Same circuit, not merely the same family name: a group that shares
