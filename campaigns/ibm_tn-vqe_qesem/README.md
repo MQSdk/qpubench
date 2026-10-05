@@ -355,12 +355,13 @@ substantially: 120 → 52 for H2/6-31g, 1304 → 392 for H2O/6-31g CAS(4,4).
   roughly the HF energy there, whatever its settings; a `vqe_energy`
   below HF on these rows is the lowest of many noisy evaluations, not
   real progress.
-- **`vqe_energy` is biased low; compare exact energies instead.** It is
+- **`vqe_energy` is biased low; compare statevector energies instead.** It is
   the lowest noisy evaluation a run saw, so it sits a few shot-noise
   widths below the energy of any state the run reached. Result records
   therefore also carry the final `phi`, `theta` and transformed
   Hamiltonian (`h_tn_opt_qubit`), and `plot_results.ipynb` re-evaluates
-  the final state exactly from them (`utils/_exact_energy.py`). Records
+  the final state by noiseless statevector simulation
+  (`utils/_statevector_energy.py`), as `final_state_energy`. Records
   collected before this was stored fall back to `vqe_energy`.
 
 ## Open decisions

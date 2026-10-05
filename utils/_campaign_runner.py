@@ -626,8 +626,8 @@ def append_record(
             # against (U(theta)^dag H U(theta), which is H itself on a plain
             # VQE run). vqe_energy is the lowest NOISY evaluation seen, which
             # sits below the true energy by a few shot-noise widths; these
-            # let the final state be re-evaluated exactly instead -- see
-            # _exact_energy.py.
+            # let the final state be re-evaluated by statevector instead --
+            # see _statevector_energy.py.
             "phi": result.phi,
             "theta": result.theta,
             "h_tn_opt_qubit": list(result.h_tn_opt_qubit),

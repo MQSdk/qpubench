@@ -1,4 +1,4 @@
-"""Exact energy of a TN_QC_OPT run's final state, by statevector simulation.
+"""Energy of a TN_QC_OPT run's final state, by noiseless statevector simulation.
 
 Imported, not run. Requires: pip install 'qpubench[qiskit]'.
 
@@ -9,7 +9,7 @@ the final parameters without shot noise gives the energy of the state the
 run actually ended in, which is what methods should be compared on.
 
 Needs a result record carrying `phi` and `h_tn_opt_qubit` (written by
-`_campaign_runner.append_record`) and the run's pinned circuit. Exact
+`_campaign_runner.append_record`) and the run's pinned circuit. Statevector
 simulation is exponential in the qubit count, so this is for the small
 registers benchmark campaigns run on simulators.
 """
@@ -37,7 +37,7 @@ def cebule_operator(labels: list[str], coefficients: list[float], num_qubits: in
     return SparsePauliOp.from_sparse_list(terms, num_qubits)
 
 
-def exact_energy(qasm_text: str, phi: list[float], h_tn_opt_qubit: Any) -> float:
+def statevector_energy(qasm_text: str, phi: list[float], h_tn_opt_qubit: Any) -> float:
     """<psi(phi)| H |psi(phi)> for the pinned circuit, without shot noise.
 
     `phi` binds positionally to the loaded circuit's parameters, as tn-vqe
@@ -54,12 +54,12 @@ def exact_energy(qasm_text: str, phi: list[float], h_tn_opt_qubit: Any) -> float
     return float(state.expectation_value(hamiltonian).real)
 
 
-def record_exact_energy(record: dict[str, Any], run: dict[str, str]) -> float | None:
-    """Exact final energy for one result record and its matrix row, or None
-    if the record predates storing the final parameters."""
+def record_statevector_energy(record: dict[str, Any], run: dict[str, str]) -> float | None:
+    """Statevector energy of the final state for one result record and its
+    matrix row, or None if the record predates storing the final parameters."""
     phi, hamiltonian = record.get("phi"), record.get("h_tn_opt_qubit")
     # A table that mixes old and new records fills the gaps with NaN.
     if not isinstance(phi, list) or not isinstance(hamiltonian, (list, tuple)):
         return None
     qasm_text = (REPO / run["Qasm_Ansatz_File"]).read_text(encoding="utf-8")
-    return exact_energy(qasm_text, phi, hamiltonian)
+    return statevector_energy(qasm_text, phi, hamiltonian)
