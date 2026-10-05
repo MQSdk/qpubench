@@ -114,7 +114,7 @@ except the one deliberately crossed axis below.
 | Optimizer | `COBYLA`, `SPSA`, `ExcitationSolve` | `RealAmplitudes` (cheap; also where SPSA's `target_step`/`c` are tuned), `UCCSD` (where SPSA is tuned too, and ExcitationSolve's `frequencies` — see `opt_options_for` in `build_matrix.py`) and `tUPS` at its default 2 layers |
 | Method × TN-layers | `TN-VQE`/`TN` × `TN_Layers_Network` ∈ {1,2,3} (2 matters most) | `RealAmplitudes`, JW — `VQE` ignores `TN_Layers_Network` entirely, so it carries no rows in this axis |
 | Mapper × method × TN-layers | the same sweep, under MolMap_sb instead of JW | `RealAmplitudes` — does TN-VQE's advantage depend on Hamiltonian density? |
-| TN-VQE on tUPS | `TN-VQE` at `TN_Layers_Network` = 2, under JW and MolMap_sb | tUPS/pp-tUPS at 2 layers, `COBYLA` — does TN-VQE's advantage carry over to a chemistry ansatz? Compared against the mapper axis's VQE tUPS rows |
+| TN-VQE on tUPS | `TN-VQE` at `TN_Layers_Network` = 1, 2, 3, under JW and MolMap_sb | tUPS/pp-tUPS at 2 layers, `COBYLA` — does TN-VQE's advantage carry over to a chemistry ansatz? Compared against the mapper axis's VQE tUPS rows |
 | Richer system | H2O/6-31g, under MolMap_sb and JW (UCCSD under MolMap_sb only — see [Known limitations](#known-limitations)) | `RealAmplitudes` and tUPS/pp-tUPS under both mappers, `UCCSD` under MolMap_sb |
 
 A row that coincides with an earlier one on every field but `Case_ID` and
@@ -122,7 +122,7 @@ A row that coincides with an earlier one on every field but `Case_ID` and
 instance) is numbered and then dropped: every row gets a `Case_ID` first,
 so a collapsed duplicate leaves a gap rather than reshuffling anything
 after it (`assign_case_ids` then `dedupe_rows`, from
-`utils/_matrix_io.py`). 46 rows, `Case_ID`s 1–53 with seven gaps.
+`utils/_matrix_io.py`). 50 rows, `Case_ID`s 1–57 with seven gaps.
 
 **Every ansatz-optimizer-mode combination reuses the same Hamiltonian,
 pinned circuit and `Phi_Init`** for a given (molecule, basis, mapper)

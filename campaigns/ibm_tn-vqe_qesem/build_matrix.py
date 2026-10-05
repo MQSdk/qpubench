@@ -397,7 +397,7 @@ SHOTS = 50_000
 # into each optimizer's own iterations so every optimizer on a row spends
 # the same budget.
 #
-# 46 rows rather than a factorial's thousands, so each run can be given
+# 50 rows rather than a factorial's thousands, so each run can be given
 # enough to reach its optimum rather than be cut off. Sized for the
 # slowest case seen, SPSA on tUPS from its HF start, which needs about
 # four times what UCCSD does; COBYLA stops on its own tolerance well
@@ -1278,6 +1278,17 @@ def build_targeted_screen() -> list[dict[str, str]]:
             extra_note=f"Entangler-topology axis: {ansatz} with "
                        f"'{entanglement}' entanglement instead of its own default.",
         ))
+
+    # --- TN-VQE on tUPS, continued: the rest of the TN-layers sweep, so
+    # tUPS gets the same layers comparison RealAmplitudes has. ---
+    for mapper in ("JW", "MolMap_sb"):
+        for layers in tn_layers_sweep:
+            if layers == 2:
+                continue
+            rows.append(row(
+                mapper=mapper, ansatz="tUPS", mode="both", layers_network=layers,
+                extra_note=f"TN-VQE on tUPS: TN_Layers_Network={layers}, {mapper}.",
+            ))
 
     return rows
 
