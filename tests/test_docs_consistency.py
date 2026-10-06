@@ -220,14 +220,20 @@ def test_phi_init_is_fixed_by_the_circuit_family():
 
     So the column is keyed on `Ansatz` alone: `Method` may not move it,
     and no row may leave it unpinned -- an unseeded upstream default is
-    the defect being fixed.
+    the defect being fixed. The one exception is the start-point axis,
+    which varies phi itself on plain-VQE rows and is checked separately.
     """
+    module = _benchmark_matrix_module()
     by_ansatz: dict[str, set[str]] = {}
     for row in _csv_rows():
         assert not row["Phi_Init"].startswith("n/a"), (
             f"Case_ID {row['Case_ID']} ({row['Ansatz']}) leaves phi "
             f"unpinned: {row['Phi_Init']!r}"
         )
+        if row["Phi_Init"] == module.PHI_INIT_HF_APPROX_KICK:
+            assert row["Ansatz"] in module.HF_APPROX_ANSATZE, row["Case_ID"]
+            assert row["Method"] == "VQE", row["Case_ID"]
+            continue
         by_ansatz.setdefault(row["Ansatz"], set()).add(row["Phi_Init"])
 
     assert by_ansatz, "no rows to check"
@@ -241,7 +247,6 @@ def test_phi_init_is_fixed_by_the_circuit_family():
     # this campaign seeds one for (RealAmplitudes, rzryrz);
     # the seeded random draw otherwise, whose identity at zero is a
     # barren starting point rather than a reference determinant.
-    module = _benchmark_matrix_module()
     for ansatz, values in by_ansatz.items():
         expected_zeros = ansatz in module.PHI_INIT_ZEROS_ANSATZE
         expected_hf_approx = ansatz in module.HF_APPROX_ANSATZE
@@ -292,8 +297,11 @@ def test_method_axis_is_only_crossed_on_realamplitudes_and_tups():
     # and legitimately pin different files -- must share the pinned file
     # and the phi it starts from, or the RealAmplitudes method arms at
     # that point differ in more than method.
+    kick = _benchmark_matrix_module().PHI_INIT_HF_APPROX_KICK
     by_case: dict[tuple[str, ...], set[tuple[str, str]]] = {}
     for row in rows:
+        if row["Phi_Init"] == kick:
+            continue
         key = (
             row["Molecule"], row["Basis"], row["Mapper"], row["Ansatz"],
             row["Ansatz_Reps"], row["Entanglement"],

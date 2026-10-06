@@ -397,7 +397,7 @@ SHOTS = 50_000
 # into each optimizer's own iterations so every optimizer on a row spends
 # the same budget.
 #
-# 50 rows rather than a factorial's thousands, so each run can be given
+# 54 rows rather than a factorial's thousands, so each run can be given
 # enough to reach its optimum rather than be cut off. Sized for the
 # slowest case seen, SPSA on tUPS from its HF start, which needs about
 # four times what UCCSD does; COBYLA stops on its own tolerance well
@@ -453,6 +453,14 @@ PHI_INIT_ZEROS_ANSATZE = {"UCCSD", "tUPS"}
 # needs occupied-qubit information (mapper, molecule, basis, electrons)
 # that only the caller building a specific row has to hand.
 PHI_INIT_HF_APPROX = "hf-approx"
+# hf-approx is a local minimum for RealAmplitudes and rzryrz: gradient
+# zero, no downhill direction, and kicks up to ~0.3 rad fall back to it.
+# A ~1 rad kick can escape, so the start-point rows add one. Seeded, so
+# every row with the same circuit starts from the same vector.
+PHI_INIT_KICK_SCALE = 1.0
+PHI_INIT_HF_APPROX_KICK = (
+    f"{PHI_INIT_HF_APPROX}+kick(scale={PHI_INIT_KICK_SCALE},seed={PHI_INIT_SEED})"
+)
 
 # --- Measurement circuits per cost-function evaluation -------------------
 #
@@ -1127,7 +1135,7 @@ def build_targeted_screen() -> list[dict[str, str]]:
         *, mapper: str, ansatz: str, cell: dict = h2_6_31g, reps: int = reps,
         optimizer: str = OPTIMIZER, mode: str = "circuit",
         layers_network: int | None = None, entanglement: str | None = None,
-        extra_note: str = "",
+        phi_init_tag: str | None = None, extra_note: str = "",
     ) -> dict[str, str]:
         if ansatz in SINGLE_LAYER_ANSATZE:
             reps = 1
@@ -1138,7 +1146,9 @@ def build_targeted_screen() -> list[dict[str, str]]:
             tn_ansatz=NOT_TN if mode == "circuit" else tn_ansatz,
             optimization_mode=mode, optimizer=optimizer,
             backend_platform=backend, entanglement=entanglement,
-            phi_init_tag=PHI_INIT_HF_APPROX if ansatz in HF_APPROX_ANSATZE else None,
+            phi_init_tag=phi_init_tag or (
+                PHI_INIT_HF_APPROX if ansatz in HF_APPROX_ANSATZE else None
+            ),
             extra_note=extra_note,
         )
 
@@ -1288,6 +1298,17 @@ def build_targeted_screen() -> list[dict[str, str]]:
             rows.append(row(
                 mapper=mapper, ansatz="tUPS", mode="both", layers_network=layers,
                 extra_note=f"TN-VQE on tUPS: TN_Layers_Network={layers}, {mapper}.",
+            ))
+
+    # --- Start point: the hardware-efficient families' ansatz-comparison
+    # rows again, from hf-approx plus a large seeded kick (see
+    # PHI_INIT_HF_APPROX_KICK). ---
+    for ansatz in sorted(HF_APPROX_ANSATZE):
+        for mapper in ("JW", "MolMap_sb"):
+            rows.append(row(
+                mapper=mapper, ansatz=ansatz, phi_init_tag=PHI_INIT_HF_APPROX_KICK,
+                extra_note=f"Start-point axis: {ansatz}, {mapper}, from "
+                           f"{PHI_INIT_HF_APPROX_KICK} instead of hf-approx.",
             ))
 
     return rows

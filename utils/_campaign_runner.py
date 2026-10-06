@@ -85,20 +85,29 @@ def hf_state(run: dict[str, str], campaign: ModuleType) -> list[int]:
 def phi_init(run: dict[str, str], campaign: ModuleType) -> list[float]:
     """The run's circuit-parameter initialisation, from its `Phi_Init` column.
 
-    `zeros`, `hf-approx`, or `random(seed=N)` (a bare `random` uses
-    PHI_INIT_SEED). Upstream randomises phi unseeded when none is given,
-    so a run that leaves it unset cannot be reproduced.
+    `zeros`, `hf-approx`, `hf-approx+kick(scale=S,seed=N)`, or
+    `random(seed=N)` (a bare `random` uses PHI_INIT_SEED). Upstream
+    randomises phi unseeded when none is given, so a run that leaves it
+    unset cannot be reproduced.
+
+    The kick adds S * N(0, 1) per parameter, drawn from default_rng(N), so
+    every row with the same circuit and spec starts from the same vector.
     """
     n = int(run["Num_Opt_Params_Phi"])
     spec = run["Phi_Init"]
     if spec == "zeros":
         return [0.0] * n
-    if spec == "hf-approx":
-        return hf_approx_phi_init(
+    kick = re.fullmatch(r"hf-approx\+kick\(scale=([0-9.]+),seed=(\d+)\)", spec)
+    if spec == "hf-approx" or kick:
+        phi = hf_approx_phi_init(
             run["Ansatz"], int(run["N_Qubit"]), int(run["Ansatz_Reps"]),
             hf_state(run, campaign), verified_qasm(run),
             entanglement=run["Entanglement"] or None,
         )
+        if kick:
+            rng = np.random.default_rng(int(kick.group(2)))
+            phi = (np.asarray(phi) + float(kick.group(1)) * rng.standard_normal(n)).tolist()
+        return phi
     match = re.fullmatch(r"random(?:\(seed=(\d+)\))?", spec)
     if match is None:
         raise ValueError(f"run {run['Case_ID']}: unknown Phi_Init {spec!r}")

@@ -116,13 +116,14 @@ except the one deliberately crossed axis below.
 | Mapper × method × TN-layers | the same sweep, under MolMap_sb instead of JW | `RealAmplitudes` — does TN-VQE's advantage depend on Hamiltonian density? |
 | TN-VQE on tUPS | `TN-VQE` at `TN_Layers_Network` = 1, 2, 3, under JW and MolMap_sb | tUPS/pp-tUPS at 2 layers, `COBYLA` — does TN-VQE's advantage carry over to a chemistry ansatz? Compared against the mapper axis's VQE tUPS rows |
 | Richer system | H2O/6-31g, under MolMap_sb and JW (UCCSD under MolMap_sb only — see [Known limitations](#known-limitations)) | `RealAmplitudes` and tUPS/pp-tUPS under both mappers, `UCCSD` under MolMap_sb |
+| Start point | `hf-approx` ↔ `hf-approx` plus a seeded ~1 rad Gaussian kick (`hf-approx+kick(scale=1.0,seed=20260811)`) | `RealAmplitudes` and `rzryrz`, VQE, `COBYLA`, 2 reps, under both mappers — `hf-approx` is a local minimum for these families, and kicks up to ~0.3 rad fall back into it. The kick is the same vector on every row sharing a circuit |
 
 A row that coincides with an earlier one on every field but `Case_ID` and
 `Notes` (the reps=2 point of the reps axis *is* the baseline, for
 instance) is numbered and then dropped: every row gets a `Case_ID` first,
 so a collapsed duplicate leaves a gap rather than reshuffling anything
 after it (`assign_case_ids` then `dedupe_rows`, from
-`utils/_matrix_io.py`). 50 rows, `Case_ID`s 1–57 with seven gaps.
+`utils/_matrix_io.py`). 54 rows, `Case_ID`s 1–61 with seven gaps.
 
 **Every ansatz-optimizer-mode combination reuses the same Hamiltonian,
 pinned circuit and `Phi_Init`** for a given (molecule, basis, mapper)
@@ -308,7 +309,7 @@ substantially: 120 → 52 for H2/6-31g, 1304 → 392 for H2O/6-31g CAS(4,4).
 | `Measurement_Method` | `pauli` (JW rows) or `grouped` (MolMap_sb rows) |
 | `Qasm_Ansatz_File`, `Qasm_Ansatz_SHA256` | The pinned circuit and a hash prefix of it |
 | `Num_Opt_Params_Phi` | Circuit-side parameter count, the `num_parameters` the pinned QASM loads with. On a `TN` row it is the count held fixed |
-| `Phi_Init` | `"zeros"` (`UCCSD`, tUPS), `"hf-approx"` (`RealAmplitudes`, `rzryrz`) — see [HF-approximating initial parameters](#hf-approximating-initial-parameters) |
+| `Phi_Init` | `"zeros"` (`UCCSD`, tUPS), `"hf-approx"` (`RealAmplitudes`, `rzryrz`), or `"hf-approx+kick(scale=S,seed=N)"` on the start-point rows — see [HF-approximating initial parameters](#hf-approximating-initial-parameters) |
 | `Num_Opt_Params_Theta` | Network-side parameter count on a TN-VQE row |
 | `Num_ExpVals_Per_Iter`, `Num_ExpVals_Source` | Measurement circuits one evaluation submits, and where that count came from |
 | `Error_Mitigation`, `Precision`, `QESEM_Execution_Mode` | `none`, `n/a (shot-based)`, `n/a (not QESEM)` on every row — no mitigation is applied in this file |
