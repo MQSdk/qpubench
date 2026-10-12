@@ -370,7 +370,12 @@ def test_iterations_matches_the_generators_proportional_rule():
         eval_budget = module.evaluation_budget(
             n_phi + n_theta, module.TARGETED_EVALS_PER_PARAM,
         )
-        expected = module.iteration_budget(eval_budget, row["Optimizer"], n_phi, n_theta)
+        sweep = module.phi_sweep_evals(
+            row["Optimizer"], row["Qasm_Ansatz_File"], row["Opt_Options"], n_phi,
+        )
+        expected = module.iteration_budget(
+            eval_budget, row["Optimizer"], n_phi, n_theta, phi_sweep_evals=sweep,
+        )
         assert int(row["Iterations"]) == expected, (
             f"Case_ID {row['Case_ID']} budgets {row['Iterations']} iterations "
             f"for {n_phi}+{n_theta} free parameters under {row['Optimizer']}; "

@@ -365,6 +365,39 @@ SPSA_C = 0.05
 SPSA_TUNED_ANSATZE = {"UCCSD", "RealAmplitudes", "rzryrz", "tUPS"}
 
 
+# ExcitationSolve's quantum evaluations per sweep, per pinned circuit
+# (closing evaluation included): tn-vqe measures each phi parameter's
+# frequency set on a noiseless copy before the run and fits it from
+# 1 + 2|f| samples, one reused, skipping parameters the energy ignores.
+# Measured with tn-vqe's frequency_probe._verified_frequencies at the
+# row's own start. A row whose Opt_Options name the sets needs no entry.
+EXCITATIONSOLVE_PHI_SWEEP_EVALS = {
+    "RealAmplitudes_8q_2r": 49,
+    "RealAmplitudes_4q_2r": 25,
+    "tUPS_JW_8q_2r_2e": 89,
+    "tUPS_MolMap_sb_4q_2r_2e_4o": 89,
+}
+
+
+def phi_sweep_evals(optimizer: str, qasm_file: str, opt_options: str, num_phi: int) -> int | None:
+    """An ExcitationSolve row's quantum evaluations per sweep, or None for
+    any other optimizer and for a row with no phi to sweep."""
+    if optimizer != "ExcitationSolve" or not num_phi:
+        return None
+    named = json.loads(opt_options).get("frequencies")
+    if named:
+        return 1 + 2 * len(named[0]) * num_phi
+    stem = pathlib.Path(qasm_file).stem
+    if stem not in EXCITATIONSOLVE_PHI_SWEEP_EVALS:
+        # Fatal, like a missing EXPVALS_PER_ITER entry: a guessed sweep cost
+        # over- or under-spends the budget.
+        raise KeyError(
+            f"no measured ExcitationSolve sweep cost for {stem}: measure its "
+            "frequency sets and add it to EXCITATIONSOLVE_PHI_SWEEP_EVALS"
+        )
+    return EXCITATIONSOLVE_PHI_SWEEP_EVALS[stem]
+
+
 def opt_options_for(optimizer: str, ansatz: str, num_phi: int, num_theta: int) -> str:
     """`Opt_Options` for one row: `{}` except for the SPSA/ExcitationSolve
     workarounds above.
@@ -397,7 +430,7 @@ SHOTS = 50_000
 # into each optimizer's own iterations so every optimizer on a row spends
 # the same budget.
 #
-# 54 rows rather than a factorial's thousands, so each run can be given
+# 72 rows rather than a factorial's thousands, so each run can be given
 # enough to reach its optimum rather than be cut off. Sized for the
 # slowest case seen, SPSA on tUPS from its HF start, which needs about
 # four times what UCCSD does; COBYLA stops on its own tolerance well
@@ -844,10 +877,14 @@ def _row(
     n_theta = int(theta_params) if theta_params else 0
     free_params = n_phi + n_theta
     eval_budget = evaluation_budget(free_params, TARGETED_EVALS_PER_PARAM)
+    opt_options = opt_options_for(optimizer, ansatz, n_phi, n_theta)
+    sweep = phi_sweep_evals(optimizer, qasm_file, opt_options, n_phi)
     quantum_per_iter, cost_per_iter = evals_per_iteration(
-        optimizer, n_phi, n_theta,
+        optimizer, n_phi, n_theta, phi_sweep_evals=sweep,
     )
-    iterations = iteration_budget(eval_budget, optimizer, n_phi, n_theta)
+    iterations = iteration_budget(
+        eval_budget, optimizer, n_phi, n_theta, phi_sweep_evals=sweep,
+    )
     # Measurement circuits per evaluation: the row's Hamiltonian decides
     # it, so it is keyed on (mapper, molecule, qubits) and not on the
     # circuit or the method.  A network row takes no measurements at all.
@@ -898,7 +935,7 @@ def _row(
             or (BACKEND_PLATFORM_TN if is_tn else BACKEND_PLATFORM_VQE)
         ),
         "Optimizer": optimizer,
-        "Opt_Options": opt_options_for(optimizer, ansatz, n_phi, n_theta),
+        "Opt_Options": opt_options,
         # Three columns where there used to be one, because a caching
         # backend makes "an evaluation" two different quantities.
         #
@@ -1310,6 +1347,29 @@ def build_targeted_screen() -> list[dict[str, str]]:
                 extra_note=f"Start-point axis: {ansatz}, {mapper}, from "
                            f"{PHI_INIT_HF_APPROX_KICK} instead of hf-approx.",
             ))
+
+    # --- TN-VQE with the optimizers that converge. COBYLA stalls under shot
+    # noise, so the COBYLA TN-VQE rows above cannot say whether the network
+    # helps; SPSA and ExcitationSolve reach FCI on tUPS. MolMap_sb because
+    # its circuits are the shallow ones a noisy backend can run; JW tUPS at
+    # 2 layers pairs with the optimizer axis's tUPS rows. ---
+    for optimizer in ("SPSA", "ExcitationSolve"):
+        for ansatz in ("RealAmplitudes", "tUPS"):
+            rows.append(row(
+                mapper="MolMap_sb", ansatz=ansatz, optimizer=optimizer,
+                extra_note=f"{optimizer} reference for TN-VQE: VQE, {ansatz}, MolMap_sb.",
+            ))
+            for layers in tn_layers_sweep:
+                rows.append(row(
+                    mapper="MolMap_sb", ansatz=ansatz, optimizer=optimizer, mode="both",
+                    layers_network=layers,
+                    extra_note=f"TN-VQE with {optimizer}: {ansatz}, MolMap_sb, "
+                               f"TN_Layers_Network={layers}.",
+                ))
+        rows.append(row(
+            mapper="JW", ansatz="tUPS", optimizer=optimizer, mode="both", layers_network=2,
+            extra_note=f"TN-VQE with {optimizer}: tUPS, JW, TN_Layers_Network=2.",
+        ))
 
     return rows
 

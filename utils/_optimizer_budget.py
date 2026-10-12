@@ -25,9 +25,14 @@ SIMPLEX_OVERHEAD = 2
 # Cost per iteration, in cost-function evaluations.
 #   COBYLA           1: scipy's COBYLA takes maxiter as an evaluation cap.
 #   SPSA             2: a plus- and a minus-perturbation per step.
-#   ExcitationSolve  a sweep over every parameter. Each phi parameter is fit
-#                    to frequencies {1, 2} from five samples, one reused from
-#                    the previous fit; theta is taken at five, unverified.
+#   ExcitationSolve  a sweep over every parameter, plus one closing
+#                    evaluation. A parameter with frequency set f is fit from
+#                    1 + 2|f| samples, one reused from the previous fit, and
+#                    a parameter the energy ignores is skipped. The sets
+#                    depend on the circuit, so a campaign passes the measured
+#                    sweep cost (`phi_sweep_evals`); without it each phi
+#                    parameter is assumed to carry {1, 2}. theta is taken at
+#                    five, unverified.
 EVALS_PER_ITERATION_FIXED = {"COBYLA": 1, "SPSA": 2}
 EXCITATIONSOLVE_EVALS_PER_PHI = 4
 EXCITATIONSOLVE_EVALS_PER_THETA = 5
@@ -66,15 +71,19 @@ def evaluation_budget(
 
 
 def evals_per_iteration(
-    optimizer: str, num_phi: int, num_theta: int,
+    optimizer: str, num_phi: int, num_theta: int, *, phi_sweep_evals: int | None = None,
 ) -> tuple[int, int]:
     """(quantum evaluations, cost-function evaluations) per iteration.
 
     `num_phi` is 0 where phi is frozen (`network` mode), so such a run
-    reports no quantum cost.
+    reports no quantum cost. `phi_sweep_evals` is an ExcitationSolve sweep's
+    measured quantum cost, closing evaluation included.
     """
     if optimizer == "ExcitationSolve":
-        quantum = EXCITATIONSOLVE_EVALS_PER_PHI * num_phi
+        if phi_sweep_evals is not None and num_phi:
+            quantum = phi_sweep_evals
+        else:
+            quantum = EXCITATIONSOLVE_EVALS_PER_PHI * num_phi
         cost = quantum + EXCITATIONSOLVE_EVALS_PER_THETA * num_theta
         return quantum, max(1, cost)
     per = EVALS_PER_ITERATION_FIXED[optimizer]
@@ -92,6 +101,7 @@ def fixed_evals(optimizer: str, num_phi: int) -> int:
 
 def iteration_budget(
     budget: int, optimizer: str, num_phi: int, num_theta: int,
+    *, phi_sweep_evals: int | None = None,
 ) -> int:
     """`n_iterations` for an optimizer, given a quantum-evaluation budget.
 
@@ -102,6 +112,8 @@ def iteration_budget(
     Floored at 1: a single ExcitationSolve sweep is still a run worth
     having where the budget does not quite cover it.
     """
-    quantum, cost = evals_per_iteration(optimizer, num_phi, num_theta)
+    quantum, cost = evals_per_iteration(
+        optimizer, num_phi, num_theta, phi_sweep_evals=phi_sweep_evals,
+    )
     remaining = budget - fixed_evals(optimizer, num_phi)
     return max(1, remaining // (quantum or cost))
