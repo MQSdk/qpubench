@@ -40,8 +40,10 @@ EXCITATIONSOLVE_EVALS_PER_THETA = 5
 # Evaluations spent outside the iterations, read off tn-vqe's spsa.py and
 # excitation_solve.py and matched against collected cost_history lengths.
 #   SPSA             12 gain calibration + 1 start + 2 x 3 closing repeats
-#   ExcitationSolve  4n flatness check + n first-sweep validation
-#                    + 1 start + 1 closing evaluation
+#   ExcitationSolve  n first-sweep validation, up to 3 repeats where a check
+#                    trips under noise, + 1 start + 1 closing evaluation;
+#                    5n + 2 bounds it. No flatness check: tn-vqe measures
+#                    the frequency sets before the run.
 SPSA_FIXED_EVALS = 19
 EXCITATIONSOLVE_FIXED_EVALS_PER_PHI = 5
 EXCITATIONSOLVE_FIXED_EVALS = 2
