@@ -375,7 +375,9 @@ EXCITATIONSOLVE_PHI_SWEEP_EVALS = {
     "RealAmplitudes_8q_2r": 49,
     "RealAmplitudes_4q_2r": 25,
     "tUPS_JW_8q_2r_2e": 89,
+    "tUPS_MolMap_sb_4q_1r_2e_4o": 33,
     "tUPS_MolMap_sb_4q_2r_2e_4o": 89,
+    "tUPS_MolMap_sb_4q_3r_2e_4o": 145,
 }
 
 
@@ -430,7 +432,7 @@ SHOTS = 50_000
 # into each optimizer's own iterations so every optimizer on a row spends
 # the same budget.
 #
-# 72 rows rather than a factorial's thousands, so each run can be given
+# 84 rows rather than a factorial's thousands, so each run can be given
 # enough to reach its optimum rather than be cut off. Sized for the
 # slowest case seen, SPSA on tUPS from its HF start, which needs about
 # four times what UCCSD does; COBYLA stops on its own tolerance well
@@ -1370,6 +1372,25 @@ def build_targeted_screen() -> list[dict[str, str]]:
             mapper="JW", ansatz="tUPS", optimizer=optimizer, mode="both", layers_network=2,
             extra_note=f"TN-VQE with {optimizer}: tUPS, JW, TN_Layers_Network=2.",
         ))
+
+    # --- tUPS reps x TN layers, MolMap_sb. 1-layer tUPS cannot reach FCI on
+    # its own, so it asks whether the network makes up for a layer; 3
+    # layers checks nothing changes where the circuit already suffices.
+    # ExcitationSolve throughout (2 layers is the block above); SPSA on 1
+    # layer, so a network effect there is not an optimizer artefact. ---
+    for optimizer, reps_sweep in (("ExcitationSolve", (1, 3)), ("SPSA", (1,))):
+        for tups_reps in reps_sweep:
+            rows.append(row(
+                mapper="MolMap_sb", ansatz="tUPS", reps=tups_reps, optimizer=optimizer,
+                extra_note=f"tUPS reps x TN layers: VQE, {tups_reps} layer(s), {optimizer}.",
+            ))
+            for layers in tn_layers_sweep:
+                rows.append(row(
+                    mapper="MolMap_sb", ansatz="tUPS", reps=tups_reps,
+                    optimizer=optimizer, mode="both", layers_network=layers,
+                    extra_note=f"tUPS reps x TN layers: {tups_reps} layer(s), "
+                               f"TN_Layers_Network={layers}, {optimizer}.",
+                ))
 
     return rows
 

@@ -42,6 +42,7 @@ caught before.
 Run:
     PYTHONPATH=src python campaigns/ibm_tn-vqe_qesem/regenerate_spinblock_mol_map.py
     PYTHONPATH=src python campaigns/ibm_tn-vqe_qesem/regenerate_spinblock_mol_map.py --h2o-tups
+    PYTHONPATH=src python campaigns/ibm_tn-vqe_qesem/regenerate_spinblock_mol_map.py --h2-tups-layers
 """
 from __future__ import annotations
 
@@ -188,6 +189,38 @@ def main() -> None:
     print("  Pauli term counts:", term_counts)
 
 
+def _committed_sb(file_stem: str, n_spatial: int) -> tuple[SparsePauliOp, sparse.csr_matrix]:
+    """A committed MolMap_sb Hamiltonian and its mapping matrix, already in
+    Qiskit's row convention."""
+    payload = json.loads((_HAMILTONIAN_DIR / f"{file_stem}_MolMap_sb.json").read_text())
+    H = SparsePauliOp(payload["h_operators"], payload["h_coeff_values"])
+    triples = np.array(payload["mapping_matrix"])
+    D = sparse.csr_matrix(
+        (triples[:, 2].astype(complex), (triples[:, 0].astype(int), triples[:, 1].astype(int))),
+        shape=(2**H.num_qubits, 2 ** (2 * n_spatial)),
+    )
+    return H, D
+
+
+def pin_h2_tups_layers() -> None:
+    """tUPS for H2/6-31g under MolMap_sb at 1-3 layers, the depths the
+    tUPS reps x TN-layers rows use. Re-runnable: reads the committed
+    MolMap_sb file."""
+    n_spatial, n_alpha, n_beta, expected_hf = 4, 1, 1, -1.1267333176928163
+    H_sb, D = _committed_sb("h2_6-31G", n_spatial)
+    print("H2/6-31g MolMap_sb tUPS layers sweep:")
+    for layers in (1, 2, 3):
+        circuit = pp_tups(n_spatial, n_alpha, n_beta, layers, mapping_matrix=D)
+        _verify(f"tUPS ({NEW_MAPPER}, {layers}L)", circuit, H_sb, expected_hf)
+        stem = qasm_stem(
+            "tUPS", circuit.num_qubits, layers, mapper=NEW_MAPPER,
+            num_electrons=n_alpha + n_beta, num_orbitals=n_spatial,
+        )
+        path = _QASM_DIR / f"{stem}.qasm"
+        path.write_text(qasm3.dumps(circuit) + "\n", encoding="utf-8")
+        print(f"  wrote {path.relative_to(_REPO_ROOT)}  ({circuit.num_parameters} params)")
+
+
 def pin_h2o_tups() -> None:
     """tUPS for H2O/6-31g CAS(4,4) under both mappers.
 
@@ -199,13 +232,7 @@ def pin_h2o_tups() -> None:
     n_spatial, n_alpha, n_beta, expected_hf = 4, 2, 2, -75.98399756962218
     print(f"H2O/6-31g CAS(4,4) tUPS, {N_LAYERS} layers:")
 
-    payload = json.loads((_HAMILTONIAN_DIR / "water_6-31G_MolMap_sb.json").read_text())
-    H_sb = SparsePauliOp(payload["h_operators"], payload["h_coeff_values"])
-    triples = np.array(payload["mapping_matrix"])
-    D = sparse.csr_matrix(
-        (triples[:, 2].astype(complex), (triples[:, 0].astype(int), triples[:, 1].astype(int))),
-        shape=(2**H_sb.num_qubits, 2 ** (2 * n_spatial)),
-    )
+    H_sb, D = _committed_sb("water_6-31G", n_spatial)
     tups_sb = pp_tups(n_spatial, n_alpha, n_beta, N_LAYERS, mapping_matrix=D)
 
     jw_payload = json.loads((_HAMILTONIAN_DIR / "water_6-31G_JW.json").read_text())
@@ -227,5 +254,7 @@ def pin_h2o_tups() -> None:
 if __name__ == "__main__":
     if "--h2o-tups" in sys.argv:
         pin_h2o_tups()
+    elif "--h2-tups-layers" in sys.argv:
+        pin_h2_tups_layers()
     else:
         main()
