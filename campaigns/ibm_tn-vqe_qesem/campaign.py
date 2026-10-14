@@ -18,8 +18,8 @@ RESULTS_DIR = DIR / "results"
 
 # The device this campaign buys QPU time on, in IBM's European data
 # centre. qiskit-ibm-runtime ships an offline calibration snapshot for it
-# (FakeAachen), so pricing against it needs no credentials.
-PRICING_DEVICE = "ibm_aachen"
+# (FakeBerlin), so pricing against it needs no credentials.
+PRICING_DEVICE = "ibm_berlin"
 
 
 # --- Hamiltonians ---------------------------------------------------------

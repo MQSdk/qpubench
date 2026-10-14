@@ -180,16 +180,18 @@ STAGE1_MEASUREMENT = {"JW": "pauli", "mol_map": "grouped"}
 # which a run-time device choice would leave describing a machine the row
 # did not use.
 #
-# ibm_aachen: this campaign's QPU time is bought in IBM's European data
+# ibm_berlin: this campaign's QPU time is bought in IBM's European data
 # centre.  qiskit-ibm-runtime ships an offline calibration snapshot for
-# it, `fake_aachen` (FakeAachen, added in 0.47.0), which is what the
+# it, `fake_berlin` (FakeBerlin, in 0.47.0 and later), which is what the
 # pre-hardware noisy runs use and what the cost estimate transpiles
 # against -- no credentials needed either way.
 #
 # It reaches the two stacks by different routes: TNQCOptInput.backend on
 # TN rows, IBMAdapter(backend_name=...) on VQE rows.
-BACKEND_PLATFORM_TN = "ibm_aachen"     # TNQCOptInput.backend
-BACKEND_PLATFORM_VQE = "ibm_aachen"    # IBMAdapter(backend_name=...)
+BACKEND_PLATFORM_TN = "ibm_berlin"     # TNQCOptInput.backend
+BACKEND_PLATFORM_VQE = "ibm_berlin"    # IBMAdapter(backend_name=...)
+# Its offline snapshot, for the noisy-simulator rows that precede hardware.
+NOISY_SIMULATOR = "fake_berlin"
 
 # The single TN-VQE point stage 1 runs, mid-range in both directions --
 # enough to tell whether TN-VQE helps for a given basis without paying
@@ -432,7 +434,7 @@ SHOTS = 50_000
 # into each optimizer's own iterations so every optimizer on a row spends
 # the same budget.
 #
-# 84 rows rather than a factorial's thousands, so each run can be given
+# 92 rows rather than a factorial's thousands, so each run can be given
 # enough to reach its optimum rather than be cut off. Sized for the
 # slowest case seen, SPSA on tUPS from its HF start, which needs about
 # four times what UCCSD does; COBYLA stops on its own tolerance well
@@ -1174,7 +1176,8 @@ def build_targeted_screen() -> list[dict[str, str]]:
         *, mapper: str, ansatz: str, cell: dict = h2_6_31g, reps: int = reps,
         optimizer: str = OPTIMIZER, mode: str = "circuit",
         layers_network: int | None = None, entanglement: str | None = None,
-        phi_init_tag: str | None = None, extra_note: str = "",
+        phi_init_tag: str | None = None, backend_platform: str = backend,
+        extra_note: str = "",
     ) -> dict[str, str]:
         if ansatz in SINGLE_LAYER_ANSATZE:
             reps = 1
@@ -1184,7 +1187,7 @@ def build_targeted_screen() -> list[dict[str, str]]:
             layers_network=layers_network,
             tn_ansatz=NOT_TN if mode == "circuit" else tn_ansatz,
             optimization_mode=mode, optimizer=optimizer,
-            backend_platform=backend, entanglement=entanglement,
+            backend_platform=backend_platform, entanglement=entanglement,
             phi_init_tag=phi_init_tag or (
                 PHI_INIT_HF_APPROX if ansatz in HF_APPROX_ANSATZE else None
             ),
@@ -1391,6 +1394,35 @@ def build_targeted_screen() -> list[dict[str, str]]:
                     extra_note=f"tUPS reps x TN layers: {tups_reps} layer(s), "
                                f"TN_Layers_Network={layers}, {optimizer}.",
                 ))
+
+    # --- Noisy simulator: aer_simulator rows repeated on the hardware
+    # device's offline snapshot, each pairing a TN-VQE row with the VQE row
+    # it improved on. MolMap_sb only: its circuits are the shallow ones
+    # (6-118 two-qubit gates on the device against 586-620 for the JW
+    # chemistry circuits). The first row is the pilot. ---
+    def noisy(**kwargs) -> None:
+        rows.append(row(
+            mapper="MolMap_sb", backend_platform=NOISY_SIMULATOR,
+            extra_note=f"Noisy simulator ({NOISY_SIMULATOR}): " + kwargs.pop("note"),
+            **kwargs,
+        ))
+
+    noisy(ansatz="RealAmplitudes", optimizer="ExcitationSolve",
+          note="VQE baseline for the TN-VQE gain on RealAmplitudes.")
+    noisy(ansatz="RealAmplitudes", optimizer="ExcitationSolve", mode="both", layers_network=2,
+          note="does the TN-VQE gain on RealAmplitudes survive noise?")
+    noisy(ansatz="RealAmplitudes", optimizer="SPSA",
+          note="VQE baseline, SPSA.")
+    noisy(ansatz="RealAmplitudes", optimizer="SPSA", mode="both", layers_network=3,
+          note="the TN-VQE gain on RealAmplitudes under SPSA.")
+    noisy(ansatz="tUPS", reps=1, optimizer="ExcitationSolve",
+          note="1-layer tUPS, VQE.")
+    noisy(ansatz="tUPS", reps=1, optimizer="ExcitationSolve", mode="both", layers_network=2,
+          note="can the network stand in for a tUPS layer when depth costs noise?")
+    noisy(ansatz="tUPS", reps=2, optimizer="ExcitationSolve",
+          note="2-layer tUPS, VQE: the depth the network stands in for.")
+    noisy(ansatz="RealAmplitudes", optimizer="COBYLA",
+          note="tn-vqe's default optimizer, as a reference.")
 
     return rows
 
