@@ -370,12 +370,13 @@ def test_iterations_matches_the_generators_proportional_rule():
         eval_budget = module.evaluation_budget(
             n_phi + n_theta, module.TARGETED_EVALS_PER_PARAM,
         )
-        sweep = module.phi_sweep_evals(
-            row["Optimizer"], row["Qasm_Ansatz_File"], row["Opt_Options"], n_phi,
-        )
+        sweep = module.phi_sweep_evals(row["Optimizer"], row["Opt_Options"], n_phi)
         expected = module.iteration_budget(
             eval_budget, row["Optimizer"], n_phi, n_theta, phi_sweep_evals=sweep,
         )
+        if (row["Backend_Platform"] == module.NOISY_SIMULATOR
+                and row["Optimizer"] == "ExcitationSolve"):
+            expected = min(expected, module.NOISY_EXCITATIONSOLVE_SWEEPS)
         assert int(row["Iterations"]) == expected, (
             f"Case_ID {row['Case_ID']} budgets {row['Iterations']} iterations "
             f"for {n_phi}+{n_theta} free parameters under {row['Optimizer']}; "
@@ -523,9 +524,7 @@ def _true_row_counts() -> set[int]:
     # main()'s own number-then-dedupe pattern is what decides the file's
     # real size -- the raw (pre-dedupe) list is not the count any prose
     # cites.
-    targeted = module.build_targeted_screen()
-    module.assign_case_ids(targeted)
-    counts.add(len(module.dedupe_rows(targeted)))
+    counts.add(len(module.numbered_targeted_screen()))
     return counts
 
 

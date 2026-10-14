@@ -37,7 +37,7 @@ crossing:
    `ExcitationSolve`), and whether the network makes up for a missing
    tUPS layer.
 
-Most rows run on `aer_simulator` (shot noise only); eight repeat
+Most rows run on `aer_simulator` (shot noise only); seven repeat
 `aer_simulator` rows on `fake_berlin`, the offline noise snapshot of
 `ibm_berlin`, the device hardware time is bought on. No run in this file
 consumes purchased hardware time or applies error mitigation.
@@ -52,6 +52,7 @@ machinery it runs on is the shared toolkit in [`utils/`](../../utils/).
 | [`build_matrix.py`](build_matrix.py) | Generates `targeted_screen.csv`: the molecules, axes, shots, optimizer settings and budget multiplier are all set here |
 | [`campaign.py`](campaign.py) | What the shared tools need to know: file locations, Hamiltonian file names, Hartree-Fock states under MolMap_sb, the device to price against |
 | [`regenerate_spinblock_mol_map.py`](regenerate_spinblock_mol_map.py) | Builds the MolMap_sb Hamiltonians and the UCCSD/tUPS circuits from them |
+| `excitationsolve_frequencies.json` | ExcitationSolve's frequency set for each circuit parameter, per circuit, Hamiltonian and start; written by `build_matrix.py` the first time a circuit needs it |
 | `targeted_screen.csv` | The matrix |
 | `hamiltonian_data/`, `qasm/` | The Hamiltonians the runs optimise, and the circuits they run |
 | `results/` | Collected runs (gitignored) |
@@ -126,14 +127,16 @@ axis below names two things it crosses deliberately.
 | Start point | `hf-approx` ↔ `hf-approx` plus a seeded ~1 rad Gaussian kick (`hf-approx+kick(scale=1.0,seed=20260811)`) | `RealAmplitudes` and `rzryrz`, VQE, `COBYLA`, 2 reps, under both mappers — `hf-approx` is a local minimum for these families, and kicks up to ~0.3 rad fall back into it. The kick is the same vector on every row sharing a circuit |
 | TN-VQE with SPSA and ExcitationSolve | `VQE` and `TN-VQE` at `TN_Layers_Network` = 1, 2, 3, under `SPSA` and `ExcitationSolve`, MolMap_sb; plus `TN-VQE` at 2 layers under JW | `RealAmplitudes` and tUPS at 2 reps (JW: tUPS only, against the optimizer axis's tUPS rows) — COBYLA stalls under shot noise, so the COBYLA TN-VQE rows cannot show whether the network helps. MolMap_sb because its circuits are shallow enough for a noisy backend |
 | tUPS reps × TN layers | tUPS at 1 and 3 layers, `VQE` and `TN-VQE` at `TN_Layers_Network` = 1, 2, 3, `ExcitationSolve`; 1 layer also under `SPSA` | H2/6-31g, MolMap_sb. 1-layer tUPS stops 13.5 mHa above FCI on its own — does the network make up for the missing layer? 2 layers is the row above; 3 layers checks nothing changes where the circuit suffices. Circuits from `regenerate_spinblock_mol_map.py --h2-tups-layers` |
-| Noisy simulator | `aer_simulator` → `fake_berlin` (cases 92–99, each identical to an `aer_simulator` row but for the backend) | H2/6-31g, MolMap_sb. RealAmplitudes VQE against TN-VQE under `ExcitationSolve` (2 TN layers) and `SPSA` (3); 1-layer tUPS VQE and TN-VQE (2 TN layers) against 2-layer tUPS VQE, all `ExcitationSolve`; RealAmplitudes `COBYLA` as a reference. MolMap_sb only: its circuits transpile to 6–118 two-qubit gates on the device, against 586–620 for the JW chemistry circuits. No error mitigation, so energies sit 35–180 mHa high; compare within pairs, and the statevector energy of each run's final parameters. Case 92 is the pilot |
+| Noisy simulator | `aer_simulator` → `fake_berlin` (cases 92–99 but 94, each identical to an `aer_simulator` row but for the backend, and for ExcitationSolve's sweeps) | H2/6-31g, MolMap_sb. RealAmplitudes VQE against TN-VQE under `ExcitationSolve` (2 TN layers), and TN-VQE under `SPSA` (3); 1-layer tUPS VQE and TN-VQE (2 TN layers) against 2-layer tUPS VQE, all `ExcitationSolve`; RealAmplitudes `COBYLA` as a reference. MolMap_sb only: its circuits transpile to 6–118 two-qubit gates on the device, against 586–620 for the JW chemistry circuits. No error mitigation, so energies sit 35–180 mHa high; compare within pairs, and the statevector energy of each run's final parameters. ExcitationSolve rows stop after 6 sweeps (`NOISY_EXCITATIONSOLVE_SWEEPS`) instead of spending the full budget: it stops improving by its third sweep, and a noisy evaluation costs far more. Case 92 is the pilot; it ran the full 55 sweeps before the cap and finished where its noiseless twin did |
 
 A row that coincides with an earlier one on every field but `Case_ID` and
 `Notes` (the reps=2 point of the reps axis *is* the baseline, for
 instance) is numbered and then dropped: every row gets a `Case_ID` first,
 so a collapsed duplicate leaves a gap rather than reshuffling anything
 after it (`assign_case_ids` then `dedupe_rows`, from
-`utils/_matrix_io.py`). 92 rows, `Case_ID`s 1–99 with seven gaps.
+`utils/_matrix_io.py`). A retired row is dropped the same way: case 94, a
+noisy-simulator SPSA VQE row whose noiseless twin ends at the local minimum
+case 92 already covers. 91 rows, `Case_ID`s 1–99 with eight gaps.
 
 **Every ansatz-optimizer-mode combination reuses the same Hamiltonian,
 pinned circuit and `Phi_Init`** for a given (molecule, basis, mapper,
@@ -312,9 +315,9 @@ substantially: 120 → 52 for H2/6-31g, 1304 → 392 for H2O/6-31g CAS(4,4).
 | `Ansatz_Reps` | Repetitions (or, for tUPS, layers) of the ansatz circuit |
 | `Entanglement` | Blank except on the entangler-topology axis's rows (`RealAmplitudes`/`rzryrz` only), where it names the non-default entanglement |
 | `Backend_Platform` | `aer_simulator`, or `fake_berlin` on the noisy-simulator rows |
-| `Optimizer`, `Opt_Options` | `COBYLA`, `SPSA` or `ExcitationSolve`. `Opt_Options` is the dictionary passed to `scipy.optimize.minimize` (or Cebule's own optimizer): `{}` except for SPSA on `RealAmplitudes`/`rzryrz`/`UCCSD`/`tUPS` and ExcitationSolve on `UCCSD`, tuned in `opt_options_for` (`build_matrix.py`) |
+| `Optimizer`, `Opt_Options` | `COBYLA`, `SPSA` or `ExcitationSolve`. `Opt_Options` is the dictionary passed to `scipy.optimize.minimize` (or Cebule's own optimizer): `{}` except for SPSA on `RealAmplitudes`/`rzryrz`/`UCCSD`/`tUPS` (`target_step`, `c`) and every ExcitationSolve row, which names the circuit parameters' `frequencies` — one shared set where all are equal, otherwise one per optimized parameter with θ's left `null` for tn-vqe — and `check_flat: false`; see `opt_options_for` (`build_matrix.py`) |
 | `Quantum_Eval_Budget` | Quantum evaluations the row is allowed, held equal across optimizers and covering the whole run, including SPSA's calibration and closing repeats and ExcitationSolve's first-sweep validation: `max(30, ceil(120 × n_params))`, enough for each run to reach its optimum rather than be cut off -- sized for SPSA on tUPS, the slowest case seen |
-| `Quantum_Evals_Per_Iteration` | What one iteration of this row's optimizer spends of the budget: 1 for COBYLA, 2 for SPSA, and for ExcitationSolve one sweep: `1 + Σ 2|f|` over the φ parameters the energy depends on, `f` being each one's frequency set (measured per circuit, `EXCITATIONSOLVE_PHI_SWEEP_EVALS` in `build_matrix.py`) — 0 wherever φ is frozen, since a θ-only change is served from cache |
+| `Quantum_Evals_Per_Iteration` | What one iteration of this row's optimizer spends of the budget: 1 for COBYLA, 2 for SPSA, and for ExcitationSolve one sweep: `1 + Σ 2|f|` over the φ parameters the energy depends on, `f` being each one's frequency set as `Opt_Options` names it — 0 wherever φ is frozen, since a θ-only change is served from cache |
 | `Cost_Evals_Per_Iteration` | Entries one iteration adds to `cost_history`, the axis convergence curves are aligned on |
 | `Iterations` | What `TNQCOptInput.n_iterations` receives |
 | `Shots` | 50,000, pinned via `TNQCOptInput.n_shots`, so one evaluation's shot noise is about 1 mHa on H2; `n/a (network mode)` on `TN` rows, which take no quantum measurement |
@@ -353,12 +356,18 @@ substantially: 120 → 52 for H2/6-31g, 1304 → 392 for H2O/6-31g CAS(4,4).
   `hf_state_for`'s JW branch raises if `Active_Electrons` is odd; every
   cell this campaign runs is closed-shell, so this has not been
   exercised for an open-shell system.
-- **`ExcitationSolve`'s frequency tuning is UCCSD-specific.**
-  `opt_options_for` special-cases `UCCSD` alone, because the workaround is
-  for UCCSD's own two-frequency excitation angles; `RealAmplitudes` under
-  `ExcitationSolve` and `tUPS` under `ExcitationSolve` run with
-  `Opt_Options = "{}"`, which has tn-vqe measure each parameter's
-  frequencies on a noiseless copy before the run.
+- **`ExcitationSolve`'s frequency sets are measured at the start.**
+  Each row names its circuit parameters' sets, measured on a noiseless
+  statevector at the row's own start and at a second point offset from it
+  (`utils/_excitationsolve_frequencies.py`), and checked by refitting. A
+  parameter flat at both points gets the empty set and is never
+  optimized, even on a TN-VQE row, where the network changes the
+  Hamiltonian the circuit sees. Rows collected before the sets were named
+  had tn-vqe measure them itself, which on 2- and 3-layer tUPS misses
+  frequency 4 on 2 and 4 parameters respectively (it vanishes at the zero
+  start); those runs converged regardless, and their sweeps were 4 and 8
+  evaluations shorter than the sets now named. UCCSD case 29 ran with
+  `{1, 2}` on every parameter.
   `SPSA`'s `target_step`/`c` tuning, by contrast, is no longer
   UCCSD-only — `SPSA_TUNED_ANSATZE` covers `RealAmplitudes`,
   `rzryrz` and `tUPS` too. The values were tuned on UCCSD and work
@@ -402,7 +411,7 @@ substantially: 120 → 52 for H2/6-31g, 1304 → 392 for H2O/6-31g CAS(4,4).
 
 ## Open decisions
 
-1. **Whether the noisy-simulator sample needs widening** once its eight
+1. **Whether the noisy-simulator sample needs widening** once its seven
    rows are back — for instance a second TN layer count per pair, or
    error mitigation before hardware.
 

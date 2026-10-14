@@ -48,6 +48,8 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import campaign
 from _ansatz_builders import SUPPLIED_ANSATZE, qasm_stem
 from _ansatz_builders import circuit_parameter_count as built_parameter_count
+from _excitationsolve_frequencies import opt_options as excitationsolve_options
+from _excitationsolve_frequencies import sweep_evals as excitationsolve_sweep_evals
 from _matrix_io import (
     assign_case_ids,
     dedupe_rows,
@@ -56,7 +58,12 @@ from _matrix_io import (
     qiskit_version,
 )
 from _matrix_io import write_csv as _write_csv
-from _optimizer_budget import evals_per_iteration, evaluation_budget, iteration_budget
+from _optimizer_budget import (
+    evals_per_iteration,
+    evaluation_budget,
+    fixed_evals,
+    iteration_budget,
+)
 
 from qpubench.hamiltonian_sources.mol_map import count_qubits, is_confirmed
 from qpubench.schemas.mirrors.mqsdk_cebule import TNAnsatz, tn_theta_parameter_count
@@ -192,6 +199,11 @@ BACKEND_PLATFORM_TN = "ibm_berlin"     # TNQCOptInput.backend
 BACKEND_PLATFORM_VQE = "ibm_berlin"    # IBMAdapter(backend_name=...)
 # Its offline snapshot, for the noisy-simulator rows that precede hardware.
 NOISY_SIMULATOR = "fake_berlin"
+# ExcitationSolve sweeps on a noisy-simulator row. ExcitationSolve stops
+# improving by its third sweep, and a noisy evaluation costs far more than
+# a noiseless one, so these rows stop at twice that rather than spending
+# the full budget; Quantum_Eval_Budget records what the cap spends.
+NOISY_EXCITATIONSOLVE_SWEEPS = 6
 
 # The single TN-VQE point stage 1 runs, mid-range in both directions --
 # enough to tell whether TN-VQE helps for a given basis without paying
@@ -293,43 +305,6 @@ OPT_OPTIONS = "{}"
 
 # --- ExcitationSolve + UCCSD: a workaround for a bug in tn-vqe ------------
 #
-# tn-vqe's ExcitationSolve currently assumes every phi parameter is
-# single-frequency (G^2=I).  That is right for the three hardware-efficient
-# families and wrong for UCCSD, whose phi parameters are fermionic
-# excitation angles -- confirmed numerically to be two-frequency (G^3=G),
-# singles and doubles alike -- but tn-vqe deliberately gives phi and theta
-# different evaluation counts independent of what the phi circuit's own
-# gates are, so it applies the single-frequency assumption to UCCSD's phi
-# too.  That is what produced UCCSD/ExcitationSolve energies landing on
-# wrong, sometimes non-physical values while COBYLA and SPSA converged
-# correctly on the identical circuit.
-#
-# A real fix belongs in tn-vqe and is in progress there.  Until it lands,
-# tn-vqe accepts an explicit override through opt_options["frequencies"]:
-# one [1, 2] entry per OPTIMIZED PARAMETER, naming the two harmonics
-# G^3=G actually has, overriding tn-vqe's wrong default without changing
-# tn-vqe itself between jobs.  Confirmed directly with tn-vqe's
-# maintainer as the accepted form.
-#
-# "Per optimized parameter" is not "per phi parameter", and that
-# distinction is the reason this was wrong the first time: in
-# optimization_mode="both" the joint vector ExcitationSolve reconstructs
-# is (theta, phi) TOGETHER -- theta first -- so a frequencies list sized
-# to phi alone was too short and misaligned against the parameters it
-# was meant to label.  theta is the tensor network's Givens rotation, and
-# it is G^3=G too (two frequencies), so it takes the same [1, 2] entry as
-# phi; the list is simply theta's entries followed by phi's.
-# `optimization_mode="circuit"` has no theta (plain VQE), so nothing
-# changes there.  `network` mode is still excluded entirely: phi is
-# frozen and not part of the optimized vector at all, and theta ALONE
-# already gets correct treatment from tn-vqe with no override -- adding
-# one would relabel a vector that was never wrong.
-#
-# THIS IS A COMPENSATION, NOT A PERMANENT CAMPAIGN INPUT -- the same
-# status as the mirrored UCCSD circuits (see UCCSD_BUILDABLE_MAPPERS in
-# _ansatz_builders.py).  Once tn-vqe's real fix lands, drop this and
-# re-run the affected rows without it.
-EXCITATIONSOLVE_UCCSD_FREQUENCIES = [1, 2]
 
 # --- SPSA: a smaller step for a steep landscape at a sharp start ---------
 #
@@ -367,53 +342,58 @@ SPSA_C = 0.05
 SPSA_TUNED_ANSATZE = {"UCCSD", "RealAmplitudes", "rzryrz", "tUPS"}
 
 
-# ExcitationSolve's quantum evaluations per sweep, per pinned circuit
-# (closing evaluation included): tn-vqe measures each phi parameter's
-# frequency set on a noiseless copy before the run and fits it from
-# 1 + 2|f| samples, one reused, skipping parameters the energy ignores.
-# Measured with tn-vqe's frequency_probe._verified_frequencies at the
-# row's own start. A row whose Opt_Options name the sets needs no entry.
-EXCITATIONSOLVE_PHI_SWEEP_EVALS = {
-    "RealAmplitudes_8q_2r": 49,
-    "RealAmplitudes_4q_2r": 25,
-    "tUPS_JW_8q_2r_2e": 89,
-    "tUPS_MolMap_sb_4q_1r_2e_4o": 33,
-    "tUPS_MolMap_sb_4q_2r_2e_4o": 89,
-    "tUPS_MolMap_sb_4q_3r_2e_4o": 145,
-}
+# ExcitationSolve's frequency set for each circuit parameter, given to
+# tn-vqe in Opt_Options rather than measured by it at run time. Measured on
+# a noiseless statevector at the row's own start (_excitationsolve_
+# frequencies.py) and cached here, keyed by circuit, Hamiltonian and start;
+# a changed circuit hash re-measures it.
+EXCITATIONSOLVE_FREQUENCIES_FILE = campaign.DIR / "excitationsolve_frequencies.json"
 
 
-def phi_sweep_evals(optimizer: str, qasm_file: str, opt_options: str, num_phi: int) -> int | None:
-    """An ExcitationSolve row's quantum evaluations per sweep, or None for
-    any other optimizer and for a row with no phi to sweep."""
+def excitationsolve_phi_sets(run: dict[str, str]) -> list[list[float]]:
+    """The circuit parameters' frequency sets for one row, from the cache or
+    measured into it."""
+    hamiltonian_file = campaign.hamiltonian_file(run)
+    key = f"{pathlib.Path(run['Qasm_Ansatz_File']).stem}|{hamiltonian_file.name}|{run['Phi_Init']}"
+    path = EXCITATIONSOLVE_FREQUENCIES_FILE
+    cache = json.loads(path.read_text()) if path.exists() else {}
+    entry = cache.get(key)
+    if entry is None or entry["sha256"] != run["Qasm_Ansatz_SHA256"]:
+        import _campaign_runner as runner
+        from _excitationsolve_frequencies import frequency_sets, statevector_energy_fn
+
+        h = json.loads(hamiltonian_file.read_text())
+        energy = statevector_energy_fn(
+            runner.verified_qasm(run), h["h_operators"], h["h_coeff_values"],
+        )
+        sets = frequency_sets(energy, runner.phi_init(run, campaign))
+        entry = {"sha256": run["Qasm_Ansatz_SHA256"], "sets": [list(s) for s in sets]}
+        cache[key] = entry
+        path.write_text(json.dumps(cache, indent=1, sort_keys=True) + "\n")
+    return entry["sets"]
+
+
+def phi_sweep_evals(optimizer: str, opt_options: str, num_phi: int) -> int | None:
+    """An ExcitationSolve row's quantum evaluations per sweep, from the
+    frequency sets its Opt_Options name; None for any other optimizer and
+    for a row with no phi to sweep."""
     if optimizer != "ExcitationSolve" or not num_phi:
         return None
-    named = json.loads(opt_options).get("frequencies")
-    if named:
-        return 1 + 2 * len(named[0]) * num_phi
-    stem = pathlib.Path(qasm_file).stem
-    if stem not in EXCITATIONSOLVE_PHI_SWEEP_EVALS:
-        # Fatal, like a missing EXPVALS_PER_ITER entry: a guessed sweep cost
-        # over- or under-spends the budget.
-        raise KeyError(
-            f"no measured ExcitationSolve sweep cost for {stem}: measure its "
-            "frequency sets and add it to EXCITATIONSOLVE_PHI_SWEEP_EVALS"
-        )
-    return EXCITATIONSOLVE_PHI_SWEEP_EVALS[stem]
+    return excitationsolve_sweep_evals(opt_options, num_phi)
 
 
-def opt_options_for(optimizer: str, ansatz: str, num_phi: int, num_theta: int) -> str:
-    """`Opt_Options` for one row: `{}` except for the SPSA/ExcitationSolve
-    workarounds above.
+def opt_options_for(
+    optimizer: str, ansatz: str, num_phi: int, num_theta: int,
+    phi_sets: list[list[float]] | None = None,
+) -> str:
+    """`Opt_Options` for one row: `{}` except for SPSA's tuning and
+    ExcitationSolve's frequency sets (`phi_sets`, one per circuit parameter).
 
-    num_theta is 0 on a `circuit` row (plain VQE, no tensor network) and
-    on a `network` row phi itself is already 0, so the ExcitationSolve
-    branch below is a no-op for both and only ever fires with a real theta
-    contribution on a `both` row.
+    A `network` row has no phi to sweep, so ExcitationSolve takes nothing
+    there and tn-vqe derives theta's sets from its own gates.
     """
-    if optimizer == "ExcitationSolve" and ansatz == "UCCSD" and num_phi:
-        entries = [EXCITATIONSOLVE_UCCSD_FREQUENCIES] * (num_theta + num_phi)
-        return json.dumps({"frequencies": entries})
+    if optimizer == "ExcitationSolve" and num_phi and phi_sets is not None:
+        return json.dumps(excitationsolve_options(phi_sets, num_theta))
     if optimizer == "SPSA" and ansatz in SPSA_TUNED_ANSATZE and num_phi:
         return json.dumps({
             "target_step": SPSA_TARGET_STEP,
@@ -434,7 +414,7 @@ SHOTS = 50_000
 # into each optimizer's own iterations so every optimizer on a row spends
 # the same budget.
 #
-# 92 rows rather than a factorial's thousands, so each run can be given
+# 91 rows rather than a factorial's thousands, so each run can be given
 # enough to reach its optimum rather than be cut off. Sized for the
 # slowest case seen, SPSA on tUPS from its HF start, which needs about
 # four times what UCCSD does; COBYLA stops on its own tolerance well
@@ -881,14 +861,33 @@ def _row(
     n_theta = int(theta_params) if theta_params else 0
     free_params = n_phi + n_theta
     eval_budget = evaluation_budget(free_params, TARGETED_EVALS_PER_PARAM)
-    opt_options = opt_options_for(optimizer, ansatz, n_phi, n_theta)
-    sweep = phi_sweep_evals(optimizer, qasm_file, opt_options, n_phi)
+    # Keyed on the circuit family alone: a VQE row and a TN-VQE row that
+    # share an ansatz start from the same phi, and so does the `network`
+    # control that freezes it.  Nothing here reads `method` or
+    # `optimization_mode`, which is the point.
+    phi_init = phi_init_tag if phi_init_tag is not None else (
+        PHI_INIT_ZEROS if ansatz in PHI_INIT_ZEROS_ANSATZE else PHI_INIT_RANDOM
+    )
+    phi_sets = None
+    if optimizer == "ExcitationSolve" and n_phi:
+        phi_sets = excitationsolve_phi_sets({
+            "Case_ID": "", "Molecule": mol.name, "Basis": basis, "Mapper": mapper,
+            "Active_Electrons": str(active_electrons), "N_Qubit": str(num_qubits),
+            "Ansatz": ansatz, "Ansatz_Reps": str(reps), "Entanglement": entanglement or "",
+            "Qasm_Ansatz_File": qasm_file, "Qasm_Ansatz_SHA256": qasm_hash,
+            "Num_Opt_Params_Phi": str(phi_params), "Phi_Init": phi_init,
+        })
+    opt_options = opt_options_for(optimizer, ansatz, n_phi, n_theta, phi_sets)
+    sweep = phi_sweep_evals(optimizer, opt_options, n_phi)
     quantum_per_iter, cost_per_iter = evals_per_iteration(
         optimizer, n_phi, n_theta, phi_sweep_evals=sweep,
     )
     iterations = iteration_budget(
         eval_budget, optimizer, n_phi, n_theta, phi_sweep_evals=sweep,
     )
+    if optimizer == "ExcitationSolve" and backend_platform == NOISY_SIMULATOR and n_phi:
+        iterations = min(iterations, NOISY_EXCITATIONSOLVE_SWEEPS)
+        eval_budget = fixed_evals(optimizer, n_phi) + iterations * quantum_per_iter
     # Measurement circuits per evaluation: the row's Hamiltonian decides
     # it, so it is keyed on (mapper, molecule, qubits) and not on the
     # circuit or the method.  A network row takes no measurements at all.
@@ -907,13 +906,6 @@ def _row(
             )
         expvals, expvals_source = str(known[0]), known[1]
 
-    # Keyed on the circuit family alone: a VQE row and a TN-VQE row that
-    # share an ansatz start from the same phi, and so does the `network`
-    # control that freezes it.  Nothing here reads `method` or
-    # `optimization_mode`, which is the point.
-    phi_init = phi_init_tag if phi_init_tag is not None else (
-        PHI_INIT_ZEROS if ansatz in PHI_INIT_ZEROS_ANSATZE else PHI_INIT_RANDOM
-    )
     return {
         "Case_ID": "",                       # assigned after the full list is built
         "Stage": stage,
@@ -1131,6 +1123,20 @@ SINGLE_LAYER_ANSATZE = {"UCCSD"}
 # Ansatze whose reference state approximates HF instead of starting random
 # -- see _ansatz_builders.hf_approx_phi_init and PHI_INIT_HF_APPROX.
 HF_APPROX_ANSATZE = {"RealAmplitudes", "rzryrz"}
+
+
+# Marks a row kept in build_targeted_screen's order only so that every row
+# after it keeps its Case_ID; numbered_targeted_screen drops it.
+RETIRED = "_retired"
+
+
+def numbered_targeted_screen() -> list[dict[str, str]]:
+    """The targeted screen as written: numbered by position, then retired
+    rows and duplicates dropped, so a dropped row leaves a gap rather than
+    renumbering the rows after it."""
+    rows = build_targeted_screen()
+    assign_case_ids(rows)
+    return dedupe_rows([r for r in rows if not r.pop(RETIRED, None)])
 
 
 def build_targeted_screen() -> list[dict[str, str]]:
@@ -1400,18 +1406,22 @@ def build_targeted_screen() -> list[dict[str, str]]:
     # it improved on. MolMap_sb only: its circuits are the shallow ones
     # (6-118 two-qubit gates on the device against 586-620 for the JW
     # chemistry circuits). The first row is the pilot. ---
-    def noisy(**kwargs) -> None:
+    def noisy(retired: bool = False, **kwargs) -> None:
         rows.append(row(
             mapper="MolMap_sb", backend_platform=NOISY_SIMULATOR,
             extra_note=f"Noisy simulator ({NOISY_SIMULATOR}): " + kwargs.pop("note"),
             **kwargs,
         ))
+        if retired:
+            rows[-1][RETIRED] = "1"
 
     noisy(ansatz="RealAmplitudes", optimizer="ExcitationSolve",
           note="VQE baseline for the TN-VQE gain on RealAmplitudes.")
     noisy(ansatz="RealAmplitudes", optimizer="ExcitationSolve", mode="both", layers_network=2,
           note="does the TN-VQE gain on RealAmplitudes survive noise?")
-    noisy(ansatz="RealAmplitudes", optimizer="SPSA",
+    # Retired: its noiseless twin ends at the local minimum case 92 already
+    # covers, so a noisy SPSA run there adds nothing for its cost.
+    noisy(ansatz="RealAmplitudes", optimizer="SPSA", retired=True,
           note="VQE baseline, SPSA.")
     noisy(ansatz="RealAmplitudes", optimizer="SPSA", mode="both", layers_network=3,
           note="the TN-VQE gain on RealAmplitudes under SPSA.")
@@ -1555,9 +1565,7 @@ def main() -> None:
 
     renumber = True
     if args.stage == "targeted":
-        rows = build_targeted_screen()
-        assign_case_ids(rows)
-        rows = dedupe_rows(rows)
+        rows = numbered_targeted_screen()
         renumber = False
         path = args.output or _TARGETED_PATH
     else:
