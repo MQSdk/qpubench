@@ -414,7 +414,7 @@ SHOTS = 50_000
 # into each optimizer's own iterations so every optimizer on a row spends
 # the same budget.
 #
-# 91 rows rather than a factorial's thousands, so each run can be given
+# 94 rows rather than a factorial's thousands, so each run can be given
 # enough to reach its optimum rather than be cut off. Sized for the
 # slowest case seen, SPSA on tUPS from its HF start, which needs about
 # four times what UCCSD does; COBYLA stops on its own tolerance well
@@ -799,6 +799,7 @@ def _row(
     converged_params: tuple[str, str] = ("", ""),
     entanglement: str | None = None,
     phi_init_tag: str | None = None,
+    noisy_sweeps: int = NOISY_EXCITATIONSOLVE_SWEEPS,
 ) -> dict[str, str]:
     num_qubits, source = qubit_count(mapper, active_electrons, active_orbitals)
     notes = [_qubit_note(mapper, source, mol.name, basis)]
@@ -886,7 +887,7 @@ def _row(
         eval_budget, optimizer, n_phi, n_theta, phi_sweep_evals=sweep,
     )
     if optimizer == "ExcitationSolve" and backend_platform == NOISY_SIMULATOR and n_phi:
-        iterations = min(iterations, NOISY_EXCITATIONSOLVE_SWEEPS)
+        iterations = min(iterations, noisy_sweeps)
         eval_budget = fixed_evals(optimizer, n_phi) + iterations * quantum_per_iter
     # Measurement circuits per evaluation: the row's Hamiltonian decides
     # it, so it is keyed on (mapper, molecule, qubits) and not on the
@@ -1183,7 +1184,7 @@ def build_targeted_screen() -> list[dict[str, str]]:
         optimizer: str = OPTIMIZER, mode: str = "circuit",
         layers_network: int | None = None, entanglement: str | None = None,
         phi_init_tag: str | None = None, backend_platform: str = backend,
-        extra_note: str = "",
+        noisy_sweeps: int = NOISY_EXCITATIONSOLVE_SWEEPS, extra_note: str = "",
     ) -> dict[str, str]:
         if ansatz in SINGLE_LAYER_ANSATZE:
             reps = 1
@@ -1197,7 +1198,7 @@ def build_targeted_screen() -> list[dict[str, str]]:
             phi_init_tag=phi_init_tag or (
                 PHI_INIT_HF_APPROX if ansatz in HF_APPROX_ANSATZE else None
             ),
-            extra_note=extra_note,
+            noisy_sweeps=noisy_sweeps, extra_note=extra_note,
         )
 
     rows: list[dict[str, str]] = []
@@ -1433,6 +1434,13 @@ def build_targeted_screen() -> list[dict[str, str]]:
           note="2-layer tUPS, VQE: the depth the network stands in for.")
     noisy(ansatz="RealAmplitudes", optimizer="COBYLA",
           note="tn-vqe's default optimizer, as a reference.")
+
+    # --- The tUPS noisy rows again at 18 sweeps: the 1-layer TN-VQE run was
+    # still descending at 6, so this separates the cap from what device
+    # noise does to the optimum. ---
+    for kwargs in (dict(reps=1), dict(reps=1, mode="both", layers_network=2), dict(reps=2)):
+        noisy(ansatz="tUPS", optimizer="ExcitationSolve", noisy_sweeps=18,
+              note="18 sweeps instead of 6, to check the cap.", **kwargs)
 
     return rows
 

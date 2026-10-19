@@ -376,7 +376,13 @@ def test_iterations_matches_the_generators_proportional_rule():
         )
         if (row["Backend_Platform"] == module.NOISY_SIMULATOR
                 and row["Optimizer"] == "ExcitationSolve"):
-            expected = min(expected, module.NOISY_EXCITATIONSOLVE_SWEEPS)
+            # A sweep cap, set per row: the budget is what the cap spends.
+            capped = module.iteration_budget(
+                int(row["Quantum_Eval_Budget"]), row["Optimizer"], n_phi, n_theta,
+                phi_sweep_evals=sweep,
+            )
+            assert capped <= expected, row["Case_ID"]
+            expected = capped
         assert int(row["Iterations"]) == expected, (
             f"Case_ID {row['Case_ID']} budgets {row['Iterations']} iterations "
             f"for {n_phi}+{n_theta} free parameters under {row['Optimizer']}; "
