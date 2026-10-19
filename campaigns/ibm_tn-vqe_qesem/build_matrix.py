@@ -384,7 +384,7 @@ def phi_sweep_evals(optimizer: str, opt_options: str, num_phi: int) -> int | Non
 
 def opt_options_for(
     optimizer: str, ansatz: str, num_phi: int, num_theta: int,
-    phi_sets: list[list[float]] | None = None,
+    phi_sets: list[list[float]] | None = None, samples: int | None = None,
 ) -> str:
     """`Opt_Options` for one row: `{}` except for SPSA's tuning and
     ExcitationSolve's frequency sets (`phi_sets`, one per circuit parameter).
@@ -393,7 +393,7 @@ def opt_options_for(
     there and tn-vqe derives theta's sets from its own gates.
     """
     if optimizer == "ExcitationSolve" and num_phi and phi_sets is not None:
-        return json.dumps(excitationsolve_options(phi_sets, num_theta))
+        return json.dumps(excitationsolve_options(phi_sets, num_theta, samples))
     if optimizer == "SPSA" and ansatz in SPSA_TUNED_ANSATZE and num_phi:
         return json.dumps({
             "target_step": SPSA_TARGET_STEP,
@@ -414,7 +414,7 @@ SHOTS = 50_000
 # into each optimizer's own iterations so every optimizer on a row spends
 # the same budget.
 #
-# 94 rows rather than a factorial's thousands, so each run can be given
+# 96 rows rather than a factorial's thousands, so each run can be given
 # enough to reach its optimum rather than be cut off. Sized for the
 # slowest case seen, SPSA on tUPS from its HF start, which needs about
 # four times what UCCSD does; COBYLA stops on its own tolerance well
@@ -800,6 +800,7 @@ def _row(
     entanglement: str | None = None,
     phi_init_tag: str | None = None,
     noisy_sweeps: int = NOISY_EXCITATIONSOLVE_SWEEPS,
+    excitationsolve_samples: int | None = None,
 ) -> dict[str, str]:
     num_qubits, source = qubit_count(mapper, active_electrons, active_orbitals)
     notes = [_qubit_note(mapper, source, mol.name, basis)]
@@ -878,7 +879,9 @@ def _row(
             "Qasm_Ansatz_File": qasm_file, "Qasm_Ansatz_SHA256": qasm_hash,
             "Num_Opt_Params_Phi": str(phi_params), "Phi_Init": phi_init,
         })
-    opt_options = opt_options_for(optimizer, ansatz, n_phi, n_theta, phi_sets)
+    opt_options = opt_options_for(
+        optimizer, ansatz, n_phi, n_theta, phi_sets, excitationsolve_samples,
+    )
     sweep = phi_sweep_evals(optimizer, opt_options, n_phi)
     quantum_per_iter, cost_per_iter = evals_per_iteration(
         optimizer, n_phi, n_theta, phi_sweep_evals=sweep,
@@ -1184,7 +1187,9 @@ def build_targeted_screen() -> list[dict[str, str]]:
         optimizer: str = OPTIMIZER, mode: str = "circuit",
         layers_network: int | None = None, entanglement: str | None = None,
         phi_init_tag: str | None = None, backend_platform: str = backend,
-        noisy_sweeps: int = NOISY_EXCITATIONSOLVE_SWEEPS, extra_note: str = "",
+        noisy_sweeps: int = NOISY_EXCITATIONSOLVE_SWEEPS,
+        excitationsolve_samples: int | None = None, shots: int | None = None,
+        extra_note: str = "",
     ) -> dict[str, str]:
         if ansatz in SINGLE_LAYER_ANSATZE:
             reps = 1
@@ -1198,7 +1203,8 @@ def build_targeted_screen() -> list[dict[str, str]]:
             phi_init_tag=phi_init_tag or (
                 PHI_INIT_HF_APPROX if ansatz in HF_APPROX_ANSATZE else None
             ),
-            noisy_sweeps=noisy_sweeps, extra_note=extra_note,
+            noisy_sweeps=noisy_sweeps, excitationsolve_samples=excitationsolve_samples,
+            shots=None if shots is None else str(shots), extra_note=extra_note,
         )
 
     rows: list[dict[str, str]] = []
@@ -1441,6 +1447,15 @@ def build_targeted_screen() -> list[dict[str, str]]:
     for kwargs in (dict(reps=1), dict(reps=1, mode="both", layers_network=2), dict(reps=2)):
         noisy(ansatz="tUPS", optimizer="ExcitationSolve", noisy_sweeps=18,
               note="18 sweeps instead of 6, to check the cap.", **kwargs)
+
+    # --- The same shots spent three ways on the row shot noise limits most,
+    # 1-layer tUPS TN-VQE: 18 sweeps of minimal fits (case 101), 6 sweeps
+    # fitting each parameter from 18 points, or 6 sweeps at 4x the shots. ---
+    tups1_tn = dict(ansatz="tUPS", reps=1, optimizer="ExcitationSolve", mode="both",
+                    layers_network=2)
+    noisy(**tups1_tn, excitationsolve_samples=18,
+          note="6 sweeps, each parameter fitted from 18 points.")
+    noisy(**tups1_tn, shots=4 * SHOTS, note=f"6 sweeps at {4 * SHOTS} shots.")
 
     return rows
 

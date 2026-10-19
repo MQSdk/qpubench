@@ -111,7 +111,9 @@ def statevector_energy_fn(qasm_text: str, labels: Sequence[str], coefficients: S
     return energy
 
 
-def opt_options(phi_sets: Sequence[Sequence[float]], num_theta: int) -> dict:
+def opt_options(
+    phi_sets: Sequence[Sequence[float]], num_theta: int, samples: int | None = None,
+) -> dict:
     """ExcitationSolve's `opt_options` for a row with these circuit sets.
 
     A single shared set where every circuit parameter has the same one (tn-vqe
@@ -119,19 +121,34 @@ def opt_options(phi_sets: Sequence[Sequence[float]], num_theta: int) -> dict:
     parameter, circuit first, with theta's left None for tn-vqe to fill. The
     flatness scan is turned off: flat parameters are already the empty sets,
     and the scan would otherwise run on the noisy objective.
+
+    `samples` fits every parameter from that many points instead of exactly
+    its 1 + 2|f| unknowns, averaging noise in each fit. tn-vqe applies one
+    count to all parameters, theta's included, so it must cover the largest
+    set; fewer points than unknowns would fit an underdetermined curve.
     """
     sets = [list(s) for s in phi_sets]
     if sets and sets[0] and all(s == sets[0] for s in sets):
         frequencies: list = sets[0]
     else:
         frequencies = sets + [None] * num_theta
-    return {"frequencies": frequencies, "check_flat": False}
+    options = {"frequencies": frequencies, "check_flat": False}
+    if samples is not None:
+        needed = max(1 + 2 * len(s) for s in sets)
+        if samples < needed:
+            raise ValueError(f"samples={samples} is below the {needed} unknowns of the largest set")
+        options["samples"] = samples
+    return options
 
 
 def sweep_evals(opt_options_json: str, num_phi: int) -> int:
     """Quantum evaluations per ExcitationSolve sweep that these options imply:
-    1 + 2|f| per circuit parameter, one reused, plus a closing evaluation."""
-    frequencies = json.loads(opt_options_json)["frequencies"]
+    each non-flat circuit parameter's fit points (1 + 2|f|, or `samples`), one
+    reused, plus a closing evaluation."""
+    options = json.loads(opt_options_json)
+    frequencies, samples = options["frequencies"], options.get("samples")
     if all(np.ndim(f) == 0 for f in frequencies):
-        return 1 + 2 * len(frequencies) * num_phi
-    return 1 + sum(2 * len(f) for f in frequencies[:num_phi])
+        sets = [frequencies] * num_phi
+    else:
+        sets = frequencies[:num_phi]
+    return 1 + sum((samples - 1) if samples else 2 * len(f) for f in sets if f)
