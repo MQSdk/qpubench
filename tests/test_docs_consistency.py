@@ -378,7 +378,7 @@ def test_iterations_matches_the_generators_proportional_rule():
         expected = module.iteration_budget(
             eval_budget, row["Optimizer"], n_phi, n_theta, phi_sweep_evals=sweep,
         )
-        if (row["Backend_Platform"] == module.NOISY_SIMULATOR
+        if (row["Backend_Platform"] in module.NOISY_SIMULATORS
                 and row["Optimizer"] == "ExcitationSolve"):
             # A sweep cap, set per row: the budget is what the cap spends.
             capped = module.iteration_budget(
@@ -434,18 +434,23 @@ def test_error_mitigation_is_additive():
     assert found == {module.MITIGATION_NONE, module.MITIGATION_READOUT}, (
         f"unexpected Error_Mitigation values {sorted(found)}"
     )
-    # A corrected row is an uncorrected one with the correction switched on.
+    # A corrected row is an uncorrected one with the correction switched on,
+    # or a hardware run moved onto a simulator.
+    def shape(row, ignore):
+        return tuple(row[k] for k in module.FIELDNAMES if k not in ignore)
+
     by_shape = {}
     for row in rows:
-        key = tuple(v for k, v in row.items()
-                    if k not in ("Case_ID", "Error_Mitigation", "Notes"))
-        by_shape.setdefault(key, set()).add(row["Error_Mitigation"])
+        by_shape.setdefault(shape(row, ("Case_ID", "Error_Mitigation", "Notes")),
+                            set()).add(row["Error_Mitigation"])
+    on_device = ("Case_ID", "Stage", "Backend_Platform", "Notes")
+    hardware = {shape(row, on_device) for row in _csv_rows(HARDWARE_CSV_PATH)}
     for row in rows:
         if row["Error_Mitigation"] == module.MITIGATION_READOUT:
-            key = tuple(v for k, v in row.items()
-                        if k not in ("Case_ID", "Error_Mitigation", "Notes"))
-            assert module.MITIGATION_NONE in by_shape[key], (
-                f"case {row['Case_ID']} has no uncorrected twin"
+            assert (module.MITIGATION_NONE in by_shape[
+                shape(row, ("Case_ID", "Error_Mitigation", "Notes"))]
+                or shape(row, on_device) in hardware), (
+                f"case {row['Case_ID']} has no uncorrected twin and mirrors no hardware run"
             )
 
 

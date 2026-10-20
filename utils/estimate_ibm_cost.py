@@ -13,9 +13,10 @@ Every call that measures anything is one job, billed
 
     job overhead + circuits x shots x (rep_delay + circuit duration)
 
-with the circuit duration from real transpilation of the row's own
-ansatz against the device calibration, at `optimization_level=2` (what
-TN-VQE's own `transpile(circuit, backend)` resolves to).
+with the device's own default rep_delay (or `--rep-delay`), and the
+circuit duration from real transpilation of the row's own ansatz against
+the device calibration, at `optimization_level=2` (what TN-VQE's own
+`transpile(circuit, backend)` resolves to).
 
 Where the row has a collected run, its jobs are the run's own: the
 record's `circuits_measured` gives each call's circuit count, with what
@@ -86,7 +87,8 @@ def _calibration(device: str):
 _DEFAULT_SHOTS = 4096          # for the minimal-case demo, which has no row
 # What TN-VQE's own transpile(circuit, backend) resolves to under Qiskit 2.x.
 _OPTIMIZATION_LEVEL = 2
-_REP_DELAY_S = 250e-6
+# IBM's stated default, for a device whose calibration names none.
+_FALLBACK_REP_DELAY_S = 250e-6
 # Fixed seconds per job.  The Estimator's default options request a readout
 # calibration in every job, measured at 11 s on the device; the Sampler
 # behind 'grouped' requests none, leaving IBM's stated ~2 s.
@@ -104,14 +106,25 @@ def _load_csv_cases(csv_path: pathlib.Path) -> list[dict[str, str]]:
         ]
 
 
-def estimate_minimal_open_plan_study(device: str) -> CircuitResourceEstimate:
+def default_rep_delay(device: str) -> float:
+    """The device's own default rep_delay in seconds. It differs by
+    processor family (250 us on Heron, 4 ms on Nighthawk), and it sets
+    the cost of every shot."""
+    configuration = getattr(_calibration(device), "configuration", None)
+    value = getattr(configuration(), "default_rep_delay", None) if configuration else None
+    return float(value) if value else _FALLBACK_REP_DELAY_S
+
+
+def estimate_minimal_open_plan_study(
+    device: str, rep_delay_s: float,
+) -> CircuitResourceEstimate:
     """A 4-qubit, one-rep EfficientSU2 circuit (the size of H2/sto-3g under
     JW) -- "the minimal possible benchmark study" the Open Plan's free
     quota is sized for."""
     spec = circuit_spec("EfficientSU2", 4, reps=1)
     return estimate_circuit_resources(
         spec, backend_name=device, backend=_calibration(device),
-        shots=_DEFAULT_SHOTS,
+        shots=_DEFAULT_SHOTS, rep_delay_s=rep_delay_s,
         optimization_level=_OPTIMIZATION_LEVEL,
         label="H2/sto-3g/JW EfficientSU2 (minimal case)",
     )
@@ -232,11 +245,12 @@ def _record_for(
 
 def estimate_full_csv_study(
     rows: list[dict[str, str]], campaign, device: str, csv_path: pathlib.Path,
+    rep_delay_s: float,
 ) -> list[tuple[dict[str, str], int, float, str, float]]:
     """(row, jobs, circuits per job, count source, QPU seconds) per row.
 
     Transpiles are cached per distinct circuit; the measurement basis
-    change adds a few gates against a 250 us rep_delay, so it is left out.
+    change adds a few gates against the rep_delay, so it is left out.
     """
     cache: dict[tuple, CircuitResourceEstimate] = {}
     records = _collected_records(campaign, csv_path)
@@ -265,7 +279,7 @@ def estimate_full_csv_study(
         duration = cache[key].circuit_duration_s
 
         overhead = _JOB_OVERHEAD_S[row["Measurement_Method"]]
-        per_circuit = shots * (_REP_DELAY_S + duration)
+        per_circuit = shots * (rep_delay_s + duration)
         record, whose = _record_for(row, records, twin_records)
         measured = record.get("circuits_measured")
         if measured:
@@ -282,7 +296,7 @@ def estimate_full_csv_study(
         seconds = num_jobs * (overhead + circuits * per_circuit)
         if row["Error_Mitigation"] == "readout_tensored":
             # One calibration job: every qubit in |0>, then every qubit in |1>.
-            seconds += overhead + 2 * shots * _REP_DELAY_S
+            seconds += overhead + 2 * shots * rep_delay_s
         priced.append((row, num_jobs, circuits, source, seconds))
     print(f"  ({len(cache)} distinct circuits really transpiled; "
           f"the rest reused from cache)")
@@ -316,6 +330,10 @@ def main() -> None:
         help="IBM device to price against (default: the campaign's PRICING_DEVICE)",
     )
     parser.add_argument(
+        "--rep-delay", type=float, default=None, metavar="US",
+        help="rep_delay in microseconds (default: the device's own default)",
+    )
+    parser.add_argument(
         "--csv", type=pathlib.Path, default=None,
         help="price this matrix instead of the campaign's own CSV",
     )
@@ -337,7 +355,11 @@ def main() -> None:
     print(f"Pricing {csv_path.resolve().relative_to(_REPO_ROOT)} against {device}.\n")
 
     print("=== Minimal possible benchmark study (H2/sto-3g/JW, 1 circuit) ===")
-    minimal = estimate_minimal_open_plan_study(device)
+    rep_delay_s = (args.rep_delay * 1e-6 if args.rep_delay is not None
+                   else default_rep_delay(device))
+    print(f"rep_delay {rep_delay_s * 1e6:,.0f} us"
+          + (" (set)" if args.rep_delay is not None else " (the device default)") + "\n")
+    minimal = estimate_minimal_open_plan_study(device, rep_delay_s)
     print(f"  {minimal.num_qubits} qubits, depth={minimal.depth}, "
           f"{minimal.two_qubit_gate_count} 2Q gates, "
           f"estimated QPU time = {minimal.estimated_qpu_time_s:.3f}s")
@@ -350,7 +372,7 @@ def main() -> None:
     ]
     print(f"\n=== {len(rows)} measuring rows, each at its run's jobs or its Quantum_Eval_Budget, "
           f"priced as hardware runs ===")
-    priced = estimate_full_csv_study(rows, campaign, device, csv_path)
+    priced = estimate_full_csv_study(rows, campaign, device, csv_path, rep_delay_s)
     _print_rows(priced)
     total = sum(seconds for *_, seconds in priced)
     print(f"\n  {total:,.0f}s ({total / 3600:,.1f} h) total QPU time")

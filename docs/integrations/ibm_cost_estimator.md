@@ -163,7 +163,9 @@ to within 4% from 2 bases to 81. The fixed 11 s is the readout
 calibration the Estimator's default options request once per job, and
 the slope matches 4,096 shots at rep_delay plus a shallow circuit. The script
 uses that 11 s for `pauli` rows and IBM's stated ~2 s for the Sampler
-behind `grouped`. Deep circuits break the fit: three depth-2389 jobs each
+behind `grouped`. Those jobs ran on a Heron device at its 250 µs
+rep_delay; the script reads each device's own default instead, which on
+the Nighthawk `ibm_berlin` is 4 ms, sixteen times the cost per shot. Deep circuits break the fit: three depth-2389 jobs each
 billed fourteen times what the line predicts.
 
 **Jobs come from the run where there is one.** Every call that measures

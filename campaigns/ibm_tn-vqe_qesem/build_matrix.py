@@ -202,6 +202,10 @@ BACKEND_PLATFORM_TN = "ibm_berlin"     # TNQCOptInput.backend
 BACKEND_PLATFORM_VQE = "ibm_berlin"    # IBMAdapter(backend_name=...)
 # Its offline snapshot, for the noisy-simulator rows that precede hardware.
 NOISY_SIMULATOR = "fake_berlin"
+# ibm_aachen's snapshot: the alternative device, whose 250 us rep_delay makes
+# a shot about sixteen times cheaper than on Berlin.
+NOISY_SIMULATOR_AACHEN = "fake_aachen"
+NOISY_SIMULATORS = (NOISY_SIMULATOR, NOISY_SIMULATOR_AACHEN)
 # ExcitationSolve sweeps on a noisy-simulator row. ExcitationSolve stops
 # improving by its third sweep, and a noisy evaluation costs far more than
 # a noiseless one, so these rows stop at twice that rather than spending
@@ -429,7 +433,7 @@ DEVICE_SHOTS = {"RealAmplitudes": 12_500, "tUPS": SHOTS}
 # into each optimizer's own iterations so every optimizer on a row spends
 # the same budget.
 #
-# 114 rows rather than a factorial's thousands, so each run can be given
+# 119 rows rather than a factorial's thousands, so each run can be given
 # enough to reach its optimum rather than be cut off. Sized for the
 # slowest case seen, SPSA on tUPS from its HF start, which needs about
 # four times what UCCSD does; COBYLA stops on its own tolerance well
@@ -913,7 +917,7 @@ def _row(
     iterations = iteration_budget(
         eval_budget, optimizer, n_phi, n_theta, phi_sweep_evals=sweep,
     )
-    if optimizer == "ExcitationSolve" and backend_platform == NOISY_SIMULATOR and n_phi:
+    if optimizer == "ExcitationSolve" and backend_platform in NOISY_SIMULATORS and n_phi:
         iterations = min(iterations, noisy_sweeps)
         eval_budget = fixed_evals(optimizer, n_phi) + iterations * quantum_per_iter
     # Measurement circuits per evaluation: the row's Hamiltonian decides
@@ -1513,6 +1517,26 @@ def build_targeted_screen() -> list[dict[str, str]]:
     # feature on Cebule, and what it does, before hardware case 2 uses it. ---
     noisy(**ra_tn, shots=SHOTS // 4, error_mitigation=MITIGATION_READOUT,
           note=f"6 sweeps at {SHOTS // 4} shots with tensored readout correction.")
+
+    # --- The five hardware runs on fake_aachen, as hardware_runs.csv defines
+    # them (readout correction, device shots), in case they move to
+    # ibm_aachen: cases 92, 108, 96, 97 and 98 in that order. ---
+    for kwargs in (
+        dict(ansatz="RealAmplitudes"),
+        dict(ansatz="RealAmplitudes", mode="both", layers_network=2),
+        dict(ansatz="tUPS", reps=1),
+        dict(ansatz="tUPS", reps=1, mode="both", layers_network=2),
+        dict(ansatz="tUPS", reps=2),
+    ):
+        shots = _device_shots(kwargs["ansatz"])
+        rows.append(row(
+            mapper="MolMap_sb", optimizer="ExcitationSolve",
+            backend_platform=NOISY_SIMULATOR_AACHEN, shots=shots,
+            error_mitigation=MITIGATION_READOUT,
+            extra_note=f"Noisy simulator ({NOISY_SIMULATOR_AACHEN}): a hardware run "
+                       f"with tensored readout correction at {shots} shots.",
+            **kwargs,
+        ))
 
     return rows
 
