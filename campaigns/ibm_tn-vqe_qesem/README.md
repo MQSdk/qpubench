@@ -37,7 +37,7 @@ crossing:
    `ExcitationSolve`), and whether the network makes up for a missing
    tUPS layer.
 
-Most rows run on `aer_simulator` (shot noise only); twelve repeat
+Most rows run on `aer_simulator` (shot noise only); sixteen repeat
 `aer_simulator` rows on `fake_berlin`, the offline noise snapshot of
 `ibm_berlin`, the device hardware time is bought on. No run in this file
 consumes purchased hardware time or applies error mitigation.
@@ -127,7 +127,7 @@ axis below names two things it crosses deliberately.
 | Start point | `hf-approx` ↔ `hf-approx` plus a seeded ~1 rad Gaussian kick (`hf-approx+kick(scale=1.0,seed=20260811)`) | `RealAmplitudes` and `rzryrz`, VQE, `COBYLA`, 2 reps, under both mappers — `hf-approx` is a local minimum for these families, and kicks up to ~0.3 rad fall back into it. The kick is the same vector on every row sharing a circuit |
 | TN-VQE with SPSA and ExcitationSolve | `VQE` and `TN-VQE` at `TN_Layers_Network` = 1, 2, 3, under `SPSA` and `ExcitationSolve`, MolMap_sb; plus `TN-VQE` at 2 layers under JW | `RealAmplitudes` and tUPS at 2 reps (JW: tUPS only, against the optimizer axis's tUPS rows) — COBYLA stalls under shot noise, so the COBYLA TN-VQE rows cannot show whether the network helps. MolMap_sb because its circuits are shallow enough for a noisy backend |
 | tUPS reps × TN layers | tUPS at 1 and 3 layers, `VQE` and `TN-VQE` at `TN_Layers_Network` = 1, 2, 3, `ExcitationSolve`; 1 layer also under `SPSA` | H2/6-31g, MolMap_sb. 1-layer tUPS stops 13.5 mHa above FCI on its own — does the network make up for the missing layer? 2 layers is the row above; 3 layers checks nothing changes where the circuit suffices. Circuits from `regenerate_spinblock_mol_map.py --h2-tups-layers` |
-| Noisy simulator | `aer_simulator` → `fake_berlin` (cases 92–104 but 94, each identical to an `aer_simulator` row but for the backend, and for ExcitationSolve's sweeps) | H2/6-31g, MolMap_sb. RealAmplitudes VQE against TN-VQE under `ExcitationSolve` (2 TN layers), and TN-VQE under `SPSA` (3); 1-layer tUPS VQE and TN-VQE (2 TN layers) against 2-layer tUPS VQE, all `ExcitationSolve`; RealAmplitudes `COBYLA` as a reference. MolMap_sb only: its circuits transpile to 6–118 two-qubit gates on the device, against 586–620 for the JW chemistry circuits. No error mitigation, so energies sit 35–180 mHa high; compare within pairs, and the statevector energy of each run's final parameters. ExcitationSolve rows stop after 6 sweeps (`NOISY_EXCITATIONSOLVE_SWEEPS`) instead of spending the full budget: it stops improving by its third sweep, and a noisy evaluation costs far more. Case 92 is the pilot; it ran the full 55 sweeps before the cap and finished where its noiseless twin did. Cases 100–102 repeat the tUPS rows 96–98 at 18 sweeps, because the 1-layer TN-VQE run was still descending at 6. Cases 103 and 104 spend about the same shots as case 101 differently on that shot-noise-limited row: 6 sweeps fitting each parameter from 18 points (ExcitationSolve's `samples`) instead of the minimal 1 + 2\|f\|, and 6 sweeps at 200,000 shots |
+| Noisy simulator | `aer_simulator` → `fake_berlin` (cases 92–108 but 94, each identical to an `aer_simulator` row but for the backend, and for ExcitationSolve's sweeps) | H2/6-31g, MolMap_sb. RealAmplitudes VQE against TN-VQE under `ExcitationSolve` (2 TN layers), and TN-VQE under `SPSA` (3); 1-layer tUPS VQE and TN-VQE (2 TN layers) against 2-layer tUPS VQE, all `ExcitationSolve`; RealAmplitudes `COBYLA` as a reference. MolMap_sb only: its circuits transpile to 6–118 two-qubit gates on the device, against 586–620 for the JW chemistry circuits. No error mitigation, so energies sit 35–180 mHa high; compare within pairs, and the statevector energy of each run's final parameters. ExcitationSolve rows stop after 6 sweeps (`NOISY_EXCITATIONSOLVE_SWEEPS`) instead of spending the full budget: it stops improving by its third sweep, and a noisy evaluation costs far more. Case 92 is the pilot; it ran the full 55 sweeps before the cap and finished where its noiseless twin did. Cases 100–102 repeat the tUPS rows 96–98 at 18 sweeps, because the 1-layer TN-VQE run was still descending at 6. Cases 103 and 104 spend about the same shots as case 101 differently on that shot-noise-limited row: 6 sweeps fitting each parameter from 18 points (ExcitationSolve's `samples`) instead of the minimal 1 + 2\|f\|, and 6 sweeps at 200,000 shots. All three ended 5.9–7.8 mHa above FCI: on that row the noise moves the minimum rather than blurring it, mostly through readout error. Cases 105–108 run the 1-layer tUPS and RealAmplitudes TN-VQE rows at 25,000 and 12,500 shots, to see whether fewer shots find the same parameters |
 
 A row that coincides with an earlier one on every field but `Case_ID` and
 `Notes` (the reps=2 point of the reps axis *is* the baseline, for
@@ -136,7 +136,7 @@ so a collapsed duplicate leaves a gap rather than reshuffling anything
 after it (`assign_case_ids` then `dedupe_rows`, from
 `utils/_matrix_io.py`). A retired row is dropped the same way: case 94, a
 noisy-simulator SPSA VQE row whose noiseless twin ends at the local minimum
-case 92 already covers. 96 rows, `Case_ID`s 1–104 with eight gaps.
+case 92 already covers. 100 rows, `Case_ID`s 1–108 with eight gaps.
 
 **Every ansatz-optimizer-mode combination reuses the same Hamiltonian,
 pinned circuit and `Phi_Init`** for a given (molecule, basis, mapper,
@@ -320,7 +320,7 @@ substantially: 120 → 52 for H2/6-31g, 1304 → 392 for H2O/6-31g CAS(4,4).
 | `Quantum_Evals_Per_Iteration` | What one iteration of this row's optimizer spends of the budget: 1 for COBYLA, 2 for SPSA, and for ExcitationSolve one sweep: `1 + Σ 2|f|` over the φ parameters the energy depends on, `f` being each one's frequency set as `Opt_Options` names it — 0 wherever φ is frozen, since a θ-only change is served from cache |
 | `Cost_Evals_Per_Iteration` | Entries one iteration adds to `cost_history`, the axis convergence curves are aligned on |
 | `Iterations` | What `TNQCOptInput.n_iterations` receives |
-| `Shots` | 50,000, pinned via `TNQCOptInput.n_shots`, so one evaluation's shot noise is about 1 mHa on H2; `n/a (network mode)` on `TN` rows, which take no quantum measurement |
+| `Shots` | 50,000, pinned via `TNQCOptInput.n_shots`, so one evaluation's shot noise is about 1 mHa on H2; `n/a (network mode)` on `TN` rows, which take no quantum measurement. Rows on the hardware device default to `DEVICE_SHOTS`: 12,500 for RealAmplitudes, 50,000 for tUPS (see [Known limitations](#known-limitations)); a few `fake_berlin` rows set their own count to test this |
 | `Qiskit_Version` | The installed Qiskit, which fixes the transpiler optimisation level the run receives |
 | `TN_Layers_Network` | Layers of θ on the classical tensor-network side; blank on `VQE` rows, which ignore it entirely; 1, 2 or 3 on `TN-VQE`/`TN` rows |
 | `TN_Ansatz` | `givens` on every TN-VQE row, or `n/a (not TN-VQE)` |
@@ -400,6 +400,18 @@ substantially: 120 → 52 for H2/6-31g, 1304 → 392 for H2O/6-31g CAS(4,4).
   the evaluations). The COBYLA rows therefore measure COBYLA under shot
   noise and cannot separate the method, mapper or depth axes; read
   those from the `SPSA` and `ExcitationSolve` rows.
+- **Device noise moves the minimum, not only the energy.** On
+  `fake_berlin`, 1-layer tUPS TN-VQE ends 6–8 mHa above its noiseless
+  0.34 mHa however the shots are spent (18 sweeps, 18 points per fit, or
+  200,000 shots: cases 101, 103, 104). Measured on the device, those runs'
+  parameters read about 4 mHa lower than the noiseless optimum's, so the
+  optimizer found the noisy energy's minimum correctly; with a readout
+  correction applied the noiseless optimum reads lowest again, so readout
+  error is most of the shift. Until tn-vqe corrects readout, more shots do
+  not help this row; fewer do hurt: at 25,000 and 12,500 shots it ends at
+  1-layer VQE's 13.5 mHa, the network's gain gone (cases 105, 106).
+  RealAmplitudes TN-VQE keeps its gain at 12,500 shots (3.3–3.7 mHa at
+  12,500–50,000: cases 93, 107, 108). Hence `DEVICE_SHOTS`.
 - **`vqe_energy` is biased low; compare statevector energies instead.** It is
   the lowest noisy evaluation a run saw, so it sits a few shot-noise
   widths below the energy of any state the run reached. Result records

@@ -382,6 +382,14 @@ def phi_sweep_evals(optimizer: str, opt_options: str, num_phi: int) -> int | Non
     return excitationsolve_sweep_evals(opt_options, num_phi)
 
 
+def _device_shots(ansatz: str) -> int:
+    """A hardware row's shots, from DEVICE_SHOTS; fatal for an ansatz never
+    measured under device noise, rather than a guess."""
+    if ansatz not in DEVICE_SHOTS:
+        raise KeyError(f"no device shot count for {ansatz}; add it to DEVICE_SHOTS")
+    return DEVICE_SHOTS[ansatz]
+
+
 def opt_options_for(
     optimizer: str, ansatz: str, num_phi: int, num_theta: int,
     phi_sets: list[list[float]] | None = None, samples: int | None = None,
@@ -406,6 +414,10 @@ def opt_options_for(
 # about 1 mHa on H2 -- below chemical accuracy and the differences between
 # methods this campaign compares; it falls as 1/sqrt(shots).
 SHOTS = 50_000
+# Shots on the hardware device, per ansatz. Under device noise fewer shots
+# found the same parameters on RealAmplitudes, while on tUPS anything below
+# SHOTS lost TN-VQE's gain entirely.
+DEVICE_SHOTS = {"RealAmplitudes": 12_500, "tUPS": SHOTS}
 
 # --- The optimizer budget, per row ----------------------------------------
 #
@@ -414,7 +426,7 @@ SHOTS = 50_000
 # into each optimizer's own iterations so every optimizer on a row spends
 # the same budget.
 #
-# 96 rows rather than a factorial's thousands, so each run can be given
+# 100 rows rather than a factorial's thousands, so each run can be given
 # enough to reach its optimum rather than be cut off. Sized for the
 # slowest case seen, SPSA on tUPS from its HF start, which needs about
 # four times what UCCSD does; COBYLA stops on its own tolerance well
@@ -910,6 +922,7 @@ def _row(
             )
         expvals, expvals_source = str(known[0]), known[1]
 
+    platform = backend_platform or (BACKEND_PLATFORM_TN if is_tn else BACKEND_PLATFORM_VQE)
     return {
         "Case_ID": "",                       # assigned after the full list is built
         "Stage": stage,
@@ -930,10 +943,7 @@ def _row(
         "Ansatz": ansatz,
         "Ansatz_Reps": str(reps),
         "Entanglement": entanglement or "",
-        "Backend_Platform": (
-            backend_platform
-            or (BACKEND_PLATFORM_TN if is_tn else BACKEND_PLATFORM_VQE)
-        ),
+        "Backend_Platform": platform,
         "Optimizer": optimizer,
         "Opt_Options": opt_options,
         # Three columns where there used to be one, because a caching
@@ -963,7 +973,9 @@ def _row(
         # forgets produces a control row that claims a real measurement
         # scheme it never uses.
         "Shots": shots if shots is not None else (
-            str(SHOTS) if takes_measurements else NETWORK_MODE
+            NETWORK_MODE if not takes_measurements
+            else str(_device_shots(ansatz)) if platform in (BACKEND_PLATFORM_TN, BACKEND_PLATFORM_VQE)
+            else str(SHOTS)
         ),
         "Qiskit_Version": qiskit_version(),
         "TN_Layers_Network": "" if layers_network is None else str(layers_network),
@@ -1456,6 +1468,15 @@ def build_targeted_screen() -> list[dict[str, str]]:
     noisy(**tups1_tn, excitationsolve_samples=18,
           note="6 sweeps, each parameter fitted from 18 points.")
     noisy(**tups1_tn, shots=4 * SHOTS, note=f"6 sweeps at {4 * SHOTS} shots.")
+
+    # --- Fewer shots on the two noisy TN-VQE rows: the remaining gap there is
+    # device noise moving the minimum, not shot noise, so a quarter or half
+    # of the shots may find the same parameters for a fraction of the cost. ---
+    ra_tn = dict(ansatz="RealAmplitudes", optimizer="ExcitationSolve", mode="both",
+                 layers_network=2)
+    for kwargs in (tups1_tn, ra_tn):
+        for shots in (SHOTS // 2, SHOTS // 4):
+            noisy(**kwargs, shots=shots, note=f"6 sweeps at {shots} shots.")
 
     return rows
 
