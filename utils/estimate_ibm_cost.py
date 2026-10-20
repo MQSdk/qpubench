@@ -4,50 +4,45 @@ four access plans?
 
 Requires: pip install 'qpubench[qiskit]'
 
-Two things this script deliberately keeps separate:
+Every row that takes quantum measurements is priced as if it ran on the
+device, whatever its `Backend_Platform` says, so a simulator row prices
+its own hardware repeat.  Rows with `Method="TN"` are skipped: they take
+no quantum measurements.
 
-1. **Real, verified**: per-circuit resource estimation
-   (`backends.ibm_cost_estimator.estimate_circuit_resources`) — real ALAP-
-   scheduled transpilation against the target device's own calibration
-   plus IBM's own documented usage formula. Circuit depth/gate counts/duration are real Qiskit output, not
-   guessed. The ansatz is real too: each row names its own `Ansatz` and
-   `Ansatz_Reps`, and `_ansatz_builders.py` builds that circuit rather
-   than substituting a hardware-efficient stand-in, which matters a lot
-   (a real Trotterized UCCSD costs ~17x EfficientSU2 at 12 qubits).
-2. **Recorded inputs, no longer assumptions**: `Shots` and `Iterations`
-   are both filled per row (`n_shots` is a real TNQCOptInput field), and
-   transpilation runs at `optimization_level=2` — what TN-VQE's own bare
-   `transpile(circuit, backend)` call resolves to under Qiskit 2.x. The
-   `Qiskit_Opt_Level` column is gone: TN-VQE passes no optimization_level
-   and offers no way to set one, so it was a column nothing could fill.
+One row costs `Quantum_Eval_Budget` jobs.  tn-vqe caches measurements
+per phi, so an evaluation that changes only theta reuses them; the
+budget counts the evaluations that do reach the QPU.  Each job bills
 
-The iteration count used to be a flat 30 applied to every row, and that
-was not a conservative assumption but an invalid one. COBYLA needs an
-initial simplex of n+1 points before it can take a single step, and
-scipy raises a maxiter set below that rather than honouring it, so the
-widest rows were billed for a fraction of what they would really consume.
-`Iterations` is now a per-row campaign input, proportional to the row's
-own parameter count so that every row reaches a comparable fraction of
-its achievable descent, and this script bills what the CSV says.
+    job overhead + circuits x shots x (rep_delay + circuit duration)
 
-This script costs ONE CIRCUIT per cost-function evaluation, which is what
-the transpilation model describes. A real evaluation of <H> submits one
-circuit per measurement basis, recorded per row in Num_ExpVals_Per_Iter,
-so the totals below are a floor.
+where the circuit duration comes from real transpilation of the row's
+own ansatz against the device calibration, at `optimization_level=2`
+(what TN-VQE's own `transpile(circuit, backend)` resolves to), and the
+circuit count from the Hamiltonian the row measures:
 
-Rows with `Method="TN"` are skipped: they take no quantum measurements,
-so they have no QPU cost to estimate.
+  grouped   one circuit per XOR pattern of the operator's matrix
+            elements, plus one per pattern with imaginary elements --
+            tn-vqe's own scheme, counted on the operator itself
+  pauli     the runtime's qubit-wise-commuting bases, the row's
+            `Num_ExpVals_Per_Iter`
+
+A TN-VQE row measures the network-transformed operator, which has more
+terms than H.  Its count is read off the run's collected record when
+there is one; otherwise grouped rows take the 2^n ceiling and pauli
+rows the untransformed count, a floor, and the table marks them.
 
 The device priced against is the campaign's PRICING_DEVICE (see
 `_campaign.py`), or `--device`.
 
 Run:
     PYTHONPATH=src python utils/estimate_ibm_cost.py [--campaign NAME] [--device ibm_...]
+        [--platform NAME ...] [--ansatz NAME ...]
 """
 from __future__ import annotations
 
 import argparse
 import csv
+import json
 import pathlib
 import sys
 
@@ -64,7 +59,6 @@ from qpubench.backends.ibm_cost_estimator import (
 from qpubench.schemas.mirrors.ibm_cost_estimator import (
     CircuitResourceEstimate,
     IBMPricingRates,
-    aggregate_benchmark_cost,
 )
 
 _REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -83,10 +77,17 @@ def _calibration(device: str):
         _CALIBRATIONS[device] = resolve_calibration_backend(device)
     return _CALIBRATIONS[device]
 
-# Shots and iterations both come from each row's own columns now.
 _DEFAULT_SHOTS = 4096          # for the minimal-case demo, which has no row
 # What TN-VQE's own transpile(circuit, backend) resolves to under Qiskit 2.x.
 _OPTIMIZATION_LEVEL = 2
+_REP_DELAY_S = 250e-6
+# Fixed seconds per job.  The Estimator's default options request a readout
+# calibration in every job, measured at 11 s on the device; the Sampler
+# behind 'grouped' requests none, leaving IBM's stated ~2 s.
+_JOB_OVERHEAD_S = {"pauli": 11.0, "grouped": 2.0}
+# Arbitrary non-zero angles: zeros let the transpiler delete rotations and
+# cancel the entangling gates between them.
+_PHI_PROBE = 0.1234
 
 
 def _load_csv_cases(csv_path: pathlib.Path) -> list[dict[str, str]]:
@@ -112,14 +113,7 @@ def estimate_minimal_open_plan_study(device: str) -> CircuitResourceEstimate:
 
 def _supplied_circuit_spec(qasm_path: pathlib.Path, num_qubits: int):
     """A `CircuitSpec` for a SUPPLIED ansatz (UCCSD, tUPS), read from its
-    pinned QASM rather than built generically.
-
-    `_ansatz_builders.build_ansatz` refuses these -- they are not a
-    `(qubits, reps)`-only family, so there is nothing generic to build.
-    Bound to zeros, which is what these families' own `Phi_Init` actually
-    is (both are number-conserving and HF-initialized at zero amplitude),
-    so this is the row's real starting circuit, not a stand-in.
-    """
+    pinned QASM rather than built generically."""
     import numpy as np
     from qiskit import qasm3
 
@@ -128,36 +122,115 @@ def _supplied_circuit_spec(qasm_path: pathlib.Path, num_qubits: int):
 
     qc = qasm3.loads((_REPO_ROOT / qasm_path).read_text())
     if qc.num_parameters:
-        qc = qc.assign_parameters(np.zeros(qc.num_parameters))
+        qc = qc.assign_parameters(np.full(qc.num_parameters, _PHI_PROBE))
     qc.measure_all()
     return CircuitSpec(
         num_qubits=num_qubits, format=CircuitFormat.QASM3, serialized=qasm3.dumps(qc)
     )
 
 
-def estimate_full_csv_study(
-    csv_path: pathlib.Path, device: str,
-) -> list[CircuitResourceEstimate]:
-    """One resource estimate per CSV row, at that row's own `Iterations`,
-    each iteration submitting one circuit.
+def _sparse_pauli_op(labels: list[str], coefficients: list, num_qubits: int):
+    """A SparsePauliOp from dense ("IIXZ") or sparse ("X2 Z3") labels."""
+    from qiskit.quantum_info import SparsePauliOp
 
-    Many rows differ only in `Measurement_Method`, `TN_Layers_Network` or
-    `TN_Ansatz`, none of which change the real *quantum-circuit*
-    resource estimate (`TN_Layers_Network` runs classically, not on the
-    QPU). So transpile calls are cached per
-    (ansatz, qubits, reps, electrons, shots) key, which collapses every
-    row onto a much smaller number of distinct circuits.
+    coefficients = [complex(*c) if isinstance(c, list) else c for c in coefficients]
+    if all(len(label) == num_qubits and " " not in label for label in labels) and all(
+        set(label) <= set("IXYZ") for label in labels
+    ):
+        return SparsePauliOp(labels, coefficients)
+    terms = []
+    for label, c in zip(labels, coefficients):
+        factors = label.split()
+        terms.append(("".join(f[0] for f in factors), [int(f[1:]) for f in factors], c))
+    return SparsePauliOp.from_sparse_list(terms, num_qubits)
+
+
+def grouped_circuit_count(op, tol: float = 1e-10) -> int:
+    """Circuits tn-vqe's grouped scheme measures `op` with: one per XOR
+    pattern of its non-zero matrix elements, and one more per pattern
+    carrying imaginary elements."""
+    import numpy as np
+
+    h = op.to_matrix()
+    rows, cols = np.nonzero(np.abs(h) > tol)
+    circuits = set()
+    for r, c in zip(rows, cols):
+        if r > c:
+            continue
+        if abs(h[r, c].real) > tol:
+            circuits.add((r ^ c, False))
+        if abs(h[r, c].imag) > tol:
+            circuits.add((r ^ c, True))
+    return len(circuits)
+
+
+def qwc_circuit_count(op) -> int:
+    """Qubit-wise-commuting bases of `op`, identity excluded (greedy)."""
+    op = op.simplify()
+    labels = [p.to_label() for p in op.paulis]
+    op = op[[i for i, label in enumerate(labels) if set(label) != {"I"}]]
+    return len(op.group_commuting(qubit_wise=True)) if len(op) else 0
+
+
+def _collected_records(campaign) -> dict[str, dict]:
+    """The last collected record per Case_ID, or nothing if none exist."""
+    path = campaign.RESULTS_DIR / f"{campaign.CSV.stem}.ndjson"
+    if not path.exists():
+        return {}
+    records = {}
+    for line in path.read_text().splitlines():
+        if line.strip():
+            record = json.loads(line)
+            records[str(record.get("Case_ID"))] = record
+    return records
+
+
+def circuits_per_evaluation(
+    row: dict[str, str], campaign, records: dict[str, dict],
+) -> tuple[int, str]:
+    """(circuits one evaluation submits, where that count came from)."""
+    num_qubits = int(row["N_Qubit"])
+    grouped = row["Measurement_Method"] == "grouped"
+    count = grouped_circuit_count if grouped else qwc_circuit_count
+
+    if row["Method"] == "TN-VQE":
+        record = records.get(row["Case_ID"])
+        if record and record.get("h_tn_opt_qubit"):
+            labels, coefficients = record["h_tn_opt_qubit"]
+            return count(_sparse_pauli_op(labels, coefficients, num_qubits)), "run record"
+        if grouped:
+            return 2 ** num_qubits, "ceiling 2^n"
+        return int(row["Num_ExpVals_Per_Iter"]), "floor (untransformed H)"
+
+    if grouped:
+        path = campaign.hamiltonian_file(row)
+        if path is not None:
+            payload = json.loads(path.read_text())
+            op = _sparse_pauli_op(payload["h_operators"], payload["h_coeff_values"], num_qubits)
+            return count(op), "XOR patterns of H"
+        return 2 ** num_qubits, "ceiling 2^n"
+    return int(row["Num_ExpVals_Per_Iter"]), row["Num_ExpVals_Source"]
+
+
+def estimate_full_csv_study(
+    rows: list[dict[str, str]], campaign, device: str,
+) -> list[tuple[dict[str, str], int, str, float]]:
+    """(row, circuits per evaluation, count source, QPU seconds) per row.
+
+    Transpiles are cached per distinct circuit; the measurement basis
+    change adds a few gates against a 250 us rep_delay, so it is left out.
     """
-    cache: dict[tuple[str, int, int, int, int], CircuitResourceEstimate] = {}
-    estimates = []
-    for row in _load_csv_cases(csv_path):
+    cache: dict[tuple, CircuitResourceEstimate] = {}
+    records = _collected_records(campaign)
+    priced = []
+    for row in rows:
         ansatz = row["Ansatz"]
         num_qubits = int(row["N_Qubit"])
         reps = int(row["Ansatz_Reps"])
         num_electrons = int(row["Active_Electrons"])
         shots = int(row["Shots"])
 
-        key = (ansatz, num_qubits, reps, num_electrons, shots)
+        key = (ansatz, num_qubits, reps, num_electrons, row["Qasm_Ansatz_File"])
         if key not in cache:
             if ansatz in SUPPLIED_ANSATZE:
                 spec = _supplied_circuit_spec(
@@ -165,18 +238,20 @@ def estimate_full_csv_study(
                 )
             else:
                 spec = circuit_spec(ansatz, num_qubits, reps=reps, num_electrons=num_electrons)
-            label = f"{ansatz}, {num_qubits}q, {reps} reps"
             cache[key] = estimate_circuit_resources(
                 spec, backend_name=device, backend=_calibration(device),
-                shots=shots,
-                optimization_level=_OPTIMIZATION_LEVEL, label=label,
+                shots=1, optimization_level=_OPTIMIZATION_LEVEL,
+                label=f"{ansatz}, {num_qubits}q, {reps} reps",
             )
-        # One separate circuit submission per optimizer iteration, each
-        # paying its own per-sub-job overhead -- not one estimate x N.
-        estimates.extend([cache[key]] * int(row["Iterations"]))
+        duration = cache[key].circuit_duration_s
+
+        circuits, source = circuits_per_evaluation(row, campaign, records)
+        per_job = (_JOB_OVERHEAD_S[row["Measurement_Method"]]
+                   + circuits * shots * (_REP_DELAY_S + duration))
+        priced.append((row, circuits, source, per_job * int(row["Quantum_Eval_Budget"])))
     print(f"  ({len(cache)} distinct circuits really transpiled; "
           f"the rest reused from cache)")
-    return estimates
+    return priced
 
 
 def _print_plan_breakdown(total_seconds: float, rates: IBMPricingRates) -> None:
@@ -187,12 +262,31 @@ def _print_plan_breakdown(total_seconds: float, rates: IBMPricingRates) -> None:
         print(f"  {plan.value:16s} {cost:>14s}   {breakdown.notes[0] if breakdown.notes else ''}")
 
 
+def _print_rows(priced: list[tuple[dict[str, str], int, str, float]]) -> None:
+    print(f"  {'Case':>4} {'Platform':14} {'Ansatz':16} {'Method':7} {'Optimizer':16}"
+          f"{'Shots':>8} {'Evals':>6} {'Circ':>5}  {'source':24}{'QPU h':>8}")
+    for row, circuits, source, seconds in priced:
+        ansatz = f"{row['Ansatz']} x{row['Ansatz_Reps']}"
+        print(f"  {row['Case_ID']:>4} {row['Backend_Platform']:14} {ansatz:16} "
+              f"{row['Method']:7} {row['Optimizer']:16}{int(row['Shots']):>8,} "
+              f"{row['Quantum_Eval_Budget']:>6} {circuits:>5}  {source:24}"
+              f"{seconds / 3600:>8.1f}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     _campaign.add_argument(parser)
     parser.add_argument(
         "--device", default=None, metavar="NAME",
         help="IBM device to price against (default: the campaign's PRICING_DEVICE)",
+    )
+    parser.add_argument(
+        "--platform", action="append", metavar="NAME",
+        help="price only rows with this Backend_Platform (repeatable)",
+    )
+    parser.add_argument(
+        "--ansatz", action="append", metavar="NAME",
+        help="price only rows with this Ansatz (repeatable)",
     )
     args = parser.parse_args()
     campaign = _campaign.load(args.campaign)
@@ -201,10 +295,6 @@ def main() -> None:
         raise SystemExit("name a device with --device; the campaign sets no PRICING_DEVICE")
 
     print(f"Pricing {campaign.CSV.relative_to(_REPO_ROOT)} against {device}.\n")
-    print(f"Shots and iterations both come from each row's own columns "
-          f"(1 iteration = 1 circuit submission).\nAnsatz is not assumed "
-          f"either: each row's own Ansatz/Ansatz_Reps is built and "
-          f"transpiled, at optimization_level={_OPTIMIZATION_LEVEL}.\n")
 
     print("=== Minimal possible benchmark study (H2/sto-3g/JW, 1 circuit) ===")
     minimal = estimate_minimal_open_plan_study(device)
@@ -213,16 +303,18 @@ def main() -> None:
           f"estimated QPU time = {minimal.estimated_qpu_time_s:.3f}s")
     _print_plan_breakdown(minimal.estimated_qpu_time_s, IBMPricingRates.default())
 
-    print("\n=== Full benchmark study (all populated CSV rows, "
-          "each at its own Iterations) ===")
-    full_estimates = estimate_full_csv_study(campaign.CSV, device)
-    agg = aggregate_benchmark_cost(full_estimates)
-    print(f"  {len(full_estimates)} cost-function evaluations, "
-          f"{agg.total_shots:,} total shots, "
-          f"{agg.total_qpu_seconds:,.1f}s ({agg.total_qpu_minutes:,.1f} min) total QPU time")
-    print("  (one circuit submission per evaluation -- a FLOOR: <H> needs one "
-          "circuit per\n   measurement basis)")
-    _print_plan_breakdown(agg.total_qpu_seconds, IBMPricingRates.default())
+    rows = [
+        row for row in _load_csv_cases(campaign.CSV)
+        if (not args.platform or row["Backend_Platform"] in args.platform)
+        and (not args.ansatz or row["Ansatz"] in args.ansatz)
+    ]
+    print(f"\n=== {len(rows)} measuring rows, each at its own Quantum_Eval_Budget, "
+          f"priced as hardware runs ===")
+    priced = estimate_full_csv_study(rows, campaign, device)
+    _print_rows(priced)
+    total = sum(seconds for *_, seconds in priced)
+    print(f"\n  {total:,.0f}s ({total / 3600:,.1f} h) total QPU time")
+    _print_plan_breakdown(total, IBMPricingRates.default())
 
 
 if __name__ == "__main__":

@@ -139,41 +139,38 @@ estimate_all_plans(total_qpu_seconds=180.0, rates=my_rates)
 
 ## End-to-end example: costing the VQE benchmark CSV
 
-`utils/estimate_ibm_cost.py` runs this against
-`campaigns/ibm_tn-vqe_qesem/targeted_screen.csv` end to end: the minimal case (H2/sto-3g,
-4 qubits, 1 circuit) fits comfortably in the Open Plan's free quota
-(~3s of an estimated 3.04s QPU-time budget vs. 600s free).
+`utils/estimate_ibm_cost.py` runs this against a campaign's matrix end
+to end. The minimal case (H2/sto-3g, 4 qubits, 1 circuit) fits
+comfortably in the Open Plan's free quota (~3 s against 600 s free).
 
-**What this transpiled figure is, and is not.** It is the cost of running
-one circuit once: `overhead + (rep_delay + duration) x shots`. One
-cost-function evaluation of `<H>` submits one circuit *per measurement
-basis*, and that count is a property of the Hamiltonian. The campaign
-therefore no longer sizes its batches from this estimate. It costs them
-from the seven completed Estimator jobs on the target device whose billed
-quantum_seconds are known,
+**One transpiled circuit is not one evaluation.** Evaluating `<H>`
+submits one job holding one circuit per measurement basis, each at the
+row's full shot count, so the script prices each job as
+
+    job overhead + circuits x shots x (rep_delay + circuit duration)
+
+The circuit count follows from the Hamiltonian the row measures: for
+`grouped` rows it is tn-vqe's own count of XOR patterns in the operator's
+matrix, and for `pauli` rows it is the qubit-wise-commuting bases in
+`Num_ExpVals_Per_Iter`. A TN-VQE row measures the network-transformed
+operator instead, which has more terms, so its count is read from the
+run's collected record where one exists. Seven completed Estimator jobs
+on the device, with known billed quantum_seconds, fit
 
     billed seconds per evaluation = 11.0 + 1.125 x measurement bases
 
-which holds to within 4% from 2 measurement bases to 81, and puts a
-4-qubit evaluation at 13 to 20 s against the 3.04 s a single transpiled
-submission suggests. See
-[the campaign README](../../campaigns/ibm_tn-vqe_qesem/README.md#what-one-cost-function-evaluation-costs).
-Two facts from those jobs are worth carrying into any use of this module:
-the fixed 11 s is readout-error calibration requested once per job by the
-default Estimator options, and across the depths measured the circuit
-duration does not enter at all, so it is the Hamiltonian rather than the
-ansatz depth that sets cost at these widths. That holds for shallow
-circuits only: three depth-2389 jobs each billed fourteen times what this
-line predicts.
+to within 4% from 2 bases to 81. The fixed 11 s is the readout
+calibration the Estimator's default options request once per job, and
+the slope matches 4,096 shots at rep_delay plus a shallow circuit. The script
+uses that 11 s for `pauli` rows and IBM's stated ~2 s for the Sampler
+behind `grouped`. Deep circuits break the fit: three depth-2389 jobs each
+billed fourteen times what the line predicts.
 
-**Iterations are per row, not a flat assumption.** Each row's
-`Iterations` column holds `max(30, ceil(1.3 x n_params))`, a budget
-proportional to the row's own free-parameter count. Two facts make a flat
-value wrong: COBYLA cannot take a single descent step before it has built
-an `n+1` simplex, and scipy overrides a smaller `maxiter` rather than
-honouring it; and the evaluations needed to reach a given fraction of the
-achievable descent grow linearly in the parameter count, so any additive
-rule reaches a shrinking fraction as circuits widen.
+**Evaluations are the row's `Quantum_Eval_Budget`.** tn-vqe caches
+measurements per phi, so a TN-VQE call that changes only theta never
+reaches the QPU; the budget counts the calls that do. Every measuring row
+is priced as a hardware run whatever its `Backend_Platform`, and
+`--platform` / `--ansatz` narrow the table to the rows being planned.
 
 ### Turning this into a real campaign plan
 
