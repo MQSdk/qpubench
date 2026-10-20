@@ -278,10 +278,10 @@ def test_method_axis_is_only_crossed_on_realamplitudes_and_tups():
         f"RealAmplitudes is run by {sorted(arms_by_ansatz.get('RealAmplitudes', ()))}, "
         "expected all three methods"
     )
-    # tUPS gets TN-VQE at 2 layers only, against its own VQE rows.
-    assert arms_by_ansatz.get("tUPS") == {"VQE", "TN-VQE"}, (
+    # tUPS gets TN-VQE against its own VQE rows, and network-only controls.
+    assert arms_by_ansatz.get("tUPS") == {"VQE", "TN-VQE", "TN"}, (
         f"tUPS is run by {sorted(arms_by_ansatz.get('tUPS', ()))}, "
-        "expected VQE and TN-VQE"
+        "expected all three methods"
     )
     for ansatz, arms in arms_by_ansatz.items():
         if ansatz in ("RealAmplitudes", "tUPS"):
@@ -368,7 +368,9 @@ def test_iterations_matches_the_generators_proportional_rule():
             continue
         n_phi, n_theta = _row_phi_theta(row)
         eval_budget = module.evaluation_budget(
-            n_phi + n_theta, module.TARGETED_EVALS_PER_PARAM,
+            n_phi + n_theta,
+            module.NETWORK_EVALS_PER_PARAM if row["Method"] == "TN"
+            else module.TARGETED_EVALS_PER_PARAM,
         )
         sweep = module.phi_sweep_evals(row["Optimizer"], row["Opt_Options"], n_phi)
         expected = module.iteration_budget(

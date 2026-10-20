@@ -426,12 +426,16 @@ DEVICE_SHOTS = {"RealAmplitudes": 12_500, "tUPS": SHOTS}
 # into each optimizer's own iterations so every optimizer on a row spends
 # the same budget.
 #
-# 100 rows rather than a factorial's thousands, so each run can be given
+# 113 rows rather than a factorial's thousands, so each run can be given
 # enough to reach its optimum rather than be cut off. Sized for the
 # slowest case seen, SPSA on tUPS from its HF start, which needs about
 # four times what UCCSD does; COBYLA stops on its own tolerance well
 # inside it.
 TARGETED_EVALS_PER_PARAM = 120.0
+# Network-only rows (Method TN) contract the frozen circuit classically, so
+# an evaluation is exact and costs no circuits; they get a budget no run
+# should reach, and stop on the optimizer's own tolerance.
+NETWORK_EVALS_PER_PARAM = 1000.0
 
 # --- phi_init, per circuit family -----------------------------------------
 #
@@ -874,7 +878,10 @@ def _row(
     n_phi = int(phi_params) if phi_params and takes_measurements else 0
     n_theta = int(theta_params) if theta_params else 0
     free_params = n_phi + n_theta
-    eval_budget = evaluation_budget(free_params, TARGETED_EVALS_PER_PARAM)
+    eval_budget = evaluation_budget(
+        free_params,
+        TARGETED_EVALS_PER_PARAM if takes_measurements else NETWORK_EVALS_PER_PARAM,
+    )
     # Keyed on the circuit family alone: a VQE row and a TN-VQE row that
     # share an ansatz start from the same phi, and so does the `network`
     # control that freezes it.  Nothing here reads `method` or
@@ -1477,6 +1484,24 @@ def build_targeted_screen() -> list[dict[str, str]]:
     for kwargs in (tups1_tn, ra_tn):
         for shots in (SHOTS // 2, SHOTS // 4):
             noisy(**kwargs, shots=shots, note=f"6 sweeps at {shots} shots.")
+
+    # --- Network-only controls for every TN-VQE configuration that lacks
+    # one: the same frozen circuit and start, theta alone. Exact and
+    # noise-free, so one row covers every TN-VQE row sharing (mapper,
+    # circuit, start, TN layers), whatever its optimizer, shots or backend. ---
+    for mapper, tups_reps in (("JW", 2), ("MolMap_sb", 1), ("MolMap_sb", 2), ("MolMap_sb", 3)):
+        for layers in tn_layers_sweep:
+            rows.append(row(
+                mapper=mapper, ansatz="tUPS", reps=tups_reps, mode="network",
+                layers_network=layers,
+                extra_note=f"Network-only control: tUPS {tups_reps} layer(s), {mapper}, "
+                           f"TN_Layers_Network={layers}.",
+            ))
+
+    # --- RealAmplitudes TN-VQE at 12,500 shots (case 108) was still
+    # descending at 6 sweeps; the same row at 18. ---
+    noisy(**ra_tn, shots=SHOTS // 4, noisy_sweeps=18,
+          note=f"18 sweeps at {SHOTS // 4} shots, to check convergence.")
 
     return rows
 
