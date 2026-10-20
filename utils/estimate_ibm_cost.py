@@ -9,16 +9,22 @@ device, whatever its `Backend_Platform` says, so a simulator row prices
 its own hardware repeat.  Rows with `Method="TN"` are skipped: they take
 no quantum measurements.
 
-One row costs `Quantum_Eval_Budget` jobs.  tn-vqe caches measurements
-per phi, so an evaluation that changes only theta reuses them; the
-budget counts the evaluations that do reach the QPU.  Each job bills
+Every call that measures anything is one job, billed
 
     job overhead + circuits x shots x (rep_delay + circuit duration)
 
-where the circuit duration comes from real transpilation of the row's
-own ansatz against the device calibration, at `optimization_level=2`
-(what TN-VQE's own `transpile(circuit, backend)` resolves to), and the
-circuit count from the Hamiltonian the row measures:
+with the circuit duration from real transpilation of the row's own
+ansatz against the device calibration, at `optimization_level=2` (what
+TN-VQE's own `transpile(circuit, backend)` resolves to).
+
+Where the row has a collected run, its jobs are the run's own: the
+record's `circuits_measured` gives each call's circuit count, with what
+tn-vqe's phi cache served left out, and calls beyond the row's
+`Quantum_Eval_Budget` are dropped.  On the pauli path that count is of
+Pauli observables, which the runtime measures in fewer bases, so a pauli
+job is priced at the qubit-wise-commuting bases of the operator instead.
+
+A row with no run costs `Quantum_Eval_Budget` jobs, each measuring
 
   grouped   one circuit per XOR pattern of the operator's matrix
             elements, plus one per pattern with imaginary elements --
@@ -27,9 +33,9 @@ circuit count from the Hamiltonian the row measures:
             `Num_ExpVals_Per_Iter`
 
 A TN-VQE row measures the network-transformed operator, which has more
-terms than H.  Its count is read off the run's collected record when
-there is one; otherwise grouped rows take the 2^n ceiling and pauli
-rows the untransformed count, a floor, and the table marks them.
+terms than H.  Its operator is read off the run's record when there is
+one; otherwise grouped rows take the 2^n ceiling and pauli rows the
+untransformed count, a floor, and the table marks them.
 
 The device priced against is the campaign's PRICING_DEVICE (see
 `_campaign.py`), or `--device`.
@@ -172,9 +178,9 @@ def qwc_circuit_count(op) -> int:
     return len(op.group_commuting(qubit_wise=True)) if len(op) else 0
 
 
-def _collected_records(campaign) -> dict[str, dict]:
+def _collected_records(campaign, csv_path: pathlib.Path) -> dict[str, dict]:
     """The last collected record per Case_ID, or nothing if none exist."""
-    path = campaign.RESULTS_DIR / f"{campaign.CSV.stem}.ndjson"
+    path = campaign.RESULTS_DIR / f"{csv_path.stem}.ndjson"
     if not path.exists():
         return {}
     records = {}
@@ -186,7 +192,7 @@ def _collected_records(campaign) -> dict[str, dict]:
 
 
 def circuits_per_evaluation(
-    row: dict[str, str], campaign, records: dict[str, dict],
+    row: dict[str, str], campaign, record: dict,
 ) -> tuple[int, str]:
     """(circuits one evaluation submits, where that count came from)."""
     num_qubits = int(row["N_Qubit"])
@@ -194,8 +200,7 @@ def circuits_per_evaluation(
     count = grouped_circuit_count if grouped else qwc_circuit_count
 
     if row["Method"] == "TN-VQE":
-        record = records.get(row["Case_ID"])
-        if record and record.get("h_tn_opt_qubit"):
+        if record.get("h_tn_opt_qubit"):
             labels, coefficients = record["h_tn_opt_qubit"]
             return count(_sparse_pauli_op(labels, coefficients, num_qubits)), "run record"
         if grouped:
@@ -212,16 +217,30 @@ def circuits_per_evaluation(
     return int(row["Num_ExpVals_Per_Iter"]), row["Num_ExpVals_Source"]
 
 
+def _record_for(
+    row: dict[str, str], records: dict, twin_records: dict,
+) -> tuple[dict, str]:
+    """(the row's own run, or else the run of the row it repeats; a label
+    saying which)."""
+    if row["Case_ID"] in records:
+        return records[row["Case_ID"]], ""
+    twin = row.get("Repeats_Case_ID", "")
+    if twin in twin_records:
+        return twin_records[twin], f" (case {twin})"
+    return {}, ""
+
+
 def estimate_full_csv_study(
-    rows: list[dict[str, str]], campaign, device: str,
-) -> list[tuple[dict[str, str], int, str, float]]:
-    """(row, circuits per evaluation, count source, QPU seconds) per row.
+    rows: list[dict[str, str]], campaign, device: str, csv_path: pathlib.Path,
+) -> list[tuple[dict[str, str], int, float, str, float]]:
+    """(row, jobs, circuits per job, count source, QPU seconds) per row.
 
     Transpiles are cached per distinct circuit; the measurement basis
     change adds a few gates against a 250 us rep_delay, so it is left out.
     """
     cache: dict[tuple, CircuitResourceEstimate] = {}
-    records = _collected_records(campaign)
+    records = _collected_records(campaign, csv_path)
+    twin_records = _collected_records(campaign, campaign.CSV)
     priced = []
     for row in rows:
         ansatz = row["Ansatz"]
@@ -245,10 +264,26 @@ def estimate_full_csv_study(
             )
         duration = cache[key].circuit_duration_s
 
-        circuits, source = circuits_per_evaluation(row, campaign, records)
-        per_job = (_JOB_OVERHEAD_S[row["Measurement_Method"]]
-                   + circuits * shots * (_REP_DELAY_S + duration))
-        priced.append((row, circuits, source, per_job * int(row["Quantum_Eval_Budget"])))
+        overhead = _JOB_OVERHEAD_S[row["Measurement_Method"]]
+        per_circuit = shots * (_REP_DELAY_S + duration)
+        record, whose = _record_for(row, records, twin_records)
+        measured = record.get("circuits_measured")
+        if measured:
+            jobs = [n for n in measured if n > 0][:int(row["Quantum_Eval_Budget"])]
+            if row["Measurement_Method"] == "grouped":
+                circuits, source = sum(jobs) / len(jobs), "run metadata" + whose
+            else:
+                circuits, source = circuits_per_evaluation(row, campaign, record)
+                source = "run jobs, QWC bases" + whose
+            num_jobs = len(jobs)
+        else:
+            circuits, source = circuits_per_evaluation(row, campaign, record)
+            num_jobs = int(row["Quantum_Eval_Budget"])
+        seconds = num_jobs * (overhead + circuits * per_circuit)
+        if row["Error_Mitigation"] == "readout_tensored":
+            # One calibration job: every qubit in |0>, then every qubit in |1>.
+            seconds += overhead + 2 * shots * _REP_DELAY_S
+        priced.append((row, num_jobs, circuits, source, seconds))
     print(f"  ({len(cache)} distinct circuits really transpiled; "
           f"the rest reused from cache)")
     return priced
@@ -262,14 +297,14 @@ def _print_plan_breakdown(total_seconds: float, rates: IBMPricingRates) -> None:
         print(f"  {plan.value:16s} {cost:>14s}   {breakdown.notes[0] if breakdown.notes else ''}")
 
 
-def _print_rows(priced: list[tuple[dict[str, str], int, str, float]]) -> None:
+def _print_rows(priced: list[tuple[dict[str, str], int, float, str, float]]) -> None:
     print(f"  {'Case':>4} {'Platform':14} {'Ansatz':16} {'Method':7} {'Optimizer':16}"
-          f"{'Shots':>8} {'Evals':>6} {'Circ':>5}  {'source':24}{'QPU h':>8}")
-    for row, circuits, source, seconds in priced:
+          f"{'Shots':>8} {'Jobs':>6} {'Circ':>5}  {'source':24}{'QPU h':>8}")
+    for row, jobs, circuits, source, seconds in priced:
         ansatz = f"{row['Ansatz']} x{row['Ansatz_Reps']}"
         print(f"  {row['Case_ID']:>4} {row['Backend_Platform']:14} {ansatz:16} "
               f"{row['Method']:7} {row['Optimizer']:16}{int(row['Shots']):>8,} "
-              f"{row['Quantum_Eval_Budget']:>6} {circuits:>5}  {source:24}"
+              f"{jobs:>6} {circuits:>5.1f}  {source:24}"
               f"{seconds / 3600:>8.1f}")
 
 
@@ -281,6 +316,10 @@ def main() -> None:
         help="IBM device to price against (default: the campaign's PRICING_DEVICE)",
     )
     parser.add_argument(
+        "--csv", type=pathlib.Path, default=None,
+        help="price this matrix instead of the campaign's own CSV",
+    )
+    parser.add_argument(
         "--platform", action="append", metavar="NAME",
         help="price only rows with this Backend_Platform (repeatable)",
     )
@@ -290,11 +329,12 @@ def main() -> None:
     )
     args = parser.parse_args()
     campaign = _campaign.load(args.campaign)
+    csv_path = args.csv or campaign.CSV
     device = args.device or getattr(campaign, "PRICING_DEVICE", None)
     if device is None:
         raise SystemExit("name a device with --device; the campaign sets no PRICING_DEVICE")
 
-    print(f"Pricing {campaign.CSV.relative_to(_REPO_ROOT)} against {device}.\n")
+    print(f"Pricing {csv_path.resolve().relative_to(_REPO_ROOT)} against {device}.\n")
 
     print("=== Minimal possible benchmark study (H2/sto-3g/JW, 1 circuit) ===")
     minimal = estimate_minimal_open_plan_study(device)
@@ -304,13 +344,13 @@ def main() -> None:
     _print_plan_breakdown(minimal.estimated_qpu_time_s, IBMPricingRates.default())
 
     rows = [
-        row for row in _load_csv_cases(campaign.CSV)
+        row for row in _load_csv_cases(csv_path)
         if (not args.platform or row["Backend_Platform"] in args.platform)
         and (not args.ansatz or row["Ansatz"] in args.ansatz)
     ]
-    print(f"\n=== {len(rows)} measuring rows, each at its own Quantum_Eval_Budget, "
+    print(f"\n=== {len(rows)} measuring rows, each at its run's jobs or its Quantum_Eval_Budget, "
           f"priced as hardware runs ===")
-    priced = estimate_full_csv_study(rows, campaign, device)
+    priced = estimate_full_csv_study(rows, campaign, device, csv_path)
     _print_rows(priced)
     total = sum(seconds for *_, seconds in priced)
     print(f"\n  {total:,.0f}s ({total / 3600:,.1f} h) total QPU time")

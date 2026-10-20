@@ -12,6 +12,8 @@ import pathlib
 DIR = pathlib.Path(__file__).resolve().parent
 
 CSV = DIR / "targeted_screen.csv"
+# The ibm_berlin runs, each repeating a fake_berlin row of CSV.
+HARDWARE_CSV = DIR / "hardware_runs.csv"
 QASM_DIR = DIR / "qasm"
 HAMILTONIAN_DIR = DIR / "hamiltonian_data"
 RESULTS_DIR = DIR / "results"

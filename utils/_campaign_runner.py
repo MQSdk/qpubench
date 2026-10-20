@@ -274,6 +274,19 @@ def task_payload(task_input: TNQCOptInput) -> dict[str, Any]:
     return payload
 
 
+# Error_Mitigation values that TN_QC_OPT applies itself, and how it is asked to.
+_READOUT_MITIGATION = {"none": None, "readout_tensored": "tensored"}
+
+
+def readout_mitigation_for(run: dict[str, str]) -> str | None:
+    """TNQCOptInput.readout_mitigation for a row's Error_Mitigation."""
+    value = run.get("Error_Mitigation") or "none"
+    if value not in _READOUT_MITIGATION:
+        raise ValueError(f"run {run['Case_ID']}: Error_Mitigation={value!r} is not "
+                         f"something TN_QC_OPT applies; one of {sorted(_READOUT_MITIGATION)}")
+    return _READOUT_MITIGATION[value]
+
+
 def build_input(
     run: dict[str, str], campaign: ModuleType, backend_override: str | None = None,
 ) -> TNQCOptInput | None:
@@ -313,6 +326,7 @@ def build_input(
         backend=backend_for(run, backend_override),
         measurement_method="pauli" if network_only else run["Measurement_Method"],
         optimization_mode=optimization_mode_for(run),
+        readout_mitigation=readout_mitigation_for(run),
     )
 
 
@@ -565,6 +579,19 @@ def submit_run(
     return result, time.time() - started, task.id
 
 
+def circuits_measured(metadata: Any) -> list[int] | None:
+    """Circuits each call sent to the backend, from the task's per-call
+    metadata, or None where there is none (network mode).
+
+    TN-VQE reports `n_measured`, which leaves out what the phi cache
+    served; VQE measures everything and reports only `n_circuits`. On the
+    pauli path both count Pauli observables rather than measurement bases.
+    """
+    if not isinstance(metadata, list) or not metadata:
+        return None
+    return [int(m.get("n_measured", m.get("n_circuits", 0))) for m in metadata]
+
+
 def append_record(
     results_path: pathlib.Path, run: dict[str, str], result: Any,
     task_id: str, wall_s: float, batch: str, backend_override: str | None = None,
@@ -640,6 +667,7 @@ def append_record(
             "phi": result.phi,
             "theta": result.theta,
             "h_tn_opt_qubit": list(result.h_tn_opt_qubit),
+            "circuits_measured": circuits_measured(result.metadata),
             "submitted_at": submitted_at,
             "collected_at": time.time(),
             "wall_clock_s": round(wall_s, 3),

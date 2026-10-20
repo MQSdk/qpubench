@@ -82,6 +82,7 @@ def test_schema_version_mentions_in_code_are_consistent():
 
 CAMPAIGN_DIR = REPO / "campaigns" / "ibm_tn-vqe_qesem"
 CSV_PATH = CAMPAIGN_DIR / "targeted_screen.csv"
+HARDWARE_CSV_PATH = CAMPAIGN_DIR / "hardware_runs.csv"
 
 
 def _benchmark_matrix_module():
@@ -108,10 +109,10 @@ def _ansatz_builders_module():
     return module
 
 
-def _csv_rows():
+def _csv_rows(path=CSV_PATH):
     import csv
 
-    with CSV_PATH.open(encoding="utf-8") as f:
+    with path.open(encoding="utf-8") as f:
         return list(csv.DictReader(f))
 
 
@@ -150,7 +151,8 @@ def test_csv_header_matches_generator_fieldnames():
 def test_every_column_is_documented_and_every_documented_column_exists():
     module = _benchmark_matrix_module()
     documented = _documented_columns()
-    actual = set(module.FIELDNAMES)
+    # hardware_runs.csv's columns, which are targeted_screen.csv's plus one.
+    actual = set(module.HARDWARE_FIELDNAMES)
     assert not actual - documented, (
         f"columns missing from the campaign README's table: "
         f"{sorted(actual - documented)}"
@@ -422,16 +424,29 @@ def test_every_cobyla_row_budgets_at_least_its_simplex():
 def test_error_mitigation_is_additive():
     """The QESEM arm must not change the meaning of a committed row.
 
-    `none` is a real value, not a placeholder: every row in the matrix
-    today is genuinely unmitigated, and stage 3's paired rows are what
-    make `qesem` meaningful by putting both values on otherwise
-    identical rows.
+    `none` is a real value, not a placeholder: a corrected row is only
+    meaningful beside an otherwise identical uncorrected one, which is
+    what stage 3's paired rows do for `qesem` too.
     """
     module = _benchmark_matrix_module()
-    found = {row["Error_Mitigation"] for row in _csv_rows()}
-    assert found == {module.MITIGATION_NONE}, (
-        f"stage 1 should be entirely unmitigated; found {sorted(found)}"
+    rows = _csv_rows()
+    found = {row["Error_Mitigation"] for row in rows}
+    assert found == {module.MITIGATION_NONE, module.MITIGATION_READOUT}, (
+        f"unexpected Error_Mitigation values {sorted(found)}"
     )
+    # A corrected row is an uncorrected one with the correction switched on.
+    by_shape = {}
+    for row in rows:
+        key = tuple(v for k, v in row.items()
+                    if k not in ("Case_ID", "Error_Mitigation", "Notes"))
+        by_shape.setdefault(key, set()).add(row["Error_Mitigation"])
+    for row in rows:
+        if row["Error_Mitigation"] == module.MITIGATION_READOUT:
+            key = tuple(v for k, v in row.items()
+                        if k not in ("Case_ID", "Error_Mitigation", "Notes"))
+            assert module.MITIGATION_NONE in by_shape[key], (
+                f"case {row['Case_ID']} has no uncorrected twin"
+            )
 
 
 def test_every_row_pins_the_circuit_it_runs():
@@ -533,6 +548,7 @@ def _true_row_counts() -> set[int]:
     # real size -- the raw (pre-dedupe) list is not the count any prose
     # cites.
     counts.add(len(module.numbered_targeted_screen()))
+    counts.add(len(_csv_rows(HARDWARE_CSV_PATH)))
     return counts
 
 
@@ -566,3 +582,29 @@ def test_row_counts_stated_in_prose_are_counts_that_really_exist():
         + "\n  ".join(stale)
         + f"\nReal counts: {sorted(truths)}"
     )
+
+
+def test_hardware_runs_csv_is_what_the_builder_writes():
+    module = _benchmark_matrix_module()
+    built = module.build_hardware_runs()
+    module.assign_case_ids(built)
+    committed = _csv_rows(HARDWARE_CSV_PATH)
+    assert [list(r) for r in committed] == [module.HARDWARE_FIELDNAMES] * len(committed)
+    assert committed == built, "hardware_runs.csv is stale; rerun build_matrix.py --stage hardware"
+
+
+def test_hardware_rows_differ_from_their_twin_only_by_the_device():
+    """A hardware result is compared against its fake_berlin twin, so
+    nothing that changes the optimisation may differ between them."""
+    module = _benchmark_matrix_module()
+    twins = {r["Case_ID"]: r for r in _csv_rows()}
+    allowed = {"Case_ID", "Stage", "Backend_Platform", "Shots", "Error_Mitigation",
+               "Repeats_Case_ID", "Notes"}
+    for row in _csv_rows(HARDWARE_CSV_PATH):
+        twin = twins[row["Repeats_Case_ID"]]
+        assert twin["Backend_Platform"] == module.NOISY_SIMULATOR
+        changed = {k for k in row if k not in allowed and row[k] != twin.get(k)}
+        assert not changed, f"hardware case {row['Case_ID']} also changes {sorted(changed)}"
+        assert row["Backend_Platform"] == module.BACKEND_PLATFORM_TN
+        assert row["Error_Mitigation"] == module.MITIGATION_READOUT
+        assert int(row["Shots"]) == module.DEVICE_SHOTS[row["Ansatz"]]

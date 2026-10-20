@@ -885,6 +885,15 @@ The measured differences confirm the campaign's model exactly — 2 for
 SPSA, and `3·n_φ + 5·n_θ` for ExcitationSolve at every width measured.
 COBYLA runs 1 to 2 rather than a flat 1.
 
+Revised again 2026-10-20 against cebule-tn_vqe `ef0dc47` (minor bump,
+6.7.0): **`TNQCOptInput.readout_mitigation` added**, `None` or
+`"tensored"`. Tensored correction measures each physical qubit's two
+readout flip rates from two calibration circuits and inverts them out of
+the grouped path's bitstring probabilities and the pauli path's
+expectation values. It defaults to `None`, which upstream reads as
+uncorrected, and `None` is dropped from the payload, so runs that do not
+set it submit exactly what they did before.
+
 | Type | Cebule task | Description |
 |---|---|---|
 | `MolecularGeometry` | shared | Flat geometry + symbols + basis |

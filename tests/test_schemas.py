@@ -4031,6 +4031,17 @@ def test_tn_qc_opt_three_para_tn_still_translates_but_tn_ansatz_wins():
     assert both.resolved_tn_ansatz == TNAnsatz.GIVENS
 
 
+def test_tn_qc_opt_readout_mitigation_is_tensored_or_unset():
+    """READOUT_MITIGATIONS upstream is (None, 'tensored'); unset is uncorrected."""
+    from qpubench.schemas.mirrors.mqsdk_cebule import TNQCOptInput
+
+    base = dict(h_coeff_values=[1.0], h_operators=["Z0"], n_layers_network=2)
+    assert TNQCOptInput(**base).readout_mitigation is None
+    assert TNQCOptInput(**base, readout_mitigation="tensored").readout_mitigation == "tensored"
+    with pytest.raises(pydantic.ValidationError):
+        TNQCOptInput(**base, readout_mitigation="trex")
+
+
 def test_tn_qc_opt_result_h_tn_opt_qubit_is_one_2_tuple():
     """task_runner_TNQCOpt returns no separate qubit_operators key.
 

@@ -166,10 +166,17 @@ uses that 11 s for `pauli` rows and IBM's stated ~2 s for the Sampler
 behind `grouped`. Deep circuits break the fit: three depth-2389 jobs each
 billed fourteen times what the line predicts.
 
-**Evaluations are the row's `Quantum_Eval_Budget`.** tn-vqe caches
-measurements per phi, so a TN-VQE call that changes only theta never
-reaches the QPU; the budget counts the calls that do. Every measuring row
-is priced as a hardware run whatever its `Backend_Platform`, and
+**Jobs come from the run where there is one.** Every call that measures
+anything is one job. tn-vqe logs per call how many circuits it measured
+(`n_measured` on TN-VQE, which leaves out what its phi cache served;
+`n_circuits` on VQE), and the runner keeps that as the record's
+`circuits_measured`; `utils/backfill_circuits_measured.py` re-fetches it
+from Cebule for records collected before. A row with a collected run is
+priced on that run's jobs, capped at its current `Quantum_Eval_Budget`;
+a row without one is priced at the full budget. On the `pauli` path the
+logged count is of Pauli observables rather than bases, so those jobs
+are priced at the operator's qubit-wise-commuting bases. Every measuring
+row is priced as a hardware run whatever its `Backend_Platform`, and
 `--platform` / `--ansatz` narrow the table to the rows being planned.
 
 ### Turning this into a real campaign plan

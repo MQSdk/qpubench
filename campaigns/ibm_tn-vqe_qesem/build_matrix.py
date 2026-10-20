@@ -1,7 +1,8 @@
 """Build this campaign's matrix.
 
-Writes `targeted_screen.csv`, the campaign's one committed file (see
-`build_targeted_screen`), and can generate a stage-3 QESEM refinement
+Writes `targeted_screen.csv` (see `build_targeted_screen`) and
+`hardware_runs.csv`, the ibm_berlin repeats of its fake_berlin rows (see
+`build_hardware_runs`), and can generate a stage-3 QESEM refinement
 arm on demand for any converged run from it.
 
 Everything in this file is a choice this campaign made -- its molecules,
@@ -24,6 +25,7 @@ pointed at, not specifically a stage-2 one.
 
 Run:
     PYTHONPATH=src python campaigns/ibm_tn-vqe_qesem/build_matrix.py --stage targeted
+    PYTHONPATH=src python campaigns/ibm_tn-vqe_qesem/build_matrix.py --stage hardware
     PYTHONPATH=src python campaigns/ibm_tn-vqe_qesem/build_matrix.py --stage 3 \\
         --from campaigns/ibm_tn-vqe_qesem/targeted_screen.csv \\
         --refine 17=results/converged/case_17.json --precision 0.0016
@@ -72,6 +74,7 @@ _CAMPAIGN_DIR = campaign.DIR
 _REPO_ROOT = _CAMPAIGN_DIR.parents[1]
 _TARGETED_PATH = campaign.CSV
 _STAGE3_PATH = _CAMPAIGN_DIR / "stage3_qesem_refinement.csv"
+_HARDWARE_PATH = campaign.HARDWARE_CSV
 _QASM_DIR = campaign.QASM_DIR
 SIMULATION_INFEASIBLE = campaign.SIMULATION_INFEASIBLE
 
@@ -426,7 +429,7 @@ DEVICE_SHOTS = {"RealAmplitudes": 12_500, "tUPS": SHOTS}
 # into each optimizer's own iterations so every optimizer on a row spends
 # the same budget.
 #
-# 113 rows rather than a factorial's thousands, so each run can be given
+# 114 rows rather than a factorial's thousands, so each run can be given
 # enough to reach its optimum rather than be cut off. Sized for the
 # slowest case seen, SPSA on tUPS from its HF start, which needs about
 # four times what UCCSD does; COBYLA stops on its own tolerance well
@@ -570,6 +573,8 @@ NETWORK_MODE = "n/a (network mode)"
 # exists today keeps its meaning and no committed number moves.
 MITIGATION_NONE = "none"
 MITIGATION_QESEM = "qesem"
+# tn-vqe's tensored readout correction (TNQCOptInput.readout_mitigation).
+MITIGATION_READOUT = "readout_tensored"
 NOT_QESEM = "n/a (not QESEM)"
 SHOT_BASED = "n/a (shot-based)"
 # QESEM decides its own sampling from a precision target, so a shot count
@@ -1208,7 +1213,7 @@ def build_targeted_screen() -> list[dict[str, str]]:
         phi_init_tag: str | None = None, backend_platform: str = backend,
         noisy_sweeps: int = NOISY_EXCITATIONSOLVE_SWEEPS,
         excitationsolve_samples: int | None = None, shots: int | None = None,
-        extra_note: str = "",
+        error_mitigation: str = MITIGATION_NONE, extra_note: str = "",
     ) -> dict[str, str]:
         if ansatz in SINGLE_LAYER_ANSATZE:
             reps = 1
@@ -1223,7 +1228,8 @@ def build_targeted_screen() -> list[dict[str, str]]:
                 PHI_INIT_HF_APPROX if ansatz in HF_APPROX_ANSATZE else None
             ),
             noisy_sweeps=noisy_sweeps, excitationsolve_samples=excitationsolve_samples,
-            shots=None if shots is None else str(shots), extra_note=extra_note,
+            shots=None if shots is None else str(shots),
+            error_mitigation=error_mitigation, extra_note=extra_note,
         )
 
     rows: list[dict[str, str]] = []
@@ -1503,13 +1509,61 @@ def build_targeted_screen() -> list[dict[str, str]]:
     noisy(**ra_tn, shots=SHOTS // 4, noisy_sweeps=18,
           note=f"18 sweeps at {SHOTS // 4} shots, to check convergence.")
 
+    # --- Case 108 with tn-vqe's tensored readout correction: checks the
+    # feature on Cebule, and what it does, before hardware case 2 uses it. ---
+    noisy(**ra_tn, shots=SHOTS // 4, error_mitigation=MITIGATION_READOUT,
+          note=f"6 sweeps at {SHOTS // 4} shots with tensored readout correction.")
+
+    return rows
+
+
+# The fake_berlin rows the device repeats, and why each is there.
+HARDWARE_REPEATS = (
+    (92, "RealAmplitudes VQE: the baseline for the TN-VQE gain on a "
+         "hardware-efficient circuit."),
+    (108, "RealAmplitudes TN-VQE (2 TN layers): does that gain survive the device?"),
+    (96, "1-layer tUPS VQE: the baseline for the TN-VQE gain on a chemistry circuit."),
+    (97, "1-layer tUPS TN-VQE (2 TN layers): can the network stand in for a "
+         "tUPS layer on the device?"),
+    (98, "2-layer tUPS VQE: the depth the network stands in for."),
+)
+HARDWARE_FIELDNAMES = [*FIELDNAMES[:-1], "Repeats_Case_ID", FIELDNAMES[-1]]
+
+
+def build_hardware_runs() -> list[dict[str, str]]:
+    """The ibm_berlin runs: each a fake_berlin row of the targeted screen,
+    unchanged but for the device, readout correction and device shots.
+
+    Copied rather than rebuilt so a hardware result can only differ from
+    its simulator twin in what the device and the correction do.
+    """
+    screen = {row["Case_ID"]: row for row in numbered_targeted_screen()}
+    rows = []
+    for case_id, why in HARDWARE_REPEATS:
+        source = screen[str(case_id)]
+        if source["Backend_Platform"] != NOISY_SIMULATOR:
+            raise ValueError(f"case {case_id} is not a {NOISY_SIMULATOR} row")
+        shots = _device_shots(source["Ansatz"])
+        rows.append({
+            **source,
+            "Case_ID": "",
+            "Stage": "hardware",
+            "Backend_Platform": BACKEND_PLATFORM_TN,
+            "Shots": str(shots),
+            "Error_Mitigation": MITIGATION_READOUT,
+            "Repeats_Case_ID": str(case_id),
+            "Notes": (f"Hardware ({BACKEND_PLATFORM_TN}), repeating "
+                      f"{_TARGETED_PATH.name} case {case_id} with tensored readout "
+                      f"correction at {shots} shots. {why}"),
+        })
     return rows
 
 
 def write_csv(
     path: pathlib.Path, rows: list[dict[str, str]], renumber: bool = True,
+    fieldnames: list[str] = FIELDNAMES,
 ) -> None:
-    _write_csv(path, rows, FIELDNAMES, renumber=renumber)
+    _write_csv(path, rows, fieldnames, renumber=renumber)
 
 
 def summarize(rows: list[dict[str, str]]) -> None:
@@ -1601,7 +1655,7 @@ def _require_precision(precision: float | None) -> float:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(
-        "--stage", choices=["targeted", "3"], default="targeted",
+        "--stage", choices=["targeted", "hardware", "3"], default="targeted",
     )
     parser.add_argument(
         "--from", dest="source", type=pathlib.Path, default=None,
@@ -1633,10 +1687,15 @@ def main() -> None:
     args = parser.parse_args()
 
     renumber = True
+    fieldnames = FIELDNAMES
     if args.stage == "targeted":
         rows = numbered_targeted_screen()
         renumber = False
         path = args.output or _TARGETED_PATH
+    elif args.stage == "hardware":
+        rows = build_hardware_runs()
+        fieldnames = HARDWARE_FIELDNAMES
+        path = args.output or _HARDWARE_PATH
     else:
         rows = build_stage3(
             _read_source_matrix(args.source),
@@ -1646,7 +1705,7 @@ def main() -> None:
         )
         path = args.output or _STAGE3_PATH
 
-    write_csv(path, rows, renumber=renumber)
+    write_csv(path, rows, renumber=renumber, fieldnames=fieldnames)
     # -o may point anywhere, so only shorten paths that are really inside
     # the repo.
     shown = path.relative_to(_REPO_ROOT) if path.is_relative_to(_REPO_ROOT) else path

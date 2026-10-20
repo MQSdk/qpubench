@@ -97,7 +97,7 @@ framework's own ``integrations/kubeflow/`` Cebule DAG example.
 from __future__ import annotations
 
 import enum
-from typing import Any
+from typing import Any, Literal
 
 import pydantic
 
@@ -569,6 +569,10 @@ class TNQCOptInput(pydantic.BaseModel):
                           basis-state-pair-grouping measurement scheme
                           (see QASMGenInput) used *inside* TN_QC_OPT
                           rather than as a separate task.
+    readout_mitigation    None (default) or "tensored": per-qubit readout
+                          flip rates from two calibration circuits (all
+                          |0>, all |1>), inverted out of every measurement
+                          on both paths (cebule-tn_vqe ``ef0dc47``).
     optimization_mode     "both" (default, jointly optimize theta/phi —
                           matches the reference paper's own approach) |
                           "circuit" (freeze theta, plain VQE over phi
@@ -715,6 +719,8 @@ class TNQCOptInput(pydantic.BaseModel):
     # 'aer_simulator' for a local Aer run and 'ibm*' for hardware.
     backend:             str            = "default.qubit"    # or "aer_simulator", "ibm_brisbane"
     measurement_method:  str            = "pauli"                # "pauli" | "grouped"
+    # Readout-error correction on the qiskit paths; None measures uncorrected.
+    readout_mitigation:  Literal["tensored"] | None = None
     optimization_mode:   str            = "both"                    # "circuit" | "network" | "both"
     # MOL_MAP's own mapping operator D, handed back to TN_QC_OPT. Supplying
     # it is what tells the task its qubits index configurations rather than
