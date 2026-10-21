@@ -39,13 +39,16 @@ crossing:
 
 Most rows run on `aer_simulator` (shot noise only); eighteen repeat
 `aer_simulator` rows on `fake_berlin`, the offline noise snapshot of
-`ibm_berlin`, the device hardware time is bought on, and five run the
-hardware runs on `fake_aachen`, the snapshot of the alternative device
-`ibm_aachen`. No run in
-`targeted_screen.csv` consumes purchased hardware time, and only case 122
-and the `fake_aachen` rows apply error mitigation. Five of its `fake_berlin` rows are repeated on `ibm_berlin`
-itself, with readout correction, in a matrix of their own:
-[Hardware runs](#hardware-runs).
+`ibm_berlin`, the device hardware time is bought on. The five hardware
+runs also run as simulator twins, readout correction included, on
+`fake_berlin` (cases 128, 122, 129, 130, 131) and on `fake_aachen`
+(123–127), the snapshot of the alternative device `ibm_aachen`, and at
+half the device shots (132–146) and at 18 sweeps (147–161) on all three
+backends. No run in
+`targeted_screen.csv` consumes purchased hardware time, and only the
+noisy-simulator copies of the hardware runs apply error mitigation. Five of its uncorrected `fake_berlin` rows
+are repeated on `ibm_berlin` itself, with readout correction, in a
+matrix of their own: [Hardware runs](#hardware-runs).
 
 ## Campaign structure
 
@@ -133,7 +136,7 @@ axis below names two things it crosses deliberately.
 | Start point | `hf-approx` ↔ `hf-approx` plus a seeded ~1 rad Gaussian kick (`hf-approx+kick(scale=1.0,seed=20260811)`) | `RealAmplitudes` and `rzryrz`, VQE, `COBYLA`, 2 reps, under both mappers — `hf-approx` is a local minimum for these families, and kicks up to ~0.3 rad fall back into it. The kick is the same vector on every row sharing a circuit |
 | TN-VQE with SPSA and ExcitationSolve | `VQE` and `TN-VQE` at `TN_Layers_Network` = 1, 2, 3, under `SPSA` and `ExcitationSolve`, MolMap_sb; plus `TN-VQE` at 2 layers under JW | `RealAmplitudes` and tUPS at 2 reps (JW: tUPS only, against the optimizer axis's tUPS rows) — COBYLA stalls under shot noise, so the COBYLA TN-VQE rows cannot show whether the network helps. MolMap_sb because its circuits are shallow enough for a noisy backend |
 | tUPS reps × TN layers | tUPS at 1 and 3 layers, `VQE` and `TN-VQE` at `TN_Layers_Network` = 1, 2, 3, `ExcitationSolve`; 1 layer also under `SPSA` | H2/6-31g, MolMap_sb. 1-layer tUPS stops 13.5 mHa above FCI on its own — does the network make up for the missing layer? 2 layers is the row above; 3 layers checks nothing changes where the circuit suffices. Circuits from `regenerate_spinblock_mol_map.py --h2-tups-layers` |
-| Noisy simulator | `aer_simulator` → `fake_berlin` (cases 92–108 but 94, 121 and 122) and `fake_aachen` (123–127) (the `fake_berlin` rows each identical to an `aer_simulator` row but for the backend, and for ExcitationSolve's sweeps) | H2/6-31g, MolMap_sb. RealAmplitudes VQE against TN-VQE under `ExcitationSolve` (2 TN layers), and TN-VQE under `SPSA` (3); 1-layer tUPS VQE and TN-VQE (2 TN layers) against 2-layer tUPS VQE, all `ExcitationSolve`; RealAmplitudes `COBYLA` as a reference. MolMap_sb only: its circuits transpile to 6–118 two-qubit gates on the device, against 586–620 for the JW chemistry circuits. No error mitigation, so energies sit 35–180 mHa high; compare within pairs, and the statevector energy of each run's final parameters. ExcitationSolve rows stop after 6 sweeps (`NOISY_EXCITATIONSOLVE_SWEEPS`) instead of spending the full budget: it stops improving by its third sweep, and a noisy evaluation costs far more. Case 92 is the pilot; it ran the full 55 sweeps before the cap and finished where its noiseless twin did. Cases 100–102 repeat the tUPS rows 96–98 at 18 sweeps, because the 1-layer TN-VQE run was still descending at 6. Cases 103 and 104 spend about the same shots as case 101 differently on that shot-noise-limited row: 6 sweeps fitting each parameter from 18 points (ExcitationSolve's `samples`) instead of the minimal 1 + 2\|f\|, and 6 sweeps at 200,000 shots. All three ended 5.9–7.8 mHa above FCI: on that row the noise moves the minimum rather than blurring it, mostly through readout error. Cases 105–108 run the 1-layer tUPS and RealAmplitudes TN-VQE rows at 25,000 and 12,500 shots, to see whether fewer shots find the same parameters; case 121 repeats case 108 at 18 sweeps, since it was still descending at 6. Case 122 is case 108 with tn-vqe's tensored readout correction (`Error_Mitigation` = `readout_tensored`), the one corrected row here: it checks the feature on Cebule and measures what it does before hardware case 2 relies on it. Cases 123–127 run the five hardware runs, readout correction and device shots included, on `fake_aachen` instead (see [Hardware runs](#hardware-runs)) |
+| Noisy simulator | `aer_simulator` → `fake_berlin` (cases 92–108 but 94, 121 and 122) and 128–131, and `fake_aachen` (123–127) (cases 92–108 and 121 each identical to an `aer_simulator` row but for the backend, and for ExcitationSolve's sweeps) | H2/6-31g, MolMap_sb. RealAmplitudes VQE against TN-VQE under `ExcitationSolve` (2 TN layers), and TN-VQE under `SPSA` (3); 1-layer tUPS VQE and TN-VQE (2 TN layers) against 2-layer tUPS VQE, all `ExcitationSolve`; RealAmplitudes `COBYLA` as a reference. MolMap_sb only: its circuits transpile to 6–118 two-qubit gates on the device, against 586–620 for the JW chemistry circuits. No error mitigation, so energies sit 35–180 mHa high; compare within pairs, and the statevector energy of each run's final parameters. ExcitationSolve rows stop after 6 sweeps (`NOISY_EXCITATIONSOLVE_SWEEPS`) instead of spending the full budget: it stops improving by its third sweep, and a noisy evaluation costs far more. Case 92 is the pilot; it ran the full 55 sweeps before the cap and finished where its noiseless twin did. Cases 100–102 repeat the tUPS rows 96–98 at 18 sweeps, because the 1-layer TN-VQE run was still descending at 6. Cases 103 and 104 spend about the same shots as case 101 differently on that shot-noise-limited row: 6 sweeps fitting each parameter from 18 points (ExcitationSolve's `samples`) instead of the minimal 1 + 2\|f\|, and 6 sweeps at 200,000 shots. All three ended 5.9–7.8 mHa above FCI: on that row the noise moves the minimum rather than blurring it, mostly through readout error. Cases 105–108 run the 1-layer tUPS and RealAmplitudes TN-VQE rows at 25,000 and 12,500 shots, to see whether fewer shots find the same parameters; case 121 repeats case 108 at 18 sweeps, since it was still descending at 6. Case 122 is case 108 with tn-vqe's tensored readout correction (`Error_Mitigation` = `readout_tensored`), the one corrected row here: it checks the feature on Cebule and measures what it does before hardware case 2 relies on it. Cases 123–127 run the five hardware runs, readout correction and device shots included, on `fake_aachen` instead, and cases 128–131 (with 122) run them on `fake_berlin`. Cases 132–146 run all five at half the device shots, and cases 147–161 at the device shots and 18 sweeps, on `aer_simulator`, `fake_berlin` and `fake_aachen` (see [Hardware runs](#hardware-runs)) |
 | Network-only controls | `TN` (θ alone, the circuit frozen at its start) for every TN-VQE configuration: RealAmplitudes from the Method × TN-layers axes (cases 33–35, 39–41) and tUPS (cases 109–120: 2 layers under JW, 1–3 layers under MolMap_sb, each at `TN_Layers_Network` = 1, 2, 3) | `COBYLA` with 1,000 evaluations per θ parameter (`NETWORK_EVALS_PER_PARAM`), which no run should reach: the contraction is exact and costs no circuits, so a row stops on the optimizer's own tolerance. One row covers every TN-VQE row sharing its mapper, circuit, start and TN layers, whatever their optimizer, shots or backend |
 
 A row that coincides with an earlier one on every field but `Case_ID` and
@@ -143,7 +146,7 @@ so a collapsed duplicate leaves a gap rather than reshuffling anything
 after it (`assign_case_ids` then `dedupe_rows`, from
 `utils/_matrix_io.py`). A retired row is dropped the same way: case 94, a
 noisy-simulator SPSA VQE row whose noiseless twin ends at the local minimum
-case 92 already covers. 119 rows, `Case_ID`s 1–127 with eight gaps.
+case 92 already covers. 153 rows, `Case_ID`s 1–161 with eight gaps.
 
 **Every ansatz-optimizer-mode combination reuses the same Hamiltonian,
 pinned circuit and `Phi_Init`** for a given (molecule, basis, mapper,
@@ -337,7 +340,7 @@ substantially: 120 → 52 for H2/6-31g, 1304 → 392 for H2O/6-31g CAS(4,4).
 | `Phi_Init` | `"zeros"` (`UCCSD`, tUPS), `"hf-approx"` (`RealAmplitudes`, `rzryrz`), or `"hf-approx+kick(scale=S,seed=N)"` on the start-point rows — see [HF-approximating initial parameters](#hf-approximating-initial-parameters) |
 | `Num_Opt_Params_Theta` | Network-side parameter count on a TN-VQE row |
 | `Num_ExpVals_Per_Iter`, `Num_ExpVals_Source` | Measurement circuits one evaluation submits, and where that count came from |
-| `Error_Mitigation`, `Precision`, `QESEM_Execution_Mode` | `none`, `n/a (shot-based)`, `n/a (not QESEM)` on every row of `targeted_screen.csv` but case 122; that row, the `fake_aachen` rows (123–127) and `hardware_runs.csv` set `Error_Mitigation` to `readout_tensored`, which the runner passes as `readout_mitigation="tensored"` |
+| `Error_Mitigation`, `Precision`, `QESEM_Execution_Mode` | `none`, `n/a (shot-based)`, `n/a (not QESEM)` on every row of `targeted_screen.csv` but cases 122–131, 137–146 and 152–161; those rows and `hardware_runs.csv` set `Error_Mitigation` to `readout_tensored`, which the runner passes as `readout_mitigation="tensored"` |
 | `Converged_Params_File`, `Converged_Params_SHA256` | Blank on every row in this file — no row here is a stage-3 refinement |
 | `Repeats_Case_ID` | `hardware_runs.csv` only: the `targeted_screen.csv` row the hardware run repeats |
 | `Notes` | Per-row provenance and caveats |
@@ -376,9 +379,11 @@ two calibration circuits per run measure each qubit's flip rates, which
 are inverted out of every measured distribution. On `fake_berlin` it
 removes 29–33 mHa of the offset, and readout error is most of what
 moves the noisy minimum (see
-[Known limitations](#known-limitations)). The twins ran uncorrected, so
-a hardware-against-twin difference mixes the device with the
-correction. Cebule must be running that tn-vqe revision or later, so
+[Known limitations](#known-limitations)). The twins named in
+`Repeats_Case_ID` ran uncorrected, so a hardware-against-twin difference
+mixes the device with the correction; cases 128, 122, 129, 130 and 131
+are the same five runs on `fake_berlin` with the correction and device
+shots, which separate the two. Cebule must be running that tn-vqe revision or later, so
 check the deployed version before submitting: an older one does not
 apply the correction.
 
@@ -403,6 +408,23 @@ of `targeted_screen.csv` are its simulator twins: the five rows above,
 readout correction and device shots included, on `fake_aachen`. Its
 tUPS circuits transpile to 84 and 166 two-qubit gates, against 62 and
 118 on Berlin, so its noise offset is expected to be larger.
+
+**At half the shots.** Cases 132–146 run the five hardware runs at half
+the device shots (6,250 for RealAmplitudes, 25,000 for tUPS) on
+`aer_simulator` (132–136), `fake_berlin` (137–141) and `fake_aachen`
+(142–146), each with the same 6-sweep cap; the two noisy simulators
+apply the readout correction, and `aer_simulator`, which has no readout
+error, runs uncorrected. Halving the shots roughly halves each run's QPU
+time. Earlier, uncorrected, 1-layer tUPS TN-VQE lost its gain over VQE
+at 25,000 shots (case 105); these show whether that holds with the
+correction, and on the other four runs.
+
+**At 18 sweeps.** Cases 147–161 run the five hardware runs at the
+device shots but 18 sweeps instead of 6, on `aer_simulator` (147–151),
+`fake_berlin` (152–156) and `fake_aachen` (157–161), corrected as
+above. On the uncorrected `fake_berlin` twins, 1-layer tUPS TN-VQE was
+still descending at 6 sweeps (8.7 mHa, against 5.9 mHa at 18); these
+show whether any hardware run needs more than the cap.
 
 The rows are ordered cheapest first, so the RealAmplitudes pair runs before any tUPS row and serves as the pilot. QESEM is not part of
 this matrix; it goes through the stage-3 path once a hardware run has
@@ -507,11 +529,7 @@ Results collect in `results/hardware_runs.ndjson`. The runner refuses an
 
 ## Open decisions
 
-1. **Correct the other `fake_berlin` twins too?** The hardware runs use
-   readout correction and their twins did not. Case 122 repeats one twin
-   (108) with it; doing the same for the other four would separate what
-   the device does from what the correction does on every hardware row.
-2. **A QPU budget.** The five runs come to about 569 h at the device's
+1. **A QPU budget.** The five runs come to about 569 h at the device's
    default rep_delay, against a 12 h target.
 
 ## References

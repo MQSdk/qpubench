@@ -433,7 +433,7 @@ DEVICE_SHOTS = {"RealAmplitudes": 12_500, "tUPS": SHOTS}
 # into each optimizer's own iterations so every optimizer on a row spends
 # the same budget.
 #
-# 119 rows rather than a factorial's thousands, so each run can be given
+# 153 rows rather than a factorial's thousands, so each run can be given
 # enough to reach its optimum rather than be cut off. Sized for the
 # slowest case seen, SPSA on tUPS from its HF start, which needs about
 # four times what UCCSD does; COBYLA stops on its own tolerance well
@@ -826,6 +826,7 @@ def _row(
     phi_init_tag: str | None = None,
     noisy_sweeps: int = NOISY_EXCITATIONSOLVE_SWEEPS,
     excitationsolve_samples: int | None = None,
+    cap_sweeps: bool = False,
 ) -> dict[str, str]:
     num_qubits, source = qubit_count(mapper, active_electrons, active_orbitals)
     notes = [_qubit_note(mapper, source, mol.name, basis)]
@@ -917,7 +918,9 @@ def _row(
     iterations = iteration_budget(
         eval_budget, optimizer, n_phi, n_theta, phi_sweep_evals=sweep,
     )
-    if optimizer == "ExcitationSolve" and backend_platform in NOISY_SIMULATORS and n_phi:
+    # Capped on a noisy simulator, or wherever a row mirrors one that is.
+    capped = backend_platform in NOISY_SIMULATORS or cap_sweeps
+    if optimizer == "ExcitationSolve" and capped and n_phi:
         iterations = min(iterations, noisy_sweeps)
         eval_budget = fixed_evals(optimizer, n_phi) + iterations * quantum_per_iter
     # Measurement circuits per evaluation: the row's Hamiltonian decides
@@ -1191,7 +1194,7 @@ def build_targeted_screen() -> list[dict[str, str]]:
     h2o = next(m for m in MOLECULES if m.name == "H2O")
     reps = STAGE1_TN_REFERENCE["ansatz_reps"]         # 2, the baseline's own reps
     tn_ansatz = STAGE1_TN_REFERENCE["tn_ansatz"].value
-    backend = "aer_simulator"
+    backend = backend_aer = "aer_simulator"
     # [1, 2, 3]: TN_LAYERS_NETWORK's own sweep, minus the 0-layer edge case.
     tn_layers_sweep = TN_LAYERS_NETWORK[1:]
 
@@ -1217,7 +1220,8 @@ def build_targeted_screen() -> list[dict[str, str]]:
         phi_init_tag: str | None = None, backend_platform: str = backend,
         noisy_sweeps: int = NOISY_EXCITATIONSOLVE_SWEEPS,
         excitationsolve_samples: int | None = None, shots: int | None = None,
-        error_mitigation: str = MITIGATION_NONE, extra_note: str = "",
+        error_mitigation: str = MITIGATION_NONE, cap_sweeps: bool = False,
+        extra_note: str = "",
     ) -> dict[str, str]:
         if ansatz in SINGLE_LAYER_ANSATZE:
             reps = 1
@@ -1233,7 +1237,8 @@ def build_targeted_screen() -> list[dict[str, str]]:
             ),
             noisy_sweeps=noisy_sweeps, excitationsolve_samples=excitationsolve_samples,
             shots=None if shots is None else str(shots),
-            error_mitigation=error_mitigation, extra_note=extra_note,
+            error_mitigation=error_mitigation, cap_sweeps=cap_sweeps,
+            extra_note=extra_note,
         )
 
     rows: list[dict[str, str]] = []
@@ -1521,22 +1526,53 @@ def build_targeted_screen() -> list[dict[str, str]]:
     # --- The five hardware runs on fake_aachen, as hardware_runs.csv defines
     # them (readout correction, device shots), in case they move to
     # ibm_aachen: cases 92, 108, 96, 97 and 98 in that order. ---
-    for kwargs in (
+    hardware_runs = (
         dict(ansatz="RealAmplitudes"),
         dict(ansatz="RealAmplitudes", mode="both", layers_network=2),
         dict(ansatz="tUPS", reps=1),
         dict(ansatz="tUPS", reps=1, mode="both", layers_network=2),
         dict(ansatz="tUPS", reps=2),
-    ):
-        shots = _device_shots(kwargs["ansatz"])
-        rows.append(row(
+    )
+
+    def as_hardware(
+        backend: str, shot_fraction: float = 1.0,
+        sweeps: int = NOISY_EXCITATIONSOLVE_SWEEPS, **kwargs,
+    ) -> dict[str, str]:
+        shots = int(_device_shots(kwargs["ansatz"]) * shot_fraction)
+        more_sweeps = f" {sweeps} sweeps." if sweeps != NOISY_EXCITATIONSOLVE_SWEEPS else ""
+        # aer_simulator has no readout error to correct.
+        corrected = backend != backend_aer
+        return row(
             mapper="MolMap_sb", optimizer="ExcitationSolve",
-            backend_platform=NOISY_SIMULATOR_AACHEN, shots=shots,
-            error_mitigation=MITIGATION_READOUT,
-            extra_note=f"Noisy simulator ({NOISY_SIMULATOR_AACHEN}): a hardware run "
-                       f"with tensored readout correction at {shots} shots.",
+            backend_platform=backend, shots=shots,
+            error_mitigation=MITIGATION_READOUT if corrected else MITIGATION_NONE,
+            cap_sweeps=True, noisy_sweeps=sweeps,
+            extra_note=(f"Noisy simulator ({backend}): a hardware run with tensored "
+                        f"readout correction at {shots} shots." if corrected
+                        else f"{backend}: a hardware run at {shots} shots, uncorrected.")
+                       + more_sweeps,
             **kwargs,
-        ))
+        )
+
+    for kwargs in hardware_runs:
+        rows.append(as_hardware(NOISY_SIMULATOR_AACHEN, **kwargs))
+
+    # --- The same on fake_berlin, so each Berlin hardware run has a twin
+    # that differs from it only in the device. Hardware case 2's is case 122. ---
+    for kwargs in hardware_runs[:1] + hardware_runs[2:]:
+        rows.append(as_hardware(NOISY_SIMULATOR, **kwargs))
+
+    # --- The five hardware runs at half the device shots, on all three
+    # backends, to see whether the hardware runs can be bought cheaper. ---
+    for backend_half in (backend_aer, NOISY_SIMULATOR, NOISY_SIMULATOR_AACHEN):
+        for kwargs in hardware_runs:
+            rows.append(as_hardware(backend_half, shot_fraction=0.5, **kwargs))
+
+    # --- The five hardware runs at the device shots and 18 sweeps, on all
+    # three backends: whether the 6-sweep cap stops any of them short. ---
+    for backend_long in (backend_aer, NOISY_SIMULATOR, NOISY_SIMULATOR_AACHEN):
+        for kwargs in hardware_runs:
+            rows.append(as_hardware(backend_long, sweeps=18, **kwargs))
 
     return rows
 

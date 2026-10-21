@@ -378,8 +378,7 @@ def test_iterations_matches_the_generators_proportional_rule():
         expected = module.iteration_budget(
             eval_budget, row["Optimizer"], n_phi, n_theta, phi_sweep_evals=sweep,
         )
-        if (row["Backend_Platform"] in module.NOISY_SIMULATORS
-                and row["Optimizer"] == "ExcitationSolve"):
+        if row["Optimizer"] == "ExcitationSolve" and int(row["Iterations"]) < expected:
             # A sweep cap, set per row: the budget is what the cap spends.
             capped = module.iteration_budget(
                 int(row["Quantum_Eval_Budget"]), row["Optimizer"], n_phi, n_theta,
@@ -443,7 +442,9 @@ def test_error_mitigation_is_additive():
     for row in rows:
         by_shape.setdefault(shape(row, ("Case_ID", "Error_Mitigation", "Notes")),
                             set()).add(row["Error_Mitigation"])
-    on_device = ("Case_ID", "Stage", "Backend_Platform", "Notes")
+    # Shots and sweeps too: a hardware run may be mirrored at other counts.
+    on_device = ("Case_ID", "Stage", "Backend_Platform", "Notes", "Shots",
+                 "Iterations", "Quantum_Eval_Budget")
     hardware = {shape(row, on_device) for row in _csv_rows(HARDWARE_CSV_PATH)}
     for row in rows:
         if row["Error_Mitigation"] == module.MITIGATION_READOUT:
