@@ -433,7 +433,7 @@ DEVICE_SHOTS = {"RealAmplitudes": 12_500, "tUPS": SHOTS}
 # into each optimizer's own iterations so every optimizer on a row spends
 # the same budget.
 #
-# 153 rows rather than a factorial's thousands, so each run can be given
+# 158 rows rather than a factorial's thousands, so each run can be given
 # enough to reach its optimum rather than be cut off. Sized for the
 # slowest case seen, SPSA on tUPS from its HF start, which needs about
 # four times what UCCSD does; COBYLA stops on its own tolerance well
@@ -1573,6 +1573,20 @@ def build_targeted_screen() -> list[dict[str, str]]:
     for backend_long in (backend_aer, NOISY_SIMULATOR, NOISY_SIMULATOR_AACHEN):
         for kwargs in hardware_runs:
             rows.append(as_hardware(backend_long, sweeps=18, **kwargs))
+
+    # --- Noiseless references at the shots of the fake_berlin rows that ran at
+    # other counts (cases 104-108): shot noise moves where a run ends, so each
+    # is compared against aer_simulator at its own shots, at full budget like
+    # the other references. ---
+    for kwargs, counts in ((tups1_tn, (4 * SHOTS, SHOTS // 2, SHOTS // 4)),
+                           (ra_tn, (SHOTS // 2, SHOTS // 4))):
+        for shots in counts:
+            rows.append(row(
+                mapper="MolMap_sb", shots=shots,
+                extra_note=f"Noiseless reference at {shots} shots for the "
+                           f"{NOISY_SIMULATOR} row at that count.",
+                **kwargs,
+            ))
 
     return rows
 
