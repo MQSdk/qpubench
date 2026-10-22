@@ -82,17 +82,44 @@ def hf_state(run: dict[str, str], campaign: ModuleType) -> list[int]:
     return campaign.hf_state(run)
 
 
+def converged_params(run: dict[str, str]) -> dict[str, Any] | None:
+    """The `phi` and `theta` a row starts from, from its Converged_Params_File,
+    or None where it names none. The file must still match the row's hash."""
+    ref = run.get("Converged_Params_File") or ""
+    if not ref:
+        return None
+    path = REPO / ref
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    if not digest.startswith(run["Converged_Params_SHA256"]):
+        raise ValueError(f"run {run['Case_ID']}: {ref} has changed since the matrix "
+                         f"was built (sha256 {digest[:12]}, row says "
+                         f"{run['Converged_Params_SHA256']})")
+    return json.loads(path.read_text())
+
+
+def theta_init(run: dict[str, str]) -> list[float] | None:
+    """A warm-started TN-VQE row's network start, or None for tn-vqe's zeros."""
+    params = converged_params(run)
+    if params is None or run["Method"] != "TN-VQE":
+        return None
+    return params["theta"]
+
+
 def phi_init(run: dict[str, str], campaign: ModuleType) -> list[float]:
     """The run's circuit-parameter initialisation, from its `Phi_Init` column.
 
     `zeros`, `hf-approx`, `hf-approx+kick(scale=S,seed=N)`, or
-    `random(seed=N)` (a bare `random` uses PHI_INIT_SEED). Upstream
+    `random(seed=N)` (a bare `random` uses PHI_INIT_SEED); a row with a
+    Converged_Params_File starts from that file's phi instead. Upstream
     randomises phi unseeded when none is given, so a run that leaves it
     unset cannot be reproduced.
 
     The kick adds S * N(0, 1) per parameter, drawn from default_rng(N), so
     every row with the same circuit and spec starts from the same vector.
     """
+    params = converged_params(run)
+    if params is not None:
+        return params["phi"]
     n = int(run["Num_Opt_Params_Phi"])
     spec = run["Phi_Init"]
     if spec == "zeros":
@@ -315,10 +342,10 @@ def build_input(
         n_layers_circuit=1,
         # Irrelevant at zero layers, so the model's own default stands.
         tn_ansatz=TNAnsatz.ROTATION_3PARAM if plain_vqe else TNAnsatz(run["TN_Ansatz"]),
-        # theta_init is deliberately not set: the task's own default is
-        # all-zero theta, and an empty list is not that -- it reaches the
-        # shape check as a length-0 array against the (n_layers, n_nodes)
-        # theta_shape and fails. task_payload drops it.
+        # None outside a warm start: the task's own default is all-zero
+        # theta, and an empty list is not that -- it reaches the shape
+        # check as a length-0 array and fails. task_payload drops it.
+        theta_init=theta_init(run),
         phi_init=phi_init(run, campaign),
         opt_method=run["Optimizer"],
         opt_options=json.loads(run["Opt_Options"]),

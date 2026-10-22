@@ -245,16 +245,22 @@ def _record_for(
 
 def estimate_full_csv_study(
     rows: list[dict[str, str]], campaign, device: str, csv_path: pathlib.Path,
-    rep_delay_s: float,
+    rep_delay_s: float, records: dict[str, dict] | None = None,
 ) -> list[tuple[dict[str, str], int, float, str, float]]:
     """(row, jobs, circuits per job, count source, QPU seconds) per row.
+
+    `records`, by Case_ID, stands in for the collected runs, for pricing a
+    run cut short or otherwise changed.
 
     Transpiles are cached per distinct circuit; the measurement basis
     change adds a few gates against the rep_delay, so it is left out.
     """
     cache: dict[tuple, CircuitResourceEstimate] = {}
-    records = _collected_records(campaign, csv_path)
-    twin_records = _collected_records(campaign, campaign.CSV)
+    if records is None:
+        records = _collected_records(campaign, csv_path)
+        twin_records = _collected_records(campaign, campaign.CSV)
+    else:
+        twin_records = {}
     priced = []
     for row in rows:
         ansatz = row["Ansatz"]

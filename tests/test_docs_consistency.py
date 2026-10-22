@@ -222,8 +222,9 @@ def test_phi_init_is_fixed_by_the_circuit_family():
 
     So the column is keyed on `Ansatz` alone: `Method` may not move it,
     and no row may leave it unpinned -- an unseeded upstream default is
-    the defect being fixed. The one exception is the start-point axis,
-    which varies phi itself on plain-VQE rows and is checked separately.
+    the defect being fixed. The exceptions are the start-point axis,
+    which varies phi itself on plain-VQE rows and is checked separately,
+    and the warm-start rows, which start from a named collected run.
     """
     module = _benchmark_matrix_module()
     by_ansatz: dict[str, set[str]] = {}
@@ -235,6 +236,11 @@ def test_phi_init_is_fixed_by_the_circuit_family():
         if row["Phi_Init"] == module.PHI_INIT_HF_APPROX_KICK:
             assert row["Ansatz"] in module.HF_APPROX_ANSATZE, row["Case_ID"]
             assert row["Method"] == "VQE", row["Case_ID"]
+            continue
+        if row["Converged_Params_File"]:
+            source = re.fullmatch(r"converged\(case=(\d+)\)", row["Phi_Init"])
+            assert source, f"Case_ID {row['Case_ID']}: {row['Phi_Init']!r}"
+            assert row["Converged_Params_File"].endswith(f"case_{source.group(1)}.json")
             continue
         by_ansatz.setdefault(row["Ansatz"], set()).add(row["Phi_Init"])
 
@@ -302,7 +308,7 @@ def test_method_axis_is_only_crossed_on_realamplitudes_and_tups():
     kick = _benchmark_matrix_module().PHI_INIT_HF_APPROX_KICK
     by_case: dict[tuple[str, ...], set[tuple[str, str]]] = {}
     for row in rows:
-        if row["Phi_Init"] == kick:
+        if row["Phi_Init"] == kick or row["Converged_Params_File"]:
             continue
         key = (
             row["Molecule"], row["Basis"], row["Mapper"], row["Ansatz"],
@@ -434,17 +440,26 @@ def test_error_mitigation_is_additive():
         f"unexpected Error_Mitigation values {sorted(found)}"
     )
     # A corrected row has an uncorrected run of the same row beside it, on any
-    # backend and at any shots or sweeps, or mirrors a hardware run.
+    # backend and at any shots or sweeps, or mirrors a hardware run -- from
+    # another start, on a warm-start row.
     elsewhere = ("Case_ID", "Stage", "Backend_Platform", "Notes", "Shots",
                  "Iterations", "Quantum_Eval_Budget", "Error_Mitigation")
+    start = ("Phi_Init", "Converged_Params_File", "Converged_Params_SHA256",
+             "Cost_Evals_Per_Iteration")
 
-    def shape(row):
-        return tuple(row[k] for k in module.FIELDNAMES if k not in elsewhere)
+    def shape(row, ignore=elsewhere):
+        return tuple(row[k] for k in module.FIELDNAMES if k not in ignore)
 
     uncorrected = {shape(row) for row in rows if row["Error_Mitigation"] == module.MITIGATION_NONE}
     hardware = {shape(row) for row in _csv_rows(HARDWARE_CSV_PATH)}
+    hardware_from_anywhere = {shape(row, elsewhere + start)
+                              for row in _csv_rows(HARDWARE_CSV_PATH)}
     for row in rows:
-        if row["Error_Mitigation"] == module.MITIGATION_READOUT:
+        if row["Error_Mitigation"] == module.MITIGATION_READOUT and row["Converged_Params_File"]:
+            assert shape(row, elsewhere + start) in hardware_from_anywhere, (
+                f"warm-start case {row['Case_ID']} mirrors no hardware run"
+            )
+        elif row["Error_Mitigation"] == module.MITIGATION_READOUT:
             assert shape(row) in uncorrected | hardware, (
                 f"case {row['Case_ID']} has no uncorrected twin and mirrors no hardware run"
             )

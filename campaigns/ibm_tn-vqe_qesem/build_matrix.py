@@ -423,7 +423,9 @@ def excitationsolve_theta_sets(run: dict[str, str], phi_sets: list[list[float]])
             return float(state.expectation_value(op).real)
 
         # tn-vqe's own scan, so the sets are the ones its run will find.
-        sets = [_verified_frequencies(energy, np.zeros(n_theta), index, 12, 2)[0]
+        start = runner.theta_init(run)
+        start = np.zeros(n_theta) if start is None else np.asarray(start, dtype=float)
+        sets = [_verified_frequencies(energy, start, index, 12, 2)[0]
                 for index in range(n_theta)]
         entry = {"sha256": run["Qasm_Ansatz_SHA256"], "sets": [list(s) for s in sets]}
         cache[key] = entry
@@ -484,7 +486,7 @@ DEVICE_SHOTS = {"RealAmplitudes": 12_500, "tUPS": SHOTS}
 # into each optimizer's own iterations so every optimizer on a row spends
 # the same budget.
 #
-# 175 rows rather than a factorial's thousands, so each run can be given
+# 177 rows rather than a factorial's thousands, so each run can be given
 # enough to reach its optimum rather than be cut off. Sized for the
 # slowest case seen, SPSA on tUPS from its HF start, which needs about
 # four times what UCCSD does; COBYLA stops on its own tolerance well
@@ -958,6 +960,8 @@ def _row(
             "Ansatz": ansatz, "Ansatz_Reps": str(reps), "Entanglement": entanglement or "",
             "Qasm_Ansatz_File": qasm_file, "Qasm_Ansatz_SHA256": qasm_hash,
             "Num_Opt_Params_Phi": str(phi_params), "Phi_Init": phi_init,
+            "Converged_Params_File": converged_params[0],
+            "Converged_Params_SHA256": converged_params[1],
         })
     opt_options = opt_options_for(
         optimizer, ansatz, n_phi, n_theta, phi_sets, excitationsolve_samples,
@@ -1285,7 +1289,7 @@ def build_targeted_screen() -> list[dict[str, str]]:
         noisy_sweeps: int = NOISY_EXCITATIONSOLVE_SWEEPS,
         excitationsolve_samples: int | None = None, shots: int | None = None,
         error_mitigation: str = MITIGATION_NONE, cap_sweeps: bool = False,
-        extra_note: str = "",
+        converged_params: tuple[str, str] = ("", ""), extra_note: str = "",
     ) -> dict[str, str]:
         if ansatz in SINGLE_LAYER_ANSATZE:
             reps = 1
@@ -1302,7 +1306,7 @@ def build_targeted_screen() -> list[dict[str, str]]:
             noisy_sweeps=noisy_sweeps, excitationsolve_samples=excitationsolve_samples,
             shots=None if shots is None else str(shots),
             error_mitigation=error_mitigation, cap_sweeps=cap_sweeps,
-            extra_note=extra_note,
+            converged_params=converged_params, extra_note=extra_note,
         )
 
     rows: list[dict[str, str]] = []
@@ -1600,7 +1604,7 @@ def build_targeted_screen() -> list[dict[str, str]]:
 
     def as_hardware(
         backend: str, shot_fraction: float = 1.0,
-        sweeps: int = NOISY_EXCITATIONSOLVE_SWEEPS, **kwargs,
+        sweeps: int = NOISY_EXCITATIONSOLVE_SWEEPS, note: str = "", **kwargs,
     ) -> dict[str, str]:
         shots = int(_device_shots(kwargs["ansatz"]) * shot_fraction)
         more_sweeps = f" {sweeps} sweeps." if sweeps != NOISY_EXCITATIONSOLVE_SWEEPS else ""
@@ -1614,7 +1618,7 @@ def build_targeted_screen() -> list[dict[str, str]]:
             extra_note=(f"Noisy simulator ({backend}): a hardware run with tensored "
                         f"readout correction at {shots} shots." if corrected
                         else f"{backend}: a hardware run at {shots} shots, uncorrected.")
-                       + more_sweeps,
+                       + more_sweeps + note,
             **kwargs,
         )
 
@@ -1687,7 +1691,48 @@ def build_targeted_screen() -> list[dict[str, str]]:
                        + (", with tensored readout correction." if corrected else "."),
         ))
 
+    # --- The two TN-VQE hardware runs on fake_aachen, started from the best
+    # noiseless run of each: how many sweeps a warm start needs. ---
+    for kwargs, source_case in ((hardware_runs[1], 73), (hardware_runs[3], 82)):
+        rows.append(as_hardware(
+            NOISY_SIMULATOR_AACHEN, **kwargs,
+            phi_init_tag=f"converged(case={source_case})",
+            converged_params=_converged_params_ref(source_case),
+            note=f" Warm start from case {source_case}'s final phi and theta.",
+        ))
+
     return rows
+
+
+# Warm-start parameters, frozen from a collected run so a row stays
+# reproducible after its results file changes.
+CONVERGED_PARAMS_DIR = campaign.DIR / "converged_params"
+
+
+def freeze_converged_params(case_id: str) -> pathlib.Path:
+    """Write a collected run's final phi and theta to CONVERGED_PARAMS_DIR."""
+    path = campaign.RESULTS_DIR / f"{_TARGETED_PATH.stem}.ndjson"
+    records = [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+    record = next((r for r in reversed(records) if str(r["Case_ID"]) == case_id), None)
+    if record is None:
+        raise SystemExit(f"--freeze-params {case_id}: no collected run of that case")
+    out = CONVERGED_PARAMS_DIR / f"case_{case_id}.json"
+    out.parent.mkdir(exist_ok=True)
+    out.write_text(json.dumps({
+        "source_case": case_id, "task_id": record["task_id"],
+        "backend": record.get("Backend"), "phi": record["phi"], "theta": record["theta"],
+    }, indent=1) + "\n")
+    return out
+
+
+def _converged_params_ref(case_id: int) -> tuple[str, str]:
+    """(Converged_Params_File, Converged_Params_SHA256) for a frozen run."""
+    path = CONVERGED_PARAMS_DIR / f"case_{case_id}.json"
+    if not path.exists():
+        raise SystemExit(f"{path.name} is missing: run build_matrix.py "
+                         f"--freeze-params {case_id} first")
+    return (str(path.relative_to(_REPO_ROOT)),
+            hashlib.sha256(path.read_bytes()).hexdigest()[:12])
 
 
 # The fake_berlin rows the device repeats, and why each is there.
@@ -1856,8 +1901,17 @@ def main() -> None:
         help="stage 3 only: QESEM QPU reservation strategy (batch releases the "
              "QPU during classical steps, and is cheaper)",
     )
+    parser.add_argument(
+        "--freeze-params", action="append", default=[], metavar="CASE_ID",
+        help="write a collected run's final phi and theta to converged_params/ "
+             "for a warm-started row, then exit. Repeatable.",
+    )
     parser.add_argument("-o", "--output", type=pathlib.Path, default=None)
     args = parser.parse_args()
+    if args.freeze_params:
+        for case_id in args.freeze_params:
+            print(f"Wrote {freeze_converged_params(case_id).relative_to(_REPO_ROOT)}")
+        return
 
     renumber = True
     fieldnames = FIELDNAMES
