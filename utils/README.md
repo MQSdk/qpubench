@@ -24,6 +24,7 @@ runnable guides to the library itself.
 | [`pin_qasm_ansatz.py`](pin_qasm_ansatz.py) | Writes each distinct circuit a campaign's matrix names to OpenQASM in that campaign's `qasm/`, so a run's circuit is part of the record rather than whatever the installed library versions resolve to |
 | [`estimate_ibm_cost.py`](estimate_ibm_cost.py) | Prices a campaign's matrix under each IBM access plan, from real transpilation against the device's calibration |
 | [`backfill_circuits_measured.py`](backfill_circuits_measured.py) | Re-fetches per-call circuit counts from Cebule into results collected before records carried them |
+| [`sweep_energies.py`](sweep_energies.py) | Exact energy after every optimizer iteration of each collected run, stored on the record for the plots' last-sweeps average; needs tn-vqe importable for TN-VQE rows (e.g. `PYTHONPATH=src:../cebule-tn_vqe/src`) |
 | [`count_measurement_bases.py`](count_measurement_bases.py) | Counts the measurement bases one cost-function evaluation submits for a campaign's JW rows, which is what the QPU cost is proportional to |
 | [`classical_reference_energies.py`](classical_reference_energies.py) | Computes the HF, MP2, CCSD and FCI energies a quantum result is scored against, for any geometry and basis |
 

@@ -433,7 +433,7 @@ DEVICE_SHOTS = {"RealAmplitudes": 12_500, "tUPS": SHOTS}
 # into each optimizer's own iterations so every optimizer on a row spends
 # the same budget.
 #
-# 158 rows rather than a factorial's thousands, so each run can be given
+# 172 rows rather than a factorial's thousands, so each run can be given
 # enough to reach its optimum rather than be cut off. Sized for the
 # slowest case seen, SPSA on tUPS from its HF start, which needs about
 # four times what UCCSD does; COBYLA stops on its own tolerance well
@@ -1587,6 +1587,28 @@ def build_targeted_screen() -> list[dict[str, str]]:
                            f"{NOISY_SIMULATOR} row at that count.",
                 **kwargs,
             ))
+
+    # --- H2O/6-31g CAS(4,4): TN-VQE and ExcitationSolve on the cell's
+    # RealAmplitudes and tUPS rows, under both mappers. TN-VQE with
+    # ExcitationSolve under JW is left out: its H2 twin at the same width
+    # (8 qubits, 4 spatial orbitals; case 79) ran too long to finish. ---
+    h2o_tn_layers = 2
+    for mapper in ("JW", "MolMap_sb"):
+        for ansatz in ("RealAmplitudes", "tUPS"):
+            h2o = dict(mapper=mapper, ansatz=ansatz, cell=h2o_6_31g)
+            label = f"H2O/6-31g {ansatz}, {mapper}"
+            rows.append(row(**h2o, optimizer="ExcitationSolve",
+                            extra_note=f"Richer system: {label}, ExcitationSolve."))
+            rows.append(row(**h2o, mode="both", layers_network=h2o_tn_layers,
+                            extra_note=f"Richer system: {label}, TN-VQE."))
+            if mapper != "JW":
+                rows.append(row(**h2o, optimizer="ExcitationSolve", mode="both",
+                                layers_network=h2o_tn_layers,
+                                extra_note=f"Richer system: {label}, TN-VQE, "
+                                           f"ExcitationSolve."))
+            rows.append(row(**h2o, mode="network", layers_network=h2o_tn_layers,
+                            extra_note=f"Network-only control: {label}, "
+                                       f"TN_Layers_Network={h2o_tn_layers}."))
 
     return rows
 

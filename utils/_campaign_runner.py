@@ -592,6 +592,16 @@ def circuits_measured(metadata: Any) -> list[int] | None:
     return [int(m.get("n_measured", m.get("n_circuits", 0))) for m in metadata]
 
 
+def sweep_params(
+    param_history: list[list[Any]], iteration_boundaries: list[int],
+) -> list[list[float]] | None:
+    """The parameters (phi, then theta) at the end of each optimizer
+    iteration, or None where the task reported no history."""
+    if not param_history or not iteration_boundaries:
+        return None
+    return [[float(v) for v in param_history[b - 1]] for b in iteration_boundaries]
+
+
 def append_record(
     results_path: pathlib.Path, run: dict[str, str], result: Any,
     task_id: str, wall_s: float, batch: str, backend_override: str | None = None,
@@ -668,6 +678,7 @@ def append_record(
             "theta": result.theta,
             "h_tn_opt_qubit": list(result.h_tn_opt_qubit),
             "circuits_measured": circuits_measured(result.metadata),
+            "sweep_params": sweep_params(result.param_history, result.iteration_boundaries),
             "submitted_at": submitted_at,
             "collected_at": time.time(),
             "wall_clock_s": round(wall_s, 3),
