@@ -31,8 +31,9 @@ SIMPLEX_OVERHEAD = 2
 #                    a parameter the energy ignores is skipped. The sets
 #                    depend on the circuit, so a campaign passes the measured
 #                    sweep cost (`phi_sweep_evals`); without it each phi
-#                    parameter is assumed to carry {1, 2}. theta is taken at
-#                    five, unverified.
+#                    parameter is assumed to carry {1, 2}. theta's sweep cost
+#                    likewise (`theta_sweep_evals`); five per parameter is
+#                    only the fallback.
 EVALS_PER_ITERATION_FIXED = {"COBYLA": 1, "SPSA": 2}
 EXCITATIONSOLVE_EVALS_PER_PHI = 4
 EXCITATIONSOLVE_EVALS_PER_THETA = 5
@@ -74,19 +75,24 @@ def evaluation_budget(
 
 def evals_per_iteration(
     optimizer: str, num_phi: int, num_theta: int, *, phi_sweep_evals: int | None = None,
+    theta_sweep_evals: int | None = None,
 ) -> tuple[int, int]:
     """(quantum evaluations, cost-function evaluations) per iteration.
 
     `num_phi` is 0 where phi is frozen (`network` mode), so such a run
     reports no quantum cost. `phi_sweep_evals` is an ExcitationSolve sweep's
-    measured quantum cost, closing evaluation included.
+    measured quantum cost, closing evaluation included; `theta_sweep_evals`
+    the evaluations its network parameters add, which reuse cached
+    measurements and so cost nothing on the QPU.
     """
     if optimizer == "ExcitationSolve":
         if phi_sweep_evals is not None and num_phi:
             quantum = phi_sweep_evals
         else:
             quantum = EXCITATIONSOLVE_EVALS_PER_PHI * num_phi
-        cost = quantum + EXCITATIONSOLVE_EVALS_PER_THETA * num_theta
+        theta = (theta_sweep_evals if theta_sweep_evals is not None
+                 else EXCITATIONSOLVE_EVALS_PER_THETA * num_theta)
+        cost = quantum + theta
         return quantum, max(1, cost)
     per = EVALS_PER_ITERATION_FIXED[optimizer]
     return (per if num_phi else 0), per

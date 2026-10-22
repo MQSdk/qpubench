@@ -13,7 +13,10 @@ CSV helpers (_matrix_io).
 
 Requires: nothing beyond the standard library.  (`importlib.metadata`
 reads the installed Qiskit *distribution metadata* for the
-`Qiskit_Version` column without importing Qiskit itself.)
+`Qiskit_Version` column without importing Qiskit itself.)  An
+ExcitationSolve row whose frequency sets are not yet in
+`excitationsolve_frequencies.json` needs Qiskit to measure them, and a
+TN-VQE one tn-vqe importable as well (`PYTHONPATH=src:../cebule-tn_vqe/src`).
 
 An earlier revision of this campaign ran a full factorial (`stage 0`),
 screened a subset of it on hardware (`stage 1`) and swept the survivors
@@ -374,6 +377,54 @@ def excitationsolve_phi_sets(run: dict[str, str]) -> list[list[float]]:
             runner.verified_qasm(run), h["h_operators"], h["h_coeff_values"],
         )
         sets = frequency_sets(energy, runner.phi_init(run, campaign))
+        entry = {"sha256": run["Qasm_Ansatz_SHA256"], "sets": [list(s) for s in sets]}
+        cache[key] = entry
+        path.write_text(json.dumps(cache, indent=1, sort_keys=True) + "\n")
+    return entry["sets"]
+
+
+# The network parameters' sets where a row names one shared circuit set: tn-vqe
+# then takes theta's from the Givens gate rather than measuring them. On a
+# mol_map register one angle rotates the alpha and beta orbitals together.
+GIVENS_THETA_FREQUENCIES = {"JW": [1.0, 2.0], "MolMap_sb": [1.0, 2.0, 3.0, 4.0]}
+
+
+def excitationsolve_theta_sets(run: dict[str, str], phi_sets: list[list[float]]) -> list[list[float]]:
+    """The network parameters' frequency sets tn-vqe sweeps a TN-VQE row with:
+    the gate's where the row names one shared circuit set, otherwise measured
+    on a noiseless statevector at the start point with tn-vqe's own scan,
+    from the cache or into it."""
+    n_theta = int(run["Num_Opt_Params_Theta"])
+    if phi_sets and phi_sets[0] and all(s == phi_sets[0] for s in phi_sets):
+        return [GIVENS_THETA_FREQUENCIES[run["Mapper"]]] * n_theta
+
+    hamiltonian_file = campaign.hamiltonian_file(run)
+    key = (f"theta|{pathlib.Path(run['Qasm_Ansatz_File']).stem}|{hamiltonian_file.name}"
+           f"|{run['Phi_Init']}|{run['TN_Ansatz']}|{run['TN_Layers_Network']}")
+    path = EXCITATIONSOLVE_FREQUENCIES_FILE
+    cache = json.loads(path.read_text()) if path.exists() else {}
+    entry = cache.get(key)
+    if entry is None or entry["sha256"] != run["Qasm_Ansatz_SHA256"]:
+        import _campaign_runner as runner
+        import numpy as np
+        from _statevector_energy import cebule_operator
+        from qiskit import qasm3
+        from qiskit.quantum_info import Statevector
+        from sweep_energies import _transform
+        from tn_vqe.frequency_probe import _verified_frequencies
+
+        circuit = qasm3.loads(runner.verified_qasm(run))
+        state = Statevector(circuit.assign_parameters(runner.phi_init(run, campaign)))
+        transform = _transform(run, campaign)
+
+        def energy(theta: np.ndarray) -> float:
+            labels, coefficients = transform(theta)
+            op = cebule_operator(labels, coefficients, circuit.num_qubits)
+            return float(state.expectation_value(op).real)
+
+        # tn-vqe's own scan, so the sets are the ones its run will find.
+        sets = [_verified_frequencies(energy, np.zeros(n_theta), index, 12, 2)[0]
+                for index in range(n_theta)]
         entry = {"sha256": run["Qasm_Ansatz_SHA256"], "sets": [list(s) for s in sets]}
         cache[key] = entry
         path.write_text(json.dumps(cache, indent=1, sort_keys=True) + "\n")
@@ -942,7 +993,7 @@ def _row(
         expvals, expvals_source = str(known[0]), known[1]
 
     platform = backend_platform or (BACKEND_PLATFORM_TN if is_tn else BACKEND_PLATFORM_VQE)
-    return {
+    row = {
         "Case_ID": "",                       # assigned after the full list is built
         "Stage": stage,
         "Molecule": mol.name,
@@ -1014,6 +1065,19 @@ def _row(
         "Converged_Params_SHA256": converged_params[1],
         "Notes": " ".join(notes),
     }
+    # A TN-VQE sweep also fits each network parameter, from 2|f| evaluations
+    # (or `samples` - 1, which tn-vqe applies to every parameter) that reuse
+    # the circuit's cached measurements: it lengthens cost_history without
+    # costing QPU time.
+    if optimizer == "ExcitationSolve" and n_phi and n_theta:
+        theta_sweep = sum(
+            (excitationsolve_samples - 1) if excitationsolve_samples else 2 * len(f)
+            for f in excitationsolve_theta_sets(row, phi_sets) if f
+        )
+        row["Cost_Evals_Per_Iteration"] = str(evals_per_iteration(
+            optimizer, n_phi, n_theta, phi_sweep_evals=sweep, theta_sweep_evals=theta_sweep,
+        )[1])
+    return row
 
 
 def stage1_active_space(mol: Molecule, basis: str) -> tuple[str, int, int, str]:
