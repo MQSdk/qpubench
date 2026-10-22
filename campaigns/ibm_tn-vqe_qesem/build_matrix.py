@@ -433,7 +433,7 @@ DEVICE_SHOTS = {"RealAmplitudes": 12_500, "tUPS": SHOTS}
 # into each optimizer's own iterations so every optimizer on a row spends
 # the same budget.
 #
-# 172 rows rather than a factorial's thousands, so each run can be given
+# 175 rows rather than a factorial's thousands, so each run can be given
 # enough to reach its optimum rather than be cut off. Sized for the
 # slowest case seen, SPSA on tUPS from its HF start, which needs about
 # four times what UCCSD does; COBYLA stops on its own tolerance well
@@ -1609,6 +1609,19 @@ def build_targeted_screen() -> list[dict[str, str]]:
             rows.append(row(**h2o, mode="network", layers_network=h2o_tn_layers,
                             extra_note=f"Network-only control: {label}, "
                                        f"TN_Layers_Network={h2o_tn_layers}."))
+
+    # --- 2-layer tUPS TN-VQE (2 TN layers) at 18 sweeps on all three
+    # backends, readout corrected where there is readout error to correct. ---
+    for backend_tups2 in (backend_aer, NOISY_SIMULATOR, NOISY_SIMULATOR_AACHEN):
+        corrected = backend_tups2 != backend_aer
+        rows.append(row(
+            mapper="MolMap_sb", ansatz="tUPS", reps=2, optimizer="ExcitationSolve",
+            mode="both", layers_network=2, backend_platform=backend_tups2,
+            shots=SHOTS, noisy_sweeps=18, cap_sweeps=True,
+            error_mitigation=MITIGATION_READOUT if corrected else MITIGATION_NONE,
+            extra_note=f"2-layer tUPS TN-VQE at 18 sweeps on {backend_tups2}"
+                       + (", with tensored readout correction." if corrected else "."),
+        ))
 
     return rows
 

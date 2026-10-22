@@ -433,24 +433,19 @@ def test_error_mitigation_is_additive():
     assert found == {module.MITIGATION_NONE, module.MITIGATION_READOUT}, (
         f"unexpected Error_Mitigation values {sorted(found)}"
     )
-    # A corrected row is an uncorrected one with the correction switched on,
-    # or a hardware run moved onto a simulator.
-    def shape(row, ignore):
-        return tuple(row[k] for k in module.FIELDNAMES if k not in ignore)
+    # A corrected row has an uncorrected run of the same row beside it, on any
+    # backend and at any shots or sweeps, or mirrors a hardware run.
+    elsewhere = ("Case_ID", "Stage", "Backend_Platform", "Notes", "Shots",
+                 "Iterations", "Quantum_Eval_Budget", "Error_Mitigation")
 
-    by_shape = {}
-    for row in rows:
-        by_shape.setdefault(shape(row, ("Case_ID", "Error_Mitigation", "Notes")),
-                            set()).add(row["Error_Mitigation"])
-    # Shots and sweeps too: a hardware run may be mirrored at other counts.
-    on_device = ("Case_ID", "Stage", "Backend_Platform", "Notes", "Shots",
-                 "Iterations", "Quantum_Eval_Budget")
-    hardware = {shape(row, on_device) for row in _csv_rows(HARDWARE_CSV_PATH)}
+    def shape(row):
+        return tuple(row[k] for k in module.FIELDNAMES if k not in elsewhere)
+
+    uncorrected = {shape(row) for row in rows if row["Error_Mitigation"] == module.MITIGATION_NONE}
+    hardware = {shape(row) for row in _csv_rows(HARDWARE_CSV_PATH)}
     for row in rows:
         if row["Error_Mitigation"] == module.MITIGATION_READOUT:
-            assert (module.MITIGATION_NONE in by_shape[
-                shape(row, ("Case_ID", "Error_Mitigation", "Notes"))]
-                or shape(row, on_device) in hardware), (
+            assert shape(row) in uncorrected | hardware, (
                 f"case {row['Case_ID']} has no uncorrected twin and mirrors no hardware run"
             )
 
