@@ -596,6 +596,11 @@ def test_hardware_runs_csv_is_what_the_builder_writes():
     module.assign_case_ids(built)
     committed = _csv_rows(HARDWARE_CSV_PATH)
     assert [list(r) for r in committed] == [module.HARDWARE_FIELDNAMES] * len(committed)
+    # Qiskit_Version records the Qiskit installed where the file was written,
+    # which CI does not install.
+    for rows in (committed, built):
+        for row in rows:
+            row.pop("Qiskit_Version")
     assert committed == built, "hardware_runs.csv is stale; rerun build_matrix.py --stage hardware"
 
 
