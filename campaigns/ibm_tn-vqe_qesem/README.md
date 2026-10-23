@@ -136,7 +136,7 @@ axis below names two things it crosses deliberately.
 | Start point | `hf-approx` ↔ `hf-approx` plus a seeded ~1 rad Gaussian kick (`hf-approx+kick(scale=1.0,seed=20260811)`) | `RealAmplitudes` and `rzryrz`, VQE, `COBYLA`, 2 reps, under both mappers — `hf-approx` is a local minimum for these families, and kicks up to ~0.3 rad fall back into it. The kick is the same vector on every row sharing a circuit |
 | TN-VQE with SPSA and ExcitationSolve | `VQE` and `TN-VQE` at `TN_Layers_Network` = 1, 2, 3, under `SPSA` and `ExcitationSolve`, MolMap_sb; plus `TN-VQE` at 2 layers under JW | `RealAmplitudes` and tUPS at 2 reps (JW: tUPS only, against the optimizer axis's tUPS rows) — COBYLA stalls under shot noise, so the COBYLA TN-VQE rows cannot show whether the network helps. MolMap_sb because its circuits are shallow enough for a noisy backend |
 | tUPS reps × TN layers | tUPS at 1 and 3 layers, `VQE` and `TN-VQE` at `TN_Layers_Network` = 1, 2, 3, `ExcitationSolve`; 1 layer also under `SPSA` | H2/6-31g, MolMap_sb. 1-layer tUPS stops 13.5 mHa above FCI on its own — does the network make up for the missing layer? 2 layers is the row above; 3 layers checks nothing changes where the circuit suffices. Circuits from `regenerate_spinblock_mol_map.py --h2-tups-layers` |
-| Noisy simulator | `aer_simulator` → `fake_berlin` (cases 92–108 but 94, 121 and 122) and 128–131, and `fake_aachen` (123–127) (cases 92–108 and 121 each identical to an `aer_simulator` row but for the backend, and for ExcitationSolve's sweeps) | H2/6-31g, MolMap_sb. RealAmplitudes VQE against TN-VQE under `ExcitationSolve` (2 TN layers), and TN-VQE under `SPSA` (3); 1-layer tUPS VQE and TN-VQE (2 TN layers) against 2-layer tUPS VQE, all `ExcitationSolve`; RealAmplitudes `COBYLA` as a reference. MolMap_sb only: its circuits transpile to 6–118 two-qubit gates on the device, against 586–620 for the JW chemistry circuits. No error mitigation, so energies sit 35–180 mHa high; compare within pairs, and the statevector energy of each run's final parameters. ExcitationSolve rows stop after 6 sweeps (`NOISY_EXCITATIONSOLVE_SWEEPS`) instead of spending the full budget: it stops improving by its third sweep, and a noisy evaluation costs far more. Case 92 is the pilot; it ran the full 55 sweeps before the cap and finished where its noiseless twin did. Cases 100–102 repeat the tUPS rows 96–98 at 18 sweeps, because the 1-layer TN-VQE run was still descending at 6. Cases 103 and 104 spend about the same shots as case 101 differently on that shot-noise-limited row: 6 sweeps fitting each parameter from 18 points (ExcitationSolve's `samples`) instead of the minimal 1 + 2\|f\|, and 6 sweeps at 200,000 shots. All three ended 5.9–7.8 mHa above FCI: on that row the noise moves the minimum rather than blurring it, mostly through readout error. Cases 105–108 run the 1-layer tUPS and RealAmplitudes TN-VQE rows at 25,000 and 12,500 shots, to see whether fewer shots find the same parameters, and cases 162–166 are their `aer_simulator` references (and case 104's) at the same shots, since shot noise also moves where a run ends; case 121 repeats case 108 at 18 sweeps, since it was still descending at 6. Case 122 is case 108 with tn-vqe's tensored readout correction (`Error_Mitigation` = `readout_tensored`), the one corrected row here: it checks the feature on Cebule and measures what it does before hardware case 2 relies on it. Cases 123–127 run the five hardware runs, readout correction and device shots included, on `fake_aachen` instead, and cases 128–131 (with 122) run them on `fake_berlin`. Cases 132–146 run all five at half the device shots, and cases 147–161 at the device shots and 18 sweeps, on `aer_simulator`, `fake_berlin` and `fake_aachen` (see [Hardware runs](#hardware-runs)). Cases 181–183 run 2-layer tUPS TN-VQE (2 TN layers, `ExcitationSolve`, 50,000 shots, 18 sweeps) on the same three, readout corrected on the two noisy simulators. Cases 184 and 185 run the two TN-VQE hardware runs on `fake_aachen` from the best noiseless run of each (cases 73 and 82), to see how many sweeps a warm start needs (see [Cutting sweeps](#hardware-runs)) |
+| Noisy simulator | `aer_simulator` → `fake_berlin` (cases 92–108 but 94, 121 and 122) and 128–131, and `fake_aachen` (123–127) (cases 92–108 and 121 each identical to an `aer_simulator` row but for the backend, and for ExcitationSolve's sweeps) | H2/6-31g, MolMap_sb. RealAmplitudes VQE against TN-VQE under `ExcitationSolve` (2 TN layers), and TN-VQE under `SPSA` (3); 1-layer tUPS VQE and TN-VQE (2 TN layers) against 2-layer tUPS VQE, all `ExcitationSolve`; RealAmplitudes `COBYLA` as a reference. MolMap_sb only: its circuits transpile to 6–118 two-qubit gates on the device, against 586–620 for the JW chemistry circuits. No error mitigation, so energies sit 35–180 mHa high; compare within pairs, and the statevector energy of each run's final parameters. ExcitationSolve rows stop after 6 sweeps (`NOISY_EXCITATIONSOLVE_SWEEPS`) instead of spending the full budget: it stops improving by its third sweep, and a noisy evaluation costs far more. Case 92 is the pilot; it ran the full 55 sweeps before the cap and finished where its noiseless twin did. Cases 100–102 repeat the tUPS rows 96–98 at 18 sweeps, because the 1-layer TN-VQE run was still descending at 6. Cases 103 and 104 spend about the same shots as case 101 differently on that shot-noise-limited row: 6 sweeps fitting each parameter from 18 points (ExcitationSolve's `samples`) instead of the minimal 1 + 2\|f\|, and 6 sweeps at 200,000 shots. All three ended 5.9–7.8 mHa above FCI: on that row the noise moves the minimum rather than blurring it, mostly through readout error. Cases 105–108 run the 1-layer tUPS and RealAmplitudes TN-VQE rows at 25,000 and 12,500 shots, to see whether fewer shots find the same parameters, and cases 162–166 are their `aer_simulator` references (and case 104's) at the same shots, since shot noise also moves where a run ends; case 121 repeats case 108 at 18 sweeps, since it was still descending at 6. Case 122 is case 108 with tn-vqe's tensored readout correction (`Error_Mitigation` = `readout_tensored`), the one corrected row here: it checks the feature on Cebule and measures what it does before hardware case 2 relies on it. Cases 123–127 run the five hardware runs, readout correction and device shots included, on `fake_aachen` instead, and cases 128–131 (with 122) run them on `fake_berlin`. Cases 132–146 run all five at half the device shots, and cases 147–161 at the device shots and 18 sweeps, on `aer_simulator`, `fake_berlin` and `fake_aachen` (see [Hardware runs](#hardware-runs)). Cases 181–183 run 2-layer tUPS TN-VQE (2 TN layers, `ExcitationSolve`, 50,000 shots, 18 sweeps) on the same three, readout corrected on the two noisy simulators. Cases 184–188 run the five hardware runs on `fake_aachen` from the final parameters of each one's full-budget noiseless run (cases 73, 82, 71, 80 and 75), to see how many sweeps a warm start needs (see [Cutting sweeps](#hardware-runs)) |
 | Network-only controls | `TN` (θ alone, the circuit frozen at its start) for every TN-VQE configuration: RealAmplitudes from the Method × TN-layers axes (cases 33–35, 39–41) and tUPS (cases 109–120: 2 layers under JW, 1–3 layers under MolMap_sb, each at `TN_Layers_Network` = 1, 2, 3) | `COBYLA` with 1,000 evaluations per θ parameter (`NETWORK_EVALS_PER_PARAM`), which no run should reach: the contraction is exact and costs no circuits, so a row stops on the optimizer's own tolerance. One row covers every TN-VQE row sharing its mapper, circuit, start and TN layers, whatever their optimizer, shots or backend |
 
 A row that coincides with an earlier one on every field but `Case_ID` and
@@ -146,7 +146,7 @@ so a collapsed duplicate leaves a gap rather than reshuffling anything
 after it (`assign_case_ids` then `dedupe_rows`, from
 `utils/_matrix_io.py`). A retired row is dropped the same way: case 94, a
 noisy-simulator SPSA VQE row whose noiseless twin ends at the local minimum
-case 92 already covers. 177 rows, `Case_ID`s 1–185 with eight gaps.
+case 92 already covers. 180 rows, `Case_ID`s 1–188 with eight gaps.
 
 **Every ansatz-optimizer-mode combination reuses the same Hamiltonian,
 pinned circuit and `Phi_Init`** for a given (molecule, basis, mapper,
@@ -337,11 +337,11 @@ substantially: 120 → 52 for H2/6-31g, 1304 → 392 for H2O/6-31g CAS(4,4).
 | `Measurement_Method` | `pauli` (JW rows) or `grouped` (MolMap_sb rows) |
 | `Qasm_Ansatz_File`, `Qasm_Ansatz_SHA256` | The pinned circuit and a hash prefix of it |
 | `Num_Opt_Params_Phi` | Circuit-side parameter count, the `num_parameters` the pinned QASM loads with. On a `TN` row it is the count held fixed |
-| `Phi_Init` | `"zeros"` (`UCCSD`, tUPS), `"hf-approx"` (`RealAmplitudes`, `rzryrz`), or `"hf-approx+kick(scale=S,seed=N)"` on the start-point rows — see [HF-approximating initial parameters](#hf-approximating-initial-parameters); `"converged(case=N)"` on the warm-start rows 184 and 185 |
+| `Phi_Init` | `"zeros"` (`UCCSD`, tUPS), `"hf-approx"` (`RealAmplitudes`, `rzryrz`), or `"hf-approx+kick(scale=S,seed=N)"` on the start-point rows — see [HF-approximating initial parameters](#hf-approximating-initial-parameters); `"converged(case=N)"` on the warm-start rows 184–188 |
 | `Num_Opt_Params_Theta` | Network-side parameter count on a TN-VQE row |
 | `Num_ExpVals_Per_Iter`, `Num_ExpVals_Source` | Measurement circuits one evaluation submits, and where that count came from |
-| `Error_Mitigation`, `Precision`, `QESEM_Execution_Mode` | `none`, `n/a (shot-based)`, `n/a (not QESEM)` on every row of `targeted_screen.csv` but cases 122–131, 137–146, 152–161, 182–185; those rows and `hardware_runs.csv` set `Error_Mitigation` to `readout_tensored`, which the runner passes as `readout_mitigation="tensored"` |
-| `Converged_Params_File`, `Converged_Params_SHA256` | Blank but on the warm-start rows 184 and 185, which start from a collected run's final phi and theta, frozen to `converged_params/case_N.json` by `build_matrix.py --freeze-params N`; the runner checks the hash and passes them as `phi_init` and `theta_init`. No row here is a stage-3 refinement |
+| `Error_Mitigation`, `Precision`, `QESEM_Execution_Mode` | `none`, `n/a (shot-based)`, `n/a (not QESEM)` on every row of `targeted_screen.csv` but cases 122–131, 137–146, 152–161, 182–188; those rows and `hardware_runs.csv` set `Error_Mitigation` to `readout_tensored`, which the runner passes as `readout_mitigation="tensored"` |
+| `Converged_Params_File`, `Converged_Params_SHA256` | Blank but on the warm-start rows 184–188, which start from a collected run's final phi (and theta, on TN-VQE), frozen to `converged_params/case_N.json` by `build_matrix.py --freeze-params N`; the runner checks the hash and passes them as `phi_init` and `theta_init`. No row here is a stage-3 refinement |
 | `Repeats_Case_ID` | `hardware_runs.csv` only: the `targeted_screen.csv` row the hardware run repeats |
 | `Notes` | Per-row provenance and caveats |
 
@@ -428,21 +428,26 @@ show whether any hardware run needs more than the cap.
 
 **Cutting sweeps.** `price_plans.py` takes the sweep at which each run's
 longest readout-corrected `fake_aachen` mirror converged (the first
-within 0.5 mHa of its plateau) and prices two reduced plans on
+within 0.5 mHa of its plateau) and prices three reduced plans on
 `ibm_aachen` from the mirrors' recorded calls:
 
 | Plan | QPU time on `ibm_aachen` |
 |---|---|
 | As defined | 37.4 h |
 | B: each run stopped where its mirror converged | 32.3 h (16.8 h with tUPS at 25,000 shots) |
-| C: VQE runs as 10 evaluations at the noiseless optimum, TN-VQE runs warm-started | 4.4 h |
+| C: VQE runs as 10 evaluations at the noiseless optimum, TN-VQE runs warm-started | 5.4 h |
+| D: every run warm-started | 9.5 h, assuming one sweep per VQE run |
 
 B barely helps on Aachen: 1-layer tUPS TN-VQE needs 10 sweeps there
 (case 160), sitting at the VQE value for the first five, and 2-layer
-tUPS VQE needs 4. C assumes two warm-started sweeps per TN-VQE run until
-cases 184 and 185 are collected; those two rows are the TN-VQE runs on
-`fake_aachen` started from cases 73 and 82, and the script uses their
-convergence sweep once they are in.
+tUPS VQE needs 4. Warm-started, the TN-VQE runs settle in one and two
+sweeps (cases 184 and 185): RealAmplitudes at about 1.0 mHa, where the
+cold runs end, and 1-layer tUPS at about 3.6 mHa, below the cold run's
+5.3 mHa after 18 sweeps. A warm-started TN-VQE job measures all 16
+circuits, against 11–14 from a cold start, since U†HU at a converged
+theta has more terms. C leaves only TN-VQE free to adapt to the
+device's noise; D gives VQE the same start and the same chance, and its
+VQE sweep counts come from cases 186–188 once they are collected.
 
 ```sh
 PYTHONPATH=src python campaigns/ibm_tn-vqe_qesem/price_plans.py [--tups-shots 25000]

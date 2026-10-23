@@ -5,7 +5,7 @@ Requires: pip install 'qpubench[qiskit]'.
 For each run in hardware_runs.csv, finds its readout-corrected mirrors on
 the noisy simulator (`--backend`, default fake_aachen) at the planned shots,
 takes the sweep at which the longest cold-start mirror converged, and
-prices three plans on `--device` with utils/estimate_ibm_cost.py's job
+prices four plans on `--device` with utils/estimate_ibm_cost.py's job
 model, from the mirrors' recorded calls:
 
   as defined   every run at its own sweep count
@@ -13,6 +13,8 @@ model, from the mirrors' recorded calls:
   C            VQE runs as 10 evaluations at the noiseless optimum; TN-VQE
                runs warm-started, for as many sweeps as their warm-start
                mirror needed (2 assumed where none is collected yet)
+  D            every run warm-started, VQE included (1 sweep assumed for
+               VQE where no warm-start mirror is collected yet)
 
 A run counts as converged at the first sweep whose exact energy is within
 `--tol` of its plateau, the median over the second half of the run.
@@ -43,7 +45,7 @@ _IGNORE = {"Case_ID", "Stage", "Notes", "Backend_Platform", "Error_Mitigation", 
            "Cost_Evals_Per_Iteration", "Opt_Options", "Phi_Init",
            "Converged_Params_File", "Converged_Params_SHA256"}
 _VQE_EVALUATIONS = 10
-_ASSUMED_WARM_SWEEPS = 2
+_ASSUMED_WARM_SWEEPS = {"VQE": 1, "TN-VQE": 2}
 
 
 def converged_sweep(energies: list[float], fci: float, tol_mha: float) -> tuple[int, float]:
@@ -89,7 +91,7 @@ def main() -> None:
             key=lambda r: int(r["Iterations"]))
 
     plans: dict[str, list[tuple[dict[str, str], list[int]]]] = {
-        "As defined": [], "B": [], "C": []}
+        "As defined": [], "B": [], "C": [], "D": []}
     for h in hardware:
         cold = mirrors(h, warm=False)
         if not cold:
@@ -101,20 +103,23 @@ def main() -> None:
         plans["As defined"].append((h, calls(longest, min(planned, len(longest["sweep_energies"]) - 1))))
         plans["B"].append((h, calls(longest, sweeps)))
 
-        if h["Method"] == "VQE":
-            per_call = next(n for n in longest["circuits_measured"] if n > 0)
-            plans["C"].append((h, [per_call] * _VQE_EVALUATIONS))
-            continue
         warm = mirrors(h, warm=True)
         if warm:
             record = records[warm[-1]["Case_ID"]]
             warm_sweeps, plateau = converged_sweep(record["sweep_energies"], args.fci, args.tol)
             print(f"  warm start (case {warm[-1]['Case_ID']}): converged at sweep {warm_sweeps}, "
                   f"plateau {plateau:.2f} mHa")
-            plans["C"].append((h, calls(record, warm_sweeps)))
+            warm_calls = calls(record, warm_sweeps)
         else:
-            print(f"  no warm-start mirror collected; assuming {_ASSUMED_WARM_SWEEPS} sweeps")
-            plans["C"].append((h, calls(longest, _ASSUMED_WARM_SWEEPS)))
+            assumed = _ASSUMED_WARM_SWEEPS[h["Method"]]
+            print(f"  no warm-start mirror collected; assuming {assumed} sweep(s)")
+            warm_calls = calls(longest, assumed)
+        plans["D"].append((h, warm_calls))
+        if h["Method"] == "VQE":
+            per_call = next(n for n in longest["circuits_measured"] if n > 0)
+            plans["C"].append((h, [per_call] * _VQE_EVALUATIONS))
+        else:
+            plans["C"].append((h, warm_calls))
 
     for name, plan in plans.items():
         rows = [dict(h, Quantum_Eval_Budget=str(len(measured))) for h, measured in plan]

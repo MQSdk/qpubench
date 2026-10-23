@@ -486,7 +486,7 @@ DEVICE_SHOTS = {"RealAmplitudes": 12_500, "tUPS": SHOTS}
 # into each optimizer's own iterations so every optimizer on a row spends
 # the same budget.
 #
-# 177 rows rather than a factorial's thousands, so each run can be given
+# 180 rows rather than a factorial's thousands, so each run can be given
 # enough to reach its optimum rather than be cut off. Sized for the
 # slowest case seen, SPSA on tUPS from its HF start, which needs about
 # four times what UCCSD does; COBYLA stops on its own tolerance well
@@ -1691,14 +1691,18 @@ def build_targeted_screen() -> list[dict[str, str]]:
                        + (", with tensored readout correction." if corrected else "."),
         ))
 
-    # --- The two TN-VQE hardware runs on fake_aachen, started from the best
-    # noiseless run of each: how many sweeps a warm start needs. ---
-    for kwargs, source_case in ((hardware_runs[1], 73), (hardware_runs[3], 82)):
+    # --- The hardware runs on fake_aachen, each started from its full-budget
+    # noiseless run: how many sweeps a warm start needs. TN-VQE first, then
+    # VQE, the order they were added in. ---
+    warm_starts = ((hardware_runs[1], 73), (hardware_runs[3], 82),
+                   (hardware_runs[0], 71), (hardware_runs[2], 80), (hardware_runs[4], 75))
+    for kwargs, source_case in warm_starts:
         rows.append(as_hardware(
             NOISY_SIMULATOR_AACHEN, **kwargs,
             phi_init_tag=f"converged(case={source_case})",
             converged_params=_converged_params_ref(source_case),
-            note=f" Warm start from case {source_case}'s final phi and theta.",
+            note=f" Warm start from case {source_case}'s final "
+                 + ("phi and theta." if kwargs.get("mode") == "both" else "phi."),
         ))
 
     return rows
