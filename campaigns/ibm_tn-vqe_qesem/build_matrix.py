@@ -486,7 +486,7 @@ DEVICE_SHOTS = {"RealAmplitudes": 12_500, "tUPS": SHOTS}
 # into each optimizer's own iterations so every optimizer on a row spends
 # the same budget.
 #
-# 180 rows rather than a factorial's thousands, so each run can be given
+# 188 rows rather than a factorial's thousands, so each run can be given
 # enough to reach its optimum rather than be cut off. Sized for the
 # slowest case seen, SPSA on tUPS from its HF start, which needs about
 # four times what UCCSD does; COBYLA stops on its own tolerance well
@@ -1704,6 +1704,19 @@ def build_targeted_screen() -> list[dict[str, str]]:
             note=f" Warm start from case {source_case}'s final "
                  + ("phi and theta." if kwargs.get("mode") == "both" else "phi."),
         ))
+
+    # --- The two TN-VQE hardware runs with a 1-layer network instead of 2,
+    # on both noisy simulators: does the second layer earn its cost there? ---
+    for backend_one_layer in (NOISY_SIMULATOR, NOISY_SIMULATOR_AACHEN):
+        for kwargs in (hardware_runs[1], hardware_runs[3]):
+            rows.append(as_hardware(backend_one_layer, **{**kwargs, "layers_network": 1},
+                                    note=" 1 TN layer instead of the hardware run's 2."))
+
+    # --- And with a 3-layer network: does a third layer help further? ---
+    for backend_three_layers in (NOISY_SIMULATOR, NOISY_SIMULATOR_AACHEN):
+        for kwargs in (hardware_runs[1], hardware_runs[3]):
+            rows.append(as_hardware(backend_three_layers, **{**kwargs, "layers_network": 3},
+                                    note=" 3 TN layers instead of the hardware run's 2."))
 
     return rows
 
