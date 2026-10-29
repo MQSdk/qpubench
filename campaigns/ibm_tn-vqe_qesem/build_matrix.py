@@ -485,7 +485,7 @@ DEVICE_SHOTS = {"RealAmplitudes": 12_500, "tUPS": SHOTS}
 # into each optimizer's own iterations so every optimizer on a row spends
 # the same budget.
 #
-# 193 rows rather than a factorial's thousands, so each run can be given
+# 198 rows rather than a factorial's thousands, so each run can be given
 # enough to reach its optimum rather than be cut off. Sized for the
 # slowest case seen, SPSA on tUPS from its HF start, which needs about
 # four times what UCCSD does; COBYLA stops on its own tolerance well
@@ -1728,8 +1728,20 @@ def build_targeted_screen() -> list[dict[str, str]]:
         rows.append(as_hardware(NOISY_SIMULATOR, **kwargs, reduce_job_submissions=True,
                                 note=" Independent evaluations batched into one job."))
 
+    # --- The same at 12 sweeps, the hardware runs' cap: at 6, 1-layer tUPS
+    # TN-VQE stops well short of its plateau (cases 155 and 160). ---
+    for kwargs in hardware_runs:
+        rows.append(as_hardware(NOISY_SIMULATOR, **kwargs, sweeps=HARDWARE_SWEEPS,
+                                reduce_job_submissions=True,
+                                note=" Independent evaluations batched into one job."))
+
     return rows
 
+
+# Sweeps each hardware run is given: enough for 1-layer tUPS TN-VQE to reach
+# its plateau on fake_berlin, the same for every run so the methods compare
+# at one cap.
+HARDWARE_SWEEPS = 12
 
 # Warm-start parameters, frozen from a collected run so a row stays
 # reproducible after its results file changes.
@@ -1762,25 +1774,28 @@ def _converged_params_ref(case_id: int) -> tuple[str, str]:
             hashlib.sha256(path.read_bytes()).hexdigest()[:12])
 
 
-# The fake_berlin rows the device repeats, and why each is there.
+# The fake_berlin rows the device repeats, and why each is there: the
+# hardware runs at HARDWARE_SWEEPS, batched and readout corrected.
 HARDWARE_REPEATS = (
-    (92, "RealAmplitudes VQE: the baseline for the TN-VQE gain on a "
+    (202, "RealAmplitudes VQE: the baseline for the TN-VQE gain on a "
          "hardware-efficient circuit."),
-    (108, "RealAmplitudes TN-VQE (2 TN layers): does that gain survive the device?"),
-    (96, "1-layer tUPS VQE: the baseline for the TN-VQE gain on a chemistry circuit."),
-    (97, "1-layer tUPS TN-VQE (2 TN layers): can the network stand in for a "
+    (203, "RealAmplitudes TN-VQE (2 TN layers): does that gain survive the device?"),
+    (204, "1-layer tUPS VQE: the baseline for the TN-VQE gain on a chemistry circuit."),
+    (205, "1-layer tUPS TN-VQE (2 TN layers): can the network stand in for a "
          "tUPS layer on the device?"),
-    (98, "2-layer tUPS VQE: the depth the network stands in for."),
+    (206, "2-layer tUPS VQE: the depth the network stands in for."),
 )
 HARDWARE_FIELDNAMES = [*FIELDNAMES[:-1], "Repeats_Case_ID", FIELDNAMES[-1]]
 
 
 def build_hardware_runs() -> list[dict[str, str]]:
     """The ibm_phoenix runs: each a fake_berlin row of the targeted screen,
-    unchanged but for the device, readout correction and device shots.
+    unchanged but for the device.
 
     Copied rather than rebuilt so a hardware result can only differ from
-    its simulator twin in what the device and the correction do.
+    its simulator twin in what the device does. The twins already carry
+    the readout correction, device shots and batching; setting them again
+    here keeps a twin that lacks one from passing as the device's run.
     """
     screen = {row["Case_ID"]: row for row in numbered_targeted_screen()}
     rows = []
@@ -1799,8 +1814,8 @@ def build_hardware_runs() -> list[dict[str, str]]:
             "Reduce_Job_Submissions": "true",
             "Repeats_Case_ID": str(case_id),
             "Notes": (f"Hardware ({BACKEND_PLATFORM_TN}), repeating "
-                      f"{_TARGETED_PATH.name} case {case_id} with tensored readout "
-                      f"correction at {shots} shots, independent evaluations "
+                      f"{_TARGETED_PATH.name} case {case_id} on the device: tensored "
+                      f"readout correction, {shots} shots, independent evaluations "
                       f"batched into one job. {why}"),
         })
     return rows

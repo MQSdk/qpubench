@@ -620,9 +620,7 @@ def test_hardware_rows_differ_from_their_twin_only_by_the_device():
     nothing that changes the optimisation may differ between them."""
     module = _benchmark_matrix_module()
     twins = {r["Case_ID"]: r for r in _csv_rows()}
-    # Batching groups the same evaluations into fewer jobs; it changes no point.
-    allowed = {"Case_ID", "Stage", "Backend_Platform", "Shots", "Error_Mitigation",
-               "Reduce_Job_Submissions", "Repeats_Case_ID", "Notes"}
+    allowed = {"Case_ID", "Stage", "Backend_Platform", "Repeats_Case_ID", "Notes"}
     for row in _csv_rows(HARDWARE_CSV_PATH):
         twin = twins[row["Repeats_Case_ID"]]
         assert twin["Backend_Platform"] == module.NOISY_SIMULATOR
