@@ -581,6 +581,9 @@ class TNQCOptInput(pydantic.BaseModel):
                           gradients (cebule-tn_vqe ``4e52b1e``). Each
                           batched evaluation's metadata gains
                           ``batch_size``.
+    use_qpu_time          None (default, upstream's false) or a bool: an
+                          ibm_* backend is refused unless this is true
+                          (cebule-tn_vqe ``4fa682b``).
     optimization_mode     "both" (default, jointly optimize theta/phi —
                           matches the reference paper's own approach) |
                           "circuit" (freeze theta, plain VQE over phi
@@ -732,6 +735,8 @@ class TNQCOptInput(pydantic.BaseModel):
     # Batches independent evaluations into one job; None leaves upstream's
     # false. Strict, as upstream raises on anything but a bool.
     reduce_job_submissions: pydantic.StrictBool | None = None
+    # Upstream refuses an ibm_* backend without it; only a literal true counts.
+    use_qpu_time:        pydantic.StrictBool | None = None
     optimization_mode:   str            = "both"                    # "circuit" | "network" | "both"
     # MOL_MAP's own mapping operator D, handed back to TN_QC_OPT. Supplying
     # it is what tells the task its qubits index configurations rather than

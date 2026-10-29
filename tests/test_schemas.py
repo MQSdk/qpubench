@@ -4054,6 +4054,17 @@ def test_tn_qc_opt_reduce_job_submissions_is_a_strict_bool_or_unset():
         TNQCOptInput(**base, reduce_job_submissions="true")
 
 
+def test_tn_qc_opt_use_qpu_time_is_a_strict_bool_or_unset():
+    """Upstream counts only a literal true; the string "false" would be truthy."""
+    from qpubench.schemas.mirrors.mqsdk_cebule import TNQCOptInput
+
+    base = dict(h_coeff_values=[1.0], h_operators=["Z0"], n_layers_network=2)
+    assert "use_qpu_time" not in TNQCOptInput(**base).model_dump(exclude_none=True)
+    assert TNQCOptInput(**base, use_qpu_time=True).use_qpu_time is True
+    with pytest.raises(pydantic.ValidationError):
+        TNQCOptInput(**base, use_qpu_time="true")
+
+
 def test_tn_qc_opt_result_h_tn_opt_qubit_is_one_2_tuple():
     """task_runner_TNQCOpt returns no separate qubit_operators key.
 

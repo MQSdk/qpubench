@@ -324,6 +324,13 @@ def reduce_job_submissions_for(run: dict[str, str]) -> bool | None:
     return True if value == "true" else None
 
 
+def use_qpu_time_for(backend: str) -> bool | None:
+    """TNQCOptInput.use_qpu_time: True on real hardware, which Cebule
+    refuses without it, else None. run_campaign's --allow-hardware is the
+    consent; this only passes it on."""
+    return True if backend.startswith("ibm") else None
+
+
 def build_input(
     run: dict[str, str], campaign: ModuleType, backend_override: str | None = None,
 ) -> TNQCOptInput | None:
@@ -361,6 +368,7 @@ def build_input(
         opt_options=json.loads(run["Opt_Options"]),
         n_shots=None if network_only else int(run["Shots"]),
         backend=backend_for(run, backend_override),
+        use_qpu_time=use_qpu_time_for(backend_for(run, backend_override)),
         measurement_method="pauli" if network_only else run["Measurement_Method"],
         optimization_mode=optimization_mode_for(run),
         readout_mitigation=readout_mitigation_for(run),

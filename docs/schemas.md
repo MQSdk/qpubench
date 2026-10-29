@@ -904,6 +904,11 @@ Each evaluation still reports its own `n_circuits`/`n_measured`, and a
 batched one adds `batch_size`. `None` is dropped from the payload, so
 runs that do not set it submit what they did before.
 
+Revised again 2026-10-29 against cebule-tn_vqe `4fa682b` (minor bump,
+6.9.0): **`TNQCOptInput.use_qpu_time` added**, `None` or a strict bool.
+Upstream refuses an `ibm_*` backend unless it is a literal `true`; fake
+and Aer backends ignore it. `None` is dropped from the payload.
+
 | Type | Cebule task | Description |
 |---|---|---|
 | `MolecularGeometry` | shared | Flat geometry + symbols + basis |
