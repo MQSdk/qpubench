@@ -223,10 +223,8 @@ def main() -> None:
              "on every pass",
     )
     parser.add_argument(
-        "--max-processors", type=int, default=None, metavar="N",
-        help="processors Cebule may give each task. Omitted from the "
-             "submission entirely when unset, leaving upstream's own "
-             "default rather than pinning one on its behalf",
+        "--max-processors", type=int, default=1, metavar="N",
+        help="processors Cebule may give each task (default: 1)",
     )
     parser.add_argument(
         "--backend", default=None, metavar="NAME",
@@ -243,11 +241,8 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    if args.max_processors is not None and args.max_processors < 1:
-        raise SystemExit(
-            f"--max-processors must be at least 1; got {args.max_processors}. "
-            "Omit it to leave Cebule's own default in place."
-        )
+    if args.max_processors < 1:
+        raise SystemExit(f"--max-processors must be at least 1; got {args.max_processors}.")
 
     campaign = _campaign.load(args.campaign)
     csv_path = args.csv or campaign.CSV
