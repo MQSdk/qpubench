@@ -573,6 +573,14 @@ class TNQCOptInput(pydantic.BaseModel):
                           flip rates from two calibration circuits (all
                           |0>, all |1>), inverted out of every measurement
                           on both paths (cebule-tn_vqe ``ef0dc47``).
+    reduce_job_submissions
+                          None (default, upstream's false) or a bool: send
+                          the evaluations an optimizer has already chosen
+                          as one primitive job -- ExcitationSolve's fit
+                          samples, SPSA's probe pairs, finite-difference
+                          gradients (cebule-tn_vqe ``4e52b1e``). Each
+                          batched evaluation's metadata gains
+                          ``batch_size``.
     optimization_mode     "both" (default, jointly optimize theta/phi —
                           matches the reference paper's own approach) |
                           "circuit" (freeze theta, plain VQE over phi
@@ -721,6 +729,9 @@ class TNQCOptInput(pydantic.BaseModel):
     measurement_method:  str            = "pauli"                # "pauli" | "grouped"
     # Readout-error correction on the qiskit paths; None measures uncorrected.
     readout_mitigation:  Literal["tensored"] | None = None
+    # Batches independent evaluations into one job; None leaves upstream's
+    # false. Strict, as upstream raises on anything but a bool.
+    reduce_job_submissions: pydantic.StrictBool | None = None
     optimization_mode:   str            = "both"                    # "circuit" | "network" | "both"
     # MOL_MAP's own mapping operator D, handed back to TN_QC_OPT. Supplying
     # it is what tells the task its qubits index configurations rather than

@@ -1,7 +1,7 @@
 """Build this campaign's matrix.
 
 Writes `targeted_screen.csv` (see `build_targeted_screen`) and
-`hardware_runs.csv`, the ibm_berlin repeats of its fake_berlin rows (see
+`hardware_runs.csv`, the ibm_phoenix repeats of its fake_berlin rows (see
 `build_hardware_runs`), and can generate a stage-3 QESEM refinement
 arm on demand for any converged run from it.
 
@@ -193,17 +193,16 @@ STAGE1_MEASUREMENT = {"JW": "pauli", "mol_map": "grouped"}
 # which a run-time device choice would leave describing a machine the row
 # did not use.
 #
-# ibm_berlin: this campaign's QPU time is bought in IBM's European data
-# centre.  qiskit-ibm-runtime ships an offline calibration snapshot for
-# it, `fake_berlin` (FakeBerlin, in 0.47.0 and later), which is what the
-# pre-hardware noisy runs use and what the cost estimate transpiles
-# against -- no credentials needed either way.
+# ibm_phoenix: this campaign's QPU time is bought in IBM's us-east data
+# centre.  qiskit-ibm-runtime ships no snapshot of it, so the noisy runs
+# that precede hardware use `fake_berlin`, the snapshot of ibm_berlin, a
+# Nighthawk r1 against Phoenix's r2 and the closest device that has one.
 #
 # It reaches the two stacks by different routes: TNQCOptInput.backend on
 # TN rows, IBMAdapter(backend_name=...) on VQE rows.
-BACKEND_PLATFORM_TN = "ibm_berlin"     # TNQCOptInput.backend
-BACKEND_PLATFORM_VQE = "ibm_berlin"    # IBMAdapter(backend_name=...)
-# Its offline snapshot, for the noisy-simulator rows that precede hardware.
+BACKEND_PLATFORM_TN = "ibm_phoenix"    # TNQCOptInput.backend
+BACKEND_PLATFORM_VQE = "ibm_phoenix"   # IBMAdapter(backend_name=...)
+# Its stand-in snapshot, for the noisy-simulator rows that precede hardware.
 NOISY_SIMULATOR = "fake_berlin"
 # ibm_aachen's snapshot: the alternative device, whose 250 us rep_delay makes
 # a shot about sixteen times cheaper than on Berlin.
@@ -486,7 +485,7 @@ DEVICE_SHOTS = {"RealAmplitudes": 12_500, "tUPS": SHOTS}
 # into each optimizer's own iterations so every optimizer on a row spends
 # the same budget.
 #
-# 188 rows rather than a factorial's thousands, so each run can be given
+# 193 rows rather than a factorial's thousands, so each run can be given
 # enough to reach its optimum rather than be cut off. Sized for the
 # slowest case seen, SPSA on tUPS from its HF start, which needs about
 # four times what UCCSD does; COBYLA stops on its own tolerance well
@@ -657,7 +656,7 @@ FIELDNAMES = [
     "Quantum_Eval_Budget", "Quantum_Evals_Per_Iteration",
     "Cost_Evals_Per_Iteration", "Iterations", "Shots",
     "Qiskit_Version", "TN_Layers_Network", "TN_Ansatz",
-    "Measurement_Method", "Qasm_Ansatz_File",
+    "Measurement_Method", "Reduce_Job_Submissions", "Qasm_Ansatz_File",
     "Qasm_Ansatz_SHA256", "Num_Opt_Params_Phi", "Phi_Init",
     "Num_Opt_Params_Theta", "Num_ExpVals_Per_Iter", "Num_ExpVals_Source",
     "Error_Mitigation", "Precision", "QESEM_Execution_Mode",
@@ -872,6 +871,7 @@ def _row(
     optimizer: str = OPTIMIZER,
     shots: str | None = None,
     error_mitigation: str = MITIGATION_NONE,
+    reduce_job_submissions: bool = False,
     precision: str = SHOT_BASED,
     qesem_execution_mode: str = NOT_QESEM,
     converged_params: tuple[str, str] = ("", ""),
@@ -1055,6 +1055,7 @@ def _row(
         "TN_Layers_Network": "" if layers_network is None else str(layers_network),
         "TN_Ansatz": tn_ansatz,
         "Measurement_Method": measurement if takes_measurements else NETWORK_MODE,
+        "Reduce_Job_Submissions": "true" if reduce_job_submissions else "false",
         "Qasm_Ansatz_File": qasm_file,
         "Qasm_Ansatz_SHA256": qasm_hash,
         "Num_Opt_Params_Phi": phi_params,
@@ -1290,6 +1291,7 @@ def build_targeted_screen() -> list[dict[str, str]]:
         excitationsolve_samples: int | None = None, shots: int | None = None,
         error_mitigation: str = MITIGATION_NONE, cap_sweeps: bool = False,
         converged_params: tuple[str, str] = ("", ""), extra_note: str = "",
+        reduce_job_submissions: bool = False,
     ) -> dict[str, str]:
         if ansatz in SINGLE_LAYER_ANSATZE:
             reps = 1
@@ -1307,6 +1309,7 @@ def build_targeted_screen() -> list[dict[str, str]]:
             shots=None if shots is None else str(shots),
             error_mitigation=error_mitigation, cap_sweeps=cap_sweeps,
             converged_params=converged_params, extra_note=extra_note,
+            reduce_job_submissions=reduce_job_submissions,
         )
 
     rows: list[dict[str, str]] = []
@@ -1718,6 +1721,13 @@ def build_targeted_screen() -> list[dict[str, str]]:
             rows.append(as_hardware(backend_three_layers, **{**kwargs, "layers_network": 3},
                                     note=" 3 TN layers instead of the hardware run's 2."))
 
+    # --- The five hardware runs on fake_berlin as the device will run them,
+    # independent evaluations batched into one job: the jobs they really
+    # submit. ---
+    for kwargs in hardware_runs:
+        rows.append(as_hardware(NOISY_SIMULATOR, **kwargs, reduce_job_submissions=True,
+                                note=" Independent evaluations batched into one job."))
+
     return rows
 
 
@@ -1766,7 +1776,7 @@ HARDWARE_FIELDNAMES = [*FIELDNAMES[:-1], "Repeats_Case_ID", FIELDNAMES[-1]]
 
 
 def build_hardware_runs() -> list[dict[str, str]]:
-    """The ibm_berlin runs: each a fake_berlin row of the targeted screen,
+    """The ibm_phoenix runs: each a fake_berlin row of the targeted screen,
     unchanged but for the device, readout correction and device shots.
 
     Copied rather than rebuilt so a hardware result can only differ from
@@ -1786,10 +1796,12 @@ def build_hardware_runs() -> list[dict[str, str]]:
             "Backend_Platform": BACKEND_PLATFORM_TN,
             "Shots": str(shots),
             "Error_Mitigation": MITIGATION_READOUT,
+            "Reduce_Job_Submissions": "true",
             "Repeats_Case_ID": str(case_id),
             "Notes": (f"Hardware ({BACKEND_PLATFORM_TN}), repeating "
                       f"{_TARGETED_PATH.name} case {case_id} with tensored readout "
-                      f"correction at {shots} shots. {why}"),
+                      f"correction at {shots} shots, independent evaluations "
+                      f"batched into one job. {why}"),
         })
     return rows
 

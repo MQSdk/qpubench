@@ -168,6 +168,21 @@ rep_delay; the script reads each device's own default instead, which on
 the Nighthawk `ibm_berlin` is 4 ms, sixteen times the cost per shot. Deep circuits break the fit: three depth-2389 jobs each
 billed fourteen times what the line predicts.
 
+**Batched runs.** A run with `reduce_job_submissions` sends several
+evaluations in one job, and each records its `batch_size`; the runner
+keeps those as the record's `batch_sizes`, and the script prices each
+batch as one job carrying all its circuits. A batched row priced from an
+unbatched run is marked `unbatched`.
+
+**A device with no snapshot.** `--calibration NAME` transpiles against
+another device's snapshot, and `--shot-time US` replaces rep_delay +
+circuit duration with the device's own time per shot; a campaign can set
+both as `PRICING_CALIBRATION` and `PRICING_SHOT_TIME_US`. The
+substitution is the caller's, named on the command line or in the
+campaign, never the library's: `ibm_phoenix` (Nighthawk r2) is priced
+against `ibm_berlin`'s snapshot (Nighthawk r1) at IBM's stated 109.7 kHz
+MCPS.
+
 **Jobs come from the run where there is one.** Every call that measures
 anything is one job. tn-vqe logs per call how many circuits it measured
 (`n_measured` on TN-VQE, which leaves out what its phi cache served;

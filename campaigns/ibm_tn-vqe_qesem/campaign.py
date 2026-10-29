@@ -12,16 +12,19 @@ import pathlib
 DIR = pathlib.Path(__file__).resolve().parent
 
 CSV = DIR / "targeted_screen.csv"
-# The ibm_berlin runs, each repeating a fake_berlin row of CSV.
+# The ibm_phoenix runs, each repeating a fake_berlin row of CSV.
 HARDWARE_CSV = DIR / "hardware_runs.csv"
 QASM_DIR = DIR / "qasm"
 HAMILTONIAN_DIR = DIR / "hamiltonian_data"
 RESULTS_DIR = DIR / "results"
 
-# The device this campaign buys QPU time on, in IBM's European data
-# centre. qiskit-ibm-runtime ships an offline calibration snapshot for it
-# (FakeBerlin), so pricing against it needs no credentials.
-PRICING_DEVICE = "ibm_berlin"
+# The device this campaign buys QPU time on, in IBM's us-east data centre.
+# qiskit-ibm-runtime ships no snapshot of it, so the estimate transpiles
+# against ibm_berlin's (Nighthawk r1, against Phoenix's r2) and takes the
+# time per shot from IBM's stated 109.7 kHz MCPS rather than from rep_delay.
+PRICING_DEVICE = "ibm_phoenix"
+PRICING_CALIBRATION = "ibm_berlin"
+PRICING_SHOT_TIME_US = 1e6 / 109.7e3
 
 
 # --- Hamiltonians ---------------------------------------------------------

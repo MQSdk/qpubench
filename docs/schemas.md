@@ -894,6 +894,16 @@ expectation values. It defaults to `None`, which upstream reads as
 uncorrected, and `None` is dropped from the payload, so runs that do not
 set it submit exactly what they did before.
 
+Revised again 2026-10-29 against cebule-tn_vqe `4e52b1e` (minor bump,
+6.8.0): **`TNQCOptInput.reduce_job_submissions` added**, `None` or a
+bool. When true, the evaluations an optimizer has already chosen go out
+as one primitive job: ExcitationSolve's fit samples, SPSA's probe pairs
+and calibration samples, and the finite-difference gradients of the
+scipy gradient methods; COBYLA, Nelder-Mead and Powell are unaffected.
+Each evaluation still reports its own `n_circuits`/`n_measured`, and a
+batched one adds `batch_size`. `None` is dropped from the payload, so
+runs that do not set it submit what they did before.
+
 | Type | Cebule task | Description |
 |---|---|---|
 | `MolecularGeometry` | shared | Flat geometry + symbols + basis |

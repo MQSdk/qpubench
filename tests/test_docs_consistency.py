@@ -443,7 +443,8 @@ def test_error_mitigation_is_additive():
     # backend and at any shots or sweeps, or mirrors a hardware run -- from
     # another start, on a warm-start row.
     elsewhere = ("Case_ID", "Stage", "Backend_Platform", "Notes", "Shots",
-                 "Iterations", "Quantum_Eval_Budget", "Error_Mitigation")
+                 "Iterations", "Quantum_Eval_Budget", "Error_Mitigation",
+                 "Reduce_Job_Submissions")
     start = ("Phi_Init", "Converged_Params_File", "Converged_Params_SHA256",
              "Cost_Evals_Per_Iteration")
 
@@ -619,8 +620,9 @@ def test_hardware_rows_differ_from_their_twin_only_by_the_device():
     nothing that changes the optimisation may differ between them."""
     module = _benchmark_matrix_module()
     twins = {r["Case_ID"]: r for r in _csv_rows()}
+    # Batching groups the same evaluations into fewer jobs; it changes no point.
     allowed = {"Case_ID", "Stage", "Backend_Platform", "Shots", "Error_Mitigation",
-               "Repeats_Case_ID", "Notes"}
+               "Reduce_Job_Submissions", "Repeats_Case_ID", "Notes"}
     for row in _csv_rows(HARDWARE_CSV_PATH):
         twin = twins[row["Repeats_Case_ID"]]
         assert twin["Backend_Platform"] == module.NOISY_SIMULATOR
@@ -628,4 +630,5 @@ def test_hardware_rows_differ_from_their_twin_only_by_the_device():
         assert not changed, f"hardware case {row['Case_ID']} also changes {sorted(changed)}"
         assert row["Backend_Platform"] == module.BACKEND_PLATFORM_TN
         assert row["Error_Mitigation"] == module.MITIGATION_READOUT
+        assert row["Reduce_Job_Submissions"] == "true"
         assert int(row["Shots"]) == module.DEVICE_SHOTS[row["Ansatz"]]

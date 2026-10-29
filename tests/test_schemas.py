@@ -4042,6 +4042,18 @@ def test_tn_qc_opt_readout_mitigation_is_tensored_or_unset():
         TNQCOptInput(**base, readout_mitigation="trex")
 
 
+def test_tn_qc_opt_reduce_job_submissions_is_a_strict_bool_or_unset():
+    """Upstream raises on anything but true or false; unset submits one job per evaluation."""
+    from qpubench.schemas.mirrors.mqsdk_cebule import TNQCOptInput
+
+    base = dict(h_coeff_values=[1.0], h_operators=["Z0"], n_layers_network=2)
+    assert TNQCOptInput(**base).reduce_job_submissions is None
+    assert "reduce_job_submissions" not in TNQCOptInput(**base).model_dump(exclude_none=True)
+    assert TNQCOptInput(**base, reduce_job_submissions=True).reduce_job_submissions is True
+    with pytest.raises(pydantic.ValidationError):
+        TNQCOptInput(**base, reduce_job_submissions="true")
+
+
 def test_tn_qc_opt_result_h_tn_opt_qubit_is_one_2_tuple():
     """task_runner_TNQCOpt returns no separate qubit_operators key.
 

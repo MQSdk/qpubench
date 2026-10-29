@@ -26,6 +26,12 @@ Optional:
     simulation_infeasible_reason(run) -> str | None
                      why a row must never be submitted
     PRICING_DEVICE   the IBM device the cost estimate prices against
+    PRICING_CALIBRATION
+                     the device whose offline snapshot to transpile against,
+                     where PRICING_DEVICE has none
+    PRICING_SHOT_TIME_US
+                     PRICING_DEVICE's time per shot, in place of
+                     rep_delay + circuit duration
 """
 from __future__ import annotations
 

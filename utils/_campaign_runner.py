@@ -314,6 +314,16 @@ def readout_mitigation_for(run: dict[str, str]) -> str | None:
     return _READOUT_MITIGATION[value]
 
 
+def reduce_job_submissions_for(run: dict[str, str]) -> bool | None:
+    """TNQCOptInput.reduce_job_submissions for a row's Reduce_Job_Submissions:
+    True, or None so an unbatched row submits what it did before."""
+    value = run.get("Reduce_Job_Submissions") or "false"
+    if value not in ("true", "false"):
+        raise ValueError(f"run {run['Case_ID']}: Reduce_Job_Submissions={value!r} is "
+                         "neither true nor false")
+    return True if value == "true" else None
+
+
 def build_input(
     run: dict[str, str], campaign: ModuleType, backend_override: str | None = None,
 ) -> TNQCOptInput | None:
@@ -354,6 +364,7 @@ def build_input(
         measurement_method="pauli" if network_only else run["Measurement_Method"],
         optimization_mode=optimization_mode_for(run),
         readout_mitigation=readout_mitigation_for(run),
+        reduce_job_submissions=reduce_job_submissions_for(run),
     )
 
 
@@ -606,6 +617,14 @@ def submit_run(
     return result, time.time() - started, task.id
 
 
+def batch_sizes(metadata: Any) -> list[int] | None:
+    """How many evaluations shared each call's job (1 where it went alone),
+    from the task's per-call metadata, or None where there is none."""
+    if not isinstance(metadata, list) or not metadata:
+        return None
+    return [int(m.get("batch_size", 1)) for m in metadata]
+
+
 def circuits_measured(metadata: Any) -> list[int] | None:
     """Circuits each call sent to the backend, from the task's per-call
     metadata, or None where there is none (network mode).
@@ -705,6 +724,7 @@ def append_record(
             "theta": result.theta,
             "h_tn_opt_qubit": list(result.h_tn_opt_qubit),
             "circuits_measured": circuits_measured(result.metadata),
+            "batch_sizes": batch_sizes(result.metadata),
             "sweep_params": sweep_params(result.param_history, result.iteration_boundaries),
             "submitted_at": submitted_at,
             "collected_at": time.time(),
