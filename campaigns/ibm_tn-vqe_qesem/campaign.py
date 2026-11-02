@@ -20,11 +20,12 @@ RESULTS_DIR = DIR / "results"
 
 # The device this campaign buys QPU time on, in IBM's us-east data centre.
 # qiskit-ibm-runtime ships no snapshot of it, so the estimate transpiles
-# against ibm_berlin's (Nighthawk r1, against Phoenix's r2) and takes the
-# time per shot from IBM's stated 109.7 kHz MCPS rather than from rep_delay.
+# against ibm_berlin's (Nighthawk r1, against Phoenix's r2). The time per
+# shot and per job are fitted to hardware case 1's billed usage.
 PRICING_DEVICE = "ibm_phoenix"
 PRICING_CALIBRATION = "ibm_berlin"
-PRICING_SHOT_TIME_US = 1e6 / 109.7e3
+PRICING_SHOT_TIME_US = 7.58
+PRICING_JOB_OVERHEAD_S = 4.39
 
 
 # --- Hamiltonians ---------------------------------------------------------

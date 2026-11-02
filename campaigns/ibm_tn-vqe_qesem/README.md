@@ -362,28 +362,27 @@ hardware result reads directly against its simulator twin, and a
 difference between them is the device's;
 `tests/test_docs_consistency.py` fails if anything else differs.
 
-| Case | Repeats | Run | Question | At 6 sweeps (cases 197–201): final state, best measured (mHa above FCI) | Estimated QPU time on `ibm_phoenix` |
-|---|---|---|---|---|---|
-| 1 | 202 | RealAmplitudes ×2, VQE, 12,500 shots | Baseline for the TN-VQE gain on a hardware-efficient circuit | 14.6, 21.4 | 10 min |
-| 2 | 203 | RealAmplitudes ×2, TN-VQE (2 TN layers), 12,500 shots | Does that gain survive the device? | 2.0, 10.5 | 14 min |
-| 3 | 204 | tUPS 1 layer, VQE, 50,000 shots | Baseline for the TN-VQE gain on a chemistry circuit | 13.5, 117.4 | 27 min |
-| 4 | 205 | tUPS 1 layer, TN-VQE (2 TN layers), 50,000 shots | Can the network stand in for a tUPS layer on the device? | 7.9, 112.5 | 49 min |
-| 5 | 206 | tUPS 2 layers, VQE, 50,000 shots | The depth the network stands in for | 1.3, 238.7 | 75 min |
+| Case | Repeats | Run | Question | Twin: final state, best measured (mHa above FCI) | Device: final state, best measured | QPU time on `ibm_phoenix` |
+|---|---|---|---|---|---|---|
+| 1 | 202 | RealAmplitudes ×2, VQE, 12,500 shots | Baseline for the TN-VQE gain on a hardware-efficient circuit | 14.6, 22.2 | 15.0, 20.8 | 15.5 min (billed) |
+| 2 | 203 | RealAmplitudes ×2, TN-VQE (2 TN layers), 12,500 shots | Does that gain survive the device? | 1.2, 6.1 | | 19 min |
+| 3 | 204 | tUPS 1 layer, VQE, 50,000 shots | Baseline for the TN-VQE gain on a chemistry circuit | 13.5, 120.1 | | 26 min |
+| 4 | 205 | tUPS 1 layer, TN-VQE (2 TN layers), 50,000 shots | Can the network stand in for a tUPS layer on the device? | 4.4, 112.2 | | 45 min |
+| 5 | 206 | tUPS 2 layers, VQE, 50,000 shots | The depth the network stands in for | 1.1, 235.1 | | 71 min |
 
 All five use `ExcitationSolve` capped at 12 sweeps (`HARDWARE_SWEEPS`),
 on H2/6-31g under `MolMap_sb` with `grouped` measurement. At 6 sweeps
 1-layer tUPS TN-VQE stops well short of its plateau: on `fake_berlin` it
 is at 9.9 mHa after 6 sweeps and about 4.1–4.6 mHa from sweep 8 on (case
 155), while the other four have settled by then; 12 keeps one cap for
-every run with a margin past that plateau. The energy columns are from
-the 6-sweep twins until cases 202–206 are collected. The final-state
-column is the twin's final parameters evaluated by noiseless statevector;
-the measured column is the lowest noisy evaluation the twin saw, which carries the
+every run with a margin past that plateau. The final-state
+columns are the final parameters evaluated by noiseless statevector;
+the measured columns are the lowest noisy evaluation the run saw, which carries the
 device-noise offset that readout correction leaves (about 10–20 mHa
 plus 1.9 mHa per two-qubit gate). On the twins, the network beats a
 missing tUPS layer in the measured energy (case 200 reads 126 mHa below
-case 201, whose circuit has twice the two-qubit gates) but not in the
-final state (7.9 against 1.3 mHa).
+case 206, whose circuit has twice the two-qubit gates) but not in the
+final state (4.4 against 1.1 mHa).
 
 **Readout correction.** Every row sets tn-vqe's tensored readout
 correction (`readout_mitigation="tensored"`, cebule-tn_vqe `ef0dc47`):
@@ -398,23 +397,27 @@ cases 92, 108 and 96–98 are the uncorrected runs, and cases 128, 122 and
 the batching), so check the deployed version before submitting: an
 older one does not apply the correction.
 
-**Cost.** About 2.9 h of QPU time in all at 12 sweeps, priced by
-`utils/estimate_ibm_cost.py` from each twin's recorded jobs and circuits
-per job (see [ibm_cost_estimator.md](../../docs/integrations/ibm_cost_estimator.md)).
+**Cost.** About 3.0 h of QPU time in all, priced by
+`utils/estimate_ibm_cost.py` from each run's recorded jobs and circuits
+per job, the twin's until the run is collected (see
+[ibm_cost_estimator.md](../../docs/integrations/ibm_cost_estimator.md)).
 qiskit-ibm-runtime ships no snapshot of `ibm_phoenix`, so the estimate
-transpiles against `ibm_berlin`'s (`PRICING_CALIBRATION`) and takes the
-time per shot from IBM's stated 109.7 kHz MCPS (9.12 µs,
-`PRICING_SHOT_TIME_US`) rather than from rep_delay. Both are unconfirmed
-on the device, as is the 2 s per job, which is about an eighth of the
-total. Wall-clock time is
-longer, since every job waits on the previous one's result. Batching
-(`Reduce_Job_Submissions`) cuts the job count, and so the overhead and
-the waits, but not the shots: the twins send 341 jobs where the
-unbatched runs sent 1,310, which took the 6-sweep estimate from 2.0 h to
-1.5 h. Until cases 202–206 are collected, the 12-sweep figure is
-extrapolated from the cost per sweep of cases 197–201, and
-`estimate_ibm_cost.py` prices the rows at their evaluation budget,
-unbatched (4.4 h), an upper bound. On
+transpiles against `ibm_berlin`'s (`PRICING_CALIBRATION`). The time per
+shot and per job are fitted to case 1, which IBM billed at 15 min 31 s
+for 158 jobs and 31.2 M shots: its execution spans give 7.58 µs per shot
+(`PRICING_SHOT_TIME_US`; IBM states 109.7 kHz MCPS, 9.12 µs), and the
+billed time left over is 4.39 s per job (`PRICING_JOB_OVERHEAD_S`),
+against IBM's stated 2 s. The overhead is about three quarters of case
+1's time, so batching (`Reduce_Job_Submissions`) is what keeps the
+total down: the twins send 341 jobs over 6 sweeps where the unbatched
+runs sent 1,310.
+
+Wall-clock time is far longer, because every job waits on the previous
+one's result and queues on its own: case 1's 11 minutes of execution
+took 35 h, 34.6 h of it in IBM's queue (median 3 min per job, the
+longest 4.1 h). A session would skip the queue but bills its whole
+duration, Cebule's few seconds between jobs included, which for this
+many jobs would more than double the QPU time. On
 `ibm_berlin`, where this matrix first pointed, the same runs take 569 h
 at its 4 ms default rep_delay.
 
@@ -454,19 +457,17 @@ recorded calls:
 
 | Plan | `ibm_phoenix` | `ibm_aachen` |
 |---|---|---|
-| As defined | 2.9 h at 12 sweeps (1.5 h at 6) | 37.4 h at 6 sweeps |
-| B: each run stopped where its mirror converged | 2.2 h | 32.3 h (16.8 h with tUPS at 25,000 shots) |
+| As defined | 3.0 h at 12 sweeps | 37.4 h at 6 sweeps |
+| B: each run stopped where its mirror converged | 1.6 h | 32.3 h (16.8 h with tUPS at 25,000 shots) |
 | C: VQE runs as 10 evaluations at the noiseless optimum, TN-VQE runs warm-started | 0.3 h | 5.4 h |
-| D: every run warm-started | 0.8 h | 15.1 h |
+| D: every run warm-started | 1.0 h | 15.1 h |
 
-The Phoenix column is priced from the batched twins where they ran long
-enough; the 9-sweep runs of B and the warm starts of C and D are priced
-from unbatched mirrors, so those are upper bounds. On Phoenix the shot
-rate makes any of them affordable, so the plans
-matter less for cost than for what they change about the comparison.
-B costs more than the runs as defined there: on `fake_berlin`, 1-layer
-tUPS TN-VQE and 2-layer tUPS VQE need 9 sweeps, against the 6-sweep cap.
-B barely helps on Aachen: 1-layer tUPS TN-VQE needs 10 sweeps there
+The Phoenix column is priced from the batched twins at case 1's fitted
+rates; the warm starts of C and D are priced from unbatched mirrors, so
+those are upper bounds. On Phoenix any of them is affordable, so the
+plans matter less for cost than for what they change about the
+comparison. On `fake_berlin`, 1-layer tUPS TN-VQE and 2-layer tUPS VQE
+need 9 sweeps, the other three fewer. B barely helps on Aachen: 1-layer tUPS TN-VQE needs 10 sweeps there
 (case 160), sitting at the VQE value for the first five, and 2-layer
 tUPS VQE needs 4. Warm-started, the TN-VQE runs settle in one and two
 sweeps (cases 184 and 185): RealAmplitudes at about 1.0 mHa, where the

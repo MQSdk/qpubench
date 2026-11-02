@@ -175,13 +175,15 @@ batch as one job carrying all its circuits. A batched row priced from an
 unbatched run is marked `unbatched`.
 
 **A device with no snapshot.** `--calibration NAME` transpiles against
-another device's snapshot, and `--shot-time US` replaces rep_delay +
-circuit duration with the device's own time per shot; a campaign can set
-both as `PRICING_CALIBRATION` and `PRICING_SHOT_TIME_US`. The
-substitution is the caller's, named on the command line or in the
-campaign, never the library's: `ibm_phoenix` (Nighthawk r2) is priced
-against `ibm_berlin`'s snapshot (Nighthawk r1) at IBM's stated 109.7 kHz
-MCPS.
+another device's snapshot, `--shot-time US` replaces rep_delay +
+circuit duration with the device's own time per shot, and
+`--job-overhead S` replaces the fixed seconds per job; a campaign can
+set them as `PRICING_CALIBRATION`, `PRICING_SHOT_TIME_US` and
+`PRICING_JOB_OVERHEAD_S`. The substitution is the caller's, named on the
+command line or in the campaign, never the library's: `ibm_phoenix`
+(Nighthawk r2) is priced against `ibm_berlin`'s snapshot (Nighthawk r1)
+at 7.58 µs per shot and 4.39 s per job, both fitted to a run's billed
+usage (IBM states 109.7 kHz MCPS, 9.12 µs, and about 2 s).
 
 **Jobs come from the run where there is one.** Every call that measures
 anything is one job. tn-vqe logs per call how many circuits it measured

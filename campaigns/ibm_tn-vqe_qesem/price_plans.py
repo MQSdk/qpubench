@@ -6,7 +6,8 @@ For each run in hardware_runs.csv, finds its readout-corrected mirrors on
 the noisy simulator (`--backend`, default fake_berlin) at the planned shots,
 takes the sweep at which the longest cold-start mirror converged, and
 prices four plans on `--device` (default: the campaign's PRICING_DEVICE,
-with its PRICING_CALIBRATION and PRICING_SHOT_TIME_US) with
+with its PRICING_CALIBRATION, PRICING_SHOT_TIME_US and
+PRICING_JOB_OVERHEAD_S) with
 utils/estimate_ibm_cost.py's job model, from the mirrors' recorded calls.
 A warm start with no mirror on `--backend` takes one from another noisy
 simulator, and says so.
@@ -88,8 +89,9 @@ def main() -> None:
         device = campaign.PRICING_DEVICE
         calibration = getattr(campaign, "PRICING_CALIBRATION", device)
         shot_time_us = getattr(campaign, "PRICING_SHOT_TIME_US", None)
+        job_overhead = getattr(campaign, "PRICING_JOB_OVERHEAD_S", None)
     else:
-        device, calibration, shot_time_us = args.device, args.device, None
+        device, calibration, shot_time_us, job_overhead = args.device, args.device, None, None
     shot_time = shot_time_us * 1e-6 if shot_time_us is not None else None
     rep_delay = (args.rep_delay * 1e-6 if args.rep_delay is not None
                  else cost.default_rep_delay(calibration))
@@ -162,7 +164,8 @@ def main() -> None:
         with contextlib.redirect_stdout(io.StringIO()):
             priced = cost.estimate_full_csv_study(rows, campaign, calibration,
                                                   campaign.HARDWARE_CSV, rep_delay, stand_ins,
-                                                  shot_time_s=shot_time)
+                                                  shot_time_s=shot_time,
+                                                  job_overhead_s=job_overhead)
         print(f"\n{name}: {sum(s for *_, s in priced) / 3600:.1f} h on {device}")
         for row, jobs, circuits, _, seconds in priced:
             print(f"  case {row['Case_ID']}: {jobs:4d} jobs x {circuits:4.1f} circuits "

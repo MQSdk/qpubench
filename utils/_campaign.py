@@ -32,6 +32,9 @@ Optional:
     PRICING_SHOT_TIME_US
                      PRICING_DEVICE's time per shot, in place of
                      rep_delay + circuit duration
+    PRICING_JOB_OVERHEAD_S
+                     PRICING_DEVICE's fixed seconds per job, in place of
+                     the measurement method's default
 """
 from __future__ import annotations
 
