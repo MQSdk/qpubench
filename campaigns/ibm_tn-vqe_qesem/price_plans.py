@@ -82,7 +82,9 @@ def main() -> None:
 
     campaign = _campaign.load("ibm_tn-vqe_qesem")
     matrix = list(csv.DictReader(open(campaign.CSV)))
-    hardware = list(csv.DictReader(open(campaign.HARDWARE_CSV)))
+    # A resumed run finishes a failed one, so pricing it as a plan would count that run twice.
+    hardware = [h for h in csv.DictReader(open(campaign.HARDWARE_CSV))
+                if not h["Phi_Init"].startswith("resumed(")]
     results = campaign.RESULTS_DIR / f"{campaign.CSV.stem}.ndjson"
     records = {str(r["Case_ID"]): r for r in map(json.loads, results.read_text().splitlines())}
     if args.device is None:

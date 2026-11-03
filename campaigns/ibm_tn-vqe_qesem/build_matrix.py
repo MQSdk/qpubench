@@ -485,7 +485,7 @@ DEVICE_SHOTS = {"RealAmplitudes": 12_500, "tUPS": SHOTS}
 # into each optimizer's own iterations so every optimizer on a row spends
 # the same budget.
 #
-# 198 rows rather than a factorial's thousands, so each run can be given
+# 199 rows rather than a factorial's thousands, so each run can be given
 # enough to reach its optimum rather than be cut off. Sized for the
 # slowest case seen, SPSA on tUPS from its HF start, which needs about
 # four times what UCCSD does; COBYLA stops on its own tolerance well
@@ -1735,6 +1735,21 @@ def build_targeted_screen() -> list[dict[str, str]]:
                                 reduce_job_submissions=True,
                                 note=" Independent evaluations batched into one job."))
 
+    # --- Each resumed hardware run's twin: its 12-sweep twin resumed from its
+    # own parameters at the sweep the device stopped at, so stitched compares
+    # with stitched and the uninterrupted twin shows what resuming costs. ---
+    for hardware_case, (twin_case, _, sweep) in HARDWARE_RESUMED.items():
+        kwargs = hardware_runs[int(hardware_case) - 1]
+        rows.append(as_hardware(
+            NOISY_SIMULATOR, **kwargs, sweeps=HARDWARE_SWEEPS - sweep,
+            reduce_job_submissions=True,
+            phi_init_tag=f"converged(case={twin_case}, sweep={sweep})",
+            converged_params=_converged_params_ref(f"{twin_case}_sweep{sweep}"),
+            note=f" Independent evaluations batched into one job. Resumes case "
+                 f"{twin_case} from its sweep {sweep}: the twin of resumed hardware "
+                 f"case {hardware_case}.",
+        ))
+
     return rows
 
 
@@ -1748,28 +1763,47 @@ HARDWARE_SWEEPS = 12
 CONVERGED_PARAMS_DIR = campaign.DIR / "converged_params"
 
 
-def freeze_converged_params(case_id: str) -> pathlib.Path:
-    """Write a collected run's final phi and theta to CONVERGED_PARAMS_DIR."""
-    path = campaign.RESULTS_DIR / f"{_TARGETED_PATH.stem}.ndjson"
+def freeze_converged_params(
+    spec: str, record_path: pathlib.Path | None = None, name: str | None = None,
+) -> pathlib.Path:
+    """Write a collected run's phi and theta to CONVERGED_PARAMS_DIR.
+
+    `spec` is CASE_ID, for the run's final parameters, or CASE_ID@SWEEP,
+    for those at the end of that sweep. The run is read from
+    `record_path` (default: the targeted screen's results) and written
+    as `<name>.json` (default: case_<CASE_ID>[_sweep<SWEEP>]).
+    """
+    case_id, _, sweep = spec.partition("@")
+    path = record_path or campaign.RESULTS_DIR / f"{_TARGETED_PATH.stem}.ndjson"
     records = [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
     record = next((r for r in reversed(records) if str(r["Case_ID"]) == case_id), None)
     if record is None:
-        raise SystemExit(f"--freeze-params {case_id}: no collected run of that case")
-    out = CONVERGED_PARAMS_DIR / f"case_{case_id}.json"
+        raise SystemExit(f"--freeze-params {spec}: no collected run of that case in {path.name}")
+    phi, theta = record["phi"], record["theta"]
+    if sweep:
+        params = record["sweep_params"][int(sweep)]
+        n_phi = len(phi)
+        phi = params[:n_phi]
+        # TN-VQE theta is flat, so it reads straight off the end; VQE has none.
+        theta = params[n_phi:] or theta
+    out = CONVERGED_PARAMS_DIR / f"{name or 'case_' + case_id + (f'_sweep{sweep}' if sweep else '')}.json"
     out.parent.mkdir(exist_ok=True)
     out.write_text(json.dumps({
         "source_case": case_id, "task_id": record["task_id"],
-        "backend": record.get("Backend"), "phi": record["phi"], "theta": record["theta"],
+        "backend": record.get("Backend"), **({"sweep": int(sweep)} if sweep else {}),
+        "phi": phi, "theta": theta,
     }, indent=1) + "\n")
     return out
 
 
-def _converged_params_ref(case_id: int) -> tuple[str, str]:
-    """(Converged_Params_File, Converged_Params_SHA256) for a frozen run."""
-    path = CONVERGED_PARAMS_DIR / f"case_{case_id}.json"
+def _converged_params_ref(name: int | str) -> tuple[str, str]:
+    """(Converged_Params_File, Converged_Params_SHA256) for a frozen run:
+    a case id, or the frozen file's name after `case_`."""
+    path = CONVERGED_PARAMS_DIR / (f"case_{name}.json" if not str(name).startswith("hardware_")
+                                   else f"{name}.json")
     if not path.exists():
         raise SystemExit(f"{path.name} is missing: run build_matrix.py "
-                         f"--freeze-params {case_id} first")
+                         f"--freeze-params first")
     return (str(path.relative_to(_REPO_ROOT)),
             hashlib.sha256(path.read_bytes()).hexdigest()[:12])
 
@@ -1787,6 +1821,14 @@ HARDWARE_REPEATS = (
 )
 HARDWARE_FIELDNAMES = [*FIELDNAMES[:-1], "Repeats_Case_ID", FIELDNAMES[-1]]
 
+# Hardware runs that failed partway and are resumed, as hardware case ->
+# (its HARDWARE_REPEATS twin, the failed attempt, the last sweep it
+# completed). The attempt's parameters at that sweep come from a replay of
+# its IBM workload files, frozen as hardware_case_<N>_<attempt>_sweep<S>.json;
+# the resumed run repeats the twin resumed the same way, and is appended to
+# hardware_runs.csv.
+HARDWARE_RESUMED = {"2": (203, "try1", 2)}
+
 
 def build_hardware_runs() -> list[dict[str, str]]:
     """The ibm_phoenix runs: each a fake_berlin row of the targeted screen,
@@ -1798,13 +1840,12 @@ def build_hardware_runs() -> list[dict[str, str]]:
     here keeps a twin that lacks one from passing as the device's run.
     """
     screen = {row["Case_ID"]: row for row in numbered_targeted_screen()}
-    rows = []
-    for case_id, why in HARDWARE_REPEATS:
-        source = screen[str(case_id)]
+
+    def on_device(source: dict[str, str], case_id: str, why: str) -> dict[str, str]:
         if source["Backend_Platform"] != NOISY_SIMULATOR:
             raise ValueError(f"case {case_id} is not a {NOISY_SIMULATOR} row")
         shots = _device_shots(source["Ansatz"])
-        rows.append({
+        return {
             **source,
             "Case_ID": "",
             "Stage": "hardware",
@@ -1812,11 +1853,28 @@ def build_hardware_runs() -> list[dict[str, str]]:
             "Shots": str(shots),
             "Error_Mitigation": MITIGATION_READOUT,
             "Reduce_Job_Submissions": "true",
-            "Repeats_Case_ID": str(case_id),
+            "Repeats_Case_ID": case_id,
             "Notes": (f"Hardware ({BACKEND_PLATFORM_TN}), repeating "
                       f"{_TARGETED_PATH.name} case {case_id} on the device: tensored "
                       f"readout correction, {shots} shots, independent evaluations "
                       f"batched into one job. {why}"),
+        }
+
+    rows = [on_device(screen[str(case_id)], str(case_id), why)
+            for case_id, why in HARDWARE_REPEATS]
+    for hardware_case, (twin_case, attempt, sweep) in HARDWARE_RESUMED.items():
+        tag = f"converged(case={twin_case}, sweep={sweep})"
+        twin = next(r for r in screen.values() if r["Phi_Init"] == tag)
+        start = _converged_params_ref(f"hardware_case_{hardware_case}_{attempt}_sweep{sweep}")
+        rows.append({
+            **on_device(twin, twin["Case_ID"],
+                        f"Resumes hardware case {hardware_case}, whose {attempt} failed "
+                        f"after sweep {sweep}, from its parameters there (replayed from "
+                        f"the attempt's IBM workload files), for the remaining "
+                        f"{HARDWARE_SWEEPS - sweep} sweeps."),
+            "Phi_Init": f"resumed(hardware case={hardware_case}, {attempt}, sweep={sweep})",
+            "Converged_Params_File": start[0],
+            "Converged_Params_SHA256": start[1],
         })
     return rows
 
@@ -1946,15 +2004,25 @@ def main() -> None:
              "QPU during classical steps, and is cheaper)",
     )
     parser.add_argument(
-        "--freeze-params", action="append", default=[], metavar="CASE_ID",
-        help="write a collected run's final phi and theta to converged_params/ "
-             "for a warm-started row, then exit. Repeatable.",
+        "--freeze-params", action="append", default=[], metavar="CASE_ID[@SWEEP]",
+        help="write a collected run's final phi and theta, or those at the end of "
+             "SWEEP, to converged_params/ for a warm-started row, then exit. "
+             "Repeatable.",
+    )
+    parser.add_argument(
+        "--record", type=pathlib.Path, default=None,
+        help="--freeze-params only: read the run from this results file instead",
+    )
+    parser.add_argument(
+        "--name", default=None,
+        help="--freeze-params only: the frozen file's name, without .json",
     )
     parser.add_argument("-o", "--output", type=pathlib.Path, default=None)
     args = parser.parse_args()
     if args.freeze_params:
         for case_id in args.freeze_params:
-            print(f"Wrote {freeze_converged_params(case_id).relative_to(_REPO_ROOT)}")
+            out = freeze_converged_params(case_id, args.record, args.name)
+            print(f"Wrote {out.relative_to(_REPO_ROOT)}")
         return
 
     renumber = True

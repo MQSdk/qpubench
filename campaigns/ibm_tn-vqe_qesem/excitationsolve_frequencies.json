@@ -1,4 +1,45 @@
 {
+ "RealAmplitudes_4q_2r|h2_6-31G_MolMap_sb.json|converged(case=203, sweep=2)": {
+  "sets": [
+   [
+    1.0
+   ],
+   [
+    1.0
+   ],
+   [
+    1.0
+   ],
+   [
+    1.0
+   ],
+   [
+    1.0
+   ],
+   [
+    1.0
+   ],
+   [
+    1.0
+   ],
+   [
+    1.0
+   ],
+   [
+    1.0
+   ],
+   [
+    1.0
+   ],
+   [
+    1.0
+   ],
+   [
+    1.0
+   ]
+  ],
+  "sha256": "20ee55d404ec"
+ },
  "RealAmplitudes_4q_2r|h2_6-31G_MolMap_sb.json|converged(case=71)": {
   "sets": [
    [

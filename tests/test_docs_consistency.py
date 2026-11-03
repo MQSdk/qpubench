@@ -238,9 +238,10 @@ def test_phi_init_is_fixed_by_the_circuit_family():
             assert row["Method"] == "VQE", row["Case_ID"]
             continue
         if row["Converged_Params_File"]:
-            source = re.fullmatch(r"converged\(case=(\d+)\)", row["Phi_Init"])
+            source = re.fullmatch(r"converged\(case=(\d+)(?:, sweep=(\d+))?\)", row["Phi_Init"])
             assert source, f"Case_ID {row['Case_ID']}: {row['Phi_Init']!r}"
-            assert row["Converged_Params_File"].endswith(f"case_{source.group(1)}.json")
+            sweep = f"_sweep{source.group(2)}" if source.group(2) else ""
+            assert row["Converged_Params_File"].endswith(f"case_{source.group(1)}{sweep}.json")
             continue
         by_ansatz.setdefault(row["Ansatz"], set()).add(row["Phi_Init"])
 
@@ -621,10 +622,21 @@ def test_hardware_rows_differ_from_their_twin_only_by_the_device():
     module = _benchmark_matrix_module()
     twins = {r["Case_ID"]: r for r in _csv_rows()}
     allowed = {"Case_ID", "Stage", "Backend_Platform", "Repeats_Case_ID", "Notes"}
+    start = {"Phi_Init", "Converged_Params_File", "Converged_Params_SHA256"}
     for row in _csv_rows(HARDWARE_CSV_PATH):
         twin = twins[row["Repeats_Case_ID"]]
         assert twin["Backend_Platform"] == module.NOISY_SIMULATOR
-        changed = {k for k in row if k not in allowed and row[k] != twin.get(k)}
+        # A resumed run starts where its failed attempt stopped, and its twin
+        # where the twin's own run was at that sweep.
+        resumed = re.fullmatch(r"resumed\(hardware case=(\d+), (\w+), sweep=(\d+)\)",
+                               row["Phi_Init"])
+        if resumed:
+            case, attempt, sweep = resumed.groups()
+            assert row["Converged_Params_File"].endswith(
+                f"hardware_case_{case}_{attempt}_sweep{sweep}.json")
+            assert twin["Phi_Init"].endswith(f", sweep={sweep})"), twin["Phi_Init"]
+        changed = {k for k in row if k not in allowed | (start if resumed else set())
+                   and row[k] != twin.get(k)}
         assert not changed, f"hardware case {row['Case_ID']} also changes {sorted(changed)}"
         assert row["Backend_Platform"] == module.BACKEND_PLATFORM_TN
         assert row["Error_Mitigation"] == module.MITIGATION_READOUT
