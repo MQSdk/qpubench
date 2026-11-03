@@ -362,14 +362,21 @@ hardware result reads directly against its simulator twin, and a
 difference between them is the device's;
 `tests/test_docs_consistency.py` fails if anything else differs.
 
-| Case | Repeats | Run | Question | Twin: final state, best measured (mHa above FCI) | Device: final state, best measured | QPU time on `ibm_phoenix` |
-|---|---|---|---|---|---|---|
-| 1 | 202 | RealAmplitudes ×2, VQE, 12,500 shots | Baseline for the TN-VQE gain on a hardware-efficient circuit | 14.6, 22.2 | 15.0, 20.8 | 15.5 min (billed) |
-| 2 | 203 | RealAmplitudes ×2, TN-VQE (2 TN layers), 12,500 shots | Does that gain survive the device? | 1.2, 6.1 | | 19 min |
-| 3 | 204 | tUPS 1 layer, VQE, 50,000 shots | Baseline for the TN-VQE gain on a chemistry circuit | 13.5, 120.1 | | 26 min |
-| 4 | 205 | tUPS 1 layer, TN-VQE (2 TN layers), 50,000 shots | Can the network stand in for a tUPS layer on the device? | 4.4, 112.2 | | 45 min |
-| 5 | 206 | tUPS 2 layers, VQE, 50,000 shots | The depth the network stands in for | 1.1, 235.1 | | 71 min |
-| 6 | 207 | Case 2 resumed from its first attempt's sweep 2, 10 sweeps | Finishes case 2 without repeating its first two sweeps | | | 16 min |
+| Case | Repeats | Run | Question | Twin: final state, best measured (mHa above FCI) | Device: final state, best measured | Jobs | QPU time per job | QPU time on `ibm_phoenix` |
+|---|---|---|---|---|---|---|---|---|
+| 1 | 202 | RealAmplitudes ×2, VQE, 12,500 shots | Baseline for the TN-VQE gain on a hardware-efficient circuit | 14.6, 22.2 | 15.0, 20.8 | 158 | 5.9 s | 15.5 min (billed) |
+| 2 | 203 | RealAmplitudes ×2, TN-VQE (2 TN layers), 12,500 shots | Does that gain survive the device? | 1.2, 6.1 | | 158 | 7.2 s | 19 min |
+| 3 | 204 | tUPS 1 layer, VQE, 50,000 shots | Baseline for the TN-VQE gain on a chemistry circuit | 13.5, 120.1 | | 86 | 18.6 s | 27 min |
+| 4 | 205 | tUPS 1 layer, TN-VQE (2 TN layers), 50,000 shots | Can the network stand in for a tUPS layer on the device? | 4.4, 112.2 | | 86 | 31.4 s | 45 min |
+| 5 | 206 | tUPS 2 layers, VQE, 50,000 shots | The depth the network stands in for | 1.1, 235.1 | | 194 | 22.1 s | 71 min |
+| 6 | 207 | Case 2 resumed from its first attempt's sweep 2, 10 sweeps | Finishes case 2 without repeating its first two sweeps | 1.7, 6.1 | | 132 | 7.4 s | 16 min |
+
+Jobs counts each run's measuring jobs, one to three batched evaluations
+each, and its one readout-calibration job, as its twin submitted them
+(case 1: as it ran). The time per job is the run's average under the
+model fitted to case 1 (4.39 s per job plus 7.58 µs per shot, see
+**Cost** below): the fixed part is most of it at 12,500 shots and 15–25%
+at 50,000.
 
 All five use `ExcitationSolve` capped at 12 sweeps (`HARDWARE_SWEEPS`),
 on H2/6-31g under `MolMap_sb` with `grouped` measurement. At 6 sweeps
@@ -399,9 +406,10 @@ only in a fresh starting evaluation, the first-sweep fit checks run
 again, and a new readout calibration, possibly on other physical qubits.
 Its twin, case 207, resumes twin 203 from its own sweep 2 in the same
 way, so the device's stitched run reads against a stitched twin, and 207
-against 203 shows what resuming alone changes. Case 6 is priced at its
-full budget, unbatched, until 207 is collected; 203's last ten sweeps
-put it at about 16 min. `price_plans.py` leaves it out, since it
+against 203 shows what resuming alone changes. Case 207 ended on 203's
+plateau (a median of 1.04 mHa over sweeps 7–12, against 1.19) for 20
+more evaluations than 203's last ten sweeps, so resuming costs about 2%
+and moves nothing systematic. `price_plans.py` leaves it out, since it
 finishes case 2 rather than adding a run.
 
 **Readout correction.** Every row sets tn-vqe's tensored readout
@@ -417,7 +425,9 @@ cases 92, 108 and 96–98 are the uncorrected runs, and cases 128, 122 and
 the batching), so check the deployed version before submitting: an
 older one does not apply the correction.
 
-**Cost.** About 3.0 h of QPU time in all, priced by
+**Cost.** About 3.2 h of QPU time for the six rows, 3.0 h as it will be
+spent, with case 2 finished by its first attempt (about 4 min) and case
+6 rather than rerun; priced by
 `utils/estimate_ibm_cost.py` from each run's recorded jobs and circuits
 per job, the twin's until the run is collected (see
 [ibm_cost_estimator.md](../../docs/integrations/ibm_cost_estimator.md)).
