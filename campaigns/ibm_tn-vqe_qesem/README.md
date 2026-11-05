@@ -366,7 +366,7 @@ difference between them is the device's;
 |---|---|---|---|---|---|---|---|---|
 | 1 | 202 | RealAmplitudes ×2, VQE, 12,500 shots | Baseline for the TN-VQE gain on a hardware-efficient circuit | 14.6, 22.2 | 15.0, 20.8 | 158 | 5.9 s | 15.5 min (billed) |
 | 2 | 203 | RealAmplitudes ×2, TN-VQE (2 TN layers), 12,500 shots | Does that gain survive the device? | 1.2, 6.1 | 3.4, −0.9 (with case 6, 8 of 12 sweeps) | 158 | 7.2 s | 19 min |
-| 3 | 204 | tUPS 1 layer, VQE, 50,000 shots | Baseline for the TN-VQE gain on a chemistry circuit | 13.5, 120.1 | | 86 | 18.6 s | 27 min |
+| 3 | 204 | tUPS 1 layer, VQE, 50,000 shots | Baseline for the TN-VQE gain on a chemistry circuit | 13.5, 120.1 | 21.7, 139.5 | 86 | 18.6 s | 27 min |
 | 4 | 205 | tUPS 1 layer, TN-VQE (2 TN layers), 50,000 shots | Can the network stand in for a tUPS layer on the device? | 4.4, 112.2 | | 86 | 31.4 s | 45 min |
 | 5 | 206 | tUPS 2 layers, VQE, 50,000 shots | The depth the network stands in for | 1.1, 235.1 | | 194 | 22.1 s | 71 min |
 | 6 | 207 | Case 2 resumed from its first attempt's sweep 2, 10 sweeps | Finishes case 2 without repeating its first two sweeps | 1.7, 6.1 | 3.4, −0.9 (halted after 6 of 10 sweeps; replayed) | 132 | 7.4 s | 16 min |
