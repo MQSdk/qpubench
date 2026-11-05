@@ -365,11 +365,11 @@ difference between them is the device's;
 | Case | Repeats | Run | Question | Twin: final state, best measured (mHa above FCI) | Device: final state, best measured | Jobs | QPU time per job | QPU time on `ibm_phoenix` |
 |---|---|---|---|---|---|---|---|---|
 | 1 | 202 | RealAmplitudes ×2, VQE, 12,500 shots | Baseline for the TN-VQE gain on a hardware-efficient circuit | 14.6, 22.2 | 15.0, 20.8 | 158 | 5.9 s | 15.5 min (billed) |
-| 2 | 203 | RealAmplitudes ×2, TN-VQE (2 TN layers), 12,500 shots | Does that gain survive the device? | 1.2, 6.1 | | 158 | 7.2 s | 19 min |
+| 2 | 203 | RealAmplitudes ×2, TN-VQE (2 TN layers), 12,500 shots | Does that gain survive the device? | 1.2, 6.1 | 3.4, −0.9 (with case 6, 8 of 12 sweeps) | 158 | 7.2 s | 19 min |
 | 3 | 204 | tUPS 1 layer, VQE, 50,000 shots | Baseline for the TN-VQE gain on a chemistry circuit | 13.5, 120.1 | | 86 | 18.6 s | 27 min |
 | 4 | 205 | tUPS 1 layer, TN-VQE (2 TN layers), 50,000 shots | Can the network stand in for a tUPS layer on the device? | 4.4, 112.2 | | 86 | 31.4 s | 45 min |
 | 5 | 206 | tUPS 2 layers, VQE, 50,000 shots | The depth the network stands in for | 1.1, 235.1 | | 194 | 22.1 s | 71 min |
-| 6 | 207 | Case 2 resumed from its first attempt's sweep 2, 10 sweeps | Finishes case 2 without repeating its first two sweeps | 1.7, 6.1 | | 132 | 7.4 s | 16 min |
+| 6 | 207 | Case 2 resumed from its first attempt's sweep 2, 10 sweeps | Finishes case 2 without repeating its first two sweeps | 1.7, 6.1 | 3.4, −0.9 (halted after 6 of 10 sweeps; replayed) | 132 | 7.4 s | 16 min |
 
 Jobs counts each run's measuring jobs, one to three batched evaluations
 each, and its one readout-calibration job, as its twin submitted them
@@ -411,6 +411,20 @@ plateau (a median of 1.04 mHa over sweeps 7–12, against 1.19) for 20
 more evaluations than 203's last ten sweeps, so resuming costs about 2%
 and moves nothing systematic. `price_plans.py` leaves it out, since it
 finishes case 2 rather than adding a run.
+
+**Case 6 halted.** Case 6 stopped sending jobs after 91 of its 132,
+with sweeps 1–6 complete and sweep 7 one job short, and could not be
+revived; IBM completed every job it was sent, so the stop was on
+Cebule's side. Its six sweeps are replayed from the IBM workload files
+the same way (`results/hardware_runs.case6_try1_replay.ndjson`), and
+with case 2's first attempt they are case 2's result: 8 of the 12
+sweeps. From the resume at 3.1 mHa the final state stays at 3.2–4.4 mHa
+through sweep 8 while twin 207 descends to 1.0–1.6, so the device run
+stalled instead of converging more slowly. After the starting
+evaluation its measured energies sit within 5 mHa of the final state
+(twin 207's are 6–12 mHa high), twice below FCI, the lowest at
+−0.9 mHa: consistent with shot noise of a few mHa that each sweep's
+updates follow rather than the energy.
 
 **Readout correction.** Every row sets tn-vqe's tensored readout
 correction (`readout_mitigation="tensored"`, cebule-tn_vqe `ef0dc47`):
