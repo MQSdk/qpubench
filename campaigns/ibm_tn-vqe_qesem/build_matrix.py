@@ -1819,7 +1819,12 @@ HARDWARE_REPEATS = (
          "tUPS layer on the device?"),
     (206, "2-layer tUPS VQE: the depth the network stands in for."),
 )
-HARDWARE_FIELDNAMES = [*FIELDNAMES[:-1], "Repeats_Case_ID", FIELDNAMES[-1]]
+HARDWARE_FIELDNAMES = [*FIELDNAMES[:-1], "Repeats_Case_ID", "Initial_Layout", FIELDNAMES[-1]]
+
+# Physical qubits on the device for a hardware case, one per logical qubit;
+# a case not listed lets the transpiler choose. The device's error rates
+# change between calibrations, so the twins carry no layout.
+HARDWARE_INITIAL_LAYOUTS: dict[str, list[int]] = {}
 
 # Hardware runs that failed partway and are resumed, as hardware case ->
 # (its HARDWARE_REPEATS twin, the failed attempt, the last sweep it
@@ -1854,6 +1859,7 @@ def build_hardware_runs() -> list[dict[str, str]]:
             "Error_Mitigation": MITIGATION_READOUT,
             "Reduce_Job_Submissions": "true",
             "Repeats_Case_ID": case_id,
+            "Initial_Layout": "",
             "Notes": (f"Hardware ({BACKEND_PLATFORM_TN}), repeating "
                       f"{_TARGETED_PATH.name} case {case_id} on the device: tensored "
                       f"readout correction, {shots} shots, independent evaluations "
@@ -1876,6 +1882,14 @@ def build_hardware_runs() -> list[dict[str, str]]:
             "Converged_Params_File": start[0],
             "Converged_Params_SHA256": start[1],
         })
+    # write_csv numbers the rows from 1 in this order.
+    for number, row in enumerate(rows, start=1):
+        layout = HARDWARE_INITIAL_LAYOUTS.get(str(number))
+        if layout is not None:
+            if len(layout) != int(row["N_Qubit"]):
+                raise ValueError(f"hardware case {number}: initial layout {layout} "
+                                 f"for a {row['N_Qubit']}-qubit circuit")
+            row["Initial_Layout"] = json.dumps(layout)
     return rows
 
 

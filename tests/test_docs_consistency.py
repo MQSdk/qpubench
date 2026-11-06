@@ -5,6 +5,7 @@ these tests derive the true values from the code and fail if the README
 disagrees.  docs/schemas.md must NOT re-pin those numbers — it points at the
 README instead — so a version bump touches one document, not many.
 """
+import json
 import pathlib
 import re
 
@@ -621,7 +622,8 @@ def test_hardware_rows_differ_from_their_twin_only_by_the_device():
     nothing that changes the optimisation may differ between them."""
     module = _benchmark_matrix_module()
     twins = {r["Case_ID"]: r for r in _csv_rows()}
-    allowed = {"Case_ID", "Stage", "Backend_Platform", "Repeats_Case_ID", "Notes"}
+    allowed = {"Case_ID", "Stage", "Backend_Platform", "Repeats_Case_ID", "Initial_Layout",
+               "Notes"}
     start = {"Phi_Init", "Converged_Params_File", "Converged_Params_SHA256"}
     for row in _csv_rows(HARDWARE_CSV_PATH):
         twin = twins[row["Repeats_Case_ID"]]
@@ -642,3 +644,6 @@ def test_hardware_rows_differ_from_their_twin_only_by_the_device():
         assert row["Error_Mitigation"] == module.MITIGATION_READOUT
         assert row["Reduce_Job_Submissions"] == "true"
         assert int(row["Shots"]) == module.DEVICE_SHOTS[row["Ansatz"]]
+        if row["Initial_Layout"]:
+            layout = json.loads(row["Initial_Layout"])
+            assert len(layout) == int(row["N_Qubit"]) == len(set(layout)), layout

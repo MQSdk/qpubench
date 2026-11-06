@@ -324,6 +324,13 @@ def reduce_job_submissions_for(run: dict[str, str]) -> bool | None:
     return True if value == "true" else None
 
 
+def initial_layout_for(run: dict[str, str]) -> list[int] | None:
+    """TNQCOptInput.initial_layout for a row's Initial_Layout, a JSON list of
+    physical qubits; None where the row has no such column or leaves it empty."""
+    value = run.get("Initial_Layout") or ""
+    return json.loads(value) if value else None
+
+
 def use_qpu_time_for(backend: str) -> bool | None:
     """TNQCOptInput.use_qpu_time: True on real hardware, which Cebule
     refuses without it, else None. run_campaign's --allow-hardware is the
@@ -373,6 +380,7 @@ def build_input(
         optimization_mode=optimization_mode_for(run),
         readout_mitigation=readout_mitigation_for(run),
         reduce_job_submissions=reduce_job_submissions_for(run),
+        initial_layout=initial_layout_for(run),
     )
 
 

@@ -345,6 +345,7 @@ substantially: 120 → 52 for H2/6-31g, 1304 → 392 for H2O/6-31g CAS(4,4).
 | `Error_Mitigation`, `Precision`, `QESEM_Execution_Mode` | `none`, `n/a (shot-based)`, `n/a (not QESEM)` on every row of `targeted_screen.csv` but cases 122–131, 137–146, 152–161, 182–206; those rows and `hardware_runs.csv` set `Error_Mitigation` to `readout_tensored`, which the runner passes as `readout_mitigation="tensored"` |
 | `Converged_Params_File`, `Converged_Params_SHA256` | Blank but on the warm-start rows 184–188, which start from a collected run's final phi (and theta, on TN-VQE), frozen to `converged_params/case_N.json` by `build_matrix.py --freeze-params N`; the runner checks the hash and passes them as `phi_init` and `theta_init`. No row here is a stage-3 refinement |
 | `Repeats_Case_ID` | `hardware_runs.csv` only: the `targeted_screen.csv` row the hardware run repeats |
+| `Initial_Layout` | `hardware_runs.csv` only: the device's physical qubits for the run, one per logical qubit, as a JSON list (set in `HARDWARE_INITIAL_LAYOUTS`), which the runner passes as `initial_layout`; empty lets the transpiler choose. Every circuit of the run is held to those qubits, and Cebule stops the run before its first job if routing cannot stay inside them. The twins carry no layout |
 | `Notes` | Per-row provenance and caveats |
 
 ## Hardware runs
@@ -360,7 +361,9 @@ evaluations batched into one job (`Reduce_Job_Submissions`). Circuit,
 start point, optimizer, sweep cap and budget are the twin's too, so a
 hardware result reads directly against its simulator twin, and a
 difference between them is the device's;
-`tests/test_docs_consistency.py` fails if anything else differs.
+`tests/test_docs_consistency.py` fails if anything else differs. The
+one exception is `Initial_Layout`, which pins a run to physical qubits
+and means nothing on the simulator.
 
 | Case | Repeats | Run | Question | Twin: final state, best measured (mHa above FCI) | Device: final state, best measured | Jobs | QPU time per job | QPU time on `ibm_phoenix` |
 |---|---|---|---|---|---|---|---|---|
