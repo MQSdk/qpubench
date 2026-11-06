@@ -97,7 +97,7 @@ framework's own ``integrations/kubeflow/`` Cebule DAG example.
 from __future__ import annotations
 
 import enum
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 import pydantic
 
@@ -584,6 +584,11 @@ class TNQCOptInput(pydantic.BaseModel):
     use_qpu_time          None (default, upstream's false) or a bool: an
                           ibm_* backend is refused unless this is true
                           (cebule-tn_vqe ``4fa682b``).
+    initial_layout        None (default) or the physical qubit for each
+                          logical one, distinct and non-negative: every
+                          circuit of the run is transpiled onto those
+                          qubits and refused if routing leaves them.
+                          qiskit platform only (cebule-tn_vqe ``e4cf4c2``).
     optimization_mode     "both" (default, jointly optimize theta/phi —
                           matches the reference paper's own approach) |
                           "circuit" (freeze theta, plain VQE over phi
@@ -737,6 +742,16 @@ class TNQCOptInput(pydantic.BaseModel):
     reduce_job_submissions: pydantic.StrictBool | None = None
     # Upstream refuses an ibm_* backend without it; only a literal true counts.
     use_qpu_time:        pydantic.StrictBool | None = None
+    # Upstream also checks length against the qubit count and the device.
+    initial_layout:      list[Annotated[pydantic.StrictInt, pydantic.Field(ge=0)]] | None = None
+
+    @pydantic.field_validator("initial_layout")
+    @classmethod
+    def _distinct_qubits(cls, layout: list[int] | None) -> list[int] | None:
+        if layout is not None and len(set(layout)) != len(layout):
+            raise ValueError(f"initial_layout {layout} names a qubit more than once")
+        return layout
+
     optimization_mode:   str            = "both"                    # "circuit" | "network" | "both"
     # MOL_MAP's own mapping operator D, handed back to TN_QC_OPT. Supplying
     # it is what tells the task its qubits index configurations rather than

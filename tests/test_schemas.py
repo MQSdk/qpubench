@@ -4065,6 +4065,17 @@ def test_tn_qc_opt_use_qpu_time_is_a_strict_bool_or_unset():
         TNQCOptInput(**base, use_qpu_time="true")
 
 
+def test_tn_qc_opt_initial_layout_is_distinct_physical_qubits_or_unset():
+    from qpubench.schemas.mirrors.mqsdk_cebule import TNQCOptInput
+
+    base = dict(h_coeff_values=[1.0], h_operators=["Z0"], n_layers_network=2)
+    assert "initial_layout" not in TNQCOptInput(**base).model_dump(exclude_none=True)
+    assert TNQCOptInput(**base, initial_layout=[84, 85, 86, 95]).initial_layout == [84, 85, 86, 95]
+    for bad in ([84, 84, 86, 95], [-1, 85], ["84", 85], "84,85"):
+        with pytest.raises(pydantic.ValidationError):
+            TNQCOptInput(**base, initial_layout=bad)
+
+
 def test_tn_qc_opt_result_h_tn_opt_qubit_is_one_2_tuple():
     """task_runner_TNQCOpt returns no separate qubit_operators key.
 

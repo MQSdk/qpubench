@@ -909,6 +909,14 @@ Revised again 2026-10-29 against cebule-tn_vqe `4fa682b` (minor bump,
 Upstream refuses an `ibm_*` backend unless it is a literal `true`; fake
 and Aer backends ignore it. `None` is dropped from the payload.
 
+Revised again 2026-11-06 against cebule-tn_vqe `e4cf4c2` (minor bump,
+6.10.0): **`TNQCOptInput.initial_layout` added**, `None` or a list of
+distinct non-negative physical-qubit indices, one per logical qubit.
+Upstream transpiles the ansatz and every grouped measurement circuit onto
+those qubits, refuses a routing that leaves them, and refuses the field
+on pennylane. Without it, upstream now keeps the grouped circuits on the
+ansatz's own layout. `None` is dropped from the payload.
+
 | Type | Cebule task | Description |
 |---|---|---|
 | `MolecularGeometry` | shared | Flat geometry + symbols + basis |
