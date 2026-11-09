@@ -118,8 +118,8 @@ def _csv_rows(path=CSV_PATH):
 
 
 def _documented_columns() -> set[str]:
-    """Every backticked token in the first cell of the campaign README's
-    column table.
+    """Every backticked token in the first cell of the column table in the
+    campaign's docs/simulator_runs.md.
 
     The table lives with the campaign rather than in `campaigns/README.md`,
     which is only an index across scenarios: a column list belongs to the
@@ -128,7 +128,7 @@ def _documented_columns() -> set[str]:
     Rows may group several columns in one cell
     (`Mapper`, `Method`, `Ansatz`), so this collects them all.
     """
-    doc = (CAMPAIGN_DIR / "README.md").read_text(encoding="utf-8")
+    doc = (CAMPAIGN_DIR / "docs" / "simulator_runs.md").read_text(encoding="utf-8")
     table = doc.split("## Columns", 1)[1].split("\n### ", 1)[0]
     columns: set[str] = set()
     for line in table.splitlines():
@@ -155,11 +155,11 @@ def test_every_column_is_documented_and_every_documented_column_exists():
     # hardware_runs.csv's columns, which are targeted_screen.csv's plus one.
     actual = set(module.HARDWARE_FIELDNAMES)
     assert not actual - documented, (
-        f"columns missing from the campaign README's table: "
+        f"columns missing from docs/simulator_runs.md's table: "
         f"{sorted(actual - documented)}"
     )
     assert not documented - actual, (
-        f"the campaign README documents columns the CSV does not have: "
+        f"docs/simulator_runs.md documents columns the CSV does not have: "
         f"{sorted(documented - actual)}"
     )
 

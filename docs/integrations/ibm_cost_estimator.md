@@ -202,5 +202,5 @@ row is priced as a hardware run whatever its `Backend_Platform`, and
 
 `utils/estimate_ibm_cost.py --campaign NAME` prices any campaign's matrix
 this way; see
-[`campaigns/ibm_tn-vqe_qesem/README.md`](../../campaigns/ibm_tn-vqe_qesem/README.md)
+[`campaigns/ibm_tn-vqe_qesem/docs/simulator_runs.md`](../../campaigns/ibm_tn-vqe_qesem/docs/simulator_runs.md#running)
 for how that campaign submits and collects `targeted_screen.csv`.
