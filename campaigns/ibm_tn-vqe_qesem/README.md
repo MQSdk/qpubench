@@ -38,7 +38,7 @@ crossing:
 
 The campaign runs in two parts:
 
-- **Simulator runs** (`targeted_screen.csv`, 199 rows): mostly on
+- **Simulator runs** (`targeted_screen.csv`, 200 rows): mostly on
   `aer_simulator` (shot noise only), with copies on `fake_berlin` and
   `fake_aachen`, the offline noise snapshots closest to the devices.
   The design, the matrix and its columns:
@@ -114,6 +114,7 @@ with tensored readout correction and batched jobs.
 | 4 | 205 | tUPS 1 layer, TN-VQE (2 TN layers), 50,000 shots | Can the network stand in for a tUPS layer on the device? | 4.4, 112.2 | 13.7, 122.8 | 86 | 31.4 s | 45 min |
 | 5 | 206 | tUPS 2 layers, VQE, 50,000 shots | The depth the network stands in for | 1.1, 235.1 | | 194 | 22.1 s | 71 min |
 | 6 | 207 | Case 2 resumed from its first attempt's sweep 2, 10 sweeps | Finishes case 2 without repeating its first two sweeps | 1.7, 6.1 | 3.4, −0.9 (halted after 6 of 10 sweeps; replayed) | 132 | 7.4 s | 16 min |
+| 7 | 208 | Case 5 cut to 3 sweeps, pinned to qubits `[70, 80, 71, 81]` | Does a region chosen from the calibration give the damping it predicts? | | | about 50 | | about 20 min (a quarter of case 5) |
 
 The final-state columns are the final parameters evaluated by noiseless
 statevector; the measured columns are the lowest noisy evaluation the
@@ -133,6 +134,11 @@ run saw. Jobs and QPU time are the twin's until a run is collected.
   correction cannot remove, and it moves the minimum. Case 3 also lost a
   qubit region partway through, which pinning runs to physical qubits
   (`Initial_Layout`) now guards against.
+- **2-layer tUPS (case 5, running) keeps 0.29 of its signal** on the
+  qubits the transpiler chose, against 0.47 their calibration predicts.
+  Case 7 runs the same circuit for 3 sweeps on a region chosen from the
+  calibration, to see whether such a choice can be trusted
+  ([Layout probe](docs/hardware_runs.md#layout-probe)).
 - **Cost.** About 3 h of QPU time for all six, but wall-clock time runs
   to days, since every job queues on its own.
 

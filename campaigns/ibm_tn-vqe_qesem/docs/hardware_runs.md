@@ -124,6 +124,28 @@ circuits of cases 1 and 6 damp to 0.98–0.99, with errors at shot noise.
 python utils/device_fidelity.py <IBM workload folder of one run> --by-hour
 ```
 
+## Layout probe
+
+Case 5, the deepest circuit (145 CZs), ran its first 16 jobs on
+{57–59, 67–69} at a damping of 0.29, swinging between 0.14 and 0.41
+from one job to the next. Estimated from the device's calibration
+(2026-11-10, 11:35 UTC), as the product of each gate's error and the
+qubits' T1/T2 decay over the circuit, that region should give 0.47, and
+the best placements 0.55–0.62: the region did far worse than its
+calibration says, not worse than the device's other regions. The same
+estimate gives 0.77 for case 4 on its region, where 0.84 was measured.
+
+Hardware case 7 tests that reading. It is case 5 cut to 3 sweeps
+(`HARDWARE_PROBES`, twin case 208), pinned with `Initial_Layout` to
+`[70, 80, 71, 81]`, the best-scoring placement, beside case 4's block
+and clear of qubit 91's 4.8% readout error. The logical circuit couples
+every pair of its four qubits, so held to four physical ones its routing
+swaps inside them: 180–184 CZs per circuit, against 145 on case 5's six.
+If its damping comes out near the calibration's 0.6, case 5's region
+was the fault, and a pinned region can be chosen from a calibration; if
+it is again far below, the calibration does not predict what this
+circuit gets.
+
 ## Readout correction
 
 Every row sets tn-vqe's tensored readout

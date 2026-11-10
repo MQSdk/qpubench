@@ -42,6 +42,7 @@ sys.path.insert(0, str(_REPO / "utils"))
 
 import _campaign  # noqa: E402
 import estimate_ibm_cost as cost  # noqa: E402
+from build_matrix import HARDWARE_PROBES  # noqa: E402
 
 # What a hardware run is, apart from where, how long and from where it starts.
 _IGNORE = {"Case_ID", "Stage", "Notes", "Backend_Platform", "Error_Mitigation", "Shots",
@@ -82,9 +83,11 @@ def main() -> None:
 
     campaign = _campaign.load("ibm_tn-vqe_qesem")
     matrix = list(csv.DictReader(open(campaign.CSV)))
-    # A resumed run finishes a failed one, so pricing it as a plan would count that run twice.
+    # A resumed run finishes a failed one, and a layout probe tests a region for
+    # one, so pricing either as a plan would count that run twice.
     hardware = [h for h in csv.DictReader(open(campaign.HARDWARE_CSV))
-                if not h["Phi_Init"].startswith("resumed(")]
+                if not h["Phi_Init"].startswith("resumed(")
+                and h["Case_ID"] not in HARDWARE_PROBES]
     results = campaign.RESULTS_DIR / f"{campaign.CSV.stem}.ndjson"
     records = {str(r["Case_ID"]): r for r in map(json.loads, results.read_text().splitlines())}
     if args.device is None:

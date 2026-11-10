@@ -485,7 +485,7 @@ DEVICE_SHOTS = {"RealAmplitudes": 12_500, "tUPS": SHOTS}
 # into each optimizer's own iterations so every optimizer on a row spends
 # the same budget.
 #
-# 199 rows rather than a factorial's thousands, so each run can be given
+# 200 rows rather than a factorial's thousands, so each run can be given
 # enough to reach its optimum rather than be cut off. Sized for the
 # slowest case seen, SPSA on tUPS from its HF start, which needs about
 # four times what UCCSD does; COBYLA stops on its own tolerance well
@@ -1750,6 +1750,14 @@ def build_targeted_screen() -> list[dict[str, str]]:
                  f"case {hardware_case}.",
         ))
 
+    # --- Each layout probe's twin: its hardware run cut to the probe's sweeps. ---
+    for hardware_case, (run, sweeps) in HARDWARE_PROBES.items():
+        rows.append(as_hardware(
+            NOISY_SIMULATOR, **hardware_runs[run - 1], sweeps=sweeps,
+            reduce_job_submissions=True,
+            note=f" Independent evaluations batched into one job. {_probe_twin_note(hardware_case)}",
+        ))
+
     return rows
 
 
@@ -1824,7 +1832,16 @@ HARDWARE_FIELDNAMES = [*FIELDNAMES[:-1], "Repeats_Case_ID", "Initial_Layout", FI
 # Physical qubits on the device for a hardware case, one per logical qubit;
 # a case not listed lets the transpiler choose. The device's error rates
 # change between calibrations, so the twins carry no layout.
-HARDWARE_INITIAL_LAYOUTS: dict[str, list[int]] = {}
+HARDWARE_INITIAL_LAYOUTS: dict[str, list[int]] = {"7": [70, 80, 71, 81]}
+
+# Short hardware runs pinned to physical qubits, to read a region's damping
+# against its calibration: hardware case -> (the hardware case it shortens,
+# sweeps). Appended to hardware_runs.csv after the resumed runs.
+HARDWARE_PROBES = {"7": (5, 3)}
+
+
+def _probe_twin_note(hardware_case: str) -> str:
+    return f"The twin of layout probe hardware case {hardware_case}."
 
 # Hardware runs that failed partway and are resumed, as hardware case ->
 # (its HARDWARE_REPEATS twin, the failed attempt, the last sweep it
@@ -1882,6 +1899,13 @@ def build_hardware_runs() -> list[dict[str, str]]:
             "Converged_Params_File": start[0],
             "Converged_Params_SHA256": start[1],
         })
+    for hardware_case, (run, sweeps) in HARDWARE_PROBES.items():
+        if hardware_case != str(len(rows) + 1):
+            raise ValueError(f"layout probe {hardware_case} would be hardware case {len(rows) + 1}")
+        twin = next(r for r in screen.values() if _probe_twin_note(hardware_case) in r["Notes"])
+        rows.append(on_device(twin, twin["Case_ID"],
+                              f"Hardware case {run} cut to {sweeps} sweeps on pinned qubits, "
+                              f"to compare the region's damping with its calibration."))
     # write_csv numbers the rows from 1 in this order.
     for number, row in enumerate(rows, start=1):
         layout = HARDWARE_INITIAL_LAYOUTS.get(str(number))
